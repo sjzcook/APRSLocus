@@ -1,0 +1,127 @@
+name: Build iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build Unsigned iOS IPA
+    runs-on: macos-latest
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. 安装 Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # 3. 显示 Flutter / Dart / Xcode 环境
+      - name: Show build environment
+        run: |
+          flutter --version
+          dart --version
+          xcodebuild -version
+
+      # 4. 获取 Flutter 依赖
+      - name: Flutter Pub Get
+        run: |
+          flutter pub get
+
+      # 5. 清理旧的构建文件
+      - name: Flutter Clean
+        run: |
+          flutter clean
+          flutter pub get
+
+      # 6. 构建 iOS Release
+      #    --no-codesign = 不进行 Apple 签名
+      - name: Build iOS Release
+        run: |
+          flutter build ios \
+            --release \
+            --no-codesign \
+            --dart-define=QWEATHER_KEY="${{ secrets.QWEATHER_KEY }}" \
+            --dart-define=QWEATHER_HOST="${{ secrets.QWEATHER_HOST || 'nd4wcw2v7n.re.qweatherapi.com' }}"
+
+      # 7. 检查 Runner.app
+      - name: Verify Runner.app
+        run: |
+          echo "检查 iOS 构建结果..."
+
+          ls -la build/ios/
+          ls -la build/ios/iphoneos/
+
+          if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
+            echo "错误：Runner.app 不存在"
+            exit 1
+          fi
+
+          echo "Runner.app 构建成功"
+
+      # 8. 创建 IPA
+      - name: Package Unsigned IPA
+        run: |
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+
+          echo "复制 Runner.app..."
+
+          cp -R \
+            "build/ios/iphoneos/Runner.app" \
+            "build/ios/ipa/Payload/Runner.app"
+
+          echo "开始生成 IPA..."
+
+          cd build/ios/ipa
+
+          zip -r \
+            "../../APRSLocus-unsigned.ipa" \
+            Payload
+
+          cd ../../..
+
+          echo "IPA 生成完成："
+          ls -lh build/APRSLocus-unsigned.ipa
+
+      # 9. 检查 IPA 内部结构
+      - name: Verify IPA
+        run: |
+          echo "检查 IPA..."
+
+          unzip -l build/APRSLocus-unsigned.ipa
+
+          if ! unzip -l build/APRSLocus-unsigned.ipa | grep -q "Payload/Runner.app/"; then
+            echo "错误：IPA 中没有 Payload/Runner.app"
+            exit 1
+          fi
+
+          echo "IPA 结构检查通过"
+
+      # 10. 检查签名状态
+      - name: Verify Code Signing
+        run: |
+          echo "检查 Runner.app 签名状态..."
+
+          codesign -dv \
+            "build/ios/iphoneos/Runner.app" \
+            2>&1 || true
+
+          echo ""
+          echo "注意：这是未签名 IPA，不包含 Apple Developer 签名。"
+
+      # 11. 上传 IPA
+      - name: Upload Unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: APRSLocus-unsigned-IPA
+          path: build/APRSLocus-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
