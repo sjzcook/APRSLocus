@@ -1,5 +1,1036 @@
 # 更新日志
 
+## [1.6.100] - 2026-09-13
+
+> 📌 本版包含：蓝牙 TNC 数据来源（含完整 KISS 控制）、聊天翻译（**默认免密钥免费接口**）、
+> 发送前把输入译成对方语言、双向翻译与对照显示、聊天日期分界线，
+> 以及「中文外泄」与「译文不显示」两个修复。
+>
+> This release covers the Bluetooth TNC data source (with full KISS control), chat
+> translation (**free keyless endpoint by default**), translating your own input into the
+> other party's language before sending, two-way translation with contrast display, chat
+> date dividers, and two fixes: leaked Chinese text and translations not showing up.
+
+### 📻 新增数据来源：蓝牙 TNC（含完整 KISS 控制） / New data source: Bluetooth TNC with full KISS control
+
+- 此前只能从 **APRS-IS（互联网）** 收发报文。现在「连接」页与「设备」页都能在
+  **APRS-IS / TNC** 之间切换数据来源，TNC 模式下报文直接经蓝牙 TNC 与电台收发
+- **设备绑定**：Android 走原生经典蓝牙 SPP（RFCOMM）——列出已配对设备、绑定、连接、
+  解除绑定、重启链路；Windows / Linux / macOS 走串口 TNC（COM 口 / `/dev/ttyUSB*`）。
+  绑定结果会记住，下次启动直接带出
+- **完整 KISS 控制**：TXDELAY、TXTAIL、PERSISTENCE、SLOTTIME、FULLDUPLEX、
+  信道（KISS 端口）、SETHARDWARE 厂商命令、帧长上限、射频中继路径、
+  RETURN 回到命令模式、重启链路；单位换算（ms ↔ 10ms）在数据层完成，界面上直接写 ms
+- **安全开关**：射频发射需持照操作，所以 **TNC 模式下默认不会自动发射位置信标**，
+  必须在设备页手动打开「允许射频信标」；自动回复 ACK 也可关闭
+- **射频适配**（不是把 APRS-IS 的写法换个通道）：
+  - 不再发送 `>APRSlocus CONNECT` 保活帧（射频上播客户端版本号毫无意义、只占信道）
+  - 不再带 `TCPIP*` 路径（那是 IP 网关的路径项，射频中继不识别）
+  - 位置/消息报头改用 `APALOC,<中继路径>`，中继路径可配置
+- **消息限制**：射频信道是共享资源，TNC 模式下——
+  - 单条消息限 **67 字符**（APRS101），输入提示与说明条会直接写明，超长在源头拦下
+  - **群聊广播不可用**（一次邀请就占大量时隙，且群呼号在射频上收不到回应），
+    入口保留但会解释原因
+- **协议实现全部在 Dart 侧**（`lib/kiss.dart`）：KISS 转义/组帧、AX.25 UI 帧编解码。
+  原生层只搬字节 —— 协议只有一份实现、可单元测试，将来加串口或 KISS-over-TCP
+  无需重写，也无需为了协议改动而发版
+- **单元测试**：新增 `test/kiss_test.dart`（30 例）—— 转义边界、半帧/跨块拼接、
+  地址字段位移与 SSID、UI 帧字节序、中继过滤、中文 UTF-8 往返、单位换算
+
+- Until now packets could only flow over **APRS-IS**. Both the Connection and Device
+  pages can now switch the data source between **APRS-IS and TNC**, where packets go
+  straight through a Bluetooth TNC to your radio. Android uses native classic Bluetooth
+  SPP (RFCOMM) — list paired devices, bind, connect, unbind, restart the link — while
+  Windows / Linux / macOS use a serial TNC (COM port / `/dev/ttyUSB*`). The bound device
+  is remembered across launches. **Full KISS control** covers TXDELAY, TXTAIL,
+  PERSISTENCE, SLOTTIME, FULLDUPLEX, channel (KISS port), vendor SETHARDWARE command,
+  frame-size limit, RF digipeater path, RETURN-to-command-mode and link restart; unit
+  conversion (ms ↔ 10 ms) happens in the data layer, so the UI speaks milliseconds.
+  Because transmitting requires a licence, **RF beaconing is off by default in TNC mode**
+  and must be enabled on the Device page; auto-ACK can likewise be turned off. The radio
+  path is genuinely adapted rather than re-routed: no `>APRSlocus CONNECT` keep-alive
+  frames (a client version string on air is pure channel occupancy), no `TCPIP*` path
+  entry (that is an IP-gateway token digipeaters ignore), and headers become
+  `APALOC,<digi path>` with a configurable path. Messaging is limited accordingly —
+  **67 characters** per message (APRS101), shown up front and enforced at the source,
+  and **group broadcasts are unavailable** (one invite burns a lot of slots and group
+  callsigns get no answers on air); the entry point stays visible and explains why.
+  The whole protocol lives on the Dart side (`lib/kiss.dart`) — KISS framing/escaping
+  and AX.25 UI encoding — while the native layer only moves bytes, so there is one
+  implementation, it is unit-tested, and future serial or KISS-over-TCP transports need
+  no protocol rewrite or release. Adds `test/kiss_test.dart` (30 cases) covering escape
+  boundaries, split/partial frames, address shifting and SSID, UI byte order, digipeater
+  filtering, UTF-8 round-trips for Chinese text and unit conversion.
+---
+
+---
+
+### 🌐 修掉 TNC 功能里的中文外泄 / Fixed Chinese leaking through in the TNC features
+
+- 根因：`connInfo` 以前存的是**中文字符串**，界面侧靠
+  `localizedConnectionInfo()` 把中文当哨兵再映射回 l10n —— TNC 新增的一批
+  状态串没登记进那张映射表，于是**所有语言下都漏出中文**
+- 现改为**结构化连接状态**（`ConnPhase` + `ConnStatus`），文案在状态层按当前
+  语言直接生成，不再有任何哨兵映射；与先前 `beaconPhase` 的做法一致
+- 同时把 TNC 的**机器错误码**（`open-write-failed` 等）换成可读文案，
+  而不是把内部串抛给用户（例如 Windows COM 口被占用会明确提示）
+- 新增 14 个连接状态/错误文案键 × 6 语言
+
+- Root cause: `connInfo` used to hold a **Chinese string**, and the UI mapped it
+  back to l10n with `localizedConnectionInfo()` using Chinese text as a sentinel. The
+  batch of TNC status strings was never registered in that table, so **Chinese showed
+  up in every language**. It is now a **structured connection state** (`ConnPhase` +
+  `ConnStatus`) that renders in the current language directly, with no sentinel mapping
+  left — matching the existing `beaconPhase` approach. TNC **machine error codes**
+  (`open-write-failed`, …) are also turned into readable text instead of being thrown
+  at the user raw (e.g. an occupied Windows COM port now says so). Adds 14 connection
+  status/error keys × 6 languages.
+
+---
+
+### 🔤 聊天翻译 / Chat translation
+
+- **长按任意消息** → 弹出操作面板：翻译 / 显示原文 / 复制原文 / 复制译文
+  （原来是长按直接复制，没有翻译入口）
+- **会话右上角新增翻译入口**（带已翻译条数角标）：面板内选该会话的
+  **目标语言**、开关**自动翻译**、一键清除本会话译文；也能直接跳到翻译设置
+- **设置页新增「翻译设置」**，支持三家接口：
+  - **Google** Cloud Translation v2（API Key）
+  - **百度**翻译开放平台（App ID + 密钥，`sign = MD5(appid+q+salt+key)`）
+  - **自定义**接口：URL / GET 或 POST / 请求头 JSON / 请求体模板
+    （`{text}` `{from}` `{to}` 占位符）/ 结果字段路径（如
+    `data.translations.0.translatedText`）
+- 页面内提供**测试翻译**按钮：三家接口都要用户自己申请凭据，配完立刻能验证
+- 细节考虑：
+  - 译文**不落盘**（翻译是查看时的加工，不是消息本身），但结果缓存落盘 ——
+    同一句话不会重复计费
+  - 语言码**按接口分别映射**（Google 用 `zh-CN`、百度用 `cht`/`jp`），
+    避免把接口方言散落到 UI
+  - 自动翻译只翻**对方发来的**消息，且**按会话**独立开关
+  - 翻译会把文本发往第三方，设置页有隐私提示
+- 仓库无 `crypto` 依赖，`MD5` 为自研实现，已用 **RFC 1321 标准向量**与
+  11 组独立生成的跨块边界向量锁住（`test/translate_test.dart`，14 例全过）
+
+- **Long-press any message** to get an action sheet: translate / show original /
+  copy original / copy translation (previously long-press just copied). A **new
+  translate entry sits in the conversation header** with a badge showing how many
+  messages are translated; its sheet sets the conversation's **target language**,
+  toggles **auto-translate**, clears this conversation's translations and links to the
+  settings. **Settings gains a “Translation settings” page** covering three providers:
+  **Google** Cloud Translation v2 (API key), **Baidu** Translate (App ID + secret,
+  `sign = MD5(appid+q+salt+key)`) and a **custom** endpoint (URL, GET/POST, JSON
+  headers, body template with `{text}`/`{from}`/`{to}`, and a result path such as
+  `data.translations.0.translatedText`). A **test translation** button is included
+  because all three providers need credentials the user must obtain themselves.
+  Translations are deliberately **not persisted** (translating is a view-time
+  operation, not part of the message) while the result cache is, so the same sentence
+  is never billed twice; language codes are **mapped per provider** (Google `zh-CN` vs
+  Baidu `cht`/`jp`) instead of leaking provider dialects into the UI; auto-translate only
+  handles **received** messages and is toggled **per conversation**; and the settings
+  page warns that text is sent to a third party. With no `crypto` dependency in the
+  repo, MD5 is implemented here and pinned by the **RFC 1321 vectors** plus 11
+  independently generated block-boundary vectors in `test/translate_test.dart`
+  (14 cases, all passing).
+
+> 📌 该条目位于 `tnc` 分支，**尚未发版**。发版时请把标题改为版本号并与主分支合并。
+>
+> This entry lives on the `tnc` branch and is **not released yet**. Rename it to a version
+> number and merge into `main` when you ship it.
+
+---
+
+### ⚡ 翻译默认走免费接口（无需任何密钥）/ Translation works out of the box on a free endpoint
+
+- 新增 **免费接口** 并设为**默认**：使用 Google 翻译网页端同款公开端点，**不需要
+  API Key**，装好即可翻译 —— 不必先去申请 Google / 百度的凭据
+- 该端点支持自动识别源语言，**识别结果同样用于学习「对方的语言」**
+- 长文本会被拆成多段返回，已按段**全部拼接**（只取第一段会得到半截译文，已用单测锁住）
+- 免费端点可能被限流、被墙或随时变动，因此：失败时**自动回退** MyMemory
+  （同样免密钥，但它要求明确源语言，故仅在源语言已知时使用），
+  仍失败则给出「可改用 Google / 百度 / 自定义」的明确提示，而不是静默输出空译文
+- 需要更高配额或稳定性时，仍可在设置里换成自带密钥的 Google / 百度，或自定义接口
+
+- A **free endpoint** was added and made the **default**: it uses the same public endpoint
+  as Google's web translator, so **no API key is required** and translation works right
+  after install — you no longer have to apply for Google/Baidu credentials first. It
+  supports auto-detection, and the detection result is used to learn “their language”
+  too. Long text comes back split into segments and is now **fully joined** (taking only
+  the first segment yields a truncated translation — pinned by a unit test). Because free
+  endpoints can be rate-limited, blocked or changed at any time, a failure **falls back to
+  MyMemory** (also keyless, but it requires an explicit source language, so it is only
+  used when the source is known) and otherwise tells you to switch to Google/Baidu/custom
+  rather than silently returning an empty translation. If you need more quota or
+  stability, you can still switch to Google/Baidu with your own key or a custom endpoint.
+
+### ✉️ 发送前翻译：把自己的输入译成对方的语言再发出 / Translate your own input before sending
+
+- 输入栏新增**译发按钮**：把当前输入译成**对方的语言**，并显示**发送前预览**
+  （「将发送：…」+ 译成什么语言），确认后再按发送
+- 会话翻译设置里可开**「发送前翻译成对方的语言」**（默认关）：开启后直接按发送
+  会先翻译再发出 —— **默认关闭是有意的**，因为它改变了真正发到空中的内容
+- 发送会**如实记录实际发出的译文**（`AprsMsg.sentAs`），气泡里以「已按对方语言发出：…」
+  标出。与「对照翻译」不同：那是查看时的加工（可重复、可换语言），
+  这是**已经发生的事实**，所以独立保存、不随目标语言变化而消失
+- 两处防误发：
+  - **改字即让旧译文失效** —— 否则会出现「改了内容却发出去旧译文」，射频上不可撤销
+  - **译文超长不发送**：射频 67 字符上限按**译文**判定（原文 60 字符通过、
+    译文 80 字符被对端丢弃是最典型的静默失败）；译完即提示，不让用户白打一遍字
+- 翻译失败时**不发原文**：否则会把对方看不懂的内容发出去
+- 仅私聊提供该开关：群聊有多个成员，对方的语言不唯一
+
+- The input bar gains a **translate button** that renders your text in **their language**
+  with a **pre-send preview** (“Will send: …” plus the target language) for confirmation
+  before you tap send. A **“translate into their language before sending”** switch (off by
+  default) lives in the conversation's translation settings; it is **off on purpose**
+  because it changes what actually goes on air. The text that was really transmitted is
+  recorded verbatim (`AprsMsg.sentAs`) and shown in the bubble as “Sent in their language:
+  …”. Unlike the contrast translation — a view-time operation you can redo or re-target —
+  this is **a fact that already happened**, so it is stored separately and never disappears
+  when the target language changes. Two safeguards against sending the wrong thing:
+  **editing the text invalidates the old translation** (otherwise you would change your
+  text and transmit the previous translation, which is irreversible on air), and **an
+  over-long translation is not sent** — the radio's 67-character limit is checked against
+  the **translation** (a 60-character original passing while an 80-character translation
+  gets dropped is the classic silent failure), reported right after translating. If
+  translation fails, the original is **not** sent, so the other side never receives text
+  they cannot read. The switch is offered for one-to-one chats only, since a group has
+  several members with no single “their language”.
+
+### 🔄 翻译改为双向：可翻成「对方的语言」 / Two-way translation: translate into the other party's language
+
+- 会话翻译设置从单一「目标语言」改为**两个方向**：
+  - **我的语言** —— 对方发来的消息翻成它（读别人的话）
+  - **对方的语言** —— 我发出的消息翻成它（预览「对方会读到什么」）
+- **对方的语言会自动学出来**，不用用户手填：接口在 `from=auto` 时都会回传识别结果
+  （Google 的 `detectedSourceLanguage`、百度的 `from`），翻译过对方几条消息后
+  自动回填并落盘；也仍可手动指定
+- 长按面板会标明方向（「对方发来」/「我发出」）与目标语言；
+  对方语言未知时，对自己发的消息会明确提示而不是硬翻（翻了往往是同一种语言）
+
+- The conversation translate sheet now has **two directions** instead of one target
+  language: **My language** (messages from the other side are translated into it) and
+  **Their language** (your own messages are translated into it — a preview of what they
+  will read). **Their language is learned automatically**: every provider returns the
+  detection result when `from=auto` (Google's `detectedSourceLanguage`, Baidu's `from`),
+  so after a few incoming messages it is filled in and persisted; manual override still
+  works. The long-press sheet shows the direction (“received”/“sent”) and the target
+  language, and when their language is still unknown your outgoing messages say so
+  instead of being translated blindly (which usually means translating into the same
+  language).
+
+---
+
+### 📖 对照翻译 / Side-by-side contrast display
+
+- 译文不再只是替换原文，而是**与原文同屏对照**：气泡里原文在下、分隔线以上标注
+  「译给我看 / 对方将读到 + 语言名」、下方是译文
+- 会话设置里可关掉「对照显示」，改为只显示译文（原文仍可长按查看）
+- 分隔线上的语言标签让「这段是译文、且翻成了什么语言」一眼可辨
+
+- Translations are no longer a replacement but shown **alongside the original**: the
+  bubble keeps the original text, a divider labels the direction and language name
+  (“for me” / “what they read”, plus the language), and the translation follows below.
+  Contrast display can be turned off per conversation to show only the translation
+  (long-press still reveals the original). The language tag on the divider makes it
+  obvious that the lower block is a translation and into which language.
+
+---
+
+### 📅 聊天日期分界线 / Date dividers in conversations
+
+- 会话、群聊与消息瀑布流的前面均按天插入**日期分界线**：今天 / 昨天 /
+  「2026年9月11日 周五」（各语言各自的日期与星期格式）
+- 分组按**视觉顺序**而非数组下标判断：「该天最早一条」的上方才是日期真正变换处；
+  按下标递增比较会把分界线插错位置。此逻辑已用 12 例单测锁住
+  （含跳月、跳年、闰日号相同等边界）
+
+- One-to-one chats, group chats and the message feed now insert a **date divider** per
+  day: Today / Yesterday / “2026-09-11 Fri”, formatted per language. Grouping is decided
+  by **visual order**, not array index — the divider belongs above the earliest message
+  of each day, and comparing indices in order would place it wrongly. The logic is
+  pinned by 12 unit tests covering month/year rollovers and same-day-of-month cases.
+---
+
+---
+
+### 🐛 修复：翻译成功后界面不显示 / Fixed: translation succeeded but nothing showed
+
+- **根因**：只有**消息瀑布流**的气泡渲染了译文块，**会话/群聊气泡漏了** ——
+  状态里确实拿到了译文（长按面板也会变成「重新翻译」），但气泡里永远不显示，
+  看上去像「翻译功能没反应」
+- 现两个气泡都渲染译文块；并加了一条**源码级防回归测试**
+  （断言 `_bubble` 与 `_feedBubble` 都调用 `translationBlock`）——
+  这类「编译通过、无异常、界面静默少一块」的漏接只能靠测试挡住。
+  该测试已验证「删掉译文块时会精确失败」
+- 另修两个会造成「看起来没翻译」的问题：
+  - **默认「我的语言」现在跟随界面语言**（以前固定回落 zh，中文界面下把中文译成中文
+    = 原文照抄，看起来像没翻译）
+  - **接口未配置时给出可操作引导**：长按面板会显示提示，且「翻译」按钮直接变成
+    「翻译设置」带你过去，而不是发一次注定失败的请求
+- 新增 `test/chat_translate_ui_test.dart`（16 例）：译文块的对照/隐藏/翻译中/失败/无译文
+  与方向标签、两个气泡的接续、会话键与消息指纹、双向目标语言解析
+
+- **Root cause**: only the **message feed** bubble rendered the translation block; the
+  **conversation/group bubble did not**. The state really held the translation (the
+  long-press sheet even switched to “Translate again”), but nothing ever appeared in the
+  bubble, making the feature look dead. Both bubbles now render it, and a
+  **source-level regression test** asserts that `_bubble` and `_feedBubble` both call
+  `translationBlock` — this class of “compiles, no exception, silently missing UI” can only
+  be caught by a test. The test was verified to fail precisely when the block is removed.
+  Also fixed two issues that made translation look broken: **“my language” now defaults to
+  the UI language** (it used to fall back to zh, so a Chinese UI translated Chinese into
+  Chinese — verbatim, looking like nothing happened), and **an unconfigured provider is
+  now actionable**: the long-press sheet explains it and turns the translate action into
+  “Translation settings”, instead of firing a request that is bound to fail. Adds
+  `test/chat_translate_ui_test.dart` (16 cases) covering the contrast/hidden/pending/
+  failed/absent states, the direction tag, both bubbles, conversation keys and message
+  fingerprints, and two-way target resolution.
+---
+
+## [1.6.98] - 2026-09-13
+
+### 🏅 授予 BA7KSM「开发人员」/ BA7KSM granted the Developer badge
+- `members.json` v45：BA7KSM 以**开发人员**（`developer`）身份加入 `developers` 名单，
+  官网会员卡 / 荣誉墙推送后即可见（**无需发版**）
+- App 侧同步登记**离线兜底**（`_seedDefaults`），断网时徽章同样显示 ——
+  否则未拉到 `members.json` 前该徽章会被整条跳过
+- 关于页「代码贡献」新增 **翻译 · BA7KSM** 一行；同时补齐官网三语贡献者块与
+  README 三语致谢名单
+- 新增 1 个文案键 × 6 语言（`codeContributionTranslation`）
+
+- `members.json` v45: BA7KSM joins the `developers` list with the **Developer** badge
+  (`developer`); the website member card and honor wall pick it up right after the push
+  (**no release needed**). The app also registers an **offline fallback** so the badge shows
+  without network — otherwise the whole badge is skipped until `members.json` arrives. The
+  About page's “Code contributions” card gains a **Translation · BA7KSM** row, and the
+  website contributor blocks plus the three README thanks-lists are updated. Adds 1 message
+  key × 6 languages (`codeContributionTranslation`).
+
+## [1.6.97] - 2026-09-13
+
+> 📌 本版**包含 v1.6.96 的全部改动**（该版本未单独发版），以下一并列出。
+>
+> This release also **includes everything from v1.6.96**, which was never published on its own.
+
+### 🏅 荣誉墙：显示每枚徽章的「获得条件」 / Honor wall: how to earn each badge
+- 荣誉墙的每一枚徽章新增一行 **「获得条件」**（**未点亮的也显示**）——
+  此前只显示诗意描述，想知道「怎么拿到」只能去官网
+- 条件来自 `members.json` 的 `honors[].criteria`，与官网 `badge.html` **同一数据源**，
+  所以官网改了条件、App 下次启动即同步（**无需发版**）
+- 回退链与徽章名 / 描述一致：**该语言 → 英文 → 中文基准**；
+  **三者都没有时整行隐藏**（不留空白行）
+- **离线可用**：8 枚徽章的三语条件已内置为兜底，与官网口径一致
+- 已点亮徽章同样显示（与官网一致，便于回顾自己的来路）
+- 新增 1 个文案键 × 6 语言（zh / zh-TW / en / ja / id / es）
+
+- Every badge on the honor wall now shows a **“How to earn”** line — **including locked
+  badges**, which previously showed only a poetic description and left you to visit the
+  website to find out how to get one. Criteria come from `honors[].criteria` in
+  `members.json`, the **same source as the website's `badge.html`**, so edits there reach the
+  app on next launch **without a release**. The fallback chain matches the badge
+  name/description (**this language → English → Chinese baseline**), and the whole line is
+  hidden when none is available rather than leaving a blank row. The eight badges' criteria
+  ship as an offline fallback, and unlocked badges show them too.
+
+### 📡 台站面板：新增「APRS.tv」查看 / Station panel: APRS.tv lookup
+- 快捷操作区新增 **APRS.tv** 按钮，点击**弹出底部面板**选择入口：
+  - **详情页** → `aprs.tv/info/<呼号>`
+  - **在地图上查看** → `aprs.tv/?call=<呼号>`
+- 两个入口不是同一件事（一个是台站资料页、一个是地图定位），所以**不直接跳转**，
+  先让用户选；面板每行还显示实际链接（去掉 `https://` 前缀），便于核对
+- 呼号用**完整呼号（含 SSID）**，与 aprs.fi 查询一致 —— APRS 服务靠 SSID 区分同一
+  操作员的多个设备（如 `BG7ABC-9` 车载台 / `BG7ABC-7` 手持）
+- 新增 3 个文案键 × 6 语言（zh / zh-TW / en / ja / id / es）
+
+- The quick-actions row now has an **APRS.tv** button that opens a **bottom sheet** with two
+  entry points: **Station page** (`aprs.tv/info/<call>`) and **View on map**
+  (`aprs.tv/?call=<call>`). They are not the same destination, so the app asks rather than
+  guessing; each row also shows the actual URL (with the `https://` prefix stripped) for
+  verification. The **full callsign including SSID** is used, matching the aprs.fi lookup —
+  APRS services rely on the SSID to tell an operator's devices apart
+  (e.g. `BG7ABC-9` mobile vs `BG7ABC-7` handheld).
+
+## [1.6.95] - 2026-09-13
+
+### 🌏 首次启动向导：不再默认勾选「中国」 / Setup wizard: no longer pre-selects China
+- **接收范围**改为**默认不勾选任何国家/地区**。不勾选 = **不做限制、接收全部台站**
+  —— 原先默认 `['CN']` 会让**海外用户开箱只见中国台站**，得自己找到设置去改
+- 向导里的**说明文案**相应改写，明确「勾选要接收的国家/地区；不勾选则接收全部台站」
+
+- The **receive range** now starts with **no country/region selected**. Nothing selected means
+  **no restriction — all stations are received**. The previous default `['CN']` meant
+  **users outside China saw only Chinese stations** out of the box. The wizard's explanatory
+  text was rewritten accordingly.
+
+### 🔀 「其他台站」开关前移到国家列表之前 / “Other stations” moved above the country list
+- 该开关是「**是否也接收未勾选国家的台站**」的总开关，而国家列表有 **25 项** ——
+  原位置在列表**底部**，要滑很久才看得到
+- **向导与设置页两处**都把它移到了国家列表**上方**
+
+- This switch controls whether stations from **unselected** countries are also received, yet it
+  sat **below** a **25-item** country list. It now appears **above** the list, in **both** the
+  setup wizard and Settings.
+
+### 🗑️ 删除会话：同时移出会话列表 / Deleting a chat now also removes it from the list
+- 修正「删除后行仍在列表里」：**收藏 / 手动联系人**即使一条消息都没有也会出现在会话列表里，
+  只删消息它们会继续留着，看起来像没删掉
+- 现在删除会话会**一并撤下这两个标记**（`_clearContactFlags`），行确实消失
+  - 只清标记、**不删台站本身** —— 台站仍可能通过 APRS 报文收到；把它从台站列表抹掉是
+    台站面板「删除台站」的事，两者语义不同
+  - 同时推进 `stationsVersion`（会话列表缓存键的一部分），否则列表不会刷新
+- **批量删除**同样处理；确认框文案也补充了「该会话将从列表中移除」
+
+- Fixed rows lingering after deletion: **favourites / manual contacts** show up in the chat list
+  even with zero messages, so deleting only the messages left them visible. Deleting a chat now
+  **also clears those two flags**, so the row really disappears. Only the flags are cleared —
+  **the station itself is kept** (it may still be heard over APRS; removing it from the station
+  list is a separate action in the station panel). `stationsVersion` is bumped so the list
+  actually refreshes. Batch delete behaves the same, and the confirmation text now says the chat
+  will be removed from the list.
+
+### 📤 ADIF 导出：完成后弹出选择提示 / ADIF export: action dialog on completion
+- 导出成功后不再只弹一条 SnackBar，改为**选择对话框**：
+  **复制路径** / **打开所在目录** / **完成**，并显示已保存的完整路径
+- 「打开所在目录」**仅在 Windows 提供** —— 那里拿到的是真实文件路径，可用资源管理器定位；
+  Android 存的是 MediaStore 相对路径（`Download/xxx.adi`），**不是可定位的真实路径**，
+  显示该按钮会点了没反应
+
+- A successful export now shows an **action dialog** (copy path / open containing folder / done)
+  with the full saved path, instead of a transient SnackBar. **Open containing folder is
+  Windows-only**: there we have a real path that Explorer can reveal, whereas Android stores a
+  MediaStore relative path (`Download/xxx.adi`) where the button would do nothing.
+
+## [1.6.94] - 2026-09-13
+
+> 📌 本版**包含 v1.6.93 的全部改动**（该版本未单独发版），以下一并列出。
+>
+> This release also **includes everything from v1.6.93**, which was never published on its own.
+
+### 🇪🇸 新增西班牙语 / Spanish
+- 新增 **西班牙语（es）** 界面，**1187 个文案键全部翻译完成**（无回落英文的遗漏项）
+- 设置页与首次启动向导（OOBE）的语言选项新增「**Español**」
+- 4 个 ICU select 逐语言补齐：**APRS 符号名 62 例**、符号分类 7 例、
+  **国家/地区 27 例**、星期 7 例
+- 语言选项在**两处入口**都已加（设置页 + OOBE）
+
+- Added a **Spanish (es)** interface with **all 1,187 message keys translated** (nothing left
+  falling back to English). The language picker in Settings and in the first-run wizard now
+  offers **Español**, and all four ICU selects were expanded per locale (62 APRS symbol names,
+  7 symbol categories, 27 countries/regions, 7 weekdays).
+
+### 🌐 荣誉墙 / 赞助墙：西班牙语回落英文 / Honors & sponsors fall back to English
+荣誉、成就与赞助文案由 `members.json` / `sponsors.json` 下发，**只维护 zh / zh-TW / en 三套**，
+所以西班牙语界面下这些内容会**显示英文**（而非中文）—— 与日语/印尼语的处理一致。
+
+Honor, achievement and sponsor copy ships in **zh / zh-TW / en only**, so under Spanish those
+sections display **English** rather than Chinese — the same behaviour as Japanese and Indonesian.
+
+### 🔧 顺带修复：版本号不一致 / Fix: inconsistent version string
+- 开发过程中曾出现 **`lib/state.dart` 的 `appVersion` 漏提交**，导致代码里是 `1.6.92`
+  而 `pubspec.yaml` 已是 `1.6.93`（两处不一致；**未影响任何已发布版本**）。现已同步
+- 影响面很小（`appVersion` 用于信标/识别时的版本上报），但属真实疏忽，已改正
+
+- During development the **`appVersion` constant in `lib/state.dart` was left out of a commit**,
+  so the code reported 1.6.92 while `pubspec.yaml` said 1.6.93 (**no released build was
+  affected**). Now synchronised.
+
+> ⚠️ **译文质量说明**：西语译文为**机器翻译质量的首版**，术语按统一口径处理
+> （indicativo / baliza / cuadrícula / digipeater 等），但**我无法自评其地道程度**。
+> 如发现不自然的表述，请告知具体键或句子，修正很快。
+>
+> **Translation quality**: this first Spanish pass is machine-translation quality with consistent
+> terminology (indicativo, baliza, cuadrícula, digipeater…), but **I cannot judge how natural it
+> sounds to a native speaker**. Report any awkward wording and it is quick to fix.
+
+### 🏫 赞助页：合作院校改用全称 / Sponsor page: partner university full name
+- 青岛科技大学业余无线电俱乐部（BA4JLD）的名称由「青科大学业余无线电爱好者俱乐部」
+  更正为「**青岛科技大学业余无线电俱乐部**」
+  - 「青科大学」实为**笔误**：同一条目的英文一直写作
+    `Qingdao University of Science and Technology Amateur Radio Club`（官网缩写 QUST），
+    中文却少了「岛」字
+  - 官网页三处（简体 / 繁體 / English）+ App 数据源 + App 内置兜底，**共 5 处已统一**
+  - 官网与 App 的排版都会**自动换行**（无 `nowrap`、无省略号截断），故按需求采用**全称**
+    而不是简称
+- 顺带统一「爱好者」的不一致：App/JSON 原写「业余无线电**爱好者**俱乐部」，但同一条目的
+  英文写 `Amateur Radio Club`、官网两处也写「俱乐部」——现统一为「俱乐部」
+
+- The partner club for BA4JLD was corrected to its **full name,
+  青岛科技大学业余无线电俱乐部** (Qingdao University of Science and Technology Amateur
+  Radio Club). The previous Chinese text was missing a character — the English in the very
+  same entry always spelled the university out in full. All five places (three website pages,
+  the app data source, and the app's built-in fallback) are now consistent. Both the website
+  and the app wrap this text rather than truncating it, so the full name is used as requested.
+
+### 🌐 修复赞助名单的多语言缺失（真 bug）/ Fixed missing translations in sponsors.json
+- `sponsors.json` 原先每条**只有中文字段 `desc`**，而 App 在线加载成功后会**整体替换**
+  内置兜底 → 于是**所有非中文语言都显示中文**；也就是说，之前「日语 / 印尼语赞助页
+  改用英文」的修复**对在线数据实际并未生效**（只对离线兜底有效）
+- 现为全部 **7 条**补齐 `descs` 与 `names`（均含 zh / zh-TW / en）
+- 关键细节：`descs` **必须包含 `zh`**。App 的取值链是 `m[lang] ?? m['en'] ?? base`，
+  若只给 `en` / `zh-TW`，则 `lang='zh'` 时会直接落到**英文**，反而把中文用户变成英文
+
+- Every entry in `sponsors.json` previously carried **only a Chinese `desc`**. Because the
+  app **replaces** its built-in fallback once the online list loads, every non-Chinese
+  language showed Chinese — so the earlier "ja/id sponsors in English" fix was in fact
+  **not in effect for the live data** (offline only). All **7 entries** now carry `descs` and
+  `names` in zh / zh-TW / en. Note that `descs` **must include `zh`**: the lookup chain is
+  `m[lang] ?? m['en'] ?? base`, so providing only `en`/`zh-TW` would send Chinese users to
+  English instead.
+
+> 官网与 `sponsors.json` **推送后约 1 分钟即生效**；App 的**内置兜底**需随本版本更新。
+>
+> The website and `sponsors.json` take effect about a minute after push; the app's **built-in
+> fallback** ships with this release.
+
+## [1.6.92] - 2026-09-13
+
+### 📶 导出 ADIF：新增「频率（FREQ）」，可自定义 / ADIF export: custom FREQ
+- 导出页新增 **频率（FREQ）** 输入框（单位 **MHz**），由你自己填写（各地 APRS 频率不同，App 无从得知）
+- 提供**常用频率快选**：**144.640 / 144.800 / 144.390 / 145.825**（中国 / 欧洲 / 北美 / 国际空间站）
+  —— 点一下填入，**仍可手改任意值**（只做快捷方式，不做固定下拉：写死列表一定会漏地区）
+- **宽容规范化**：自动去首尾空白、去掉误粘的单位后缀 `MHz`、把欧式逗号小数自动改正
+- **小数分隔符一律用 `.`**：ADIF 规定与操作系统语言环境无关；若原样写 `<FREQ:7>144,640`，
+  欧/法语区的日志软件会解析错位
+- **格式非法时禁用导出并就地提示**（如填了 `abc`），而不是静默丢掉你填的值
+- **与 BAND 相互独立**，可同时写入（很多日志软件两者都要）；选项会被记住
+
+- The export page now has a **Frequency (FREQ)** field in **MHz**, which you fill in yourself
+  (APRS frequencies vary by region and the app cannot know yours).
+- **Quick presets**: **144.640 / 144.800 / 144.390 / 145.825** (China / Europe / North America / ISS)
+  — one tap to fill, and you can still type any value. Presets only, no fixed dropdown, because a
+  hard-coded list will always miss some region.
+- **Lenient normalisation**: trims whitespace, drops a pasted `MHz` suffix, and fixes
+  comma decimals.
+- **The decimal separator is always `.`**: ADIF is locale-independent; writing
+  `<FREQ:7>144,640` would misparse in European/French logbooks.
+- **Invalid input disables the export button with an inline hint** instead of silently dropping
+  what you typed.
+- **Independent of BAND** — both can be written at once, and your choices are remembered.
+
+### 🧪 回归测试 / Regression tests
+- `test/adif_test.dart` 扩到 **34 项**：新增 7 项 FREQ 用例，包括「**逗号必须被转成点**」
+  （语言环境陷阱）与「**非法输入一律拒绝**」；仍在 UTC 与 Asia/Shanghai 两时区下各验一遍
+
+- `test/adif_test.dart` grew to **34 tests**, adding 7 FREQ cases including
+  "**commas must become dots**" (the locale trap) and "**invalid input is always rejected**";
+  still verified under both UTC and Asia/Shanghai.
+
+## [1.6.91] - 2026-09-12
+
+### 📤 导出 ADIF：新增可选导出选项（修好导入被拒） / ADIF export: selectable options (fixes import rejection)
+- **修好上一版导不进去的问题**：上一版只写 `CALL` / `QSO_DATE` / `TIME_ON`，**不写 `MODE`**；
+  而 `MODE` 是多数日志软件的**必需**字段，QRZ Logbook 会因为「缺少 MODE」**拒收全部记录**
+- 导出页新增**「导出选项」**，可自行选择：
+  - **MODE**：`PKT`（数据包，**默认**，QRZ 推荐）/ `FM`（语音）/ `DATA`（数据）/ 不写
+  - **附加 SUBMODE=APRS**：开关，默认开（未选 MODE 时自动置灰 —— ADIF 规定 SUBMODE 不能脱离 MODE）
+  - **BAND**：不写（默认）/ 2m / 70cm / 1.25m / 23cm / 6m
+  - **只写基础呼号（去掉 -SSID）**：默认关；开启后 `BG7PGW-2` → `BG7PGW`
+    （部分日志软件的呼号校验只认基础呼号）
+- 选项会被**记住**，下次进入仍是上次的选择
+- 新增**预览**：直接显示即将写出的那条记录，可先核对再导出
+- 字段长度仍按 **UTF-8 字节数**、时间仍写 **UTC**（未变）
+
+- **Fixed the previous version being un-importable**: it wrote only `CALL` / `QSO_DATE` /
+  `TIME_ON` and **omitted `MODE`** — but `MODE` is **required** by most logbooks, so QRZ
+  Logbook rejected every record with “missing MODE”.
+- The export page now has **Export options**:
+  - **MODE**: `PKT` (packet, **default**, recommended for QRZ) / `FM` / `DATA` / omit
+  - **Add SUBMODE=APRS**: default on (greyed out when no MODE is chosen, since ADIF forbids
+    SUBMODE without MODE)
+  - **BAND**: omit (default) / 2m / 70cm / 1.25m / 23cm / 6m
+  - **Base callsign only (drop -SSID)**: default off; when on, `BG7PGW-2` → `BG7PGW`
+- Your choices are **remembered** for next time, and a **preview** shows the exact record
+  that will be written.
+
+### 🔧 顺带修复：导出文件名被追加 `.txt` / Fix: exported filename gained a `.txt` suffix
+- Android 导出到「下载」时，部分系统会按 MIME 类型给文件名**追加 `.txt`**，
+  使 `APRSlocus_….adi` 变成 `APRSlocus_….adi.txt`；现在写入后核对实际文件名并改回
+
+- On Android, some systems **appended `.txt`** to the exported file (because of its
+  `text/plain` MIME type), turning `APRSlocus_….adi` into `APRSlocus_….adi.txt`. The actual
+  display name is now read back and corrected.
+
+### 🧪 回归测试 / Regression tests
+- `test/adif_test.dart` 扩到 **27 项**：新增 MODE/SUBMODE/BAND/去SSID 的用例，
+  其中两条专门钉住「**默认必写 MODE**」与「**SUBMODE 不得脱离 MODE**」，
+  另有一条断言**预览与实际写出内容同源**（预览若另走一套拼接就会骗人）
+
+- `test/adif_test.dart` grew to **27 tests**, adding MODE / SUBMODE / BAND / SSID cases —
+  including “**MODE is written by default**”, “**SUBMODE never appears without MODE**”, and
+  an assertion that the **preview and the real output share one code path**.
+
+## [1.6.90] - 2026-09-12
+
+### 📤 新增「导出 ADIF」（设置页 → 在「关于」上方） / ADIF export (Settings → above About)
+- 设置页新增 **「导出 ADIF」** 入口，位于 **「关于」上方**
+- 进入后可**勾选会话**（群聊 + 单聊），支持**全选 / 取消全选**，点「导出」生成 `.adi` 文件
+- 每条记录只写 **呼号 + 时间**（CALL / QSO_DATE / TIME_ON），**不写模式与频段** ——
+  APRS 的频段 App 无从得知，写入错误信息比留空更麻烦；导入后自行补即可
+- 时间取该会话**首条消息**时刻，且按 ADIF 规范写作 **UTC**
+- 只列出**有消息的会话**：ADIF 每条记录都要求通联时间，从未通联过的收藏联系人拿不到时间，
+  列出来只会导出一条时间错误的日志，所以直接不列
+- 兼容 ADIF 3.x（`<名称:长度>值`，长度为 **UTF-8 字节数**），可直接导入 Log4OM、N3FJP 等日志软件
+
+- **Settings → Export ADIF**, placed **above About**. Tick conversations (group + 1:1), use
+  **select all / deselect all**, then export a `.adi` file. Each record contains **only the
+  callsign and time** (CALL / QSO_DATE / TIME_ON) — **no mode or band**, because the band is
+  not knowable from APRS and wrong data is worse than none. The time is the conversation's
+  **first message**, written in **UTC** per the ADIF spec. Only conversations **with
+  messages** are listed, since ADIF requires a contact time. Compliant with ADIF 3.x
+  (`<NAME:len>value`, len = **UTF-8 byte count**) and importable into Log4OM, N3FJP, etc.
+
+### 💾 文件保存位置 / Where the file is saved
+- **Android**：「下载」目录。Android 10 及以上走 MediaStore，**无需任何存储权限**；
+  Android 9 及以下写入应用外部目录（同样免权限，且该系统版本下可被文件管理器直接看到）
+- **Windows / 桌面**：写入「文档」目录
+- 保存后在页内显示完整路径，并提供「**复制路径**」
+
+- **Android**: the **Downloads** folder. On Android 10+ this uses MediaStore and needs
+  **no storage permission at all**; on Android 9 and below it writes to the app's external
+  folder (also permission-free, and browsable by file managers on those versions).
+- **Windows / desktop**: the **Documents** folder. The full path is shown afterwards,
+  with a **Copy path** button.
+
+### 🧪 回归测试 / Regression tests
+- 新增 `test/adif_test.dart`（14 项）：钉住 ADIF 最易错且**不会报错、只会静默解析错乱**的两点 ——
+  **字段长度是 UTF-8 字节数（非字符数）**、**日期时间必须是 UTC**；并在 UTC 与
+  非 UTC 时区下各跑一遍验证
+
+- Added `test/adif_test.dart` (14 tests) pinning ADIF's two silent-failure traps:
+  **field lengths are UTF-8 byte counts (not character counts)** and **timestamps must be
+  UTC**; verified under both UTC and a non-UTC timezone.
+
+## [1.6.89] - 2026-09-12
+
+### 💬 会话管理：对齐与布局修正 / Chat management: alignment & layout fixes
+- **修正「管理」按钮错位（垂直）**：计数徽章与「管理」按钮此前用了**不同的内边距**（3 / 4），
+  两个高度不同的胶囊并排 → 文字基线不齐。现统一为**固定高度 26 + 垂直居中**，
+  并统一圆角，「管理」/「完成」与计数徽章严格对齐
+- **修正「管理」按钮偏移（水平）**：标题此前用 `Flexible` 且其后跟 `Spacer`，两者 flex
+  都是 1 → 各分走一半空白；而 `Flexible` 用不完的那份会被留到最右侧，导致尾部的
+  计数/管理按钮**离右边缘有 37.5px 空隙**（中文短标题「会话」实测；英文标题够长
+  会占满份额，碰巧掩盖了这个 bug）。现改用 `Expanded` 吃掉全部剩余宽度，
+  按钮**严格贴右**（实测空隙 0）；并新增布局回归测试钉住该不变量
+- **修正切换管理时的列表跳动**：管理模式标题原为 16px、普通模式为 20px，
+  两种模式行高不同 → 切换时下方列表上下跳。现统一标题字号
+- **重做管理工具栏**：管理模式**整行切换**为「已选 N 项 + 全选 + 删除 + 完成」，
+  不再与标题挤在同一行；按钮改为等高图标按钮，窄屏（横屏列表栏仅 280 宽）也不挤
+- **新增左滑删除**：会话列表项**左滑即出现删除**，与「管理」多选互补——
+  既能快速单删，也能批量删（管理模式下自动禁用左滑，避免勾选时误删）
+- 选中标记统一为红色，与选中行的红底/红边构成同一个「待删除」信号
+
+- **Fixed the misaligned Manage button (vertical)**: the count badge and the Manage button
+  used **different vertical padding** (3 vs 4), so two unequal-height pills sat side by
+  side with mismatched baselines. Both are now a **fixed height of 26, vertically
+  centred**, with matching corner radii — the badge, Manage and Done line up exactly.
+- **Fixed the offset Manage button (horizontal)**: the title used `Flexible` followed by a
+  `Spacer`, both with flex 1, so they split the free space in half — and the title’s unused
+  share was left at the far right, pushing the count/Manage buttons **37.5px away from the
+  right edge** (measured with the short Chinese title 「会话」; the longer English title only
+  hid the bug by filling its share). The title is now an `Expanded` that consumes all
+  remaining width, so the buttons sit **flush right** (measured gap 0), with a layout
+  regression test pinning the invariant.
+- **Fixed the list jumping when entering manage mode**: the manage title was 16px while the
+  normal title was 20px, so the header changed height and the list below shifted. Both
+  modes now use the same title size.
+- **Rebuilt the manage toolbar**: manage mode swaps the **whole row** for
+  “N selected + select all + delete + done” instead of cramming controls beside the title;
+  controls are equal-height icon buttons that fit even at 280px wide.
+- **Added swipe-to-delete**: swiping a conversation left reveals **Delete**, complementing
+  multi-select — quick single deletes and batch deletes both work. Swipe is disabled in
+  manage mode so ticking rows can’t be deleted by accident.
+- Selection ticks are now red, matching the red row tint for one consistent
+  “to be deleted” signal.
+
+## [1.6.88] - 2026-09-12
+
+### 📡 台站面板：新增台站操作菜单（收藏 / 复制呼号 / 删除台站） / Station panel: actions menu
+- 台站详情面板右上角新增**可见的「⋮」菜单**，不再把操作藏在手势里
+- **收藏 / 取消收藏**：一键标记常看的台站
+- **复制呼号**：复制到剪贴板，方便粘贴到日志或消息
+- **删除台站**：二次确认后从台站列表移除；若再次收到其报文会重新出现
+  （若该台站是收藏 / 手动联系人，删除会一并移除）
+
+- The station detail sheet now has a **visible “⋮” menu** instead of hiding actions
+  behind gestures: **favourite / unfavourite**, **copy callsign**, and **delete station**
+  (with a confirmation). A deleted station reappears if its packets are heard again;
+  deleting also removes it from favourites / manual contacts.
+
+### 💬 会话管理：不再只有长按删除 / Conversation management: no more long-press-only delete
+- 会话列表右上角新增**可见的「管理」按钮**（此前只能长按删除，界面没有任何提示，很难发现）
+- 进入管理后可**多选**会话：点按选中 / 取消，并支持**全选 / 取消全选**
+- 工具栏显示**已选数量**与**删除**按钮，可一次删除多个会话（带二次确认）
+- **长按**会话现在 = 进入管理并选中该项（保留快捷操作，但不再直接删除，避免误触）
+- 单聊删除全部消息；群聊只清消息、**保留群组本身**
+- 已读时间点一并清理；若正停留在被删除的会话上会自动退回会话列表
+
+- The conversation list header now has a **visible Manage button** (previously deletion
+  was long-press-only with no affordance at all). Manage mode supports **multi-select**,
+  **select all / deselect all**, and a toolbar showing the **selected count** plus a
+  **delete** action with confirmation. **Long-press** now enters manage mode and selects
+  that row — still quick, but no longer a destructive surprise. 1:1 chats delete all
+  messages; groups clear messages but **keep the group itself**.
+
+### 🌐 新增 14 条界面文案（中 / 繁 / 英 / 日 / 印尼） / 14 new UI strings (zh / zh-TW / en / ja / id)
+- 覆盖「管理、全选 / 取消全选、已选数量、删除确认、台站操作、复制呼号、删除台站」等
+- 新文案已补齐全部 5 种语言，与既有键集保持一致（每语 1160 键）
+
+- Covers manage / select-all / selected-count / delete confirmation / station actions /
+  copy callsign / delete station. All five locales are complete and consistent
+  (1160 keys each).
+
+## [1.6.87] - 2026-09-12
+
+### 🗑️ 消息会话列表：新增删除聊天 / Delete a chat from the conversation list
+- **长按**会话列表项即可删除该会话的聊天记录
+- **单聊**：删除与该呼号的全部消息，会话从列表消失（收藏 / 手动联系人仍保留）
+- **群聊**：只清空该群的消息，**群组本身保留**（解散群组仍在群详情里，是更重的操作，不混在此处）
+- 若当前正停留在被删除的会话上，自动退回会话列表（否则会停在一个已不存在的会话里，
+  头部还挂着已删除的呼号）
+
+- **Long-press** a conversation to delete its chat history.
+- **1:1 chats**: every message with that callsign is removed and the row disappears
+  (favourites / manual contacts stay listed).
+- **Group chats**: only the messages are cleared — the **group itself is kept**
+  (dissolving a group still lives in group details and is a heavier action).
+- If you were viewing the deleted conversation, you are returned to the list.
+
+### 🌐 荣誉墙 / 赞助墙：日语、印尼语改用英文 / Honors & sponsors use English for ja/id
+- 荣誉、成就、赞助墙的文案由 `members.json` / `sponsors.json` 下发，目前只维护
+  **zh / zh-TW / en 三套**；此前日语、印尼语界面会**回落成中文**
+- 现改为**统一回落英文**（`honorLangOf` 只认 en），并给 `Honor` / `Achievement` /
+  赞助条目加上「该语言 → **英文** → 中文基准」的逐级回落
+- 内置的赞助兜底名单补齐 zh-TW / en 文案（并支持 sponsors.json 下发多语言字段）
+
+- Honor, achievement and sponsor copy ships in **zh / zh-TW / en** only; Japanese and
+  Indonesian used to **fall back to Chinese**. They now fall back to **English**
+  instead, via a per-language → English → Chinese chain in `Honor` / `Achievement` /
+  sponsor entries. The built-in sponsor fallback list gained zh-TW / en copy and can
+  now take multilingual fields from `sponsors.json`.
+
+### 🏅 荣誉授予 / Honors granted
+- **BI4BNF** 授予「早期成员」（`members.json` v43）
+- **BH6RIZ** 追加「开山」（`primary` 取「开山」，与最初三位创始人一致）
+- 两者均为纯数据改动，App 与官网**运行时拉取，即时生效，无需发版**
+
+- **BI4BNF** granted *Early member*; **BH6RIZ** additionally granted *Founding pioneer*
+  (`members.json` v43). Pure data changes — fetched at runtime, effective immediately.
+
+## [1.6.86] - 2026-09-12
+
+> 自 v1.6.82 起的改动合并为此版发布（v1.6.82~v1.6.85 未单独发版）。
+> Changes since v1.6.82 are all released together in this version
+> (v1.6.82~v1.6.85 were not released on their own).
+
+### 🌐 新增日语与印尼语（译文已全部完成）
+
+新增 **日本語** 与 **Bahasa Indonesia** 两种界面语言，共 1143 个文案键。
+
+**译文已 1143 / 1143 条全部完成**（日、印尼各一套）。
+配套的语言选项、解析链路、生成类、校验全部就绪。
+
+改动内容：
+
+- 新增 `app_ja.arb` / `app_id.arb`（键集与 zh/en/zh_TW 完全一致）
+- 新增 `app_localizations_ja.dart` / `app_localizations_id.dart`
+  （**由 `flutter gen-l10n` 生成**，非手写——我用它重新生成现有三种语言，
+  产物与仓库里手工维护的文件**键集完全一致零差异**，确认工具可靠）
+- `supportedLocales` / `isSupported` / `lookupAppLocalizations` 接入 ja、id
+- 语言选项：**设置页 + OOBE 两处**都加上（原先只有 中/繁/英）
+- `AppState.l10n`（无 BuildContext 场合）加 ja/id 分支
+- `terms_page`：非中文语言的协议正文回落到**英文**（原先会回落中文；
+  目前只有中英两套协议正文，日语/印尼语协议待补）
+
+流程保障（避免再让 CI 挂）：译文逐条做 **JSON 转义往返校验**，
+并断言**占位符集合与中文原文完全一致**（`{name}` 少一个就会输出错乱）。
+
+- Added **Japanese** and **Indonesian** UI locales (1143 keys each).
+- **This commit lands the plumbing**: both locales are selectable, resolve
+  correctly and verified end-to-end. **Translation is complete: 1143 / 1143 keys**
+  for both Japanese and Indonesian, along with the language pickers, resolution
+  chain and generated classes.
+- New ARBs + generated Dart classes (`flutter gen-l10n` — verified by regenerating
+  the three existing locales and diffing: identical key sets, zero drift).
+- Wired into `supportedLocales` / `isSupported` / `lookupAppLocalizations`, both
+  language pickers (settings + OOBE) and `AppState.l10n`.
+- `terms_page` now falls back to the **English** terms text for non-Chinese locales
+  (ja/id terms documents are still to be written).
+
+
+### 🐛 修复「APRSlocus 同款软件」识别失效（v1.6.80 引入的回归）
+
+你反馈「分类标签好像不起效了」——查证属实，而且**根因是我自己在 v1.6.80 造成的**。
+
+当时的判定是「备注或呼号含 `APRSlocus`」，但同一个版本里我又把**版本号从位置包
+备注移到了状态包**、且**备注默认留空** ——于是 APRSlocus 台站的备注里再也不可能出现
+「APRSlocus」→ 判定全部落空。
+
+受害面比筛选更大（同一个判定被复制成两处）：
+
+| 使用处 | 症状 |
+|---|---|
+| 台站筛选「APRSlocus」chip | 命中 **0** |
+| 统计面板的 APRSlocus 计数 | 恒为 **0** |
+| `stationAllowedFor`（开启「接收其他台站」时） | APRSlocus 台站被**误过滤掉** |
+| 台站详情「APRSlocus 信息」区块 | 不显示 |
+
+数据本身没丢（入库时的判定认 `APALOC`，一直是对的），只是**没人去用它**。
+
+**修法**：改成多信号判定并按可靠性排序，同时把两份重复逻辑**收敛为一处**（这是它
+会漂移的根因）：
+
+1. `toCall == APALOC/APRSLOCUS/APOLOCUS` —— 报文路径首段的官方标识，最可靠，已持久化
+2. `aprslocus` 字段存在 —— 解析出的专属信息兜底（已持久化）
+3. 备注/呼号关键字 —— 兼容旧版本报文
+
+另外：因为 `toCall` 与 `aprslocus` **都已持久化**，这个修复对**已缓存的历史台站同样生效**，
+不需要等重新收包。
+
+新增 5 项回归测试（含「筛选判定须与 Station 判定一致」，专门防止两套逻辑再漂移）。
+
+- Fixed the broken "APRSlocus same software" detection — a regression I introduced in
+  v1.6.80. The check looked for `APRSlocus` in the comment/callsign, but that same
+  release moved the version tag from the position-packet comment into the status
+  packet and made the comment empty by default — so the text could never match again.
+  It affected the station filter (0 hits), the stats counter (always 0),
+  `stationAllowedFor` (APRSlocus stations wrongly filtered out when "receive other
+  stations" is on) and the station-detail info block.
+- The detection now uses several signals in order of reliability (`toCall`, the parsed
+  `aprslocus` field, then comment/callsign for legacy packets) and the duplicated logic
+  has been collapsed into a single place — that duplication is why it drifted.
+- Because `toCall` and `aprslocus` are both persisted, the fix also applies to already
+  cached stations without waiting for new packets. 5 regression tests added.
+
+
+### 🌐 中文硬编码清理 · 第五批：补上一批我漏掉的 
+
+审计时发现一个**验证方式的缺陷**：我用「字面量是否等于某个 ARB 值」判断是否已本地化，
+但有些键的值**恰好等于字面量本身**（如 `moreSymbols` 的值就是 `更多符号`），
+于是这些「本就该替换却没替换」的位置被当成「已有本地化」跳过了。本批把这 11 处补齐：
+
+| 位置 | 情况 |
+|---|---|
+| `early_member.dart` 徒章墙 / 成就墙 | 这两处**连键都没有**（新增 `badgeWall` / `achievementWall`），且原本是 `const Text` → 去 `const` 才能用 l10n |
+| `terms_page.dart` 刷新 / 在浏览器打开 / 重试 | 自写 `_en ? 'Refresh' : '刷新'` **二元式**，**繁體用户只能看到简体** → 改走 l10n（新增 `openInBrowser`） |
+| `settings_pages.dart` 更多符号 / 请输入有效经纬度 | 键（`moreSymbols` / `invalidLatLng`）早已存在，只是没用 |
+| `settings_page.dart` 取消 / 退出 | 同上（`cancel` / `logout`） |
+| `vector_map.dart` 加载失败 / 加载中 | 同上（`vectorMapLoadFailed` / `loadingVectorMap`） |
+
+提交前自检**当场拓到一个真实错误**：我凭印象写的 `openInBrowser` 键名**并不存在**
+（这正是那次“一次就过”的反例，也是自检价值的体现）。
+
+- **Fifth batch**: my audit had a flaw — it treated a literal as "already localized"
+  whenever its text equalled some ARB value, but for keys like `moreSymbols` the
+  *value is the literal itself*, so genuinely-untranslated sites were skipped.
+  This batch fixes those 11 sites (incl. `terms_page`'s hand-rolled
+  `_en ? 'Refresh' : '刷新'` binary that left Traditional-Chinese users with
+  Simplified text) and adds the missing `badgeWall` / `achievementWall` /
+  `openInBrowser` keys. Two sites were `const Text` and needed the `const` removed.
+
+
+### 🌐 中文硬编码清理 · 第四批：修好「有本地化包但没用上」的地方
+
+查证后发现，剩余中文里有很大一部分**并非缺翻译，而是 UI 没用现成的本地化包** ——
+`widgets.dart` 早就提供了 `localizedLocationStatus` / `localizedConnectionInfo` /
+`localizedAprsSymbolName` / `localizedMapTypeLabel`，但多处界面直接渲染了原始中文：
+
+- **定位状态**（2 处）：地图「我的位置」面板、沉浸地图四角信息 —— 原先只在地图首页
+  经过了本地化，其余位置直接输出 `未定位` / `已定位` 等中文
+- **连接状态**（3 处）：连接页信息行、连接横幅、开发者页状态 —— 已从 1 处扩到全部
+  4 处（均走 `localizedConnectionInfo`）
+- **符号/设备名**（4 处）：消息页台站行（3）与台站详情副标题（1）原先用
+  `s.typeName`（直接输出中文符号名）
+- **地图类型标签**（9 处）：`localizedMapTypeLabel` 里 `Carto 浅色` / `OSM 标准` /
+  `Esri 影像` 等 9 个名称是硬编码中文 → 新增 9 个 l10n 键
+- **地图分组标题**（2 处）：设置页地图选择器的「国内地图 / 国际地图」走 l10n
+  > 注：分组判别符 `'高德' / '其他'` **保留不动** —— 它是 `MapType.group` 的
+  > 数据实参，直接换成 l10n 文案会让分组失效（这是项目里「中文字符串当键」
+  > 的典型坑），已加注释说明。
+
+### 🐛 顺带补一个我自己上一版留下的漏
+
+v1.6.80 新增的定位状态串 `模拟位置 · 后台保活` **不在映射表里** → 会直接把中文
+漏到界面（选择「模拟位置」后地图状态就显示中文）。已补 l10n 键 + 映射。
+
+### 📝 说明
+
+本批所在文件里其余中文属于**有意保留**：
+- `state.dart` 的国家/地区表与 `_log()` 日志（帮助，非必须）
+- `mock_data.dart` 演示数据、`tile_map.dart` 城市标签（北京城区/海淀…）
+- `aprs_device.dart` 的设备类别名已走 `deviceClassLabel(context)`
+- 台站列表/地图的**搜索匹配**仍用中文名（因为它是被搜索的**数据**本身）
+
+- **Fourth batch**: a large part of the remaining Chinese wasn't missing
+  translation at all — the UI simply wasn't using the localization helpers that
+  already existed (`localizedLocationStatus` / `localizedConnectionInfo` /
+  `localizedAprsSymbolName` / `localizedMapTypeLabel`).
+- **Location status** (2), **connection status** (3, now all 4 call sites),
+  **symbol/device names** (4), **map type labels** (9, nine new keys) and the
+  **map group headings** (2) now all go through l10n.
+- The group discriminator `'高德' / '其他'` is deliberately left alone: it is the
+  *data* value of `MapType.group`, so translating it would break the grouping
+  (a textbook case of this project's "Chinese string used as a key" pitfall).
+- **Also fixed a leak I introduced in v1.6.80**: the new location-status string
+  `模拟位置 · 后台保活` had no mapping, so it showed Chinese in the UI.
+- Chinese that remains in these files is intentional: the country table and
+  `_log()` messages in `state.dart`, demo data in `mock_data.dart`, city labels
+  in `tile_map.dart`, and the station-search **matching data** itself.
+
+## [1.6.81] - 2026-09-12
+
+### 🌐 设置页中文硬编码清完（第三批，收尾）/ Settings page fully localized (batch 3)
+- 设置页剩余中文全部改走 l10n，共 **142 处**（新增 121 个文案键，三语齐全）
+- **符号名表**是本次的大头（共 162 行、57 个符号）：原先是**顶层 `const` 表**，
+  顶层没有 `context`，所以把表改成接收 `S` 的函数（`_symCategories(s)` /
+  `_smartQuickSymbols(s)`），名称统一由新增的顶层 `symName(s, code)` 解析；
+  符号码—图标数据不变，只是不再内嵌中文
+- 其余覆盖：主页徽章选择、速度分档规则编辑器（13 处）、天气模拟 11 项、
+  数据清理条目、重新运行向导、WebSocket 提示、退出应用弹窗等
+- 顺带清掉一处重复文案：本次新增的 `radiusSaveHint` 与项目**已有的**
+  `radiusTip` 含义完全相同，已改用既有键（避免两套同义文案）
+- 结果：`settings_pages.dart` + `settings_page.dart` 的可本地化中文字面量 **归零**
+
+- Every remaining hardcoded Chinese string in the settings pages now goes through
+  l10n: **142 sites**, 121 new keys (all three languages).
+- The bulk was the **APRS symbol table** (162 rows / 57 symbols). It was a
+  top-level `const` list, and a top-level constant has no `context`, so the tables
+  became functions taking `S` (`_symCategories(s)` / `_smartQuickSymbols(s)`) with
+  names resolved by a new top-level `symName(s, code)`. The symbol-code/icon data
+  is unchanged — it simply no longer embeds Chinese text.
+- Also covered: home badge picker, the speed-tier editor (13 sites), the 11 weather
+  simulation entries, data-cleanup rows, the wizard-restart dialog, the WebSocket
+  hint and the quit dialog.
+- Removed one duplicate: the newly added `radiusSaveHint` said exactly the same
+  thing as the pre-existing `radiusTip`, so the existing key is used instead.
+- Net result: **zero** localizable Chinese literals left in `settings_pages.dart`
+  and `settings_page.dart`.
+
+## [1.6.80] - 2026-09-12
+
+### 🌐 中文硬编码清理 · 第二批 / Hardcoded-Chinese cleanup, batch 2
+- 补齐 v1.6.79 遗漏的三处：设置页符号表中 `const` 上下文内的字面量已还原
+  （顶层 `const` 符号表里根本没有 `context` 可用，需先做结构性改造）
+- **Fixed the three spots v1.6.79 missed**: literals inside the top-level `const`
+  symbol tables were restored — those tables have no `context` in scope at all, so
+  they need a structural change before they can be localized.
+
+### 💬 聊天输入栏：元素分隔 / Chat composer spacing
+- 输入栏原先内边距 12、输入框与发送键间距仅 8，且底部没有安全区，
+  在手势导航机型上与系统导航条贴死
+- 现在：包一层 `SafeArea`、内边距 14/10、间距 10、输入框加描边、
+  发送键 42→44 —— 输入框与发送键成为两个可分辨的独立控件
+- **Composer spacing**: wrapped in a `SafeArea`, larger padding (14/10), a 10 px
+  gap, an outline on the field, and a 42→44 px send button so the field and the
+  button read as two distinct controls.
+
+### 🔔 模拟位置模式的后台保活 / Keep-alive in simulated-location mode
+- 原先选「模拟位置」会 `loc.stop()` 停掉 **前台服务**，切到后台后进程被冻结：
+  APRS-IS 连接断开、信标定时器停摆、通知也没有了
+- 新增 Android 前台服务 `keepalive` 模式：**不需要定位权限**、不注册任何
+  provider 监听（不额外耗电），仅保留前台服务 + WakeLock，让连接与定时器存活
+- **Simulated location used to kill the foreground service**, so the process got
+  frozen in the background: the APRS-IS link dropped, beacon timers stopped and
+  the notification disappeared. A new `keepalive` foreground-service mode needs
+  **no location permission** and registers no provider listeners (no extra drain)
+  while keeping the service and wake-lock alive.
+
+### 📝 站台备注默认清空 / Empty default station comment
+- 默认备注由 `'APRSlocus 移动台'` 改为**空**；老用户若从未改过该值，
+  升级后自动视为空（其余自定义备注不受影响）
+- **The default comment is now empty** (was `'APRSlocus 移动台'`). Existing users
+  who never changed it are migrated to empty; custom comments are untouched.
+
+### 🏷️ 版本号改由状态数据包上报 / Version tag moved to the status packet
+- 版本号/平台原先追加在**位置数据包**的备注末尾，会污染第三方地图上的备注显示
+- 现改由**状态数据包**上报：`>APRSlocus CONNECT vX.Y.Z 平台`
+- 解析端同时容忍新旧两种格式（可选 `CONNECT`），所以台站详情里的
+  「版本 / 平台」照旧显示；旧版客户端报的台站也不会读不到
+- **The version/platform tag used to be appended to the position packet comment**,
+  which polluted the comment shown on third-party maps. It is now reported in the
+  **status packet** (`>APRSlocus CONNECT vX.Y.Z platform`). The parser accepts both
+  new and old forms (optional `CONNECT`), so station-detail version/platform still
+  shows, including for stations running older builds.
+
+### ⏱️ 在线判定时长可自定义 / Configurable online window
+- 原先写死「5 分钟内上报为在线」。现新增设置项「在线判定时长（分钟）」，
+  范围 1–240，默认仍为 5
+- 实现上由 `Station.effectiveStatus` 读取统一的静态窗口，因此台站列表、
+  地图圆点、统计面板口径完全一致（不会出现「列表离线、地图在线」）
+- **Configurable online window**: previously hard-coded at 5 minutes; there is now
+  an "Online window (minutes)" setting (1–240, default 5). A single shared window
+  feeds `Station.effectiveStatus`, so the station list, map dots and stats panel
+  agree — no more "offline in the list, online on the map".
+
+## [1.6.79] - 2026-09-12
+
+### 🌐 中文硬编码清理 · 第一批：设置页 / Hardcoded-Chinese cleanup, batch 1: settings
+
+- 设置页 **70 处**界面文案改为走 l10n，覆盖「电台身份 / 显示信息 / 定位来源 /
+  信标上报 / 数据维护 / 高级设置」等区块的标题、按钮、提示与开关说明
+- 这批**只替换「ARB 里已存在同名键」的字面量**，因此**零新增翻译**、无回归风险
+- 该文件仍有 **93 处**待处理：符号名表（约 150 项，位于顶层 `const` 表中，
+  需先改结构才能取到 `context`）、带插值的模板文案、无现成键的文案，
+  以及 3 处 `const` 上下文，将在后续版本分批处理
+- 做法：逐行定点替换 + 自动校验（比较语境检测 / 键存在性 / 括号配平 /
+  残留检测），避免误改「中文串当键/当状态」的写法
+
+- **70** hardcoded UI strings in the settings pages now go through l10n
+  (section titles, buttons, hints and switch captions in the station, display,
+  beacon, data-maintenance and advanced pages).
+- Only literals whose text already had a matching ARB key were swapped, so this
+  batch adds **zero new translations** and carries no regression risk.
+- **93** sites in this file remain: the symbol-name tables (which live in
+  top-level `const` lists and therefore have no `context` in scope, so they need a
+  structural change first), interpolated strings, and 3 literals inside `const`
+  contexts; they will ship in follow-up releases.
+- Done with per-line targeted replacement plus automated checks
+  (comparison-context detection, key existence, bracket balance, leftover
+  detection) so that "Chinese string used as a key/state" patterns are never
+  touched by accident.
+
+## [1.6.78] - 2026-09-12
+
+> 说明：自本版起更新日志采用**中英双语**。
+> Note: from this release onward the changelog is bilingual (Chinese + English).
+
+### 🚚 台站详情：发送消息入口提前 / Move the message box to the top
+- 「发送消息」原先沉在页面**最底部**（数据包列表之后），几乎找不到；
+  现移到**头部之后**（呼号/状态下方），进入详情即可直接发消息
+- The "send message" input used to sit at the very **bottom** of the station
+  detail panel (below the packet list) and was hard to find. It now sits
+  directly **under the header**, so it is visible as soon as the panel opens.
+
+### 📐 消息页：英文标签溢出修复 / Fix overflowing English labels
+- **标题行**：`Messages` 与 `Feed/Chats` 切换器同处一行，英文下挤爆窄屏
+  → 标题改为 `Expanded` + ellipsis，剩余宽度让给切换器
+- **快捷操作按钮**：`New conversation` / `Broadcast` / `New group` 明显长于中文，
+  按钮内 `Text` 无省略 → 加 `Flexible` + `maxLines:1` + ellipsis；切换器内边距收紧
+- **Title row**: `Messages` plus the `Feed`/`Chats` toggle overflowed narrow
+  screens in English → title is now `Expanded` + ellipsis.
+- **Quick-action buttons**: the English labels are much longer; their `Text`
+  had no ellipsis → wrapped in `Flexible` with `maxLines: 1` + ellipsis.
+
+### 🏗️ 信标倒计时：状态结构化（i18n 架构修复）
+### / Beacon countdown: structured state (i18n refactor)
+- `AppState.nextBeaconIn` 原先**返回中文字符串**（`'已关闭'`/`'未连接'`/
+  `'等待定位'`/`'45s'`/`'即将'`），UI 还得用 `== '即将'` 去比较 —— 既无法
+  本地化、又极易出错
+- 新增结构化的 `BeaconPhase`（off / disconnected / waitingFix / counting /
+  imminent）与 `beaconSecondsLeft`；UI 改为按 phase 判断 + l10n 渲染
+- `nextBeaconIn` 保留但改为按 `AppState.locale` 自行本地化；
+  通知栏文案（已连接/连接中/在线/收包/信标）一并本地化
+- 移除 `widgets.dart` 里按中文串映射的旧助手 `localizedNextBeaconValue()`
+- 修正繁體中文（`zh_TW`）取本地化实例的判断：本应用语言码用**下划线**
+  （`zh_TW`），此前误写成 `zh-TW`，会让繁體用户回落成简体文案
+- `AppState.nextBeaconIn` used to **return Chinese strings** and the UI even
+  compared with `== '即将'` — unlocalizable and error-prone. Added a structured
+  `BeaconPhase` enum + `beaconSecondsLeft`; the UI now switches on the phase and
+  renders via l10n. Notification-bar texts are localized too, and the legacy
+  Chinese-string-mapping helper was removed.
+- Fixed the `zh_TW` locale lookup: the app stores language codes with an
+  underscore (`zh_TW`, not `zh-TW`), so Traditional Chinese no longer fell back
+  to Simplified.
+
 ## [1.6.77] - 2026-09-11
 
 ### 🌐 荣誉墙多语言（此前只有中文）

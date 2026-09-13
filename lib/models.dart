@@ -84,11 +84,20 @@ class Station {
     return '${lastHeard.year}-${lastHeard.month.toString().padLeft(2, '0')}';
   }
 
-  /// 有效状态：5 分钟内上报为在线（保留移动/静止），否则为离线
+  /// 在线判定时长（秒）：最后上报距今 ≥ 该值即判为离线。
+  ///
+  /// 由 `AppState` 按用户设置写入（见 `setOnlineWindowMin`）。
+  /// 这里用静态字段而不是构造参数，是因为 `effectiveStatus` 必须在
+  /// **没有 BuildContext / AppState** 的场合也能正确判定——例如地图的
+  /// CustomPainter 在逐点绘制时拿不到任何 widget 上下文。若改由调用方传参，
+  /// 很容易漏传，出现「列表已显示离线、地图圆点还是在线」的不一致。
+  static int onlineWindowSec = 300;
+
+  /// 有效状态：在 [onlineWindowSec] 内上报过即为在线（保留移动/静止），否则离线。
   St get effectiveStatus {
     final d = DateTime.now().difference(lastHeard);
-    if (d.inMinutes >= 5) return St.offline;
-    // 5 分钟内：保留移动/静止；原本在线/其他归为在线
+    if (d.inSeconds >= onlineWindowSec) return St.offline;
+    // 窗口内：保留移动/静止；原本在线/其他归为在线
     if (status == St.moving) return St.moving;
     if (status == St.stopped) return St.stopped;
     return St.online;
@@ -118,8 +127,20 @@ class Station {
   String get typeName => AprsSym.name(symbol);
   Color get color => statusColor(status);
 
-  /// 是否为 APRSlocus 同款软件台站（备注/呼号含关键字，与筛选一致）
+  /// APRSlocus 本应用官方注册的 tocall（数据包路径首段）。
+  /// 自 v1.6.80 起位置包备注里**不再包含** "APRSlocus"（版本号已移到状态包，
+  /// 且备注默认留空），所以**不能只靠备注判定**，否则筛选/统计会全部落空。
+  static const aprslocusToCalls = {'APALOC', 'APRSLOCUS', 'APOLOCUS'};
+
+  /// 是否为 APRSlocus 同款软件台站。
+  ///
+  /// 判定信号（任一命中即可），按可靠性排序：
+  ///  ① [toCall] —— 报文路径首段的官方标识（APALOC），最可靠，已持久化
+  ///  ② [aprslocus] —— 状态包/位置包解析出的 APRSlocus 专属信息（已持久化）
+  ///  ③ 备注/呼号关键字 —— 兼容旧版本报文
   bool get isAprslocusStation =>
+      aprslocusToCalls.contains((toCall ?? '').toUpperCase()) ||
+      (aprslocus?.containsKey('软件') ?? false) ||
       (comment?.toLowerCase().contains('aprslocus') ?? false) ||
       call.toUpperCase().contains('APRSLOCUS');
 
@@ -265,14 +286,10 @@ class StationFilter {
     }
     if (dev != 'all' && s.deviceClassKey != dev) return false;
     if (model != 'all' && (s.deviceName ?? '') != model) return false;
-    if (app == 'aprslocus') {
-      // 备注/呼号含 APRSlocus 的台站（同为 APRSlocus 用户）
-      final c = (s.comment ?? '').toLowerCase();
-      if (!c.contains('aprslocus') &&
-          !s.call.toUpperCase().contains('APRSLOCUS')) {
-        return false;
-      }
-    }
+    // 同款软件（APRSlocus）：复用 Station 上的单一判定，
+    // 避免此处与 Station.isAprslocusStation 两套逻辑各自漂移
+    // （v1.6.80 备注不再含 "APRSlocus" 后，此处曾因只查备注而完全失效）。
+    if (app == 'aprslocus' && !s.isAprslocusStation) return false;
     return true;
   }
 }
@@ -299,6 +316,17 @@ class AprsMsg {
   final String? groupId; // 群聊ID（可选）
   final bool system; // 系统消息（如"XX 已加入群聊"）
   bool acked;
+
+  /// **实际发到空中的文本**（仅在「发送前翻译」时与 [text] 不同）。
+  ///
+  /// 语义分工：[text] 是用户写的内容（聊天记录应按他的话显示），
+  /// [sentAs] 是真正发出的报文内容。两者都留着 —— 只存一个都会丢信息：
+  /// 只存译文则用户看不懂自己的聊天记录；只存原文则无法核对到底发出了什么。
+  final String? sentAs;
+
+  /// 是否译发过
+  bool get translated => sentAs != null && sentAs!.isNotEmpty && sentAs != text;
+
   AprsMsg(
     this.from,
     this.to,
@@ -309,6 +337,7 @@ class AprsMsg {
     this.acked = false,
     this.groupId,
     this.system = false,
+    this.sentAs,
   });
 
   Map<String, dynamic> toJson() => {
@@ -321,6 +350,7 @@ class AprsMsg {
     'acked': acked,
     if (groupId != null) 'groupId': groupId,
     if (system) 'system': system,
+    if (sentAs != null) 'sentAs': sentAs,
   };
 
   factory AprsMsg.fromJson(Map<String, dynamic> j) => AprsMsg(
@@ -333,6 +363,7 @@ class AprsMsg {
     acked: j['acked'] as bool? ?? false,
     groupId: j['groupId'] as String?,
     system: j['system'] as bool? ?? false,
+    sentAs: j['sentAs'] as String?,
   );
 }
 

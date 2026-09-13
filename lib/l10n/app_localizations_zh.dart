@@ -187,6 +187,421 @@ class AppLocalizationsZh extends AppLocalizations {
   String get beaconsSent => '信标发送次数';
 
   @override
+  String get symCatVehicles => '车辆 / 交通';
+
+  @override
+  String get symCatBuildings => '建筑 / 设施';
+
+  @override
+  String get symCatNature => '气象 / 自然';
+
+  @override
+  String get symCatAirWater => '飞行 / 水域';
+
+  @override
+  String get symCatComms => '通信 / 其他';
+
+  @override
+  String get homeBadgeLabel => '主页展示徽章';
+
+  @override
+  String get homeBadgePickTitle => '选择主页展示徽章';
+
+  @override
+  String get homeBadgePickDesc => '在以下已获得的徽章中选一个，作为主页常驻展示';
+
+  @override
+  String get simLocationHint => '使用模拟位置，无需 GPS';
+
+  @override
+  String get speedTierRules => '速度分档规则';
+
+  @override
+  String get restoreDefaults => '恢复默认';
+
+  @override
+  String get speedTierDesc => '速度越快上报越频繁；每档可自定义间隔与图标（留空=我的符号）。';
+
+  @override
+  String get speedTierShortIntervalWarn => '间隔低于 60 秒会显著增加服务器负载，建议 ≥60 秒。';
+
+  @override
+  String get addSpeedTier => '添加速度档';
+
+  @override
+  String get maxSpeedTiers => '最多 5 个速度档';
+
+  @override
+  String get iconDefaultMySymbol => '图标 · 默认(我的符号)';
+
+  @override
+  String iconNamed(String name) {
+    return '图标 · $name';
+  }
+
+  @override
+  String everyNSeconds(String sec) {
+    return '每 $sec 秒';
+  }
+
+  @override
+  String get tierIdleTitle => '编辑 · 静止/低速档';
+
+  @override
+  String get tierSpeedTitle => '编辑 · 速度档';
+
+  @override
+  String get minSpeedKmh => '最低速度 (km/h)';
+
+  @override
+  String get intervalSeconds => '上报间隔 (秒)';
+
+  @override
+  String get idleTierDesc => '低于第一移动档的速度都按此档上报';
+
+  @override
+  String get intervalLabel => '间隔';
+
+  @override
+  String get unitSeconds => '秒';
+
+  @override
+  String get pickBeaconIconDesc => '选择信标图标 ·「默认」= 沿用我的符号';
+
+  @override
+  String get defaultLabel => '默认';
+
+  @override
+  String get deleteThisTier => '删除此档';
+
+  @override
+  String get idleTierNotDeletable => '静止档不可删除';
+
+  @override
+  String get errMinSpeedInt => '最低速度需为 ≥1 的整数';
+
+  @override
+  String get errIntervalInt => '上报间隔需为 ≥5 秒的整数';
+
+  @override
+  String get errTierDuplicate => '该速度档已存在，速度值需互不相同';
+
+  @override
+  String get wsUrlOptional => 'WebSocket URL(可选)';
+
+  @override
+  String get countryUnrestricted => '未选择国家/地区 · 不做限制（接收全部台站）';
+
+  @override
+  String get weatherWidget => '天气组件';
+
+  @override
+  String get groupChatLabel => '群聊';
+
+  @override
+  String nItems(String n) {
+    return '$n 个';
+  }
+
+  @override
+  String nMessages(String n) {
+    return '$n 条';
+  }
+
+  @override
+  String confirmDeleteMessages(String n) {
+    return '确定要删除全部 $n 条聊天记录吗？此操作不可恢复。';
+  }
+
+  @override
+  String get weatherSimFollowLive => '跟随实时';
+
+  @override
+  String get wxClear => '晴';
+
+  @override
+  String get wxCloudy => '多云';
+
+  @override
+  String get wxOvercast => '阴';
+
+  @override
+  String get wxLightRain => '小雨';
+
+  @override
+  String get wxModerateRain => '中雨';
+
+  @override
+  String get wxHeavyRain => '大雨';
+
+  @override
+  String get wxStormRain => '暴雨';
+
+  @override
+  String get wxThunder => '雷阵雨';
+
+  @override
+  String get wxSnow => '雪';
+
+  @override
+  String get wxFog => '雾';
+
+  @override
+  String get weatherSimTitle => '天气模拟（预览背景/特效/建议）';
+
+  @override
+  String get weatherSimDesc => '选择后点顶栏天气胶囊预览；「跟随实时」恢复真实天气';
+
+  @override
+  String get restartWizardConfirm =>
+      '将重新进入首次启动向导，可重新设置呼号、接收地区等。\\n当前设置不会丢失，完成向导后继续使用。';
+
+  @override
+  String get restartWizardButton => '重新运行';
+
+  @override
+  String get pasteAprsPacketHint =>
+      '粘贴原始 APRS 包，如：\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>测试台';
+
+  @override
+  String beaconsSentCount(String n) {
+    return '$n 次';
+  }
+
+  @override
+  String get myBadgesAndAchievements => '我的徽章与成就';
+
+  @override
+  String get quitApp => '退出应用';
+
+  @override
+  String get quitAppDesc => '退出后 APRSlocus 将停止定位上报与后台接收，并结束进程。';
+
+  @override
+  String get symCar => '汽车';
+
+  @override
+  String get openInBrowser => '在浏览器打开';
+
+  @override
+  String get badgeWall => '徽章墙';
+
+  @override
+  String get achievementWall => '成就墙';
+
+  @override
+  String get mapTypeCartoPositron => 'Carto Positron(浅色矢量)';
+
+  @override
+  String get mapTypeCarto => 'Carto 浅色';
+
+  @override
+  String get mapTypeCartoDark => 'Carto 深色';
+
+  @override
+  String get mapTypeCartoVoyager => 'Carto 航行者';
+
+  @override
+  String get mapTypeOsm => 'OSM 标准';
+
+  @override
+  String get mapTypeOsmHot => 'OSM 人道';
+
+  @override
+  String get mapTypeOpenTopo => 'OpenTopo 地形';
+
+  @override
+  String get mapTypeEsriStreet => 'Esri 街道';
+
+  @override
+  String get mapTypeEsriSat => 'Esri 影像';
+
+  @override
+  String get simulatedKeepAlive => '模拟位置 · 后台保活';
+
+  @override
+  String get symCatEmergency => '应急救援';
+
+  @override
+  String get symSmallAircraft => '小型飞机';
+
+  @override
+  String myPositionSet(String grid) {
+    return '已设置我的位置，网格 $grid';
+  }
+
+  @override
+  String get tierIdleShort => '静止/低速';
+
+  @override
+  String get symHouse => '房屋';
+
+  @override
+  String get symPerson => '人';
+
+  @override
+  String get symTruck => '卡车';
+
+  @override
+  String get symBicycle => '自行车';
+
+  @override
+  String get symRv => '房车';
+
+  @override
+  String get symWxStation => '气象站';
+
+  @override
+  String get symPolice => '警局';
+
+  @override
+  String get symMotorcycle => '摩托';
+
+  @override
+  String get symSemi => '半挂车';
+
+  @override
+  String get symVan => '面包车';
+
+  @override
+  String get symJeep => '吉普';
+
+  @override
+  String get symBus => '公交';
+
+  @override
+  String get symTruckStop => '卡车停靠';
+
+  @override
+  String get symTrain => '火车';
+
+  @override
+  String get symFireTruck => '消防车';
+
+  @override
+  String get symPoliceCar => '警车';
+
+  @override
+  String get symSnowmobile => '雪地摩托';
+
+  @override
+  String get symYagi => '八木屋';
+
+  @override
+  String get symHospital => '医院';
+
+  @override
+  String get symAmbulance => '救护车';
+
+  @override
+  String get symFireStation => '消防站';
+
+  @override
+  String get symSchool => '学校';
+
+  @override
+  String get symMotel => '旅馆';
+
+  @override
+  String get symHotel => '酒店';
+
+  @override
+  String get symLaptop => '笔记本';
+
+  @override
+  String get symPostOffice => '邮局';
+
+  @override
+  String get symWeather => '气象';
+
+  @override
+  String get symWater => '供水站';
+
+  @override
+  String get symHurricane => '飓风';
+
+  @override
+  String get symHorse => '骑马';
+
+  @override
+  String get symDog => '狗';
+
+  @override
+  String get symCamping => '露营';
+
+  @override
+  String get symShelter => '避难所';
+
+  @override
+  String get symRedCross => '红十字';
+
+  @override
+  String get symFireAlarm => '火警';
+
+  @override
+  String get symEmergCenter => '应急中心';
+
+  @override
+  String get symCmdCenter => '指挥中心';
+
+  @override
+  String get symHandicap => '残障';
+
+  @override
+  String get symBigAircraft => '大型飞机';
+
+  @override
+  String get symGlider => '滑翔机';
+
+  @override
+  String get symBalloon => '气球';
+
+  @override
+  String get symShip => '船';
+
+  @override
+  String get symSailboat => '帆船';
+
+  @override
+  String get symMobileSat => '移动卫星';
+
+  @override
+  String get symSatAntenna => '卫星天线';
+
+  @override
+  String get symDigi => '数字中继';
+
+  @override
+  String get symDigiTower => '中继塔';
+
+  @override
+  String get symMicE => 'Mic-E 中继';
+
+  @override
+  String get symNode => '节点';
+
+  @override
+  String get symDxCluster => 'DX 集群';
+
+  @override
+  String get symHfGateway => 'HF 网关';
+
+  @override
+  String get symFileServer => '文件服务器';
+
+  @override
+  String get symTelephone => '电话';
+
+  @override
+  String get symGrid => '网格';
+
+  @override
+  String get symXUnix => 'X/Unix';
+
+  @override
+  String get symFmoStation => 'FMO 台站';
+
+  @override
   String get filter => '接收范围过滤';
 
   @override
@@ -224,6 +639,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get languageZhTw => '繁體中文';
+
+  @override
+  String get languageJa => '日本語';
+
+  @override
+  String get languageId => 'Bahasa Indonesia';
+
+  @override
+  String get languageEs => '西班牙语';
 
   @override
   String get displaySettings => '显示设置';
@@ -365,7 +789,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get oobeFilterTitle => '选择接收地区';
 
   @override
-  String get oobeFilterDesc => '默认只接收中国呼号台站，可按需添加其他国家/地区';
+  String get oobeFilterDesc => '勾选要接收的国家/地区；不勾选则接收全部台站，不做限制';
 
   @override
   String get oobeWelcomeTitle => '欢迎使用 APRSlocus';
@@ -603,6 +1027,492 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get codeContributionZhTw => '繁体中文界面';
+
+  @override
+  String get codeContributionTranslation => '翻译';
+
+  @override
+  String connTncConnected(String arg) {
+    return 'TNC 已连接 · $arg';
+  }
+
+  @override
+  String connTncPositionSent(String arg) {
+    return 'TNC 已连接 · 位置已发送 ($arg)';
+  }
+
+  @override
+  String connRetryTnc(int n) {
+    return 'TNC 连接失败 · ${n}s 后重试…';
+  }
+
+  @override
+  String connRetryTncDetail(String e, int n) {
+    return 'TNC 连接失败（$e）· ${n}s 后重试…';
+  }
+
+  @override
+  String connTncLinkLost(int n) {
+    return 'TNC 链路断开 · $n秒后自动重连…';
+  }
+
+  @override
+  String get tncErrNoDevice => '未绑定 TNC 设备';
+
+  @override
+  String get tncErrUnsupported => '当前平台不支持';
+
+  @override
+  String get tncErrNotConnected => '链路未连接';
+
+  @override
+  String get tncErrOpenRead => '无法打开设备（读）';
+
+  @override
+  String get tncErrOpenWrite => '无法打开设备（写）—— Windows 的 COM 口是独占设备，检查是否被其他软件占用';
+
+  @override
+  String get tncErrBadFormat => '报文格式不合法';
+
+  @override
+  String get tncErrFrameTooLong => '帧长超出上限';
+
+  @override
+  String get tncErrTimeout => '连接超时';
+
+  @override
+  String get translateMyLang => '我的语言';
+
+  @override
+  String get translateMyLangHint => '对方发来的消息翻成它';
+
+  @override
+  String get translatePeerLang => '对方的语言';
+
+  @override
+  String get translatePeerUnknownHint => '收到对方消息后由翻译接口自动识别';
+
+  @override
+  String get translateLearned => '已自动识别';
+
+  @override
+  String get translatePeerUnknown => '还不知道对方使用什么语言 · 先在翻译设置里指定，或收几条对方消息后会自动识别';
+
+  @override
+  String get translateSideIncoming => '对方发来';
+
+  @override
+  String get translateSideOutgoing => '我发出';
+
+  @override
+  String get translateToMeTag => '译给我看';
+
+  @override
+  String get translateToPeerTag => '对方将读到';
+
+  @override
+  String get translateContrast => '对照显示原文与译文';
+
+  @override
+  String get translateContrastTip => '关闭后只显示译文（原文仍可通过长按查看）';
+
+  @override
+  String get translateProviderFree => '免费接口（无需密钥）';
+
+  @override
+  String get translateProviderFreeDesc => '开箱即用 · 使用公开端点，可能被限流或不稳定';
+
+  @override
+  String translateFreeFailed(String e) {
+    return '免费接口暂时不可用（$e）· 可在设置里改用 Google / 百度 / 自定义接口';
+  }
+
+  @override
+  String get translateOutgoing => '发送前翻译成对方的语言';
+
+  @override
+  String get translateOutgoingTip => '开启后按发送会先把内容译成对方的语言再发出；请确认对方能读懂该语言';
+
+  @override
+  String get translateInput => '翻译输入内容';
+
+  @override
+  String translateOutPreview(String text) {
+    return '将发送：$text';
+  }
+
+  @override
+  String translateOutPreviewHint(String lang) {
+    return '已译为 $lang · 点发送即按此发出';
+  }
+
+  @override
+  String get translateOutCancel => '取消翻译';
+
+  @override
+  String get translateOutNeedPeer => '还不知道对方使用什么语言 · 先在会话翻译设置里指定';
+
+  @override
+  String translateSentAs(String text) {
+    return '已按对方语言发出：$text';
+  }
+
+  @override
+  String translateTooLongAfter(int n) {
+    return '译文超出长度上限（$n 字符），未发送';
+  }
+
+  @override
+  String get dateToday => '今天';
+
+  @override
+  String get dateYesterday => '昨天';
+
+  @override
+  String dateDividerFull(int y, int m, int d, String w) {
+    return '$y年$m月$d日 $w';
+  }
+
+  @override
+  String dateWeekday(String d) {
+    String _temp0 = intl.Intl.selectLogic(d, {
+      '1': '周一',
+      '2': '周二',
+      '3': '周三',
+      '4': '周四',
+      '5': '周五',
+      '6': '周六',
+      '7': '周日',
+      'other': '—',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get translate => '翻译';
+
+  @override
+  String get translateText => '翻译文本';
+
+  @override
+  String get translateSettings => '翻译设置';
+
+  @override
+  String get translateSettingsSubtitle => '翻译接口、语言与自动翻译';
+
+  @override
+  String get translateProvider => '翻译接口';
+
+  @override
+  String get translateProviderGoogle => 'Google 翻译';
+
+  @override
+  String get translateProviderBaidu => '百度翻译';
+
+  @override
+  String get translateProviderCustom => '自定义';
+
+  @override
+  String get translateGoogleKey => 'Google API Key';
+
+  @override
+  String get translateGoogleKeyTip =>
+      'Google Cloud Translation v2 的 API Key，需要自行到 Google Cloud 控制台申请';
+
+  @override
+  String get translateBaiduAppId => '百度 App ID';
+
+  @override
+  String get translateBaiduKey => '百度密钥';
+
+  @override
+  String get translateBaiduTip => '在百度翻译开放平台申请「通用文本翻译」，密钥只保存在本机';
+
+  @override
+  String get translateCustomUrl => '接口地址';
+
+  @override
+  String get translateCustomMethod => '请求方式';
+
+  @override
+  String get translateCustomHeaders => '请求头 (JSON)';
+
+  @override
+  String get translateCustomBody => '请求体模板';
+
+  @override
+  String translateCustomBodyTip(String text, String from, String to) {
+    return '可用占位符：$text 原文、$from 源语言、$to 目标语言。选择 GET 时忽略此项';
+  }
+
+  @override
+  String get translateCustomResultPath => '结果字段路径';
+
+  @override
+  String get translateCustomResultPathTip =>
+      '用点号表示层级，数组用序号，如 data.translations.0.translatedText';
+
+  @override
+  String get translateTest => '测试翻译';
+
+  @override
+  String translateTestOk(String text) {
+    return '接口可用：$text';
+  }
+
+  @override
+  String get translateNeedConfig => '请先填写翻译接口配置';
+
+  @override
+  String translateFailed(String e) {
+    return '翻译失败：$e';
+  }
+
+  @override
+  String get translateTargetLang => '翻译为';
+
+  @override
+  String get translateSourceLang => '原文语言';
+
+  @override
+  String get translateAuto => '自动翻译收到的消息';
+
+  @override
+  String get translateAutoTip => '仅对本会话生效；只翻译对方发来的消息';
+
+  @override
+  String get translateShowOriginal => '显示原文';
+
+  @override
+  String get translateShowTranslation => '显示译文';
+
+  @override
+  String get translateRetry => '重新翻译';
+
+  @override
+  String get translateTranslating => '正在翻译…';
+
+  @override
+  String get translateCopyOriginal => '复制原文';
+
+  @override
+  String get translateCopyResult => '复制译文';
+
+  @override
+  String get translateLangAuto => '自动检测';
+
+  @override
+  String get translateSameLang => '原文已是目标语言';
+
+  @override
+  String translateBubbleCount(int n) {
+    return '已翻译 $n 条';
+  }
+
+  @override
+  String get translatePrivacyNote => '翻译会把消息文本发送到你选择的第三方接口，请自行评估隐私';
+
+  @override
+  String get notifTncConnected => 'TNC 已连接';
+
+  @override
+  String get notifTncDisconnected => 'TNC 未连接';
+
+  @override
+  String get dataSourceTitle => '数据来源';
+
+  @override
+  String get dataSourceSubtitle => '报文从哪里来';
+
+  @override
+  String get dataSourceAprsIs => 'APRS-IS';
+
+  @override
+  String get dataSourceAprsIsDesc => '通过互联网接入全球 APRS 网络';
+
+  @override
+  String get dataSourceTnc => 'TNC';
+
+  @override
+  String get dataSourceTncDesc => '通过蓝牙或串口的 TNC 与电台直接收发';
+
+  @override
+  String get dataSourceSwitchHint => '切换数据来源会断开当前连接';
+
+  @override
+  String get tncBindTitle => '蓝牙 TNC';
+
+  @override
+  String get tncBindSubtitle => '绑定并连接电台侧的 TNC';
+
+  @override
+  String get tncBoundDevice => '已绑定设备';
+
+  @override
+  String get tncNotBound => '未绑定设备';
+
+  @override
+  String get tncScanPaired => '扫描已配对设备';
+
+  @override
+  String get tncNoPaired => '未找到设备 · 请先在系统蓝牙设置里配对 TNC';
+
+  @override
+  String get tncUnbind => '解除绑定';
+
+  @override
+  String get tncConnectAction => '连接 TNC';
+
+  @override
+  String get tncRestart => '重启链路';
+
+  @override
+  String get tncSupportedNo => '当前平台暂不支持 TNC 链路';
+
+  @override
+  String get tncNeedPermission => '需要蓝牙权限，请授权后重试';
+
+  @override
+  String get tncOpenFailedHint => '打开设备失败 · Windows 的 COM 口是独占设备，请确认没有被其他软件占用';
+
+  @override
+  String tncStats(String rx, String tx) {
+    return '收 $rx 帧 · 发 $tx 帧';
+  }
+
+  @override
+  String get tncLog => '链路日志';
+
+  @override
+  String get tncLogEmpty => '暂无日志';
+
+  @override
+  String get kissParamsTitle => 'KISS 参数';
+
+  @override
+  String get kissParamsSubtitle => '直接下发到 TNC 的链路层参数';
+
+  @override
+  String get kissTxDelay => '发射延时 (ms)';
+
+  @override
+  String get kissTxDelayTip => 'KISS TXDELAY，单位 10ms。发射前留给自己 PTT 建立的时间';
+
+  @override
+  String get kissTxTail => '发射尾音 (ms)';
+
+  @override
+  String get kissTxTailTip => 'KISS TXTAIL，单位 10ms。某些电台需要尾部保持才能收全';
+
+  @override
+  String get kissPersistence => '持续度 P';
+
+  @override
+  String get kissPersistenceTip => 'KISS PERSISTENCE，0-255。越小越礼让，共用信道时能减少碰撞';
+
+  @override
+  String get kissSlotTime => '时隙 (ms)';
+
+  @override
+  String get kissSlotTimeTip => 'KISS SLOTTIME，单位 10ms。与持续度共同决定信道竞争节奏';
+
+  @override
+  String get kissFullDuplex => '全双工';
+
+  @override
+  String get kissFullDuplexTip => 'KISS FULLDUPLEX，普通电台必须关闭（同时收发会互相干扰）';
+
+  @override
+  String get kissChannel => '信道 / KISS 端口';
+
+  @override
+  String get kissChannelTip => '多信道 TNC 才有多端口，单信道电台保持 0';
+
+  @override
+  String get kissMaxFrame => '帧长上限 (字节)';
+
+  @override
+  String get kissMaxFrameTip => '超过此长度的报文不会发出（1200bd 下 AX.25 单帧约 330 字节）';
+
+  @override
+  String get kissHardwareCmd => '厂商命令码';
+
+  @override
+  String get kissHardwareVal => '参数值';
+
+  @override
+  String get kissHardwareTip => 'KISS SETHARDWARE (0x06)，厂商自定义；-1 表示不下发';
+
+  @override
+  String get kissApplyParams => '下发参数';
+
+  @override
+  String get kissParamsSent => 'KISS 参数已下发';
+
+  @override
+  String get kissBackToCommand => '回到 TNC 命令模式';
+
+  @override
+  String get kissBackToCommandTip =>
+      '发送 RETURN (0x0F)。多数 KISS TNC 会就此停止转发，需重启链路才恢复';
+
+  @override
+  String get kissRfPath => '射频中继路径';
+
+  @override
+  String get kissRfPathTip => '射频上使用的中继，如 WIDE1-1,WIDE2-1；留空则不指定';
+
+  @override
+  String get kissRfBeacon => '允许射频信标';
+
+  @override
+  String get kissRfBeaconTip => '打开后才会在射频上定时发射位置。发射需以自己的呼号并在执照范围内操作';
+
+  @override
+  String get kissAutoAck => '自动回复 ACK';
+
+  @override
+  String get kissAutoAckTip => '关闭后不回应收到的消息回执，可减少射频占用';
+
+  @override
+  String get kissAutoReconnect => '断开后自动重连';
+
+  @override
+  String get kissNeedConnected => '请先连接 TNC';
+
+  @override
+  String get tncSwitchOn => '已开启';
+
+  @override
+  String get tncSwitchOff => '已关闭';
+
+  @override
+  String get connTncSourceHint => 'TNC 模式下不使用服务器与过滤器，相关设置已停用';
+
+  @override
+  String get connectTncBar => '点「连接」建立 TNC 链路';
+
+  @override
+  String connectingToTnc(String name) {
+    return '正在连接 TNC · $name';
+  }
+
+  @override
+  String get tncMsgTitle => '射频（TNC）模式';
+
+  @override
+  String get tncMsgDesc => '射频信道是共享资源，消息能力相应受限';
+
+  @override
+  String get tncGroupDisabled => '射频模式不支持群聊广播';
+
+  @override
+  String tncMsgLimitHint(String n) {
+    return '单条限 $n 字符（APRS 消息规范）';
+  }
+
+  @override
+  String get tncMsgTooLong => '超出射频模式单条消息长度上限';
 
   @override
   String get licenseSection => '许可证声明';
@@ -1799,6 +2709,19 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get deleteConversation => '删除会话';
+
+  @override
+  String deleteConversationConfirm(Object call) {
+    return '确定删除与 $call 的聊天记录吗？该会话将从列表中移除，此操作不可恢复。';
+  }
+
+  @override
+  String clearGroupChatConfirm(Object name) {
+    return '确定清空「$name」的聊天记录吗？此操作不可恢复。';
+  }
+
+  @override
   String memberOnlineCount(int members, int online) {
     return '$members 名成员 · $online 在线';
   }
@@ -2847,6 +3770,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lookupAprsFi => 'aprs.fi 位置';
 
   @override
+  String get aprsTv => 'APRS.tv';
+
+  @override
+  String get aprsTvInfo => '详情页';
+
+  @override
+  String get aprsTvMap => '在地图上查看';
+
+  @override
   String get linkOpenFailed => '无法打开链接';
 
   @override
@@ -3281,6 +4213,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get maxTrackPtsTip => '每个台站保留的轨迹点数（默认 300，决定运动轨迹能回溯多长；仅位移超过 20m 才记点）';
 
   @override
+  String get onlineWindow => '在线判定时长（分钟）';
+
+  @override
+  String get onlineWindowTip => '台站最后上报超过该时长即视为离线（默认 5 分钟）';
+
+  @override
   String get chatRecords => '聊天记录';
 
   @override
@@ -3356,6 +4294,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notLit => '未点亮';
 
   @override
+  String honorCriteriaLine(String c) {
+    return '获得条件：$c';
+  }
+
+  @override
   String get badgeFallback => '徽章';
 
   @override
@@ -3367,6 +4310,184 @@ class AppLocalizationsZh extends AppLocalizations {
   String achievementsProgress(String n, String m) {
     return '$n/$m 成就';
   }
+
+  @override
+  String get beaconNotConnected => '未连接';
+
+  @override
+  String get beaconWaitingFix => '等待定位';
+
+  @override
+  String get beaconSoon => '即将';
+
+  @override
+  String beaconNextIn(String s) {
+    return '距下次上报 $s';
+  }
+
+  @override
+  String get beaconImminent => '即将上报…';
+
+  @override
+  String get notifConnected => '已连接';
+
+  @override
+  String get notifConnecting => '连接中';
+
+  @override
+  String get notifDisconnected => '未连接';
+
+  @override
+  String notifOnline(String n) {
+    return '$n 在线';
+  }
+
+  @override
+  String notifRx(String n) {
+    return '收 $n';
+  }
+
+  @override
+  String notifBeacon(String v) {
+    return '信标 $v';
+  }
+
+  @override
+  String get selectAll => '全选';
+
+  @override
+  String get deselectAll => '取消全选';
+
+  @override
+  String selectedCount(int n) {
+    return '已选 $n 项';
+  }
+
+  @override
+  String deleteSelected(int n) {
+    return '删除 ($n)';
+  }
+
+  @override
+  String deleteSelectedConfirm(int n) {
+    return '确定删除选中的 $n 个会话？此操作不可恢复。';
+  }
+
+  @override
+  String get chatManageHint => '点击会话进行选择，长按也可选中';
+
+  @override
+  String conversationsDeleted(int n) {
+    return '已删除 $n 个会话';
+  }
+
+  @override
+  String get stationActions => '台站操作';
+
+  @override
+  String get deleteStation => '删除台站';
+
+  @override
+  String deleteStationConfirm(String name) {
+    return '确定删除台站 $name 吗？删除后将从台站列表移除；若再次收到其报文会重新出现。';
+  }
+
+  @override
+  String get unfavorite => '取消收藏';
+
+  @override
+  String get copyCallsign => '复制呼号';
+
+  @override
+  String get callsignCopied => '呼号已复制';
+
+  @override
+  String get stationDeleted => '已删除台站';
+
+  @override
+  String get exportAdif => '导出 ADIF';
+
+  @override
+  String get exportAdifDesc => '把会话导出为 ADIF 日志文件，可导入 Log4OM、N3FJP 等日志软件';
+
+  @override
+  String get export => '导出';
+
+  @override
+  String get adifHint => '每条记录只含呼号与首条消息时间（UTC），不含模式与频段';
+
+  @override
+  String get adifNoSelection => '请先选择要导出的会话';
+
+  @override
+  String adifExported(int n) {
+    return '已导出 $n 条记录';
+  }
+
+  @override
+  String get adifExportDone => '导出完成';
+
+  @override
+  String get adifExportFailed => '导出失败，请检查存储权限或剩余空间';
+
+  @override
+  String adifSavedTo(String path) {
+    return '已保存到：$path';
+  }
+
+  @override
+  String get adifCopyPath => '复制路径';
+
+  @override
+  String get adifPathCopied => '路径已复制';
+
+  @override
+  String get chatShortLabel => '单聊';
+
+  @override
+  String get adifLogFile => '会话导出为日志文件';
+
+  @override
+  String get adifOptions => '导出选项';
+
+  @override
+  String get adifMode => '模式（MODE）';
+
+  @override
+  String get adifNotWritten => '不写';
+
+  @override
+  String get adifModePkt => 'PKT（数据包，推荐）';
+
+  @override
+  String get adifModeFm => 'FM（语音）';
+
+  @override
+  String get adifModeData => 'DATA（数据）';
+
+  @override
+  String get adifSubModeAprs => '附加 SUBMODE=APRS';
+
+  @override
+  String get adifBand => '频段（BAND）';
+
+  @override
+  String get adifStripSsid => '只写基础呼号（去掉 -SSID）';
+
+  @override
+  String get adifPreview => '预览（将写出的记录）';
+
+  @override
+  String get adifModeRequiredHint => '多数日志软件（含 QRZ）要求 MODE，缺少会被拒收';
+
+  @override
+  String get adifFreq => '频率（FREQ）';
+
+  @override
+  String get adifFreqHint => '单位 MHz，留空则不写';
+
+  @override
+  String get adifFreqInvalid => '请输入 MHz 数字，如 144.640';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -3551,6 +4672,421 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get beaconsSent => '信標傳送次數';
 
   @override
+  String get symCatVehicles => '車輛 / 交通';
+
+  @override
+  String get symCatBuildings => '建築 / 設施';
+
+  @override
+  String get symCatNature => '氣象 / 自然';
+
+  @override
+  String get symCatAirWater => '飛行 / 水域';
+
+  @override
+  String get symCatComms => '通訊 / 其他';
+
+  @override
+  String get homeBadgeLabel => '首頁展示徽章';
+
+  @override
+  String get homeBadgePickTitle => '選擇首頁展示徽章';
+
+  @override
+  String get homeBadgePickDesc => '在以下已獲得的徽章中選一個，作為首頁常駐展示';
+
+  @override
+  String get simLocationHint => '使用模擬位置，無需 GPS';
+
+  @override
+  String get speedTierRules => '速度分檔規則';
+
+  @override
+  String get restoreDefaults => '恢復預設';
+
+  @override
+  String get speedTierDesc => '速度越快上報越頻繁；每檔可自訂間隔與圖示（留空=我的符號）。';
+
+  @override
+  String get speedTierShortIntervalWarn => '間隔低於 60 秒會顯著增加伺服器負載，建議 ≥60 秒。';
+
+  @override
+  String get addSpeedTier => '新增速度檔';
+
+  @override
+  String get maxSpeedTiers => '最多 5 個速度檔';
+
+  @override
+  String get iconDefaultMySymbol => '圖示 · 預設(我的符號)';
+
+  @override
+  String iconNamed(String name) {
+    return '圖示 · $name';
+  }
+
+  @override
+  String everyNSeconds(String sec) {
+    return '每 $sec 秒';
+  }
+
+  @override
+  String get tierIdleTitle => '編輯 · 靜止/低速檔';
+
+  @override
+  String get tierSpeedTitle => '編輯 · 速度檔';
+
+  @override
+  String get minSpeedKmh => '最低速度 (km/h)';
+
+  @override
+  String get intervalSeconds => '上報間隔 (秒)';
+
+  @override
+  String get idleTierDesc => '低於第一移動檔的速度都按此檔上報';
+
+  @override
+  String get intervalLabel => '間隔';
+
+  @override
+  String get unitSeconds => '秒';
+
+  @override
+  String get pickBeaconIconDesc => '選擇信標圖示 ·「預設」= 沿用我的符號';
+
+  @override
+  String get defaultLabel => '預設';
+
+  @override
+  String get deleteThisTier => '刪除此檔';
+
+  @override
+  String get idleTierNotDeletable => '靜止檔不可刪除';
+
+  @override
+  String get errMinSpeedInt => '最低速度需為 ≥1 的整數';
+
+  @override
+  String get errIntervalInt => '上報間隔需為 ≥5 秒的整數';
+
+  @override
+  String get errTierDuplicate => '該速度檔已存在，速度值需互不相同';
+
+  @override
+  String get wsUrlOptional => 'WebSocket URL(可選)';
+
+  @override
+  String get countryUnrestricted => '未選擇國家/地區 · 不做限制（接收全部台站）';
+
+  @override
+  String get weatherWidget => '天氣元件';
+
+  @override
+  String get groupChatLabel => '群組聊天';
+
+  @override
+  String nItems(String n) {
+    return '$n 個';
+  }
+
+  @override
+  String nMessages(String n) {
+    return '$n 條';
+  }
+
+  @override
+  String confirmDeleteMessages(String n) {
+    return '確定要刪除全部 $n 條聊天記錄嗎？此操作不可恢復。';
+  }
+
+  @override
+  String get weatherSimFollowLive => '跟隨即時';
+
+  @override
+  String get wxClear => '晴';
+
+  @override
+  String get wxCloudy => '多雲';
+
+  @override
+  String get wxOvercast => '陰';
+
+  @override
+  String get wxLightRain => '小雨';
+
+  @override
+  String get wxModerateRain => '中雨';
+
+  @override
+  String get wxHeavyRain => '大雨';
+
+  @override
+  String get wxStormRain => '暴雨';
+
+  @override
+  String get wxThunder => '雷陣雨';
+
+  @override
+  String get wxSnow => '雪';
+
+  @override
+  String get wxFog => '霧';
+
+  @override
+  String get weatherSimTitle => '天氣模擬（預覽背景/特效/建議）';
+
+  @override
+  String get weatherSimDesc => '選擇後點頂欄天氣膠囊預覽；「跟隨即時」恢復真實天氣';
+
+  @override
+  String get restartWizardConfirm =>
+      '將重新進入首次啟動精靈，可重新設定呼號、接收地區等。\\n目前設定不會遺失，完成精靈後繼續使用。';
+
+  @override
+  String get restartWizardButton => '重新執行';
+
+  @override
+  String get pasteAprsPacketHint =>
+      '貼上原始 APRS 封包，如：\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>測試台';
+
+  @override
+  String beaconsSentCount(String n) {
+    return '$n 次';
+  }
+
+  @override
+  String get myBadgesAndAchievements => '我的徽章與成就';
+
+  @override
+  String get quitApp => '結束應用程式';
+
+  @override
+  String get quitAppDesc => '結束後 APRSlocus 將停止定位上報與背景接收，並結束行程。';
+
+  @override
+  String get symCar => '汽車';
+
+  @override
+  String get openInBrowser => '在瀏覽器開啟';
+
+  @override
+  String get badgeWall => '徽章牆';
+
+  @override
+  String get achievementWall => '成就牆';
+
+  @override
+  String get mapTypeCartoPositron => 'Carto Positron(淺色向量)';
+
+  @override
+  String get mapTypeCarto => 'Carto 淺色';
+
+  @override
+  String get mapTypeCartoDark => 'Carto 深色';
+
+  @override
+  String get mapTypeCartoVoyager => 'Carto 航行者';
+
+  @override
+  String get mapTypeOsm => 'OSM 標準';
+
+  @override
+  String get mapTypeOsmHot => 'OSM 人道';
+
+  @override
+  String get mapTypeOpenTopo => 'OpenTopo 地形';
+
+  @override
+  String get mapTypeEsriStreet => 'Esri 街道';
+
+  @override
+  String get mapTypeEsriSat => 'Esri 影像';
+
+  @override
+  String get simulatedKeepAlive => '模擬位置 · 背景保活';
+
+  @override
+  String get symCatEmergency => '應急救援';
+
+  @override
+  String get symSmallAircraft => '小型飛機';
+
+  @override
+  String myPositionSet(String grid) {
+    return '已設定我的位置，網格 $grid';
+  }
+
+  @override
+  String get tierIdleShort => '靜止/低速';
+
+  @override
+  String get symHouse => '房屋';
+
+  @override
+  String get symPerson => '人';
+
+  @override
+  String get symTruck => '卡車';
+
+  @override
+  String get symBicycle => '自行車';
+
+  @override
+  String get symRv => '房車';
+
+  @override
+  String get symWxStation => '氣象站';
+
+  @override
+  String get symPolice => '警局';
+
+  @override
+  String get symMotorcycle => '摩托';
+
+  @override
+  String get symSemi => '半掛車';
+
+  @override
+  String get symVan => '麵包車';
+
+  @override
+  String get symJeep => '吉普';
+
+  @override
+  String get symBus => '公車';
+
+  @override
+  String get symTruckStop => '卡車停靠';
+
+  @override
+  String get symTrain => '火車';
+
+  @override
+  String get symFireTruck => '消防車';
+
+  @override
+  String get symPoliceCar => '警車';
+
+  @override
+  String get symSnowmobile => '雪地摩托';
+
+  @override
+  String get symYagi => '八木屋';
+
+  @override
+  String get symHospital => '醫院';
+
+  @override
+  String get symAmbulance => '救護車';
+
+  @override
+  String get symFireStation => '消防站';
+
+  @override
+  String get symSchool => '學校';
+
+  @override
+  String get symMotel => '旅館';
+
+  @override
+  String get symHotel => '酒店';
+
+  @override
+  String get symLaptop => '筆記型電腦';
+
+  @override
+  String get symPostOffice => '郵局';
+
+  @override
+  String get symWeather => '氣象';
+
+  @override
+  String get symWater => '供水站';
+
+  @override
+  String get symHurricane => '颶風';
+
+  @override
+  String get symHorse => '騎馬';
+
+  @override
+  String get symDog => '狗';
+
+  @override
+  String get symCamping => '露營';
+
+  @override
+  String get symShelter => '避難所';
+
+  @override
+  String get symRedCross => '紅十字';
+
+  @override
+  String get symFireAlarm => '火警';
+
+  @override
+  String get symEmergCenter => '應急中心';
+
+  @override
+  String get symCmdCenter => '指揮中心';
+
+  @override
+  String get symHandicap => '殘障';
+
+  @override
+  String get symBigAircraft => '大型飛機';
+
+  @override
+  String get symGlider => '滑翔機';
+
+  @override
+  String get symBalloon => '氣球';
+
+  @override
+  String get symShip => '船';
+
+  @override
+  String get symSailboat => '帆船';
+
+  @override
+  String get symMobileSat => '移動衛星';
+
+  @override
+  String get symSatAntenna => '衛星天線';
+
+  @override
+  String get symDigi => '數位中繼';
+
+  @override
+  String get symDigiTower => '中繼塔';
+
+  @override
+  String get symMicE => 'Mic-E 中繼';
+
+  @override
+  String get symNode => '節點';
+
+  @override
+  String get symDxCluster => 'DX 叢集';
+
+  @override
+  String get symHfGateway => 'HF 閘道';
+
+  @override
+  String get symFileServer => '檔案伺服器';
+
+  @override
+  String get symTelephone => '電話';
+
+  @override
+  String get symGrid => '網格';
+
+  @override
+  String get symXUnix => 'X/Unix';
+
+  @override
+  String get symFmoStation => 'FMO 台站';
+
+  @override
   String get filter => '接收範圍篩選';
 
   @override
@@ -3588,6 +5124,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get languageZhTw => '繁體中文';
+
+  @override
+  String get languageJa => '日本語';
+
+  @override
+  String get languageId => 'Bahasa Indonesia';
+
+  @override
+  String get languageEs => '西班牙語';
 
   @override
   String get displaySettings => '顯示設定';
@@ -3729,7 +5274,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get oobeFilterTitle => '選擇接收地區';
 
   @override
-  String get oobeFilterDesc => '預設只接收中國呼號臺站，可按需新增其他國家/地區';
+  String get oobeFilterDesc => '勾選要接收的國家/地區；不勾選則接收全部臺站，不做限制';
 
   @override
   String get oobeWelcomeTitle => '歡迎使用 APRSlocus';
@@ -3967,6 +5512,492 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get codeContributionZhTw => '繁體中文介面';
+
+  @override
+  String get codeContributionTranslation => '翻譯';
+
+  @override
+  String connTncConnected(String arg) {
+    return 'TNC 已連線 · $arg';
+  }
+
+  @override
+  String connTncPositionSent(String arg) {
+    return 'TNC 已連線 · 位置已傳送 ($arg)';
+  }
+
+  @override
+  String connRetryTnc(int n) {
+    return 'TNC 連線失敗 · ${n}s 後重試…';
+  }
+
+  @override
+  String connRetryTncDetail(String e, int n) {
+    return 'TNC 連線失敗（$e）· ${n}s 後重試…';
+  }
+
+  @override
+  String connTncLinkLost(int n) {
+    return 'TNC 鏈路中斷 · $n秒後自動重連…';
+  }
+
+  @override
+  String get tncErrNoDevice => '未綁定 TNC 裝置';
+
+  @override
+  String get tncErrUnsupported => '目前平台不支援';
+
+  @override
+  String get tncErrNotConnected => '鏈路未連線';
+
+  @override
+  String get tncErrOpenRead => '無法開啟裝置（讀）';
+
+  @override
+  String get tncErrOpenWrite => '無法開啟裝置（寫）—— Windows 的 COM 埠是獨佔裝置，檢查是否被其他軟體佔用';
+
+  @override
+  String get tncErrBadFormat => '報文格式不合法';
+
+  @override
+  String get tncErrFrameTooLong => '幀長超出上限';
+
+  @override
+  String get tncErrTimeout => '連線逾時';
+
+  @override
+  String get translateMyLang => '我的語言';
+
+  @override
+  String get translateMyLangHint => '對方傳來的訊息翻成它';
+
+  @override
+  String get translatePeerLang => '對方的語言';
+
+  @override
+  String get translatePeerUnknownHint => '收到對方訊息後由翻譯介面自動識別';
+
+  @override
+  String get translateLearned => '已自動識別';
+
+  @override
+  String get translatePeerUnknown => '還不知道對方使用什麼語言 · 先在翻譯設定裡指定，或收幾條對方訊息後會自動識別';
+
+  @override
+  String get translateSideIncoming => '對方傳來';
+
+  @override
+  String get translateSideOutgoing => '我發出';
+
+  @override
+  String get translateToMeTag => '譯給我看';
+
+  @override
+  String get translateToPeerTag => '對方將讀到';
+
+  @override
+  String get translateContrast => '對照顯示原文與譯文';
+
+  @override
+  String get translateContrastTip => '關閉後只顯示譯文（原文仍可透過長按查看）';
+
+  @override
+  String get translateProviderFree => '免費介面（無需密鑰）';
+
+  @override
+  String get translateProviderFreeDesc => '開箱即用 · 使用公開端點，可能被限流或不穩定';
+
+  @override
+  String translateFreeFailed(String e) {
+    return '免費介面暫時無法使用（$e）· 可在設定裡改用 Google / 百度 / 自訂介面';
+  }
+
+  @override
+  String get translateOutgoing => '傳送前翻譯成對方的語言';
+
+  @override
+  String get translateOutgoingTip => '開啟後按傳送會先把內容譯成對方的語言再發出；請確認對方能讀懂該語言';
+
+  @override
+  String get translateInput => '翻譯輸入內容';
+
+  @override
+  String translateOutPreview(String text) {
+    return '將傳送：$text';
+  }
+
+  @override
+  String translateOutPreviewHint(String lang) {
+    return '已譯為 $lang · 點傳送即按此發出';
+  }
+
+  @override
+  String get translateOutCancel => '取消翻譯';
+
+  @override
+  String get translateOutNeedPeer => '還不知道對方使用什麼語言 · 先在對話翻譯設定裡指定';
+
+  @override
+  String translateSentAs(String text) {
+    return '已按對方語言發出：$text';
+  }
+
+  @override
+  String translateTooLongAfter(int n) {
+    return '譯文超出長度上限（$n 字元），未傳送';
+  }
+
+  @override
+  String get dateToday => '今天';
+
+  @override
+  String get dateYesterday => '昨天';
+
+  @override
+  String dateDividerFull(int y, int m, int d, String w) {
+    return '$y年$m月$d日 $w';
+  }
+
+  @override
+  String dateWeekday(String d) {
+    String _temp0 = intl.Intl.selectLogic(d, {
+      '1': '週一',
+      '2': '週二',
+      '3': '週三',
+      '4': '週四',
+      '5': '週五',
+      '6': '週六',
+      '7': '週日',
+      'other': '—',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get translate => '翻譯';
+
+  @override
+  String get translateText => '翻譯文字';
+
+  @override
+  String get translateSettings => '翻譯設定';
+
+  @override
+  String get translateSettingsSubtitle => '翻譯介面、語言與自動翻譯';
+
+  @override
+  String get translateProvider => '翻譯介面';
+
+  @override
+  String get translateProviderGoogle => 'Google 翻譯';
+
+  @override
+  String get translateProviderBaidu => '百度翻譯';
+
+  @override
+  String get translateProviderCustom => '自訂';
+
+  @override
+  String get translateGoogleKey => 'Google API Key';
+
+  @override
+  String get translateGoogleKeyTip =>
+      'Google Cloud Translation v2 的 API Key，需自行到 Google Cloud 主控台申請';
+
+  @override
+  String get translateBaiduAppId => '百度 App ID';
+
+  @override
+  String get translateBaiduKey => '百度密鑰';
+
+  @override
+  String get translateBaiduTip => '在百度翻譯開放平台申請「通用文本翻譯」，密鑰只保存在本機';
+
+  @override
+  String get translateCustomUrl => '介面網址';
+
+  @override
+  String get translateCustomMethod => '請求方式';
+
+  @override
+  String get translateCustomHeaders => '請求標頭 (JSON)';
+
+  @override
+  String get translateCustomBody => '請求主體範本';
+
+  @override
+  String translateCustomBodyTip(String text, String from, String to) {
+    return '可用佔位符：$text 原文、$from 來源語言、$to 目標語言。選擇 GET 時忽略此項';
+  }
+
+  @override
+  String get translateCustomResultPath => '結果欄位路徑';
+
+  @override
+  String get translateCustomResultPathTip =>
+      '用點號表示層級，陣列用序號，如 data.translations.0.translatedText';
+
+  @override
+  String get translateTest => '測試翻譯';
+
+  @override
+  String translateTestOk(String text) {
+    return '介面可用：$text';
+  }
+
+  @override
+  String get translateNeedConfig => '請先填寫翻譯介面設定';
+
+  @override
+  String translateFailed(String e) {
+    return '翻譯失敗：$e';
+  }
+
+  @override
+  String get translateTargetLang => '翻譯為';
+
+  @override
+  String get translateSourceLang => '原文語言';
+
+  @override
+  String get translateAuto => '自動翻譯收到的訊息';
+
+  @override
+  String get translateAutoTip => '僅對本對話生效；只翻譯對方傳來的訊息';
+
+  @override
+  String get translateShowOriginal => '顯示原文';
+
+  @override
+  String get translateShowTranslation => '顯示譯文';
+
+  @override
+  String get translateRetry => '重新翻譯';
+
+  @override
+  String get translateTranslating => '正在翻譯…';
+
+  @override
+  String get translateCopyOriginal => '複製原文';
+
+  @override
+  String get translateCopyResult => '複製譯文';
+
+  @override
+  String get translateLangAuto => '自動偵測';
+
+  @override
+  String get translateSameLang => '原文已是目標語言';
+
+  @override
+  String translateBubbleCount(int n) {
+    return '已翻譯 $n 條';
+  }
+
+  @override
+  String get translatePrivacyNote => '翻譯會把訊息文字傳送到你選擇的第三方介面，請自行評估隱私';
+
+  @override
+  String get notifTncConnected => 'TNC 已連線';
+
+  @override
+  String get notifTncDisconnected => 'TNC 未連線';
+
+  @override
+  String get dataSourceTitle => '資料來源';
+
+  @override
+  String get dataSourceSubtitle => '報文從哪裡來';
+
+  @override
+  String get dataSourceAprsIs => 'APRS-IS';
+
+  @override
+  String get dataSourceAprsIsDesc => '透過網際網路接入全球 APRS 網路';
+
+  @override
+  String get dataSourceTnc => 'TNC';
+
+  @override
+  String get dataSourceTncDesc => '透過藍牙或串列的 TNC 與電台直接收發';
+
+  @override
+  String get dataSourceSwitchHint => '切換資料來源會中斷目前連線';
+
+  @override
+  String get tncBindTitle => '藍牙 TNC';
+
+  @override
+  String get tncBindSubtitle => '綁定並連接電台端的 TNC';
+
+  @override
+  String get tncBoundDevice => '已綁定裝置';
+
+  @override
+  String get tncNotBound => '未綁定裝置';
+
+  @override
+  String get tncScanPaired => '掃描已配對裝置';
+
+  @override
+  String get tncNoPaired => '未找到裝置 · 請先在系統藍牙設定裡配對 TNC';
+
+  @override
+  String get tncUnbind => '解除綁定';
+
+  @override
+  String get tncConnectAction => '連接 TNC';
+
+  @override
+  String get tncRestart => '重啟鏈路';
+
+  @override
+  String get tncSupportedNo => '目前平台暫不支援 TNC 鏈路';
+
+  @override
+  String get tncNeedPermission => '需要藍牙權限，請授權後重試';
+
+  @override
+  String get tncOpenFailedHint => '開啟裝置失敗 · Windows 的 COM 埠是獨佔裝置，請確認沒有被其他軟體佔用';
+
+  @override
+  String tncStats(String rx, String tx) {
+    return '收 $rx 幀 · 發 $tx 幀';
+  }
+
+  @override
+  String get tncLog => '鏈路日誌';
+
+  @override
+  String get tncLogEmpty => '暫無日誌';
+
+  @override
+  String get kissParamsTitle => 'KISS 參數';
+
+  @override
+  String get kissParamsSubtitle => '直接下發到 TNC 的鏈路層參數';
+
+  @override
+  String get kissTxDelay => '發射延時 (ms)';
+
+  @override
+  String get kissTxDelayTip => 'KISS TXDELAY，單位 10ms。發射前留給自己 PTT 建立的時間';
+
+  @override
+  String get kissTxTail => '發射尾音 (ms)';
+
+  @override
+  String get kissTxTailTip => 'KISS TXTAIL，單位 10ms。某些電台需要尾部保持才能收全';
+
+  @override
+  String get kissPersistence => '持續度 P';
+
+  @override
+  String get kissPersistenceTip => 'KISS PERSISTENCE，0-255。越小越禮讓，共用信道時能減少碰撞';
+
+  @override
+  String get kissSlotTime => '時隙 (ms)';
+
+  @override
+  String get kissSlotTimeTip => 'KISS SLOTTIME，單位 10ms。與持續度共同決定信道競爭節奏';
+
+  @override
+  String get kissFullDuplex => '全雙工';
+
+  @override
+  String get kissFullDuplexTip => 'KISS FULLDUPLEX，一般電台必須關閉（同時收發會互相干擾）';
+
+  @override
+  String get kissChannel => '信道 / KISS 埠';
+
+  @override
+  String get kissChannelTip => '多信道 TNC 才有多埠，單信道電台保持 0';
+
+  @override
+  String get kissMaxFrame => '幀長上限 (位元組)';
+
+  @override
+  String get kissMaxFrameTip => '超過此長度的報文不會發出（1200bd 下 AX.25 單幀約 330 位元組）';
+
+  @override
+  String get kissHardwareCmd => '廠商命令碼';
+
+  @override
+  String get kissHardwareVal => '參數值';
+
+  @override
+  String get kissHardwareTip => 'KISS SETHARDWARE (0x06)，廠商自訂；-1 表示不下發';
+
+  @override
+  String get kissApplyParams => '下發參數';
+
+  @override
+  String get kissParamsSent => 'KISS 參數已下發';
+
+  @override
+  String get kissBackToCommand => '回到 TNC 命令模式';
+
+  @override
+  String get kissBackToCommandTip =>
+      '發送 RETURN (0x0F)。多數 KISS TNC 會就此停止轉發，需重啟鏈路才恢復';
+
+  @override
+  String get kissRfPath => '射頻中繼路徑';
+
+  @override
+  String get kissRfPathTip => '射頻上使用的中繼，如 WIDE1-1,WIDE2-1；留空則不指定';
+
+  @override
+  String get kissRfBeacon => '允許射頻信標';
+
+  @override
+  String get kissRfBeaconTip => '打開後才會在射頻上定時發射位置。發射需以自己的呼號並在執照範圍內操作';
+
+  @override
+  String get kissAutoAck => '自動回覆 ACK';
+
+  @override
+  String get kissAutoAckTip => '關閉後不回覆收到的訊息回執，可減少射頻佔用';
+
+  @override
+  String get kissAutoReconnect => '斷開後自動重連';
+
+  @override
+  String get kissNeedConnected => '請先連接 TNC';
+
+  @override
+  String get tncSwitchOn => '已開啟';
+
+  @override
+  String get tncSwitchOff => '已關閉';
+
+  @override
+  String get connTncSourceHint => 'TNC 模式下不使用伺服器與過濾器，相關設定已停用';
+
+  @override
+  String get connectTncBar => '點「連接」建立 TNC 鏈路';
+
+  @override
+  String connectingToTnc(String name) {
+    return '正在連接 TNC · $name';
+  }
+
+  @override
+  String get tncMsgTitle => '射頻（TNC）模式';
+
+  @override
+  String get tncMsgDesc => '射頻信道是共享資源，訊息能力相應受限';
+
+  @override
+  String get tncGroupDisabled => '射頻模式不支援群聊廣播';
+
+  @override
+  String tncMsgLimitHint(String n) {
+    return '單條限 $n 字元（APRS 訊息規範）';
+  }
+
+  @override
+  String get tncMsgTooLong => '超出射頻模式單條訊息長度上限';
 
   @override
   String get licenseSection => '許可證宣告';
@@ -5163,6 +7194,19 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
+  String get deleteConversation => '刪除會話';
+
+  @override
+  String deleteConversationConfirm(Object call) {
+    return '確定刪除與 $call 的聊天記錄嗎？該會話將從列表中移除，此操作不可恢復。';
+  }
+
+  @override
+  String clearGroupChatConfirm(Object name) {
+    return '確定清空「$name」的聊天記錄嗎？此操作不可恢復。';
+  }
+
+  @override
   String memberOnlineCount(int members, int online) {
     return '$members 名成員 · $online 線上';
   }
@@ -6212,6 +8256,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get lookupAprsFi => 'aprs.fi 位置';
 
   @override
+  String get aprsTv => 'APRS.tv';
+
+  @override
+  String get aprsTvInfo => '詳細頁';
+
+  @override
+  String get aprsTvMap => '在地圖上查看';
+
+  @override
   String get linkOpenFailed => '無法開啟連結';
 
   @override
@@ -6646,6 +8699,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get maxTrackPtsTip => '每個台站保留的軌跡點數（預設 300，決定運動軌跡能回溯多長；僅位移超過 20m 才記點）';
 
   @override
+  String get onlineWindow => '在線判定時長（分鐘）';
+
+  @override
+  String get onlineWindowTip => '台站最後上報超過該時長即視為離線（預設 5 分鐘）';
+
+  @override
   String get chatRecords => '聊天記錄';
 
   @override
@@ -6721,6 +8780,11 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get notLit => '未點亮';
 
   @override
+  String honorCriteriaLine(String c) {
+    return '獲得條件：$c';
+  }
+
+  @override
   String get badgeFallback => '徽章';
 
   @override
@@ -6732,4 +8796,182 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String achievementsProgress(String n, String m) {
     return '$n/$m 成就';
   }
+
+  @override
+  String get beaconNotConnected => '未連線';
+
+  @override
+  String get beaconWaitingFix => '等待定位';
+
+  @override
+  String get beaconSoon => '即將';
+
+  @override
+  String beaconNextIn(String s) {
+    return '距下次上報 $s';
+  }
+
+  @override
+  String get beaconImminent => '即將上報…';
+
+  @override
+  String get notifConnected => '已連線';
+
+  @override
+  String get notifConnecting => '連線中';
+
+  @override
+  String get notifDisconnected => '未連線';
+
+  @override
+  String notifOnline(String n) {
+    return '$n 在線';
+  }
+
+  @override
+  String notifRx(String n) {
+    return '收 $n';
+  }
+
+  @override
+  String notifBeacon(String v) {
+    return '信標 $v';
+  }
+
+  @override
+  String get selectAll => '全選';
+
+  @override
+  String get deselectAll => '取消全選';
+
+  @override
+  String selectedCount(int n) {
+    return '已選 $n 項';
+  }
+
+  @override
+  String deleteSelected(int n) {
+    return '刪除 ($n)';
+  }
+
+  @override
+  String deleteSelectedConfirm(int n) {
+    return '確定刪除選中的 $n 個會話？此操作不可恢復。';
+  }
+
+  @override
+  String get chatManageHint => '點擊會話進行選擇，長按也可選中';
+
+  @override
+  String conversationsDeleted(int n) {
+    return '已刪除 $n 個會話';
+  }
+
+  @override
+  String get stationActions => '台站操作';
+
+  @override
+  String get deleteStation => '刪除台站';
+
+  @override
+  String deleteStationConfirm(String name) {
+    return '確定刪除台站 $name 嗎？刪除後將從台站列表移除；若再次收到其報文會重新出現。';
+  }
+
+  @override
+  String get unfavorite => '取消收藏';
+
+  @override
+  String get copyCallsign => '複製呼號';
+
+  @override
+  String get callsignCopied => '呼號已複製';
+
+  @override
+  String get stationDeleted => '已刪除台站';
+
+  @override
+  String get exportAdif => '匯出 ADIF';
+
+  @override
+  String get exportAdifDesc => '把會話匯出為 ADIF 日誌檔案，可匯入 Log4OM、N3FJP 等日誌軟體';
+
+  @override
+  String get export => '匯出';
+
+  @override
+  String get adifHint => '每筆記錄只含呼號與首則訊息時間（UTC），不含模式與頻段';
+
+  @override
+  String get adifNoSelection => '請先選擇要匯出的會話';
+
+  @override
+  String adifExported(int n) {
+    return '已匯出 $n 筆記錄';
+  }
+
+  @override
+  String get adifExportDone => '匯出完成';
+
+  @override
+  String get adifExportFailed => '匯出失敗，請檢查儲存權限或剩餘空間';
+
+  @override
+  String adifSavedTo(String path) {
+    return '已儲存至：$path';
+  }
+
+  @override
+  String get adifCopyPath => '複製路徑';
+
+  @override
+  String get adifPathCopied => '路徑已複製';
+
+  @override
+  String get chatShortLabel => '單聊';
+
+  @override
+  String get adifLogFile => '會話匯出為日誌檔案';
+
+  @override
+  String get adifOptions => '匯出選項';
+
+  @override
+  String get adifMode => '模式（MODE）';
+
+  @override
+  String get adifNotWritten => '不寫';
+
+  @override
+  String get adifModePkt => 'PKT（資料包，推薦）';
+
+  @override
+  String get adifModeFm => 'FM（語音）';
+
+  @override
+  String get adifModeData => 'DATA（資料）';
+
+  @override
+  String get adifSubModeAprs => '附加 SUBMODE=APRS';
+
+  @override
+  String get adifBand => '頻段（BAND）';
+
+  @override
+  String get adifStripSsid => '只寫基礎呼號（去掉 -SSID）';
+
+  @override
+  String get adifPreview => '預覽（將寫出的記錄）';
+
+  @override
+  String get adifModeRequiredHint => '多數日誌軟體（含 QRZ）要求 MODE，缺少會被拒收';
+
+  @override
+  String get adifFreq => '頻率（FREQ）';
+
+  @override
+  String get adifFreqHint => '單位 MHz，留空則不寫';
+
+  @override
+  String get adifFreqInvalid => '請輸入 MHz 數字，如 144.640';
 }

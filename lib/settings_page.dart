@@ -13,6 +13,8 @@ import 'exit_app.dart';
 import 'early_member.dart';
 import 'honor_wall_page.dart';
 import 'settings_pages.dart';
+import 'translate_page.dart';
+import 'export_adif_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppState state;
@@ -203,9 +205,9 @@ class _SettingsPageState extends State<SettingsPage> {
                               color: Colors.white, size: 17),
                         ),
                         SizedBox(width: 10),
-                        Text('荣誉墙', style: ts(13, w: FontWeight.w700)),
+                        Text(S.of(context).honorWall, style: ts(13, w: FontWeight.w700)),
                         const SizedBox(width: 6),
-                        const Text('我的徽章与成就',
+                        Text(S.of(context).myBadgesAndAchievements,
                             style: TextStyle(fontSize: 10, color: Color(0xFF98A2B8))),
                         Spacer(),
                         Icon(Icons.chevron_right_rounded,
@@ -217,6 +219,102 @@ class _SettingsPageState extends State<SettingsPage> {
                 SizedBox(height: 12),
                 // QQ 交流群
                 _qqBanner(),
+                SizedBox(height: 12),
+                // 翻译设置
+                GestureDetector(
+                  onTap: () => _push(TranslateSettingsPage(state: st)),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF0E7490), Color(0xFF155E75)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Icon(Icons.translate_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(S.of(context).translateSettings,
+                                  style: ts(13, w: FontWeight.w700)),
+                              SizedBox(height: 2),
+                              Text(S.of(context).translateSettingsSubtitle,
+                                  style: ts(10, c: C.grey),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded,
+                            color: C.grey, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 导出 ADIF（按需求置于「关于」上方）
+                GestureDetector(
+                  onTap: () => _push(ExportAdifPage(state: widget.state)),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF16A34A), Color(0xFF0B7A37)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: const Icon(
+                            Icons.file_download_rounded,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          S.of(context).exportAdif,
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).adifLogFile,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF98A2B8),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 SizedBox(height: 12),
                 // 关于
                 GestureDetector(
@@ -435,7 +533,7 @@ class _SettingsPageState extends State<SettingsPage> {
           textStyle: ts(13, w: FontWeight.w700),
         ),
         icon: const Icon(Icons.power_settings_new_rounded, size: 17),
-        label: const Text('退出应用'),
+        label: Text(S.of(context).quitApp),
       ),
     );
   }
@@ -448,22 +546,24 @@ class _SettingsPageState extends State<SettingsPage> {
           Icon(Icons.power_settings_new_rounded, color: C.red, size: 22),
           SizedBox(width: 8),
           Expanded(
-            child: Text('退出应用', style: ts(15, w: FontWeight.w700)),
+            child: Text(S.of(context).quitApp,
+                style: ts(15, w: FontWeight.w700)),
           ),
         ]),
         content: Text(
-          '退出后 APRSlocus 将停止定位上报与后台接收，并结束进程。',
+          S.of(context).quitAppDesc,
           style: ts(13, h: 1.7),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('取消', style: ts(13, c: C.slate)),
+            child: Text(S.of(context).cancel,
+                style: ts(13, c: C.slate)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: C.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('退出', style: ts(13)),
+            child: Text(S.of(context).logout, style: ts(13)),
           ),
         ],
       ),

@@ -25,8 +25,61 @@ class LocService {
 
   bool get running => _running;
 
+  /// 仅保活模式：不采集定位，只维持前台服务（Android）让连接与定时器存活。
+  /// 非 Android 平台无此服务，返回 false 表示调用方无需处理。
+  bool _keepAliveMode = false;
+
+  /// 启动「仅保活」：**不需要定位权限**，只为让应用在后台不被冻结。
+  ///
+  /// 用于用户的「模拟位置」模式：位置来自手动坐标/演示数据，不读 GPS，
+  /// 但 APRS-IS 连接、信标定时器仍需在后台运行。
+  Future<bool> startKeepAlive() async {
+    if (_keepAliveMode) return true;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      _listenEvents();
+      await _channel.invokeMethod('startService', {'mode': 'keepalive'});
+      _keepAliveMode = true;
+      onStatus?.call('模拟位置 · 后台保活已启动');
+      return true;
+    } catch (e) {
+      onStatus?.call('后台保活启动失败: $e');
+      return false;
+    }
+  }
+
+  /// 订阅原生事件通道（保活/定位共用）
+  void _listenEvents() {
+    _sub ??= _eventChannel.receiveBroadcastStream().listen((event) {
+      if (event is Map) {
+        final type = event['type'] as String?;
+        if (type == 'toggleConnect') {
+          onToggleConnect?.call();
+          return;
+        }
+        final status = event['status'] as String?;
+        if (status != null) onStatus?.call(status);
+        final lat = event['lat'];
+        if (lat is num && event['lng'] is num) {
+          onFix?.call(
+            lat.toDouble(),
+            (event['lng'] as num).toDouble(),
+            (event['alt'] as num?)?.toDouble() ?? 0,
+            (event['speed'] as num?)?.toDouble() ?? 0,
+            (event['bearing'] as num?)?.toDouble() ?? -1,
+          );
+        }
+      }
+    }, onError: (e) {
+      onStatus?.call('定位流异常: $e');
+    });
+  }
+
   /// 启动持续定位，返回是否成功
   Future<bool> start() async {
+    // 从「仅保活」切回真正定位时，必须先停掉保活服务，
+    // 否则前台服务仍在运行，下面 _running 判定会失效。
+    if (_keepAliveMode) stop();
     if (_running) return true;
     // Windows/Linux 无系统定位能力：直接用 IP 网络定位（纯 Dart，不走原生通道）
     if (!kIsWeb &&
@@ -61,29 +114,7 @@ class LocService {
         return false;
       }
       // 先订阅事件通道，避免漏掉服务启动后的初始定位
-      _sub = _eventChannel.receiveBroadcastStream().listen((event) {
-        if (event is Map) {
-          final type = event['type'] as String?;
-          if (type == 'toggleConnect') {
-            onToggleConnect?.call();
-            return;
-          }
-          final status = event['status'] as String?;
-          if (status != null) onStatus?.call(status);
-          final lat = event['lat'];
-          if (lat is num && event['lng'] is num) {
-            onFix?.call(
-              lat.toDouble(),
-              (event['lng'] as num).toDouble(),
-              (event['alt'] as num?)?.toDouble() ?? 0,
-              (event['speed'] as num?)?.toDouble() ?? 0,
-              (event['bearing'] as num?)?.toDouble() ?? -1,
-            );
-          }
-        }
-      }, onError: (e) {
-        onStatus?.call('定位流异常: $e');
-      });
+      _listenEvents();
       // 启动前台定位服务（携带定位模式）
       await _channel.invokeMethod('startService', {'mode': mode});
       _running = true;
@@ -179,6 +210,7 @@ class LocService {
 
   void stop() {
     _running = false;
+    _keepAliveMode = false;
     _sub?.cancel();
     _sub = null;
     _channel.invokeMethod('stopService').catchError((_) {});
@@ -259,13 +291,19 @@ class AprsFmt {
   }
 
   /// 消息数据包：CALL>APRS,TCPIP*::DEST  :text{id
-  static String message(String call, String dest, String text, String id) {
-    return '$call>APRS,TCPIP*::${dest.padRight(9)}:$text{$id';
+  ///
+  /// [path] 为报头路径段（目的呼号 + 中继列表）。APRS-IS 用默认值；
+  /// 射频（TNC）模式传 `APALOC,WIDE1-1` 之类的实际中继路径 ——
+  /// 射频上不能带 `TCPIP*`（IP 网关才有的路径，中继不识别）。
+  static String message(String call, String dest, String text, String id,
+      {String path = 'APRS,TCPIP*'}) {
+    return '$call>$path::${dest.padRight(9)}:$text{$id';
   }
 
   /// 无需 ack 的消息数据包（群聊广播用）：`{id_` 结尾
-  static String messageNoAck(String call, String dest, String text, String id) {
-    return '$call>APRS,TCPIP*::${dest.padRight(9)}:$text{${id}_';
+  static String messageNoAck(String call, String dest, String text, String id,
+      {String path = 'APRS,TCPIP*'}) {
+    return '$call>$path::${dest.padRight(9)}:$text{${id}_';
   }
   static String randId() {
     final r = DateTime.now().millisecondsSinceEpoch;

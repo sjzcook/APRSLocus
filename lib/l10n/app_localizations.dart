@@ -6,6 +6,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_es.dart';
+import 'app_localizations_id.dart';
+import 'app_localizations_ja.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -95,6 +98,9 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
+    Locale('es'),
+    Locale('id'),
+    Locale('ja'),
     Locale('zh'),
     Locale('zh', 'TW'),
   ];
@@ -453,6 +459,804 @@ abstract class AppLocalizations {
   /// **'信标发送次数'**
   String get beaconsSent;
 
+  /// No description provided for @symCatVehicles.
+  ///
+  /// In zh, this message translates to:
+  /// **'车辆 / 交通'**
+  String get symCatVehicles;
+
+  /// No description provided for @symCatBuildings.
+  ///
+  /// In zh, this message translates to:
+  /// **'建筑 / 设施'**
+  String get symCatBuildings;
+
+  /// No description provided for @symCatNature.
+  ///
+  /// In zh, this message translates to:
+  /// **'气象 / 自然'**
+  String get symCatNature;
+
+  /// No description provided for @symCatAirWater.
+  ///
+  /// In zh, this message translates to:
+  /// **'飞行 / 水域'**
+  String get symCatAirWater;
+
+  /// No description provided for @symCatComms.
+  ///
+  /// In zh, this message translates to:
+  /// **'通信 / 其他'**
+  String get symCatComms;
+
+  /// No description provided for @homeBadgeLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'主页展示徽章'**
+  String get homeBadgeLabel;
+
+  /// No description provided for @homeBadgePickTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择主页展示徽章'**
+  String get homeBadgePickTitle;
+
+  /// No description provided for @homeBadgePickDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'在以下已获得的徽章中选一个，作为主页常驻展示'**
+  String get homeBadgePickDesc;
+
+  /// No description provided for @simLocationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用模拟位置，无需 GPS'**
+  String get simLocationHint;
+
+  /// No description provided for @speedTierRules.
+  ///
+  /// In zh, this message translates to:
+  /// **'速度分档规则'**
+  String get speedTierRules;
+
+  /// No description provided for @restoreDefaults.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复默认'**
+  String get restoreDefaults;
+
+  /// No description provided for @speedTierDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'速度越快上报越频繁；每档可自定义间隔与图标（留空=我的符号）。'**
+  String get speedTierDesc;
+
+  /// No description provided for @speedTierShortIntervalWarn.
+  ///
+  /// In zh, this message translates to:
+  /// **'间隔低于 60 秒会显著增加服务器负载，建议 ≥60 秒。'**
+  String get speedTierShortIntervalWarn;
+
+  /// No description provided for @addSpeedTier.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加速度档'**
+  String get addSpeedTier;
+
+  /// No description provided for @maxSpeedTiers.
+  ///
+  /// In zh, this message translates to:
+  /// **'最多 5 个速度档'**
+  String get maxSpeedTiers;
+
+  /// No description provided for @iconDefaultMySymbol.
+  ///
+  /// In zh, this message translates to:
+  /// **'图标 · 默认(我的符号)'**
+  String get iconDefaultMySymbol;
+
+  /// No description provided for @iconNamed.
+  ///
+  /// In zh, this message translates to:
+  /// **'图标 · {name}'**
+  String iconNamed(String name);
+
+  /// No description provided for @everyNSeconds.
+  ///
+  /// In zh, this message translates to:
+  /// **'每 {sec} 秒'**
+  String everyNSeconds(String sec);
+
+  /// No description provided for @tierIdleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑 · 静止/低速档'**
+  String get tierIdleTitle;
+
+  /// No description provided for @tierSpeedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑 · 速度档'**
+  String get tierSpeedTitle;
+
+  /// No description provided for @minSpeedKmh.
+  ///
+  /// In zh, this message translates to:
+  /// **'最低速度 (km/h)'**
+  String get minSpeedKmh;
+
+  /// No description provided for @intervalSeconds.
+  ///
+  /// In zh, this message translates to:
+  /// **'上报间隔 (秒)'**
+  String get intervalSeconds;
+
+  /// No description provided for @idleTierDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'低于第一移动档的速度都按此档上报'**
+  String get idleTierDesc;
+
+  /// No description provided for @intervalLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'间隔'**
+  String get intervalLabel;
+
+  /// No description provided for @unitSeconds.
+  ///
+  /// In zh, this message translates to:
+  /// **'秒'**
+  String get unitSeconds;
+
+  /// No description provided for @pickBeaconIconDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择信标图标 ·「默认」= 沿用我的符号'**
+  String get pickBeaconIconDesc;
+
+  /// No description provided for @defaultLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认'**
+  String get defaultLabel;
+
+  /// No description provided for @deleteThisTier.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除此档'**
+  String get deleteThisTier;
+
+  /// No description provided for @idleTierNotDeletable.
+  ///
+  /// In zh, this message translates to:
+  /// **'静止档不可删除'**
+  String get idleTierNotDeletable;
+
+  /// No description provided for @errMinSpeedInt.
+  ///
+  /// In zh, this message translates to:
+  /// **'最低速度需为 ≥1 的整数'**
+  String get errMinSpeedInt;
+
+  /// No description provided for @errIntervalInt.
+  ///
+  /// In zh, this message translates to:
+  /// **'上报间隔需为 ≥5 秒的整数'**
+  String get errIntervalInt;
+
+  /// No description provided for @errTierDuplicate.
+  ///
+  /// In zh, this message translates to:
+  /// **'该速度档已存在，速度值需互不相同'**
+  String get errTierDuplicate;
+
+  /// No description provided for @wsUrlOptional.
+  ///
+  /// In zh, this message translates to:
+  /// **'WebSocket URL(可选)'**
+  String get wsUrlOptional;
+
+  /// No description provided for @countryUnrestricted.
+  ///
+  /// In zh, this message translates to:
+  /// **'未选择国家/地区 · 不做限制（接收全部台站）'**
+  String get countryUnrestricted;
+
+  /// No description provided for @weatherWidget.
+  ///
+  /// In zh, this message translates to:
+  /// **'天气组件'**
+  String get weatherWidget;
+
+  /// No description provided for @groupChatLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊'**
+  String get groupChatLabel;
+
+  /// No description provided for @nItems.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 个'**
+  String nItems(String n);
+
+  /// No description provided for @nMessages.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 条'**
+  String nMessages(String n);
+
+  /// No description provided for @confirmDeleteMessages.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定要删除全部 {n} 条聊天记录吗？此操作不可恢复。'**
+  String confirmDeleteMessages(String n);
+
+  /// No description provided for @weatherSimFollowLive.
+  ///
+  /// In zh, this message translates to:
+  /// **'跟随实时'**
+  String get weatherSimFollowLive;
+
+  /// No description provided for @wxClear.
+  ///
+  /// In zh, this message translates to:
+  /// **'晴'**
+  String get wxClear;
+
+  /// No description provided for @wxCloudy.
+  ///
+  /// In zh, this message translates to:
+  /// **'多云'**
+  String get wxCloudy;
+
+  /// No description provided for @wxOvercast.
+  ///
+  /// In zh, this message translates to:
+  /// **'阴'**
+  String get wxOvercast;
+
+  /// No description provided for @wxLightRain.
+  ///
+  /// In zh, this message translates to:
+  /// **'小雨'**
+  String get wxLightRain;
+
+  /// No description provided for @wxModerateRain.
+  ///
+  /// In zh, this message translates to:
+  /// **'中雨'**
+  String get wxModerateRain;
+
+  /// No description provided for @wxHeavyRain.
+  ///
+  /// In zh, this message translates to:
+  /// **'大雨'**
+  String get wxHeavyRain;
+
+  /// No description provided for @wxStormRain.
+  ///
+  /// In zh, this message translates to:
+  /// **'暴雨'**
+  String get wxStormRain;
+
+  /// No description provided for @wxThunder.
+  ///
+  /// In zh, this message translates to:
+  /// **'雷阵雨'**
+  String get wxThunder;
+
+  /// No description provided for @wxSnow.
+  ///
+  /// In zh, this message translates to:
+  /// **'雪'**
+  String get wxSnow;
+
+  /// No description provided for @wxFog.
+  ///
+  /// In zh, this message translates to:
+  /// **'雾'**
+  String get wxFog;
+
+  /// No description provided for @weatherSimTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'天气模拟（预览背景/特效/建议）'**
+  String get weatherSimTitle;
+
+  /// No description provided for @weatherSimDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择后点顶栏天气胶囊预览；「跟随实时」恢复真实天气'**
+  String get weatherSimDesc;
+
+  /// No description provided for @restartWizardConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'将重新进入首次启动向导，可重新设置呼号、接收地区等。\\n当前设置不会丢失，完成向导后继续使用。'**
+  String get restartWizardConfirm;
+
+  /// No description provided for @restartWizardButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新运行'**
+  String get restartWizardButton;
+
+  /// No description provided for @pasteAprsPacketHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'粘贴原始 APRS 包，如：\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>测试台'**
+  String get pasteAprsPacketHint;
+
+  /// No description provided for @beaconsSentCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 次'**
+  String beaconsSentCount(String n);
+
+  /// No description provided for @myBadgesAndAchievements.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的徽章与成就'**
+  String get myBadgesAndAchievements;
+
+  /// No description provided for @quitApp.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出应用'**
+  String get quitApp;
+
+  /// No description provided for @quitAppDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出后 APRSlocus 将停止定位上报与后台接收，并结束进程。'**
+  String get quitAppDesc;
+
+  /// No description provided for @symCar.
+  ///
+  /// In zh, this message translates to:
+  /// **'汽车'**
+  String get symCar;
+
+  /// No description provided for @openInBrowser.
+  ///
+  /// In zh, this message translates to:
+  /// **'在浏览器打开'**
+  String get openInBrowser;
+
+  /// No description provided for @badgeWall.
+  ///
+  /// In zh, this message translates to:
+  /// **'徽章墙'**
+  String get badgeWall;
+
+  /// No description provided for @achievementWall.
+  ///
+  /// In zh, this message translates to:
+  /// **'成就墙'**
+  String get achievementWall;
+
+  /// No description provided for @mapTypeCartoPositron.
+  ///
+  /// In zh, this message translates to:
+  /// **'Carto Positron(浅色矢量)'**
+  String get mapTypeCartoPositron;
+
+  /// No description provided for @mapTypeCarto.
+  ///
+  /// In zh, this message translates to:
+  /// **'Carto 浅色'**
+  String get mapTypeCarto;
+
+  /// No description provided for @mapTypeCartoDark.
+  ///
+  /// In zh, this message translates to:
+  /// **'Carto 深色'**
+  String get mapTypeCartoDark;
+
+  /// No description provided for @mapTypeCartoVoyager.
+  ///
+  /// In zh, this message translates to:
+  /// **'Carto 航行者'**
+  String get mapTypeCartoVoyager;
+
+  /// No description provided for @mapTypeOsm.
+  ///
+  /// In zh, this message translates to:
+  /// **'OSM 标准'**
+  String get mapTypeOsm;
+
+  /// No description provided for @mapTypeOsmHot.
+  ///
+  /// In zh, this message translates to:
+  /// **'OSM 人道'**
+  String get mapTypeOsmHot;
+
+  /// No description provided for @mapTypeOpenTopo.
+  ///
+  /// In zh, this message translates to:
+  /// **'OpenTopo 地形'**
+  String get mapTypeOpenTopo;
+
+  /// No description provided for @mapTypeEsriStreet.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esri 街道'**
+  String get mapTypeEsriStreet;
+
+  /// No description provided for @mapTypeEsriSat.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esri 影像'**
+  String get mapTypeEsriSat;
+
+  /// No description provided for @simulatedKeepAlive.
+  ///
+  /// In zh, this message translates to:
+  /// **'模拟位置 · 后台保活'**
+  String get simulatedKeepAlive;
+
+  /// No description provided for @symCatEmergency.
+  ///
+  /// In zh, this message translates to:
+  /// **'应急救援'**
+  String get symCatEmergency;
+
+  /// No description provided for @symSmallAircraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'小型飞机'**
+  String get symSmallAircraft;
+
+  /// No description provided for @myPositionSet.
+  ///
+  /// In zh, this message translates to:
+  /// **'已设置我的位置，网格 {grid}'**
+  String myPositionSet(String grid);
+
+  /// No description provided for @tierIdleShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'静止/低速'**
+  String get tierIdleShort;
+
+  /// No description provided for @symHouse.
+  ///
+  /// In zh, this message translates to:
+  /// **'房屋'**
+  String get symHouse;
+
+  /// No description provided for @symPerson.
+  ///
+  /// In zh, this message translates to:
+  /// **'人'**
+  String get symPerson;
+
+  /// No description provided for @symTruck.
+  ///
+  /// In zh, this message translates to:
+  /// **'卡车'**
+  String get symTruck;
+
+  /// No description provided for @symBicycle.
+  ///
+  /// In zh, this message translates to:
+  /// **'自行车'**
+  String get symBicycle;
+
+  /// No description provided for @symRv.
+  ///
+  /// In zh, this message translates to:
+  /// **'房车'**
+  String get symRv;
+
+  /// No description provided for @symWxStation.
+  ///
+  /// In zh, this message translates to:
+  /// **'气象站'**
+  String get symWxStation;
+
+  /// No description provided for @symPolice.
+  ///
+  /// In zh, this message translates to:
+  /// **'警局'**
+  String get symPolice;
+
+  /// No description provided for @symMotorcycle.
+  ///
+  /// In zh, this message translates to:
+  /// **'摩托'**
+  String get symMotorcycle;
+
+  /// No description provided for @symSemi.
+  ///
+  /// In zh, this message translates to:
+  /// **'半挂车'**
+  String get symSemi;
+
+  /// No description provided for @symVan.
+  ///
+  /// In zh, this message translates to:
+  /// **'面包车'**
+  String get symVan;
+
+  /// No description provided for @symJeep.
+  ///
+  /// In zh, this message translates to:
+  /// **'吉普'**
+  String get symJeep;
+
+  /// No description provided for @symBus.
+  ///
+  /// In zh, this message translates to:
+  /// **'公交'**
+  String get symBus;
+
+  /// No description provided for @symTruckStop.
+  ///
+  /// In zh, this message translates to:
+  /// **'卡车停靠'**
+  String get symTruckStop;
+
+  /// No description provided for @symTrain.
+  ///
+  /// In zh, this message translates to:
+  /// **'火车'**
+  String get symTrain;
+
+  /// No description provided for @symFireTruck.
+  ///
+  /// In zh, this message translates to:
+  /// **'消防车'**
+  String get symFireTruck;
+
+  /// No description provided for @symPoliceCar.
+  ///
+  /// In zh, this message translates to:
+  /// **'警车'**
+  String get symPoliceCar;
+
+  /// No description provided for @symSnowmobile.
+  ///
+  /// In zh, this message translates to:
+  /// **'雪地摩托'**
+  String get symSnowmobile;
+
+  /// No description provided for @symYagi.
+  ///
+  /// In zh, this message translates to:
+  /// **'八木屋'**
+  String get symYagi;
+
+  /// No description provided for @symHospital.
+  ///
+  /// In zh, this message translates to:
+  /// **'医院'**
+  String get symHospital;
+
+  /// No description provided for @symAmbulance.
+  ///
+  /// In zh, this message translates to:
+  /// **'救护车'**
+  String get symAmbulance;
+
+  /// No description provided for @symFireStation.
+  ///
+  /// In zh, this message translates to:
+  /// **'消防站'**
+  String get symFireStation;
+
+  /// No description provided for @symSchool.
+  ///
+  /// In zh, this message translates to:
+  /// **'学校'**
+  String get symSchool;
+
+  /// No description provided for @symMotel.
+  ///
+  /// In zh, this message translates to:
+  /// **'旅馆'**
+  String get symMotel;
+
+  /// No description provided for @symHotel.
+  ///
+  /// In zh, this message translates to:
+  /// **'酒店'**
+  String get symHotel;
+
+  /// No description provided for @symLaptop.
+  ///
+  /// In zh, this message translates to:
+  /// **'笔记本'**
+  String get symLaptop;
+
+  /// No description provided for @symPostOffice.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮局'**
+  String get symPostOffice;
+
+  /// No description provided for @symWeather.
+  ///
+  /// In zh, this message translates to:
+  /// **'气象'**
+  String get symWeather;
+
+  /// No description provided for @symWater.
+  ///
+  /// In zh, this message translates to:
+  /// **'供水站'**
+  String get symWater;
+
+  /// No description provided for @symHurricane.
+  ///
+  /// In zh, this message translates to:
+  /// **'飓风'**
+  String get symHurricane;
+
+  /// No description provided for @symHorse.
+  ///
+  /// In zh, this message translates to:
+  /// **'骑马'**
+  String get symHorse;
+
+  /// No description provided for @symDog.
+  ///
+  /// In zh, this message translates to:
+  /// **'狗'**
+  String get symDog;
+
+  /// No description provided for @symCamping.
+  ///
+  /// In zh, this message translates to:
+  /// **'露营'**
+  String get symCamping;
+
+  /// No description provided for @symShelter.
+  ///
+  /// In zh, this message translates to:
+  /// **'避难所'**
+  String get symShelter;
+
+  /// No description provided for @symRedCross.
+  ///
+  /// In zh, this message translates to:
+  /// **'红十字'**
+  String get symRedCross;
+
+  /// No description provided for @symFireAlarm.
+  ///
+  /// In zh, this message translates to:
+  /// **'火警'**
+  String get symFireAlarm;
+
+  /// No description provided for @symEmergCenter.
+  ///
+  /// In zh, this message translates to:
+  /// **'应急中心'**
+  String get symEmergCenter;
+
+  /// No description provided for @symCmdCenter.
+  ///
+  /// In zh, this message translates to:
+  /// **'指挥中心'**
+  String get symCmdCenter;
+
+  /// No description provided for @symHandicap.
+  ///
+  /// In zh, this message translates to:
+  /// **'残障'**
+  String get symHandicap;
+
+  /// No description provided for @symBigAircraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'大型飞机'**
+  String get symBigAircraft;
+
+  /// No description provided for @symGlider.
+  ///
+  /// In zh, this message translates to:
+  /// **'滑翔机'**
+  String get symGlider;
+
+  /// No description provided for @symBalloon.
+  ///
+  /// In zh, this message translates to:
+  /// **'气球'**
+  String get symBalloon;
+
+  /// No description provided for @symShip.
+  ///
+  /// In zh, this message translates to:
+  /// **'船'**
+  String get symShip;
+
+  /// No description provided for @symSailboat.
+  ///
+  /// In zh, this message translates to:
+  /// **'帆船'**
+  String get symSailboat;
+
+  /// No description provided for @symMobileSat.
+  ///
+  /// In zh, this message translates to:
+  /// **'移动卫星'**
+  String get symMobileSat;
+
+  /// No description provided for @symSatAntenna.
+  ///
+  /// In zh, this message translates to:
+  /// **'卫星天线'**
+  String get symSatAntenna;
+
+  /// No description provided for @symDigi.
+  ///
+  /// In zh, this message translates to:
+  /// **'数字中继'**
+  String get symDigi;
+
+  /// No description provided for @symDigiTower.
+  ///
+  /// In zh, this message translates to:
+  /// **'中继塔'**
+  String get symDigiTower;
+
+  /// No description provided for @symMicE.
+  ///
+  /// In zh, this message translates to:
+  /// **'Mic-E 中继'**
+  String get symMicE;
+
+  /// No description provided for @symNode.
+  ///
+  /// In zh, this message translates to:
+  /// **'节点'**
+  String get symNode;
+
+  /// No description provided for @symDxCluster.
+  ///
+  /// In zh, this message translates to:
+  /// **'DX 集群'**
+  String get symDxCluster;
+
+  /// No description provided for @symHfGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'HF 网关'**
+  String get symHfGateway;
+
+  /// No description provided for @symFileServer.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件服务器'**
+  String get symFileServer;
+
+  /// No description provided for @symTelephone.
+  ///
+  /// In zh, this message translates to:
+  /// **'电话'**
+  String get symTelephone;
+
+  /// No description provided for @symGrid.
+  ///
+  /// In zh, this message translates to:
+  /// **'网格'**
+  String get symGrid;
+
+  /// No description provided for @symXUnix.
+  ///
+  /// In zh, this message translates to:
+  /// **'X/Unix'**
+  String get symXUnix;
+
+  /// No description provided for @symFmoStation.
+  ///
+  /// In zh, this message translates to:
+  /// **'FMO 台站'**
+  String get symFmoStation;
+
   /// No description provided for @filter.
   ///
   /// In zh, this message translates to:
@@ -530,6 +1334,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'繁體中文'**
   String get languageZhTw;
+
+  /// No description provided for @languageJa.
+  ///
+  /// In zh, this message translates to:
+  /// **'日本語'**
+  String get languageJa;
+
+  /// No description provided for @languageId.
+  ///
+  /// In zh, this message translates to:
+  /// **'Bahasa Indonesia'**
+  String get languageId;
+
+  /// No description provided for @languageEs.
+  ///
+  /// In zh, this message translates to:
+  /// **'西班牙语'**
+  String get languageEs;
 
   /// No description provided for @displaySettings.
   ///
@@ -810,7 +1632,7 @@ abstract class AppLocalizations {
   /// No description provided for @oobeFilterDesc.
   ///
   /// In zh, this message translates to:
-  /// **'默认只接收中国呼号台站，可按需添加其他国家/地区'**
+  /// **'勾选要接收的国家/地区；不勾选则接收全部台站，不做限制'**
   String get oobeFilterDesc;
 
   /// No description provided for @oobeWelcomeTitle.
@@ -1286,6 +2108,876 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'繁体中文界面'**
   String get codeContributionZhTw;
+
+  /// No description provided for @codeContributionTranslation.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译'**
+  String get codeContributionTranslation;
+
+  /// No description provided for @connTncConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 已连接 · {arg}'**
+  String connTncConnected(String arg);
+
+  /// No description provided for @connTncPositionSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 已连接 · 位置已发送 ({arg})'**
+  String connTncPositionSent(String arg);
+
+  /// No description provided for @connRetryTnc.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 连接失败 · {n}s 后重试…'**
+  String connRetryTnc(int n);
+
+  /// No description provided for @connRetryTncDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 连接失败（{e}）· {n}s 后重试…'**
+  String connRetryTncDetail(String e, int n);
+
+  /// No description provided for @connTncLinkLost.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 链路断开 · {n}秒后自动重连…'**
+  String connTncLinkLost(int n);
+
+  /// No description provided for @tncErrNoDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'未绑定 TNC 设备'**
+  String get tncErrNoDevice;
+
+  /// No description provided for @tncErrUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持'**
+  String get tncErrUnsupported;
+
+  /// No description provided for @tncErrNotConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'链路未连接'**
+  String get tncErrNotConnected;
+
+  /// No description provided for @tncErrOpenRead.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开设备（读）'**
+  String get tncErrOpenRead;
+
+  /// No description provided for @tncErrOpenWrite.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开设备（写）—— Windows 的 COM 口是独占设备，检查是否被其他软件占用'**
+  String get tncErrOpenWrite;
+
+  /// No description provided for @tncErrBadFormat.
+  ///
+  /// In zh, this message translates to:
+  /// **'报文格式不合法'**
+  String get tncErrBadFormat;
+
+  /// No description provided for @tncErrFrameTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'帧长超出上限'**
+  String get tncErrFrameTooLong;
+
+  /// No description provided for @tncErrTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接超时'**
+  String get tncErrTimeout;
+
+  /// No description provided for @translateMyLang.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的语言'**
+  String get translateMyLang;
+
+  /// No description provided for @translateMyLangHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'对方发来的消息翻成它'**
+  String get translateMyLangHint;
+
+  /// No description provided for @translatePeerLang.
+  ///
+  /// In zh, this message translates to:
+  /// **'对方的语言'**
+  String get translatePeerLang;
+
+  /// No description provided for @translatePeerUnknownHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'收到对方消息后由翻译接口自动识别'**
+  String get translatePeerUnknownHint;
+
+  /// No description provided for @translateLearned.
+  ///
+  /// In zh, this message translates to:
+  /// **'已自动识别'**
+  String get translateLearned;
+
+  /// No description provided for @translatePeerUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'还不知道对方使用什么语言 · 先在翻译设置里指定，或收几条对方消息后会自动识别'**
+  String get translatePeerUnknown;
+
+  /// No description provided for @translateSideIncoming.
+  ///
+  /// In zh, this message translates to:
+  /// **'对方发来'**
+  String get translateSideIncoming;
+
+  /// No description provided for @translateSideOutgoing.
+  ///
+  /// In zh, this message translates to:
+  /// **'我发出'**
+  String get translateSideOutgoing;
+
+  /// No description provided for @translateToMeTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'译给我看'**
+  String get translateToMeTag;
+
+  /// No description provided for @translateToPeerTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'对方将读到'**
+  String get translateToPeerTag;
+
+  /// No description provided for @translateContrast.
+  ///
+  /// In zh, this message translates to:
+  /// **'对照显示原文与译文'**
+  String get translateContrast;
+
+  /// No description provided for @translateContrastTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭后只显示译文（原文仍可通过长按查看）'**
+  String get translateContrastTip;
+
+  /// No description provided for @translateProviderFree.
+  ///
+  /// In zh, this message translates to:
+  /// **'免费接口（无需密钥）'**
+  String get translateProviderFree;
+
+  /// No description provided for @translateProviderFreeDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'开箱即用 · 使用公开端点，可能被限流或不稳定'**
+  String get translateProviderFreeDesc;
+
+  /// No description provided for @translateFreeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'免费接口暂时不可用（{e}）· 可在设置里改用 Google / 百度 / 自定义接口'**
+  String translateFreeFailed(String e);
+
+  /// No description provided for @translateOutgoing.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送前翻译成对方的语言'**
+  String get translateOutgoing;
+
+  /// No description provided for @translateOutgoingTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启后按发送会先把内容译成对方的语言再发出；请确认对方能读懂该语言'**
+  String get translateOutgoingTip;
+
+  /// No description provided for @translateInput.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译输入内容'**
+  String get translateInput;
+
+  /// No description provided for @translateOutPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'将发送：{text}'**
+  String translateOutPreview(String text);
+
+  /// No description provided for @translateOutPreviewHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'已译为 {lang} · 点发送即按此发出'**
+  String translateOutPreviewHint(String lang);
+
+  /// No description provided for @translateOutCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消翻译'**
+  String get translateOutCancel;
+
+  /// No description provided for @translateOutNeedPeer.
+  ///
+  /// In zh, this message translates to:
+  /// **'还不知道对方使用什么语言 · 先在会话翻译设置里指定'**
+  String get translateOutNeedPeer;
+
+  /// No description provided for @translateSentAs.
+  ///
+  /// In zh, this message translates to:
+  /// **'已按对方语言发出：{text}'**
+  String translateSentAs(String text);
+
+  /// No description provided for @translateTooLongAfter.
+  ///
+  /// In zh, this message translates to:
+  /// **'译文超出长度上限（{n} 字符），未发送'**
+  String translateTooLongAfter(int n);
+
+  /// No description provided for @dateToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天'**
+  String get dateToday;
+
+  /// No description provided for @dateYesterday.
+  ///
+  /// In zh, this message translates to:
+  /// **'昨天'**
+  String get dateYesterday;
+
+  /// No description provided for @dateDividerFull.
+  ///
+  /// In zh, this message translates to:
+  /// **'{y}年{m}月{d}日 {w}'**
+  String dateDividerFull(int y, int m, int d, String w);
+
+  /// No description provided for @dateWeekday.
+  ///
+  /// In zh, this message translates to:
+  /// **'{d, select, 1 {周一} 2 {周二} 3 {周三} 4 {周四} 5 {周五} 6 {周六} 7 {周日} other {—}}'**
+  String dateWeekday(String d);
+
+  /// No description provided for @translate.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译'**
+  String get translate;
+
+  /// No description provided for @translateText.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译文本'**
+  String get translateText;
+
+  /// No description provided for @translateSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译设置'**
+  String get translateSettings;
+
+  /// No description provided for @translateSettingsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译接口、语言与自动翻译'**
+  String get translateSettingsSubtitle;
+
+  /// No description provided for @translateProvider.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译接口'**
+  String get translateProvider;
+
+  /// No description provided for @translateProviderGoogle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google 翻译'**
+  String get translateProviderGoogle;
+
+  /// No description provided for @translateProviderBaidu.
+  ///
+  /// In zh, this message translates to:
+  /// **'百度翻译'**
+  String get translateProviderBaidu;
+
+  /// No description provided for @translateProviderCustom.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义'**
+  String get translateProviderCustom;
+
+  /// No description provided for @translateGoogleKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google API Key'**
+  String get translateGoogleKey;
+
+  /// No description provided for @translateGoogleKeyTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google Cloud Translation v2 的 API Key，需要自行到 Google Cloud 控制台申请'**
+  String get translateGoogleKeyTip;
+
+  /// No description provided for @translateBaiduAppId.
+  ///
+  /// In zh, this message translates to:
+  /// **'百度 App ID'**
+  String get translateBaiduAppId;
+
+  /// No description provided for @translateBaiduKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'百度密钥'**
+  String get translateBaiduKey;
+
+  /// No description provided for @translateBaiduTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'在百度翻译开放平台申请「通用文本翻译」，密钥只保存在本机'**
+  String get translateBaiduTip;
+
+  /// No description provided for @translateCustomUrl.
+  ///
+  /// In zh, this message translates to:
+  /// **'接口地址'**
+  String get translateCustomUrl;
+
+  /// No description provided for @translateCustomMethod.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求方式'**
+  String get translateCustomMethod;
+
+  /// No description provided for @translateCustomHeaders.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求头 (JSON)'**
+  String get translateCustomHeaders;
+
+  /// No description provided for @translateCustomBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求体模板'**
+  String get translateCustomBody;
+
+  /// No description provided for @translateCustomBodyTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'可用占位符：{text} 原文、{from} 源语言、{to} 目标语言。选择 GET 时忽略此项'**
+  String translateCustomBodyTip(String text, String from, String to);
+
+  /// No description provided for @translateCustomResultPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'结果字段路径'**
+  String get translateCustomResultPath;
+
+  /// No description provided for @translateCustomResultPathTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'用点号表示层级，数组用序号，如 data.translations.0.translatedText'**
+  String get translateCustomResultPathTip;
+
+  /// No description provided for @translateTest.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试翻译'**
+  String get translateTest;
+
+  /// No description provided for @translateTestOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'接口可用：{text}'**
+  String translateTestOk(String text);
+
+  /// No description provided for @translateNeedConfig.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先填写翻译接口配置'**
+  String get translateNeedConfig;
+
+  /// No description provided for @translateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译失败：{e}'**
+  String translateFailed(String e);
+
+  /// No description provided for @translateTargetLang.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译为'**
+  String get translateTargetLang;
+
+  /// No description provided for @translateSourceLang.
+  ///
+  /// In zh, this message translates to:
+  /// **'原文语言'**
+  String get translateSourceLang;
+
+  /// No description provided for @translateAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动翻译收到的消息'**
+  String get translateAuto;
+
+  /// No description provided for @translateAutoTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅对本会话生效；只翻译对方发来的消息'**
+  String get translateAutoTip;
+
+  /// No description provided for @translateShowOriginal.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示原文'**
+  String get translateShowOriginal;
+
+  /// No description provided for @translateShowTranslation.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示译文'**
+  String get translateShowTranslation;
+
+  /// No description provided for @translateRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新翻译'**
+  String get translateRetry;
+
+  /// No description provided for @translateTranslating.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在翻译…'**
+  String get translateTranslating;
+
+  /// No description provided for @translateCopyOriginal.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制原文'**
+  String get translateCopyOriginal;
+
+  /// No description provided for @translateCopyResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制译文'**
+  String get translateCopyResult;
+
+  /// No description provided for @translateLangAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动检测'**
+  String get translateLangAuto;
+
+  /// No description provided for @translateSameLang.
+  ///
+  /// In zh, this message translates to:
+  /// **'原文已是目标语言'**
+  String get translateSameLang;
+
+  /// No description provided for @translateBubbleCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已翻译 {n} 条'**
+  String translateBubbleCount(int n);
+
+  /// No description provided for @translatePrivacyNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'翻译会把消息文本发送到你选择的第三方接口，请自行评估隐私'**
+  String get translatePrivacyNote;
+
+  /// No description provided for @notifTncConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 已连接'**
+  String get notifTncConnected;
+
+  /// No description provided for @notifTncDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 未连接'**
+  String get notifTncDisconnected;
+
+  /// No description provided for @dataSourceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据来源'**
+  String get dataSourceTitle;
+
+  /// No description provided for @dataSourceSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'报文从哪里来'**
+  String get dataSourceSubtitle;
+
+  /// No description provided for @dataSourceAprsIs.
+  ///
+  /// In zh, this message translates to:
+  /// **'APRS-IS'**
+  String get dataSourceAprsIs;
+
+  /// No description provided for @dataSourceAprsIsDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过互联网接入全球 APRS 网络'**
+  String get dataSourceAprsIsDesc;
+
+  /// No description provided for @dataSourceTnc.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC'**
+  String get dataSourceTnc;
+
+  /// No description provided for @dataSourceTncDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过蓝牙或串口的 TNC 与电台直接收发'**
+  String get dataSourceTncDesc;
+
+  /// No description provided for @dataSourceSwitchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换数据来源会断开当前连接'**
+  String get dataSourceSwitchHint;
+
+  /// No description provided for @tncBindTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'蓝牙 TNC'**
+  String get tncBindTitle;
+
+  /// No description provided for @tncBindSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'绑定并连接电台侧的 TNC'**
+  String get tncBindSubtitle;
+
+  /// No description provided for @tncBoundDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'已绑定设备'**
+  String get tncBoundDevice;
+
+  /// No description provided for @tncNotBound.
+  ///
+  /// In zh, this message translates to:
+  /// **'未绑定设备'**
+  String get tncNotBound;
+
+  /// No description provided for @tncScanPaired.
+  ///
+  /// In zh, this message translates to:
+  /// **'扫描已配对设备'**
+  String get tncScanPaired;
+
+  /// No description provided for @tncNoPaired.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到设备 · 请先在系统蓝牙设置里配对 TNC'**
+  String get tncNoPaired;
+
+  /// No description provided for @tncUnbind.
+  ///
+  /// In zh, this message translates to:
+  /// **'解除绑定'**
+  String get tncUnbind;
+
+  /// No description provided for @tncConnectAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接 TNC'**
+  String get tncConnectAction;
+
+  /// No description provided for @tncRestart.
+  ///
+  /// In zh, this message translates to:
+  /// **'重启链路'**
+  String get tncRestart;
+
+  /// No description provided for @tncSupportedNo.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台暂不支持 TNC 链路'**
+  String get tncSupportedNo;
+
+  /// No description provided for @tncNeedPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要蓝牙权限，请授权后重试'**
+  String get tncNeedPermission;
+
+  /// No description provided for @tncOpenFailedHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开设备失败 · Windows 的 COM 口是独占设备，请确认没有被其他软件占用'**
+  String get tncOpenFailedHint;
+
+  /// No description provided for @tncStats.
+  ///
+  /// In zh, this message translates to:
+  /// **'收 {rx} 帧 · 发 {tx} 帧'**
+  String tncStats(String rx, String tx);
+
+  /// No description provided for @tncLog.
+  ///
+  /// In zh, this message translates to:
+  /// **'链路日志'**
+  String get tncLog;
+
+  /// No description provided for @tncLogEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无日志'**
+  String get tncLogEmpty;
+
+  /// No description provided for @kissParamsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS 参数'**
+  String get kissParamsTitle;
+
+  /// No description provided for @kissParamsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'直接下发到 TNC 的链路层参数'**
+  String get kissParamsSubtitle;
+
+  /// No description provided for @kissTxDelay.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射延时 (ms)'**
+  String get kissTxDelay;
+
+  /// No description provided for @kissTxDelayTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS TXDELAY，单位 10ms。发射前留给自己 PTT 建立的时间'**
+  String get kissTxDelayTip;
+
+  /// No description provided for @kissTxTail.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射尾音 (ms)'**
+  String get kissTxTail;
+
+  /// No description provided for @kissTxTailTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS TXTAIL，单位 10ms。某些电台需要尾部保持才能收全'**
+  String get kissTxTailTip;
+
+  /// No description provided for @kissPersistence.
+  ///
+  /// In zh, this message translates to:
+  /// **'持续度 P'**
+  String get kissPersistence;
+
+  /// No description provided for @kissPersistenceTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS PERSISTENCE，0-255。越小越礼让，共用信道时能减少碰撞'**
+  String get kissPersistenceTip;
+
+  /// No description provided for @kissSlotTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'时隙 (ms)'**
+  String get kissSlotTime;
+
+  /// No description provided for @kissSlotTimeTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS SLOTTIME，单位 10ms。与持续度共同决定信道竞争节奏'**
+  String get kissSlotTimeTip;
+
+  /// No description provided for @kissFullDuplex.
+  ///
+  /// In zh, this message translates to:
+  /// **'全双工'**
+  String get kissFullDuplex;
+
+  /// No description provided for @kissFullDuplexTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS FULLDUPLEX，普通电台必须关闭（同时收发会互相干扰）'**
+  String get kissFullDuplexTip;
+
+  /// No description provided for @kissChannel.
+  ///
+  /// In zh, this message translates to:
+  /// **'信道 / KISS 端口'**
+  String get kissChannel;
+
+  /// No description provided for @kissChannelTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'多信道 TNC 才有多端口，单信道电台保持 0'**
+  String get kissChannelTip;
+
+  /// No description provided for @kissMaxFrame.
+  ///
+  /// In zh, this message translates to:
+  /// **'帧长上限 (字节)'**
+  String get kissMaxFrame;
+
+  /// No description provided for @kissMaxFrameTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'超过此长度的报文不会发出（1200bd 下 AX.25 单帧约 330 字节）'**
+  String get kissMaxFrameTip;
+
+  /// No description provided for @kissHardwareCmd.
+  ///
+  /// In zh, this message translates to:
+  /// **'厂商命令码'**
+  String get kissHardwareCmd;
+
+  /// No description provided for @kissHardwareVal.
+  ///
+  /// In zh, this message translates to:
+  /// **'参数值'**
+  String get kissHardwareVal;
+
+  /// No description provided for @kissHardwareTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS SETHARDWARE (0x06)，厂商自定义；-1 表示不下发'**
+  String get kissHardwareTip;
+
+  /// No description provided for @kissApplyParams.
+  ///
+  /// In zh, this message translates to:
+  /// **'下发参数'**
+  String get kissApplyParams;
+
+  /// No description provided for @kissParamsSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS 参数已下发'**
+  String get kissParamsSent;
+
+  /// No description provided for @kissBackToCommand.
+  ///
+  /// In zh, this message translates to:
+  /// **'回到 TNC 命令模式'**
+  String get kissBackToCommand;
+
+  /// No description provided for @kissBackToCommandTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送 RETURN (0x0F)。多数 KISS TNC 会就此停止转发，需重启链路才恢复'**
+  String get kissBackToCommandTip;
+
+  /// No description provided for @kissRfPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频中继路径'**
+  String get kissRfPath;
+
+  /// No description provided for @kissRfPathTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频上使用的中继，如 WIDE1-1,WIDE2-1；留空则不指定'**
+  String get kissRfPathTip;
+
+  /// No description provided for @kissRfBeacon.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许射频信标'**
+  String get kissRfBeacon;
+
+  /// No description provided for @kissRfBeaconTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开后才会在射频上定时发射位置。发射需以自己的呼号并在执照范围内操作'**
+  String get kissRfBeaconTip;
+
+  /// No description provided for @kissAutoAck.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动回复 ACK'**
+  String get kissAutoAck;
+
+  /// No description provided for @kissAutoAckTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭后不回应收到的消息回执，可减少射频占用'**
+  String get kissAutoAckTip;
+
+  /// No description provided for @kissAutoReconnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'断开后自动重连'**
+  String get kissAutoReconnect;
+
+  /// No description provided for @kissNeedConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先连接 TNC'**
+  String get kissNeedConnected;
+
+  /// No description provided for @tncSwitchOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开启'**
+  String get tncSwitchOn;
+
+  /// No description provided for @tncSwitchOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'已关闭'**
+  String get tncSwitchOff;
+
+  /// No description provided for @connTncSourceHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 模式下不使用服务器与过滤器，相关设置已停用'**
+  String get connTncSourceHint;
+
+  /// No description provided for @connectTncBar.
+  ///
+  /// In zh, this message translates to:
+  /// **'点「连接」建立 TNC 链路'**
+  String get connectTncBar;
+
+  /// No description provided for @connectingToTnc.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在连接 TNC · {name}'**
+  String connectingToTnc(String name);
+
+  /// No description provided for @tncMsgTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频（TNC）模式'**
+  String get tncMsgTitle;
+
+  /// No description provided for @tncMsgDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频信道是共享资源，消息能力相应受限'**
+  String get tncMsgDesc;
+
+  /// No description provided for @tncGroupDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频模式不支持群聊广播'**
+  String get tncGroupDisabled;
+
+  /// No description provided for @tncMsgLimitHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'单条限 {n} 字符（APRS 消息规范）'**
+  String tncMsgLimitHint(String n);
+
+  /// No description provided for @tncMsgTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'超出射频模式单条消息长度上限'**
+  String get tncMsgTooLong;
 
   /// No description provided for @licenseSection.
   ///
@@ -3453,6 +5145,24 @@ abstract class AppLocalizations {
   /// **'确定删除「{name}」？此操作不可撤销。'**
   String deleteGroupConfirm(String name);
 
+  /// No description provided for @deleteConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除会话'**
+  String get deleteConversation;
+
+  /// No description provided for @deleteConversationConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定删除与 {call} 的聊天记录吗？该会话将从列表中移除，此操作不可恢复。'**
+  String deleteConversationConfirm(Object call);
+
+  /// No description provided for @clearGroupChatConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定清空「{name}」的聊天记录吗？此操作不可恢复。'**
+  String clearGroupChatConfirm(Object name);
+
   /// No description provided for @memberOnlineCount.
   ///
   /// In zh, this message translates to:
@@ -5121,6 +6831,24 @@ abstract class AppLocalizations {
   /// **'aprs.fi 位置'**
   String get lookupAprsFi;
 
+  /// No description provided for @aprsTv.
+  ///
+  /// In zh, this message translates to:
+  /// **'APRS.tv'**
+  String get aprsTv;
+
+  /// No description provided for @aprsTvInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'详情页'**
+  String get aprsTvInfo;
+
+  /// No description provided for @aprsTvMap.
+  ///
+  /// In zh, this message translates to:
+  /// **'在地图上查看'**
+  String get aprsTvMap;
+
   /// No description provided for @linkOpenFailed.
   ///
   /// In zh, this message translates to:
@@ -5901,6 +7629,18 @@ abstract class AppLocalizations {
   /// **'每个台站保留的轨迹点数（默认 300，决定运动轨迹能回溯多长；仅位移超过 20m 才记点）'**
   String get maxTrackPtsTip;
 
+  /// No description provided for @onlineWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线判定时长（分钟）'**
+  String get onlineWindow;
+
+  /// No description provided for @onlineWindowTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'台站最后上报超过该时长即视为离线（默认 5 分钟）'**
+  String get onlineWindowTip;
+
   /// No description provided for @chatRecords.
   ///
   /// In zh, this message translates to:
@@ -6051,6 +7791,12 @@ abstract class AppLocalizations {
   /// **'未点亮'**
   String get notLit;
 
+  /// No description provided for @honorCriteriaLine.
+  ///
+  /// In zh, this message translates to:
+  /// **'获得条件：{c}'**
+  String honorCriteriaLine(String c);
+
   /// No description provided for @badgeFallback.
   ///
   /// In zh, this message translates to:
@@ -6068,6 +7814,318 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{n}/{m} 成就'**
   String achievementsProgress(String n, String m);
+
+  /// No description provided for @beaconNotConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未连接'**
+  String get beaconNotConnected;
+
+  /// No description provided for @beaconWaitingFix.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待定位'**
+  String get beaconWaitingFix;
+
+  /// No description provided for @beaconSoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'即将'**
+  String get beaconSoon;
+
+  /// No description provided for @beaconNextIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'距下次上报 {s}'**
+  String beaconNextIn(String s);
+
+  /// No description provided for @beaconImminent.
+  ///
+  /// In zh, this message translates to:
+  /// **'即将上报…'**
+  String get beaconImminent;
+
+  /// No description provided for @notifConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已连接'**
+  String get notifConnected;
+
+  /// No description provided for @notifConnecting.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接中'**
+  String get notifConnecting;
+
+  /// No description provided for @notifDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未连接'**
+  String get notifDisconnected;
+
+  /// No description provided for @notifOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 在线'**
+  String notifOnline(String n);
+
+  /// No description provided for @notifRx.
+  ///
+  /// In zh, this message translates to:
+  /// **'收 {n}'**
+  String notifRx(String n);
+
+  /// No description provided for @notifBeacon.
+  ///
+  /// In zh, this message translates to:
+  /// **'信标 {v}'**
+  String notifBeacon(String v);
+
+  /// No description provided for @selectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get selectAll;
+
+  /// No description provided for @deselectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消全选'**
+  String get deselectAll;
+
+  /// No description provided for @selectedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已选 {n} 项'**
+  String selectedCount(int n);
+
+  /// No description provided for @deleteSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 ({n})'**
+  String deleteSelected(int n);
+
+  /// No description provided for @deleteSelectedConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定删除选中的 {n} 个会话？此操作不可恢复。'**
+  String deleteSelectedConfirm(int n);
+
+  /// No description provided for @chatManageHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击会话进行选择，长按也可选中'**
+  String get chatManageHint;
+
+  /// No description provided for @conversationsDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已删除 {n} 个会话'**
+  String conversationsDeleted(int n);
+
+  /// No description provided for @stationActions.
+  ///
+  /// In zh, this message translates to:
+  /// **'台站操作'**
+  String get stationActions;
+
+  /// No description provided for @deleteStation.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除台站'**
+  String get deleteStation;
+
+  /// No description provided for @deleteStationConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定删除台站 {name} 吗？删除后将从台站列表移除；若再次收到其报文会重新出现。'**
+  String deleteStationConfirm(String name);
+
+  /// No description provided for @unfavorite.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消收藏'**
+  String get unfavorite;
+
+  /// No description provided for @copyCallsign.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制呼号'**
+  String get copyCallsign;
+
+  /// No description provided for @callsignCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'呼号已复制'**
+  String get callsignCopied;
+
+  /// No description provided for @stationDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已删除台站'**
+  String get stationDeleted;
+
+  /// No description provided for @exportAdif.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出 ADIF'**
+  String get exportAdif;
+
+  /// No description provided for @exportAdifDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'把会话导出为 ADIF 日志文件，可导入 Log4OM、N3FJP 等日志软件'**
+  String get exportAdifDesc;
+
+  /// No description provided for @export.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出'**
+  String get export;
+
+  /// No description provided for @adifHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'每条记录只含呼号与首条消息时间（UTC），不含模式与频段'**
+  String get adifHint;
+
+  /// No description provided for @adifNoSelection.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先选择要导出的会话'**
+  String get adifNoSelection;
+
+  /// No description provided for @adifExported.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出 {n} 条记录'**
+  String adifExported(int n);
+
+  /// No description provided for @adifExportDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出完成'**
+  String get adifExportDone;
+
+  /// No description provided for @adifExportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出失败，请检查存储权限或剩余空间'**
+  String get adifExportFailed;
+
+  /// No description provided for @adifSavedTo.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到：{path}'**
+  String adifSavedTo(String path);
+
+  /// No description provided for @adifCopyPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制路径'**
+  String get adifCopyPath;
+
+  /// No description provided for @adifPathCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'路径已复制'**
+  String get adifPathCopied;
+
+  /// No description provided for @chatShortLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'单聊'**
+  String get chatShortLabel;
+
+  /// No description provided for @adifLogFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话导出为日志文件'**
+  String get adifLogFile;
+
+  /// No description provided for @adifOptions.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出选项'**
+  String get adifOptions;
+
+  /// No description provided for @adifMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'模式（MODE）'**
+  String get adifMode;
+
+  /// No description provided for @adifNotWritten.
+  ///
+  /// In zh, this message translates to:
+  /// **'不写'**
+  String get adifNotWritten;
+
+  /// No description provided for @adifModePkt.
+  ///
+  /// In zh, this message translates to:
+  /// **'PKT（数据包，推荐）'**
+  String get adifModePkt;
+
+  /// No description provided for @adifModeFm.
+  ///
+  /// In zh, this message translates to:
+  /// **'FM（语音）'**
+  String get adifModeFm;
+
+  /// No description provided for @adifModeData.
+  ///
+  /// In zh, this message translates to:
+  /// **'DATA（数据）'**
+  String get adifModeData;
+
+  /// No description provided for @adifSubModeAprs.
+  ///
+  /// In zh, this message translates to:
+  /// **'附加 SUBMODE=APRS'**
+  String get adifSubModeAprs;
+
+  /// No description provided for @adifBand.
+  ///
+  /// In zh, this message translates to:
+  /// **'频段（BAND）'**
+  String get adifBand;
+
+  /// No description provided for @adifStripSsid.
+  ///
+  /// In zh, this message translates to:
+  /// **'只写基础呼号（去掉 -SSID）'**
+  String get adifStripSsid;
+
+  /// No description provided for @adifPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'预览（将写出的记录）'**
+  String get adifPreview;
+
+  /// No description provided for @adifModeRequiredHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'多数日志软件（含 QRZ）要求 MODE，缺少会被拒收'**
+  String get adifModeRequiredHint;
+
+  /// No description provided for @adifFreq.
+  ///
+  /// In zh, this message translates to:
+  /// **'频率（FREQ）'**
+  String get adifFreq;
+
+  /// No description provided for @adifFreqHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'单位 MHz，留空则不写'**
+  String get adifFreqHint;
+
+  /// No description provided for @adifFreqInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 MHz 数字，如 144.640'**
+  String get adifFreqInvalid;
 }
 
 class _AppLocalizationsDelegate
@@ -6081,7 +8139,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+      <String>['en', 'es', 'id', 'ja', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -6104,6 +8162,12 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'es':
+      return AppLocalizationsEs();
+    case 'id':
+      return AppLocalizationsId();
+    case 'ja':
+      return AppLocalizationsJa();
     case 'zh':
       return AppLocalizationsZh();
   }

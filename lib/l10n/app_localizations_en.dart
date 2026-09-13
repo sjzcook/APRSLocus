@@ -187,6 +187,431 @@ class AppLocalizationsEn extends AppLocalizations {
   String get beaconsSent => 'Beacons sent';
 
   @override
+  String get symCatVehicles => 'Vehicles / Traffic';
+
+  @override
+  String get symCatBuildings => 'Buildings / Facilities';
+
+  @override
+  String get symCatNature => 'Weather / Nature';
+
+  @override
+  String get symCatAirWater => 'Air / Water';
+
+  @override
+  String get symCatComms => 'Comms / Other';
+
+  @override
+  String get homeBadgeLabel => 'Badge shown on home';
+
+  @override
+  String get homeBadgePickTitle => 'Choose a badge for home';
+
+  @override
+  String get homeBadgePickDesc =>
+      'Pick one earned badge to keep on your home screen';
+
+  @override
+  String get simLocationHint => 'Use a simulated location (no GPS needed)';
+
+  @override
+  String get speedTierRules => 'Speed tiers';
+
+  @override
+  String get restoreDefaults => 'Restore defaults';
+
+  @override
+  String get speedTierDesc =>
+      'The faster you move, the more often you report; each tier can have its own interval and icon (blank = my symbol).';
+
+  @override
+  String get speedTierShortIntervalWarn =>
+      'Intervals under 60 s noticeably increase server load; 60 s or more is recommended.';
+
+  @override
+  String get addSpeedTier => 'Add speed tier';
+
+  @override
+  String get maxSpeedTiers => 'Up to 5 speed tiers';
+
+  @override
+  String get iconDefaultMySymbol => 'Icon · Default (my symbol)';
+
+  @override
+  String iconNamed(String name) {
+    return 'Icon · $name';
+  }
+
+  @override
+  String everyNSeconds(String sec) {
+    return 'Every $sec s';
+  }
+
+  @override
+  String get tierIdleTitle => 'Edit · Idle/low-speed tier';
+
+  @override
+  String get tierSpeedTitle => 'Edit · Speed tier';
+
+  @override
+  String get minSpeedKmh => 'Minimum speed (km/h)';
+
+  @override
+  String get intervalSeconds => 'Report interval (s)';
+
+  @override
+  String get idleTierDesc =>
+      'Speeds below the first moving tier are reported with this tier';
+
+  @override
+  String get intervalLabel => 'Interval';
+
+  @override
+  String get unitSeconds => 's';
+
+  @override
+  String get pickBeaconIconDesc =>
+      'Pick a beacon icon · \"Default\" keeps my symbol';
+
+  @override
+  String get defaultLabel => 'Default';
+
+  @override
+  String get deleteThisTier => 'Delete this tier';
+
+  @override
+  String get idleTierNotDeletable => 'The idle tier cannot be deleted';
+
+  @override
+  String get errMinSpeedInt => 'Minimum speed must be an integer >= 1';
+
+  @override
+  String get errIntervalInt => 'Interval must be an integer of at least 5 s';
+
+  @override
+  String get errTierDuplicate =>
+      'That speed tier already exists; thresholds must be unique';
+
+  @override
+  String get wsUrlOptional => 'WebSocket URL (optional)';
+
+  @override
+  String get countryUnrestricted =>
+      'No country selected · no restriction (all stations)';
+
+  @override
+  String get weatherWidget => 'Weather widget';
+
+  @override
+  String get groupChatLabel => 'Group chats';
+
+  @override
+  String nItems(String n) {
+    return '$n';
+  }
+
+  @override
+  String nMessages(String n) {
+    return '$n';
+  }
+
+  @override
+  String confirmDeleteMessages(String n) {
+    return 'Delete all $n chat messages? This cannot be undone.';
+  }
+
+  @override
+  String get weatherSimFollowLive => 'Follow live';
+
+  @override
+  String get wxClear => 'Clear';
+
+  @override
+  String get wxCloudy => 'Cloudy';
+
+  @override
+  String get wxOvercast => 'Overcast';
+
+  @override
+  String get wxLightRain => 'Light rain';
+
+  @override
+  String get wxModerateRain => 'Moderate rain';
+
+  @override
+  String get wxHeavyRain => 'Heavy rain';
+
+  @override
+  String get wxStormRain => 'Torrential rain';
+
+  @override
+  String get wxThunder => 'Thundershower';
+
+  @override
+  String get wxSnow => 'Snow';
+
+  @override
+  String get wxFog => 'Fog';
+
+  @override
+  String get weatherSimTitle =>
+      'Weather simulation (preview background/effects/advice)';
+
+  @override
+  String get weatherSimDesc =>
+      'After choosing, tap the weather pill in the top bar to preview; \"Follow live\" restores real weather';
+
+  @override
+  String get restartWizardConfirm =>
+      'The first-run wizard will open again so you can reset your callsign, receive area and more.\\nYour current settings are kept; continue using the app after finishing the wizard.';
+
+  @override
+  String get restartWizardButton => 'Run again';
+
+  @override
+  String get pasteAprsPacketHint =>
+      'Paste a raw APRS packet, e.g.\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>Test';
+
+  @override
+  String beaconsSentCount(String n) {
+    return '$n';
+  }
+
+  @override
+  String get myBadgesAndAchievements => 'My badges and achievements';
+
+  @override
+  String get quitApp => 'Quit app';
+
+  @override
+  String get quitAppDesc =>
+      'Quitting stops location reporting and background reception, and ends the process.';
+
+  @override
+  String get symCar => 'Car';
+
+  @override
+  String get openInBrowser => 'Open in browser';
+
+  @override
+  String get badgeWall => 'Badge wall';
+
+  @override
+  String get achievementWall => 'Achievement wall';
+
+  @override
+  String get mapTypeCartoPositron => 'Carto Positron (light vector)';
+
+  @override
+  String get mapTypeCarto => 'Carto Light';
+
+  @override
+  String get mapTypeCartoDark => 'Carto Dark';
+
+  @override
+  String get mapTypeCartoVoyager => 'Carto Voyager';
+
+  @override
+  String get mapTypeOsm => 'OSM Standard';
+
+  @override
+  String get mapTypeOsmHot => 'OSM Humanitarian';
+
+  @override
+  String get mapTypeOpenTopo => 'OpenTopo Terrain';
+
+  @override
+  String get mapTypeEsriStreet => 'Esri Streets';
+
+  @override
+  String get mapTypeEsriSat => 'Esri Imagery';
+
+  @override
+  String get simulatedKeepAlive => 'Simulated location · keep-alive';
+
+  @override
+  String get symCatEmergency => 'Emergency';
+
+  @override
+  String get symSmallAircraft => 'Small aircraft';
+
+  @override
+  String myPositionSet(String grid) {
+    return 'My position set, grid $grid';
+  }
+
+  @override
+  String get tierIdleShort => 'Idle/low';
+
+  @override
+  String get symHouse => 'House';
+
+  @override
+  String get symPerson => 'Person';
+
+  @override
+  String get symTruck => 'Truck';
+
+  @override
+  String get symBicycle => 'Bicycle';
+
+  @override
+  String get symRv => 'RV';
+
+  @override
+  String get symWxStation => 'Weather station';
+
+  @override
+  String get symPolice => 'Police';
+
+  @override
+  String get symMotorcycle => 'Motorcycle';
+
+  @override
+  String get symSemi => 'Semi-trailer';
+
+  @override
+  String get symVan => 'Van';
+
+  @override
+  String get symJeep => 'Jeep';
+
+  @override
+  String get symBus => 'Bus';
+
+  @override
+  String get symTruckStop => 'Truck stop';
+
+  @override
+  String get symTrain => 'Train';
+
+  @override
+  String get symFireTruck => 'Fire truck';
+
+  @override
+  String get symPoliceCar => 'Police car';
+
+  @override
+  String get symSnowmobile => 'Snowmobile';
+
+  @override
+  String get symYagi => 'Yagi';
+
+  @override
+  String get symHospital => 'Hospital';
+
+  @override
+  String get symAmbulance => 'Ambulance';
+
+  @override
+  String get symFireStation => 'Fire station';
+
+  @override
+  String get symSchool => 'School';
+
+  @override
+  String get symMotel => 'Motel';
+
+  @override
+  String get symHotel => 'Hotel';
+
+  @override
+  String get symLaptop => 'Laptop';
+
+  @override
+  String get symPostOffice => 'Post office';
+
+  @override
+  String get symWeather => 'Weather';
+
+  @override
+  String get symWater => 'Water station';
+
+  @override
+  String get symHurricane => 'Hurricane';
+
+  @override
+  String get symHorse => 'Horseback';
+
+  @override
+  String get symDog => 'Dog';
+
+  @override
+  String get symCamping => 'Camping';
+
+  @override
+  String get symShelter => 'Shelter';
+
+  @override
+  String get symRedCross => 'Red Cross';
+
+  @override
+  String get symFireAlarm => 'Fire alarm';
+
+  @override
+  String get symEmergCenter => 'Emergency center';
+
+  @override
+  String get symCmdCenter => 'Command center';
+
+  @override
+  String get symHandicap => 'Handicapped';
+
+  @override
+  String get symBigAircraft => 'Large aircraft';
+
+  @override
+  String get symGlider => 'Glider';
+
+  @override
+  String get symBalloon => 'Balloon';
+
+  @override
+  String get symShip => 'Ship';
+
+  @override
+  String get symSailboat => 'Sailboat';
+
+  @override
+  String get symMobileSat => 'Mobile satellite';
+
+  @override
+  String get symSatAntenna => 'Satellite antenna';
+
+  @override
+  String get symDigi => 'Digital repeater';
+
+  @override
+  String get symDigiTower => 'Repeater tower';
+
+  @override
+  String get symMicE => 'Mic-E repeater';
+
+  @override
+  String get symNode => 'Node';
+
+  @override
+  String get symDxCluster => 'DX cluster';
+
+  @override
+  String get symHfGateway => 'HF gateway';
+
+  @override
+  String get symFileServer => 'File server';
+
+  @override
+  String get symTelephone => 'Telephone';
+
+  @override
+  String get symGrid => 'Grid';
+
+  @override
+  String get symXUnix => 'X/Unix';
+
+  @override
+  String get symFmoStation => 'FMO station';
+
+  @override
   String get filter => 'Range filter';
 
   @override
@@ -224,6 +649,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get languageZhTw => '繁體中文';
+
+  @override
+  String get languageJa => '日本語';
+
+  @override
+  String get languageId => 'Bahasa Indonesia';
+
+  @override
+  String get languageEs => 'Spanish';
 
   @override
   String get displaySettings => 'Display settings';
@@ -366,7 +800,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get oobeFilterDesc =>
-      'By default only Chinese callsigns are received. Add other countries as needed.';
+      'Tick the countries/regions to receive. Leave all unselected to receive every station with no restriction.';
 
   @override
   String get oobeWelcomeTitle => 'Welcome to APRSlocus';
@@ -606,6 +1040,526 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get codeContributionZhTw => 'Traditional Chinese UI';
+
+  @override
+  String get codeContributionTranslation => 'Translation';
+
+  @override
+  String connTncConnected(String arg) {
+    return 'TNC connected · $arg';
+  }
+
+  @override
+  String connTncPositionSent(String arg) {
+    return 'TNC connected · position sent ($arg)';
+  }
+
+  @override
+  String connRetryTnc(int n) {
+    return 'TNC connection failed · retrying in ${n}s…';
+  }
+
+  @override
+  String connRetryTncDetail(String e, int n) {
+    return 'TNC connection failed ($e) · retrying in ${n}s…';
+  }
+
+  @override
+  String connTncLinkLost(int n) {
+    return 'TNC link lost · reconnecting in ${n}s…';
+  }
+
+  @override
+  String get tncErrNoDevice => 'no TNC device bound';
+
+  @override
+  String get tncErrUnsupported => 'unsupported on this platform';
+
+  @override
+  String get tncErrNotConnected => 'link not connected';
+
+  @override
+  String get tncErrOpenRead => 'cannot open device for reading';
+
+  @override
+  String get tncErrOpenWrite =>
+      'cannot open device for writing — Windows COM ports are exclusive; check for another app holding it';
+
+  @override
+  String get tncErrBadFormat => 'malformed packet';
+
+  @override
+  String get tncErrFrameTooLong => 'frame exceeds the size limit';
+
+  @override
+  String get tncErrTimeout => 'timed out';
+
+  @override
+  String get translateMyLang => 'My language';
+
+  @override
+  String get translateMyLangHint =>
+      'Messages from the other side are translated into this';
+
+  @override
+  String get translatePeerLang => 'The other party\'s language';
+
+  @override
+  String get translatePeerUnknownHint =>
+      'Detected automatically from their messages';
+
+  @override
+  String get translateLearned => 'Auto-detected';
+
+  @override
+  String get translatePeerUnknown =>
+      'The other party\'s language is still unknown — set it in translation settings, or it will be detected after a few of their messages';
+
+  @override
+  String get translateSideIncoming => 'received';
+
+  @override
+  String get translateSideOutgoing => 'sent';
+
+  @override
+  String get translateToMeTag => 'for me';
+
+  @override
+  String get translateToPeerTag => 'what they read';
+
+  @override
+  String get translateContrast => 'Show original and translation together';
+
+  @override
+  String get translateContrastTip =>
+      'When off only the translation shows (long-press still reveals the original)';
+
+  @override
+  String get translateProviderFree => 'Free (no key needed)';
+
+  @override
+  String get translateProviderFreeDesc =>
+      'Works out of the box · uses a public endpoint that may be rate-limited or unstable';
+
+  @override
+  String translateFreeFailed(String e) {
+    return 'The free endpoint is unavailable ($e) · switch to Google / Baidu / a custom endpoint in settings';
+  }
+
+  @override
+  String get translateOutgoing =>
+      'Translate into their language before sending';
+
+  @override
+  String get translateOutgoingTip =>
+      'With this on, sending first translates the text into their language — make sure they can read it';
+
+  @override
+  String get translateInput => 'Translate the input';
+
+  @override
+  String translateOutPreview(String text) {
+    return 'Will send: $text';
+  }
+
+  @override
+  String translateOutPreviewHint(String lang) {
+    return 'Translated into $lang · tap send to transmit this';
+  }
+
+  @override
+  String get translateOutCancel => 'Cancel translation';
+
+  @override
+  String get translateOutNeedPeer =>
+      'Their language is still unknown — set it in the conversation\'s translation settings';
+
+  @override
+  String translateSentAs(String text) {
+    return 'Sent in their language: $text';
+  }
+
+  @override
+  String translateTooLongAfter(int n) {
+    return 'Translation exceeds the length limit ($n chars) — not sent';
+  }
+
+  @override
+  String get dateToday => 'Today';
+
+  @override
+  String get dateYesterday => 'Yesterday';
+
+  @override
+  String dateDividerFull(int y, int m, int d, String w) {
+    return '$m/$d/$y $w';
+  }
+
+  @override
+  String dateWeekday(String d) {
+    String _temp0 = intl.Intl.selectLogic(d, {
+      '1': 'Mon',
+      '2': 'Tue',
+      '3': 'Wed',
+      '4': 'Thu',
+      '5': 'Fri',
+      '6': 'Sat',
+      '7': 'Sun',
+      'other': '—',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get translate => 'Translate';
+
+  @override
+  String get translateText => 'Translate text';
+
+  @override
+  String get translateSettings => 'Translation settings';
+
+  @override
+  String get translateSettingsSubtitle =>
+      'Provider, languages and auto-translate';
+
+  @override
+  String get translateProvider => 'Provider';
+
+  @override
+  String get translateProviderGoogle => 'Google Translate';
+
+  @override
+  String get translateProviderBaidu => 'Baidu Translate';
+
+  @override
+  String get translateProviderCustom => 'Custom';
+
+  @override
+  String get translateGoogleKey => 'Google API key';
+
+  @override
+  String get translateGoogleKeyTip =>
+      'API key for Google Cloud Translation v2 — create one in the Google Cloud console';
+
+  @override
+  String get translateBaiduAppId => 'Baidu App ID';
+
+  @override
+  String get translateBaiduKey => 'Baidu secret key';
+
+  @override
+  String get translateBaiduTip =>
+      'Apply for general text translation on the Baidu Translate platform; the key stays on this device';
+
+  @override
+  String get translateCustomUrl => 'Endpoint URL';
+
+  @override
+  String get translateCustomMethod => 'HTTP method';
+
+  @override
+  String get translateCustomHeaders => 'Headers (JSON)';
+
+  @override
+  String get translateCustomBody => 'Body template';
+
+  @override
+  String translateCustomBodyTip(String text, String from, String to) {
+    return 'Placeholders: $text, $from, $to. Ignored when the method is GET';
+  }
+
+  @override
+  String get translateCustomResultPath => 'Result JSON path';
+
+  @override
+  String get translateCustomResultPathTip =>
+      'Dot-separated path with array indexes, e.g. data.translations.0.translatedText';
+
+  @override
+  String get translateTest => 'Test translation';
+
+  @override
+  String translateTestOk(String text) {
+    return 'Provider works: $text';
+  }
+
+  @override
+  String get translateNeedConfig => 'Configure the translation provider first';
+
+  @override
+  String translateFailed(String e) {
+    return 'Translation failed: $e';
+  }
+
+  @override
+  String get translateTargetLang => 'Translate into';
+
+  @override
+  String get translateSourceLang => 'Source language';
+
+  @override
+  String get translateAuto => 'Auto-translate incoming messages';
+
+  @override
+  String get translateAutoTip =>
+      'Applies to this conversation only; translates received messages only';
+
+  @override
+  String get translateShowOriginal => 'Show original';
+
+  @override
+  String get translateShowTranslation => 'Show translation';
+
+  @override
+  String get translateRetry => 'Translate again';
+
+  @override
+  String get translateTranslating => 'Translating…';
+
+  @override
+  String get translateCopyOriginal => 'Copy original';
+
+  @override
+  String get translateCopyResult => 'Copy translation';
+
+  @override
+  String get translateLangAuto => 'Auto detect';
+
+  @override
+  String get translateSameLang => 'Already in the target language';
+
+  @override
+  String translateBubbleCount(int n) {
+    return '$n translated';
+  }
+
+  @override
+  String get translatePrivacyNote =>
+      'Translation sends message text to the third-party provider you choose; assess privacy accordingly';
+
+  @override
+  String get notifTncConnected => 'TNC connected';
+
+  @override
+  String get notifTncDisconnected => 'TNC disconnected';
+
+  @override
+  String get dataSourceTitle => 'Data source';
+
+  @override
+  String get dataSourceSubtitle => 'Where packets come from';
+
+  @override
+  String get dataSourceAprsIs => 'APRS-IS';
+
+  @override
+  String get dataSourceAprsIsDesc => 'Global APRS network over the internet';
+
+  @override
+  String get dataSourceTnc => 'TNC';
+
+  @override
+  String get dataSourceTncDesc =>
+      'Send and receive on air through a Bluetooth or serial TNC';
+
+  @override
+  String get dataSourceSwitchHint =>
+      'Switching the data source disconnects the current link';
+
+  @override
+  String get tncBindTitle => 'Bluetooth TNC';
+
+  @override
+  String get tncBindSubtitle => 'Bind and connect the TNC on your radio';
+
+  @override
+  String get tncBoundDevice => 'Bound device';
+
+  @override
+  String get tncNotBound => 'No bound device';
+
+  @override
+  String get tncScanPaired => 'Scan paired devices';
+
+  @override
+  String get tncNoPaired =>
+      'No devices found — pair the TNC in the system Bluetooth settings first';
+
+  @override
+  String get tncUnbind => 'Unbind';
+
+  @override
+  String get tncConnectAction => 'Connect TNC';
+
+  @override
+  String get tncRestart => 'Restart link';
+
+  @override
+  String get tncSupportedNo =>
+      'TNC links are not supported on this platform yet';
+
+  @override
+  String get tncNeedPermission =>
+      'Bluetooth permission is required — grant it and try again';
+
+  @override
+  String get tncOpenFailedHint =>
+      'Could not open the device — Windows COM ports are exclusive; make sure no other app holds it';
+
+  @override
+  String tncStats(String rx, String tx) {
+    return '$rx frames received · $tx sent';
+  }
+
+  @override
+  String get tncLog => 'Link log';
+
+  @override
+  String get tncLogEmpty => 'No log entries yet';
+
+  @override
+  String get kissParamsTitle => 'KISS parameters';
+
+  @override
+  String get kissParamsSubtitle =>
+      'Link-layer settings pushed straight to the TNC';
+
+  @override
+  String get kissTxDelay => 'TX delay (ms)';
+
+  @override
+  String get kissTxDelayTip =>
+      'KISS TXDELAY in 10 ms units — time for your PTT to settle before data';
+
+  @override
+  String get kissTxTail => 'TX tail (ms)';
+
+  @override
+  String get kissTxTailTip =>
+      'KISS TXTAIL in 10 ms units — some radios need the tail to be heard fully';
+
+  @override
+  String get kissPersistence => 'Persistence';
+
+  @override
+  String get kissPersistenceTip =>
+      'KISS PERSISTENCE, 0–255 — lower is more polite and avoids collisions on a shared channel';
+
+  @override
+  String get kissSlotTime => 'Slot time (ms)';
+
+  @override
+  String get kissSlotTimeTip =>
+      'KISS SLOTTIME in 10 ms units — works with persistence to pace channel access';
+
+  @override
+  String get kissFullDuplex => 'Full duplex';
+
+  @override
+  String get kissFullDuplexTip =>
+      'KISS FULLDUPLEX — leave off for ordinary radios (simultaneous TX/RX interferes)';
+
+  @override
+  String get kissChannel => 'Channel / KISS port';
+
+  @override
+  String get kissChannelTip =>
+      'Only multi-channel TNCs have several ports; keep 0 for single-channel radios';
+
+  @override
+  String get kissMaxFrame => 'Max frame size (bytes)';
+
+  @override
+  String get kissMaxFrameTip =>
+      'Longer packets are not sent at all (at 1200 baud an AX.25 frame is ~330 bytes)';
+
+  @override
+  String get kissHardwareCmd => 'Vendor command';
+
+  @override
+  String get kissHardwareVal => 'Value';
+
+  @override
+  String get kissHardwareTip =>
+      'KISS SETHARDWARE (0x06), vendor-specific; -1 means do not send';
+
+  @override
+  String get kissApplyParams => 'Push parameters';
+
+  @override
+  String get kissParamsSent => 'KISS parameters sent';
+
+  @override
+  String get kissBackToCommand => 'Return to TNC command mode';
+
+  @override
+  String get kissBackToCommandTip =>
+      'Sends RETURN (0x0F). Most KISS TNCs stop forwarding until the link is restarted';
+
+  @override
+  String get kissRfPath => 'RF digipeater path';
+
+  @override
+  String get kissRfPathTip =>
+      'Digipeaters used on air, e.g. WIDE1-1,WIDE2-1; leave empty for none';
+
+  @override
+  String get kissRfBeacon => 'Allow RF beaconing';
+
+  @override
+  String get kissRfBeaconTip =>
+      'Only then will positions be transmitted on air. Transmitting requires your own licence and callsign';
+
+  @override
+  String get kissAutoAck => 'Auto-acknowledge';
+
+  @override
+  String get kissAutoAckTip =>
+      'When off, incoming messages are not acknowledged — keeps the channel quieter';
+
+  @override
+  String get kissAutoReconnect => 'Reconnect automatically';
+
+  @override
+  String get kissNeedConnected => 'Connect the TNC first';
+
+  @override
+  String get tncSwitchOn => 'On';
+
+  @override
+  String get tncSwitchOff => 'Off';
+
+  @override
+  String get connTncSourceHint =>
+      'TNC mode does not use a server or filters, so those settings are disabled';
+
+  @override
+  String get connectTncBar => 'Tap Connect to open the TNC link';
+
+  @override
+  String connectingToTnc(String name) {
+    return 'Connecting TNC · $name';
+  }
+
+  @override
+  String get tncMsgTitle => 'Radio (TNC) mode';
+
+  @override
+  String get tncMsgDesc =>
+      'The radio channel is shared, so messaging is limited accordingly';
+
+  @override
+  String get tncGroupDisabled =>
+      'Group broadcasts are unavailable in radio mode';
+
+  @override
+  String tncMsgLimitHint(String n) {
+    return '$n characters per message (APRS spec)';
+  }
+
+  @override
+  String get tncMsgTooLong => 'Exceeds the message length limit for radio mode';
 
   @override
   String get licenseSection => 'License';
@@ -1835,6 +2789,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get deleteConversation => 'Delete chat';
+
+  @override
+  String deleteConversationConfirm(Object call) {
+    return 'Delete the chat history with $call? The conversation will also be removed from the list. This cannot be undone.';
+  }
+
+  @override
+  String clearGroupChatConfirm(Object name) {
+    return 'Clear the chat history of “$name”? This cannot be undone.';
+  }
+
+  @override
   String memberOnlineCount(int members, int online) {
     return '$members members · $online online';
   }
@@ -2917,6 +3884,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lookupAprsFi => 'aprs.fi position';
 
   @override
+  String get aprsTv => 'APRS.tv';
+
+  @override
+  String get aprsTvInfo => 'Station page';
+
+  @override
+  String get aprsTvMap => 'View on map';
+
+  @override
   String get linkOpenFailed => 'Unable to open link';
 
   @override
@@ -3374,6 +4350,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Track points kept per station (default 300; decides how far back a movement track can reach; a point is only stored after 20 m of movement)';
 
   @override
+  String get onlineWindow => 'Online window (minutes)';
+
+  @override
+  String get onlineWindowTip =>
+      'A station with no report for longer than this is treated as offline (default 5 minutes)';
+
+  @override
   String get chatRecords => 'Chat history';
 
   @override
@@ -3451,6 +4434,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notLit => 'Not yet';
 
   @override
+  String honorCriteriaLine(String c) {
+    return 'How to earn: $c';
+  }
+
+  @override
   String get badgeFallback => 'Badge';
 
   @override
@@ -3462,4 +4450,186 @@ class AppLocalizationsEn extends AppLocalizations {
   String achievementsProgress(String n, String m) {
     return '$n/$m achievements';
   }
+
+  @override
+  String get beaconNotConnected => 'Not connected';
+
+  @override
+  String get beaconWaitingFix => 'Waiting for fix';
+
+  @override
+  String get beaconSoon => 'Due now';
+
+  @override
+  String beaconNextIn(String s) {
+    return 'Next report in $s';
+  }
+
+  @override
+  String get beaconImminent => 'Reporting now…';
+
+  @override
+  String get notifConnected => 'Connected';
+
+  @override
+  String get notifConnecting => 'Connecting';
+
+  @override
+  String get notifDisconnected => 'Disconnected';
+
+  @override
+  String notifOnline(String n) {
+    return '$n online';
+  }
+
+  @override
+  String notifRx(String n) {
+    return 'RX $n';
+  }
+
+  @override
+  String notifBeacon(String v) {
+    return 'Beacon $v';
+  }
+
+  @override
+  String get selectAll => 'Select all';
+
+  @override
+  String get deselectAll => 'Deselect all';
+
+  @override
+  String selectedCount(int n) {
+    return '$n selected';
+  }
+
+  @override
+  String deleteSelected(int n) {
+    return 'Delete ($n)';
+  }
+
+  @override
+  String deleteSelectedConfirm(int n) {
+    return 'Delete the $n selected chats? This cannot be undone.';
+  }
+
+  @override
+  String get chatManageHint => 'Tap a chat to select; long-press also selects';
+
+  @override
+  String conversationsDeleted(int n) {
+    return 'Deleted $n chats';
+  }
+
+  @override
+  String get stationActions => 'Station actions';
+
+  @override
+  String get deleteStation => 'Delete station';
+
+  @override
+  String deleteStationConfirm(String name) {
+    return 'Delete station $name? It will be removed from the station list and will reappear if its packets are received again.';
+  }
+
+  @override
+  String get unfavorite => 'Remove from favorites';
+
+  @override
+  String get copyCallsign => 'Copy callsign';
+
+  @override
+  String get callsignCopied => 'Callsign copied';
+
+  @override
+  String get stationDeleted => 'Station deleted';
+
+  @override
+  String get exportAdif => 'Export ADIF';
+
+  @override
+  String get exportAdifDesc =>
+      'Export conversations as an ADIF log file, importable into Log4OM, N3FJP and similar';
+
+  @override
+  String get export => 'Export';
+
+  @override
+  String get adifHint =>
+      'Each record contains only the callsign and the first message time (UTC); mode and band are omitted';
+
+  @override
+  String get adifNoSelection => 'Select at least one conversation to export';
+
+  @override
+  String adifExported(int n) {
+    return 'Exported $n records';
+  }
+
+  @override
+  String get adifExportDone => 'Export complete';
+
+  @override
+  String get adifExportFailed =>
+      'Export failed — check storage permission or free space';
+
+  @override
+  String adifSavedTo(String path) {
+    return 'Saved to: $path';
+  }
+
+  @override
+  String get adifCopyPath => 'Copy path';
+
+  @override
+  String get adifPathCopied => 'Path copied';
+
+  @override
+  String get chatShortLabel => 'Chat';
+
+  @override
+  String get adifLogFile => 'Export chats as a log file';
+
+  @override
+  String get adifOptions => 'Export options';
+
+  @override
+  String get adifMode => 'Mode (MODE)';
+
+  @override
+  String get adifNotWritten => 'Omit';
+
+  @override
+  String get adifModePkt => 'PKT (packet, recommended)';
+
+  @override
+  String get adifModeFm => 'FM (voice)';
+
+  @override
+  String get adifModeData => 'DATA (data)';
+
+  @override
+  String get adifSubModeAprs => 'Add SUBMODE=APRS';
+
+  @override
+  String get adifBand => 'Band (BAND)';
+
+  @override
+  String get adifStripSsid => 'Write base callsign only (drop -SSID)';
+
+  @override
+  String get adifPreview => 'Preview (record to be written)';
+
+  @override
+  String get adifModeRequiredHint =>
+      'Most logbooks (including QRZ) require MODE; records without it are rejected';
+
+  @override
+  String get adifFreq => 'Frequency (FREQ)';
+
+  @override
+  String get adifFreqHint => 'In MHz; leave blank to omit';
+
+  @override
+  String get adifFreqInvalid => 'Enter a number in MHz, e.g. 144.640';
 }

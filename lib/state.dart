@@ -14,7 +14,20 @@ import 'mock_data.dart';
 import 'services.dart';
 import 'aprs_parse.dart';
 import 'aprs_device.dart';
+import 'adif.dart';
+import 'l10n/app_localizations.dart';
+// 说明：AppLocalizationsZh / AppLocalizationsZhTw / AppLocalizationsEn 是 gen-l10n
+// 生成在 app_localizations_zh.dart / app_localizations_en.dart 里的**具体实现类**，
+// app_localizations.dart 只导出抽象基类。状态层（无 BuildContext）需要直接构造
+// 具体实例，故必须显式 import 这两个生成文件，否则报 undefined_method。
+import 'l10n/app_localizations_en.dart';
+import 'l10n/app_localizations_es.dart';
+import 'l10n/app_localizations_id.dart';
+import 'l10n/app_localizations_ja.dart';
+import 'l10n/app_localizations_zh.dart';
 import 'net/aprs.dart';
+import 'tnc.dart';
+import 'translate.dart';
 import 'early_member.dart';
 import 'achievements.dart';
 
@@ -50,12 +63,34 @@ class SmartBeaconTier {
 
 class AppState extends ChangeNotifier {
   /// 应用版本（用于信标备注、APRSlocus 识别）
-  static const appVersion = '1.6.77';
+  static const appVersion = '1.6.100';
   // 我的电台
   String myCall = 'BV2AAA';
   int mySsid = 0; // 0 = 无后缀, 1-15 = -1 到 -15
   String mySymbol = '>';
-  String myComment = 'APRSlocus 移动台';
+  // 备注默认**为空**（用户要求）：新装用户不会再被塞一段默认文字。
+  // 历史版本曾默认 'APRSlocus 移动台'，老用户升级后由 _loadPrefs 迁移清零。
+  String myComment = '';
+
+  /// 历史版本的内置默认备注。升级时若仍是这个值（用户从未改过）则视为空。
+  static const _legacyDefaultComment = 'APRSlocus 移动台';
+
+  /// 在线判定时长（分钟）：台站最后上报距今超过该值即视为离线。
+  /// 原先是写死的 5 分钟，现改为用户可配置（步进见设置页）。
+  int onlineWindowMin = 5;
+
+  /// 把在线判定时长同步到模型层（`Station.effectiveStatus` 读它）。
+  /// 加载设置与用户修改时都要调用，否则地图圆点等无上下文处仍按旧窗口判定。
+  void _applyOnlineWindow() {
+    Station.onlineWindowSec = onlineWindowMin * 60;
+  }
+
+  void setOnlineWindowMin(int v) {
+    onlineWindowMin = v.clamp(1, 240);
+    _applyOnlineWindow();
+    persist();
+    _notify();
+  }
 
   /// 完整呼号（含 SSID 后缀）
   String get myFullCall => mySsid == 0 ? myCall : '$myCall-$mySsid';
@@ -608,11 +643,74 @@ class AppState extends ChangeNotifier {
   }
 
   // 连接
+  /// 当前连接（数据来源）状态。TNC 模式下它表示「TNC 链路已建立」，
+  /// 因此上层（连接卡片、状态栏、通知）无需分辨数据来源 —— 详见 [_syncConnFromLink]。
   bool connected = false;
   bool connecting = false;
-  String connInfo = '未连接 · 点击播放按钮连接 APRS-IS';
+  /// 连接状态（结构化）。
+  ///
+  /// **不要用中文字符串表示状态**：此前 `connInfo` 存中文，UI 侧靠
+  /// `localizedConnectionInfo()` 拿中文当哨兵再映射回 l10n —— 一旦新增
+  /// 状态忘了登记映射，界面在所有语言下都会漏出中文（这正是 TNC 状态
+  /// 串当初的表现）。改为结构化枚举 + 参数，由本类的 [connInfo] 直接
+  /// 用当前语言生成文案，与 `BeaconPhase` 同一套做法。
+  ConnStatus _conn = const ConnStatus(ConnPhase.idle);
+
+  /// 设置连接状态（自动通知刷新）
+  void setConnStatus(ConnPhase phase, {String arg = '', int seconds = 0}) {
+    _conn = ConnStatus(phase, arg: arg, seconds: seconds);
+    _notify();
+  }
+
+  /// 当前连接状态说明（**已按当前界面语言本地化**）
+  String get connInfo => _conn.localized(l10n);
   // Passcode 是否被服务器判定无效（logresp unverified）
   bool passcodeInvalid = false;
+
+  // ─── 数据来源：APRS-IS（互联网）/ TNC（电台） ───
+  /// 'aprsis' | 'tnc'
+  String dataSource = 'aprsis';
+
+  /// TNC 链路（KISS 参数、绑定设备、收发统计）
+  final TncLink tnc = TncLink();
+
+  /// 是否使用 TNC（射频）作为数据来源
+  bool get usingTnc => dataSource == 'tnc';
+
+  static const String srcAprsIs = 'aprsis';
+  static const String srcTnc = 'tnc';
+
+  /// 射频中继路径：TNC 模式下目的呼号用本应用的 toCall（APALOC），
+  /// 后接用户配置的中继（如 WIDE1-1,WIDE2-1）；
+  /// APRS-IS 模式仍是 `APRS,TCPIP*`。
+  String get txPath {
+    if (!usingTnc) return 'APRS,TCPIP*';
+    final p = tnc.config.path.trim();
+    // 去掉头部逗号/空格，避免出现 `APALOC,,WIDE1-1`
+    final cleaned = p.replaceAll(RegExp(r'^[,\s]+'), '');
+    return cleaned.isEmpty ? 'APALOC' : 'APALOC,$cleaned';
+  }
+
+  /// 切换数据来源。切换会断开当前链路 —— 两个来源不能同时占用
+  /// 发送通路（同一个 myFullCall 从两条网络发出去会造成重复报文）。
+  Future<void> setDataSource(String src) async {
+    final next = src == srcTnc ? srcTnc : srcAprsIs;
+    if (next == dataSource) return;
+    final wasConnected = connected;
+    dataSource = next;
+    connected = false;
+    _userDisconnected = false;
+    _reconnectTimer?.cancel();
+    aprs.disconnect();
+    await tnc.disconnect(manual: false);
+    setConnStatus(ConnPhase.manual);
+    _log(LogLevel.info, '连接',
+        '数据来源切换为 ${next == srcTnc ? 'TNC（电台）' : 'APRS-IS'}');
+    persist();
+    _notify();
+    _updateNotification();
+    if (wasConnected) await _connect();
+  }
 
   // 坐标显示：'wgs84' 标准 / 'gcj' 高德火星坐标
   String coordDatum = 'wgs84';
@@ -636,6 +734,8 @@ class AppState extends ChangeNotifier {
   /// 切换界面语言
   void setLocale(String lang) {
     locale = lang;
+    // 界面语言变了，翻译的默认目标语言也要跟着变
+    TranslateService.instance.setUiLocale(lang);
     persist();
     _notify();
   }
@@ -699,8 +799,8 @@ class AppState extends ChangeNotifier {
   void setUseSimLocation(bool v) {
     useSimLocation = v;
     if (v) {
-      // 切换到模拟：停止 GPS
-      loc.stop();
+      // 切换到模拟：不再需要 GPS，但需要前台服务保活（见 startTracking）
+      unawaited(startTracking());
       if (myLat == null || myLng == null) {
         // 无手动坐标时用默认演示坐标
         setMyPosition(39.9042, 116.4074);
@@ -743,6 +843,37 @@ class AppState extends ChangeNotifier {
 
   void setUpdateChannel(String c) {
     updateChannel = c;
+    persist();
+    _notify();
+  }
+
+  // ─── ADIF 导出选项 ───
+  // 记忆用户上次的选择，避免每次导出台都要重设。
+  // 空串（而非 null）表示「不写」—— SharedPreferences 没有 null 语义。
+  /// MODE 值；空串 = 不写
+  String adifMode = 'PKT';
+  bool adifSubMode = true;
+  /// BAND 值；空串 = 不写
+  String adifBand = '';
+  /// FREQ 值（MHz，已规范化）；空串 = 不写
+  String adifFreq = '';
+  bool adifStripSsid = false;
+
+  /// 组装为编码器使用的选项
+  AdifOptions get adifOptions => AdifOptions(
+    mode: adifMode.isEmpty ? null : adifMode,
+    subModeAprs: adifSubMode,
+    band: adifBand.isEmpty ? null : adifBand,
+    freq: adifFreq.isEmpty ? null : adifFreq,
+    stripSsid: adifStripSsid,
+  );
+
+  void setAdifOptions(AdifOptions o) {
+    adifMode = o.mode ?? '';
+    adifSubMode = o.subModeAprs;
+    adifBand = o.band ?? '';
+    adifFreq = o.freq ?? '';
+    adifStripSsid = o.stripSsid;
     persist();
     _notify();
   }
@@ -909,6 +1040,9 @@ class AppState extends ChangeNotifier {
       mySsid = p.getInt('mySsid') ?? mySsid;
       mySymbol = p.getString('mySymbol') ?? mySymbol;
       myComment = p.getString('myComment') ?? myComment;
+      // 迁移：老版本会把 'APRSlocus 移动台' 当作默认备注存下来。
+      // 用户从未改过它的话，现在视为「空」，以符合「备注默认清空」的预期。
+      if (myComment == _legacyDefaultComment) myComment = '';
       beaconEnabled = p.getBool('beacon') ?? beaconEnabled;
       beaconAutoAsked = p.getBool('beaconAutoAsked') ?? beaconAutoAsked;
       beaconInterval = p.getInt('beaconInterval') ?? beaconInterval;
@@ -939,6 +1073,11 @@ class AppState extends ChangeNotifier {
       themeColor = p.getString('themeColor') ?? themeColor;
       uiScale = p.getDouble('uiScale') ?? uiScale;      mapType = p.getString('mapType') ?? mapType;
       updateChannel = p.getString('updateChannel') ?? updateChannel;
+      adifMode = p.getString('adifMode') ?? adifMode;
+      adifSubMode = p.getBool('adifSubMode') ?? adifSubMode;
+      adifBand = p.getString('adifBand') ?? adifBand;
+      adifFreq = p.getString('adifFreq') ?? adifFreq;
+      adifStripSsid = p.getBool('adifStripSsid') ?? adifStripSsid;
       locationMode = p.getString('locationMode') ?? locationMode;
       loc.mode = locationMode;
       useSimLocation = p.getBool('useSimLocation') ?? useSimLocation;
@@ -947,6 +1086,9 @@ class AppState extends ChangeNotifier {
       filterRadius = p.getInt('filterRadius') ?? filterRadius;
       maxStations = p.getInt('maxStations') ?? maxStations;
       maxPackets = p.getInt('maxPackets') ?? maxPackets;
+      onlineWindowMin = p.getInt('onlineWindowMin') ?? onlineWindowMin;
+      // 同步到模型层，供 effectiveStatus / 地图绘制使用
+      _applyOnlineWindow();
       maxTrackPts = p.getInt('maxTrackPts') ?? maxTrackPts;
       filterFollow = p.getBool('filterFollow') ?? filterFollow;
       // 按国家接收
@@ -963,6 +1105,8 @@ class AppState extends ChangeNotifier {
       aprs.server = p.getString('server') ?? aprs.server;
       aprs.port = p.getInt('port') ?? aprs.port;
       aprs.passcode = p.getString('passcode') ?? aprs.passcode;
+      dataSource = p.getString('dataSource') ?? dataSource;
+      await tnc.load();
       final savedLat = p.getDouble('myLat');
       final savedLng = p.getDouble('myLng');
       if (savedLat != null && savedLng != null) {
@@ -1059,6 +1203,11 @@ class AppState extends ChangeNotifier {
           p.setDouble('uiScale', uiScale);
           p.setString('mapType', mapType);
           p.setString('updateChannel', updateChannel);
+          p.setString('adifMode', adifMode);
+          p.setBool('adifSubMode', adifSubMode);
+          p.setString('adifBand', adifBand);
+          p.setString('adifFreq', adifFreq);
+          p.setBool('adifStripSsid', adifStripSsid);
           p.setString('locationMode', locationMode);
           p.setBool('useSimLocation', useSimLocation);
           p.setDouble('filterLat', filterLat);
@@ -1066,6 +1215,7 @@ class AppState extends ChangeNotifier {
           p.setInt('filterRadius', filterRadius);
           p.setInt('maxStations', maxStations);
           p.setInt('maxPackets', maxPackets);
+          p.setInt('onlineWindowMin', onlineWindowMin);
           p.setInt('maxTrackPts', maxTrackPts);
           p.setBool('filterFollow', filterFollow);
           p.setStringList('receiveCountries', receiveCountries);
@@ -1075,6 +1225,7 @@ class AppState extends ChangeNotifier {
           p.setString('server', aprs.server);
           p.setInt('port', aprs.port);
           p.setString('passcode', aprs.passcode);
+          p.setString('dataSource', dataSource);
           if (myHasFix && myLat != null && myLng != null) {
             p.setDouble('myLat', myLat!);
             p.setDouble('myLng', myLng!);
@@ -1123,6 +1274,11 @@ class AppState extends ChangeNotifier {
 
   AppState() : stations = <Station>[], messages = <AprsMsg>[] {
     _initDeviceDb();
+    // 翻译配置（接口、密钥、语言、每会话偏好）在启动时载入：
+    // 消息页可能在用户还没进设置前就要用它（自动翻译）。
+    unawaited(TranslateService.instance.load());
+    // 翻译的「我的语言」默认跟随界面语言（见 TranslateService.uiLocale）
+    TranslateService.instance.setUiLocale(locale);
     unawaited(ensureMembersLoaded());
     unawaited(AchievementCenter.instance.ensureLoaded());
     _loadPrefs();
@@ -1142,7 +1298,8 @@ class AppState extends ChangeNotifier {
       if (_disposed) return;
       connected = false;
       final manual = _userDisconnected;
-      connInfo = manual ? '未连接 · 已手动断开' : '连接已断开 · 8秒后自动重连…';
+      setConnStatus(manual ? ConnPhase.manual : ConnPhase.linkLostServer,
+          seconds: 8);
       _log(
         manual ? LogLevel.info : LogLevel.warn,
         '连接',
@@ -1153,14 +1310,15 @@ class AppState extends ChangeNotifier {
       // 意外断开自动重连
       if (!_userDisconnected) _scheduleReconnect();
     };
+    _wireTnc();
     _simTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (devMode) _simTick();
     });
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_disposed) return;
-      // 自动定时上报仅在已连接 APRS-IS 时进行；未连接不发送（避免误以为在上报）
-      if (connected &&
-          beaconEnabled &&
+      // 自动定时上报仅在链路可用时进行；未连接不发送（避免误以为在上报）。
+      // TNC 模式下还需用户显式开启「射频信标」（见 canAutoBeacon）。
+      if (canAutoBeacon &&
           myHasFix &&
           DateTime.now().difference(_lastBeacon).inSeconds >=
               beaconIntervalNow) {
@@ -1176,11 +1334,16 @@ class AppState extends ChangeNotifier {
     });
     // 连接保活：APRS-IS 空闲超时约 30s，无发送时发状态帧防止被踢
     _keepaliveTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      // TNC（射频）模式下**不发保活帧**：射频频段是全共享资源，
+      // 每 15 秒播一次客户端版本号纯属占用信道（且与「信标」语义不同，
+      // 会被其他台站当成无意义报文），故仅在 APRS-IS 下生效。
+      if (usingTnc) return;
       if (!connected || _userDisconnected) return;
       if (DateTime.now().difference(_lastTx).inSeconds < 25) return;
       // 保活：发送身份/在线状态帧。tocall=APALOC（本应用官方注册标识），
       // body=APRSLocus CONNECT（区分于位置信标；不再用非标 “保持连接”）
-      final raw = '$myFullCall>APALOC,TCPIP*:>APRSLocus CONNECT $platformTag';
+      final raw =
+          '$myFullCall>APALOC,TCPIP*:>APRSlocus CONNECT v$appVersion $platformTag';
       aprs.send(raw);
       _lastTx = DateTime.now();
       _updateNotification(); // 定期刷新通知内容（台站数/收包数）
@@ -1293,9 +1456,45 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  /// 把 TNC 链路接入既有报文管线。
+  ///
+  /// 关键点：TNC 收到的报文直接交给 [_onAprsLine] —— 与 APRS-IS 完全同一条
+  /// 解析路径。这样台站上图、消息收发、过滤、成就等逻辑无需为 TNC 再写一套，
+  /// 也不会出现两个来源行为不一致的分叉。
+  void _wireTnc() {
+    tnc.onLine = _onAprsLine;
+    tnc.onClosed = () {
+      if (_disposed || !usingTnc) return;
+      connected = false;
+      final manual = _userDisconnected;
+      setConnStatus(manual ? ConnPhase.manual : ConnPhase.linkLostTnc,
+          seconds: 8);
+      _log(
+        manual ? LogLevel.info : LogLevel.warn,
+        '连接',
+        manual ? '已手动断开 TNC' : 'TNC 链路断开，稍后自动重连',
+      );
+      _notify();
+      _updateNotification();
+      if (!_userDisconnected && tnc.config.autoReconnect) _scheduleReconnect();
+    };
+    // TNC 的接收计数/状态由 TncLink 自行维护（rxFrames/txFrames），
+    // 这里只做 UI 节流刷新，避免每个字节都全量重建页面。
+    tnc.onStateChanged = () {
+      if (_disposed) return;
+      if (usingTnc) _notifyRx();
+    };
+  }
+
+  /// 是否允许自动周期上报（TNC 模式下需用户显式开启「射频信标」）
+  bool get canAutoBeacon =>
+      connected && beaconEnabled && (!usingTnc || tnc.config.rfBeacon);
+
   Future<void> _connect() async {
+    if (usingTnc) return _connectTnc();
     connecting = true;
-    connInfo = '正在连接 ${aprs.server}:${aprs.port}…';
+    setConnStatus(ConnPhase.connectingServer,
+        arg: '${aprs.server}:${aprs.port}');
     _log(LogLevel.info, '连接', '正在连接 ${aprs.server}:${aprs.port}…');
     _notify();
     _updateNotification();
@@ -1310,11 +1509,11 @@ class AppState extends ChangeNotifier {
       passcodeInvalid = false; // 连接成功后重置，等待服务器验证
       _lastTx = DateTime.now();
       _lastFilter = aprs.filter; // 记录本次连接的过滤器
-      connInfo = '已连接 · $myCall 在线';
+      setConnStatus(ConnPhase.online, arg: myCall);
       _log(LogLevel.info, '连接', '已连接 · $myCall 在线 (过滤: $filterString)');
       _flushPendingTx();
       // 连接成功即发一次身份状态帧（APRS 惯例：上报在线/客户端标识）
-      aprs.send('$myFullCall>APALOC,TCPIP*:>APRSLocus CONNECT $platformTag');
+      aprs.send('$myFullCall>APALOC,TCPIP*:>APRSLocus CONNECT v$appVersion $platformTag');
       // 连接成功：若主界面已就绪且尚未问过“是否自动上报”，延迟触发询问。
       // 不在此置位 beaconAutoAsked —— 用户做出选择后才记位，避免漏弹后永久丢失。
       if (!beaconAutoAsked && beaconEnabled) {
@@ -1326,7 +1525,7 @@ class AppState extends ChangeNotifier {
     } else {
       connected = false;
       final backoff = [8, 16, 32, 60][_reconnectAttempt.clamp(0, 3)];
-      connInfo = '连接失败 · ${backoff}s 后重试…';
+      setConnStatus(ConnPhase.retryServer, seconds: backoff);
       _log(LogLevel.error, '连接', '连接失败，${backoff} 秒后自动重试');
     }
     _notify();
@@ -1334,6 +1533,87 @@ class AppState extends ChangeNotifier {
     // 失败继续自动重连
     if (!connected && !_userDisconnected) _scheduleReconnect();
   }
+
+  /// TNC（射频）连接。与 APRS-IS 的关键差异：
+  ///   - 不发送 `>APRSlocus CONNECT` 身份帧（射频上发客户端版本号毫无意义，
+  ///     只占信道；且它不是位置也不是消息，其他台站无法利用）；
+  ///   - 不注册过滤器（过滤是 APRS-IS 服务端能力，射频频段只能全收）；
+  ///   - passcode 不适用（RF 不过 APRS-IS 登录）。
+  Future<void> _connectTnc() async {
+    connecting = true;
+    final name = tnc.device?.label ?? '未绑定设备';
+    setConnStatus(ConnPhase.connectingTnc, arg: name);
+    _log(LogLevel.info, '连接', '正在连接 TNC：$name');
+    _notify();
+    _updateNotification();
+    final ok = await tnc.connect();
+    connecting = false;
+    if (ok) {
+      connected = true;
+      _userDisconnected = false;
+      _reconnectAttempt = 0;
+      passcodeInvalid = false;
+      _lastTx = DateTime.now();
+      setConnStatus(ConnPhase.tncConnected, arg: name);
+      _log(LogLevel.info, '连接', 'TNC 已连接 · $name（KISS 参数已下发）');
+      _flushPendingTx();
+      if (beaconEnabled && !tnc.config.rfBeacon) {
+        _log(LogLevel.warn, '信标',
+            'TNC 模式下射频信标开关未打开，不会自动发射位置（可在设备页开启）');
+      }
+    } else {
+      connected = false;
+      final backoff = [8, 16, 32, 60][_reconnectAttempt.clamp(0, 3)];
+      setConnStatus(ConnPhase.retryTnc,
+          arg: tnc.lastError, seconds: backoff);
+      _log(LogLevel.error, '连接',
+          'TNC 连接失败（${tnc.lastError}），${backoff} 秒后自动重试');
+    }
+    _notify();
+    _updateNotification();
+    if (!connected && !_userDisconnected) _scheduleReconnect();
+  }
+
+  /// 统一发送入口：按当前数据来源路由到 APRS-IS 或 TNC。
+  ///
+  /// 所有发报路径都必须经过它 —— 否则 TNC 模式下会出现
+  /// 「界面上报成功、实际报文走 APRS-IS 发出」这类静默错误。
+  void _sendRaw(String raw) {
+    if (usingTnc) {
+      final err = tnc.sendTnc2(raw);
+      if (err != null) {
+        _log(LogLevel.warn, 'TNC', '发送失败（$err）：${_trunc(raw)}');
+      }
+      return;
+    }
+    aprs.send(raw);
+  }
+
+  /// 报头里的目的呼号（不含中继列表）。
+  /// 消息/ack 包用它 —— 收件人写在信息字段，报头目的呼号仍应是 toCall。
+  String get _destHeader {
+    final p = txPath;
+    final comma = p.indexOf(',');
+    return comma < 0 ? p : p.substring(0, comma);
+  }
+
+  /// 是否自动回复 ack。TNC 模式下可由用户在设备页关闭 ——
+  /// 射频信道上每个 ack 都是一次真实发射，共用信道时需要能关掉。
+  bool get _autoAckEnabled => !usingTnc || tnc.config.autoAck;
+
+  // ─── TNC（射频）模式的消息能力限制 ───
+
+  /// APRS101 规定单条消息文本上限（字符）
+  static const int tncMaxMsgLen = 67;
+
+  /// 当前数据来源下单条消息的长度上限；0 表示不限
+  int get msgLenLimit => usingTnc ? tncMaxMsgLen : 0;
+
+  /// 群聊是否可用。射频模式下禁用（见 [sendGroupMessage] 的说明）
+  bool get groupChatAllowed => !usingTnc;
+
+  /// 当前是否处于「有实际发射能力」的状态（用于 UI 提示）
+  bool get rfActive => usingTnc && connected;
 
   bool _disposed = false;
 
@@ -1461,7 +1741,11 @@ class AppState extends ChangeNotifier {
   // ─── 定位 ───
   Future<bool> startTracking() async {
     if (useSimLocation) {
-      locStatus = '模拟位置';
+      // 模拟位置不读 GPS，但**仍要启动前台服务保活**：
+      // 否则切到后台后 APRS-IS 连接会被冻结、信标定时器停摆。
+      // 该调用不需要定位权限（Android 侧 keepalive 模式已豁免）。
+      await loc.startKeepAlive();
+      locStatus = '模拟位置 · 后台保活';
       _notify();
       return true;
     }
@@ -1552,7 +1836,7 @@ class AppState extends ChangeNotifier {
       lng,
       beaconSymbolNow,
       comment: _beaconComment(),
-      path: 'APALOC,TCPIP*',
+      path: txPath,
     );
     _pushPacket(
       Packet(
@@ -1565,11 +1849,14 @@ class AppState extends ChangeNotifier {
       ),
     );
     if (connected) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
-      connInfo = '已连接 · 位置已上传 ($myCall)';
+      setConnStatus(
+        usingTnc ? ConnPhase.positionSentTnc : ConnPhase.positionSent,
+        arg: myCall,
+      );
     } else {
-      connInfo = '未连接 · 位置已上报(模拟)';
+      setConnStatus(ConnPhase.demoBeacon);
     }
     beaconsSent++;
     _lastBeacon = DateTime.now();
@@ -1614,9 +1901,8 @@ class AppState extends ChangeNotifier {
     if (myComment.trim().isNotEmpty) {
       parts.add(myComment.trim());
     }
-    // 版本号始终追加在末尾
-    // 末尾带上运行平台，便于识别端侧（同一份报文也供第三方解析）
-    parts.add('APRSlocus v$appVersion $platformTag');
+    // 版本号/平台**不再**放在位置数据包备注里（会污染第三方地图上的备注），
+    // 改由状态数据包上报：`>APRSlocus CONNECT vX.Y.Z 平台`。
     return parts.join(' ');
   }
 
@@ -1625,6 +1911,21 @@ class AppState extends ChangeNotifier {
     _userDisconnected = false;
     _reconnectTimer?.cancel();
     _lastFilter = ''; // 重置，确保下次连接后更新
+    if (usingTnc) {
+      // TNC：重启链路（断开重连并重下发 KISS 参数）而不是只重开套接字
+      connected = false;
+      _notify();
+      _updateNotification();
+      await tnc.restart();
+      if (connected) {
+        _userDisconnected = false;
+        setConnStatus(ConnPhase.tncConnected,
+            arg: tnc.device?.label ?? '');
+      }
+      _notify();
+      _updateNotification();
+      return;
+    }
     aprs.disconnect();
     connected = false;
     _notify();
@@ -1637,9 +1938,13 @@ class AppState extends ChangeNotifier {
       _userDisconnected = true;
       _reconnectAttempt = 0; // 手动断开，重置重试计数
       _reconnectTimer?.cancel();
-      aprs.disconnect();
+      if (usingTnc) {
+        await tnc.disconnect();
+      } else {
+        aprs.disconnect();
+      }
       connected = false;
-      connInfo = '未连接 · 已手动断开';
+      setConnStatus(ConnPhase.manual);
       _notify();
       _updateNotification();
       return;
@@ -1663,7 +1968,7 @@ class AppState extends ChangeNotifier {
             passcodeInvalid = true;
             _log(LogLevel.warn, '连接', '登录未验证：passcode 可能错误（unverified）');
             if (connected) {
-              connInfo = '已连接 · 未验证（passcode 可能错误）';
+              setConnStatus(ConnPhase.unverified);
               _notify();
               _updateNotification();
             }
@@ -1714,6 +2019,10 @@ class AppState extends ChangeNotifier {
         info = '$info  ·  [via $path]';
       }
 
+      // APRSlocus 状态包：>APRSlocus CONNECT vX.Y.Z 平台
+      // （版本号自 v1.6.80 起从位置包移到这里，见 _mergeApStatus）
+      if (body.startsWith('>')) _mergeApStatus(src, body);
+
       // FMO 状态包：>地区,状态,在线/峰值,描述（路径含 APFMO）
       if (body.startsWith('>') && line.contains('APFMO')) {
         final fmo = _parseFmoStatus(body);
@@ -1753,10 +2062,10 @@ class AppState extends ChangeNotifier {
           }
           // 自动 ack（标准：{id 需要 ack，{id_ 不需要 ack）
           final ackId = parsed.$2;
-          if (ackId != null && connected) {
+          if (ackId != null && connected && _autoAckEnabled) {
             // ack 包不带消息 ID，防止对方无限 ack 我们的 ack
-            final ack = '$myFullCall>APRS,TCPIP*::${src.padRight(9)}:ack$ackId';
-            aprs.send(ack);
+            final ack = '$myFullCall>$_destHeader::${src.padRight(9)}:ack$ackId';
+            _sendRaw(ack);
             _pushPacket(
               Packet(
                 ack,
@@ -2091,7 +2400,45 @@ class AppState extends ChangeNotifier {
   /// 待合并的 FMO 状态信息（位置包到达前先缓存）
   final Map<String, Map<String, String>> _pendingFmo = {};
 
+  /// APRSlocus 状态包缓存：呼号 → {版本, 平台}。
+  ///
+  /// 自 v1.6.80 起版本号/平台由**状态包**上报
+  /// （`>APRSlocus CONNECT vX.Y.Z 平台`），而不再是位置包的备注。
+  /// 位置包里拿不到这些信息，所以这里缓存下来，在 `_upsertStation`
+  /// 合并到台站的 aprslocus 字段，保证第三方台站的版本照样能显示。
+  final Map<String, Map<String, String>> _apStatusCache = {};
+
   /// 解析 FMO 状态包体 `>地区,状态,在线/峰值:29/54,描述`
+  /// 解析 APRSlocus 状态包（`>APRSlocus CONNECT vX.Y.Z 平台`），
+  /// 缓存版本/平台并合入已有台站。
+  ///
+  /// 位置包旧格式 `APRSlocus v1.2.6 Win` 仍由 `_upsertStation` 解析，
+  /// 两个正则都容忍可选的 `CONNECT`，因此新旧版本互通。
+  void _mergeApStatus(String call, String body) {
+    final up = body.toUpperCase();
+    if (!up.contains('APRSLOCUS') && !up.contains('APOLOCUS')) return;
+    final info = <String, String>{'软件': 'APRSlocus'};
+    final vm = RegExp(r'APRSLOCUS(?:\s+CONNECT)?\s*v?(\d[\d.]*)',
+            caseSensitive: false)
+        .firstMatch(body);
+    if (vm != null) info['版本'] = 'v${vm.group(1)}';
+    final pm = RegExp(
+            r'APRSLOCUS(?:\s+CONNECT)?\s*v?[\d.]+\s+(Win|Mac|iOS|Android|Linux|Web|Fuchsia)',
+            caseSensitive: false)
+        .firstMatch(body);
+    if (pm != null) {
+      final raw = pm.group(1)!;
+      info['平台'] = raw.toLowerCase() == 'ios'
+          ? 'iOS'
+          : raw[0].toUpperCase() + raw.substring(1).toLowerCase();
+    }
+    _apStatusCache[call] = info;
+    final idx = stations.indexWhere((s) => s.call == call);
+    if (idx >= 0) {
+      stations[idx].aprslocus = {...?stations[idx].aprslocus, ...info};
+    }
+  }
+
   Map<String, String>? _parseFmoStatus(String body) {
     final text = body.substring(1).trim();
     if (text.isEmpty) return null;
@@ -2204,14 +2551,14 @@ class AppState extends ChangeNotifier {
       apInfo = <String, String>{};
       // 版本：APRSlocus v1.2.6
       final vm = RegExp(
-        r'APRSLOCUS\s*v?(\d[\d.]*)',
+        r'APRSLOCUS(?:\s+CONNECT)?\s*v?(\d[\d.]*)',
         caseSensitive: false,
       ).firstMatch(p.comment!);
       if (vm != null) apInfo['版本'] = 'v${vm.group(1)}';
       apInfo['软件'] = 'APRSlocus';
       // 平台：APRSlocus v1.6.74 Win / iOS / Mac / Android / Linux / Web
       final pm = RegExp(
-        r'APRSLOCUS\s*v?[\d.]+\s+(Win|Mac|iOS|Android|Linux|Web|Fuchsia)',
+        r'APRSLOCUS(?:\s+CONNECT)?\s*v?[\d.]+\s+(Win|Mac|iOS|Android|Linux|Web|Fuchsia)',
         caseSensitive: false,
       ).firstMatch(p.comment!);
       if (pm != null) {
@@ -2245,6 +2592,10 @@ class AppState extends ChangeNotifier {
     } else if (isFmo) {
       fmoInfo = <String, String>{'类型': 'FMO'};
     }
+    // 合并此前由状态包缓存的版本/平台（自 v1.6.80 起版本号随状态包上报，
+    // 见 _mergeApStatus），否则其它 APRSlocus 台站的版本会显示不出来。
+    final cachedAp = _apStatusCache[call];
+    if (cachedAp != null) apInfo = {...?apInfo, ...cachedAp};
     final idx = stations.indexWhere((s) => s.call == call);
     final now = DateTime.now();
     if (idx >= 0) {
@@ -2542,6 +2893,35 @@ class AppState extends ChangeNotifier {
   }
 
   // ─── 消息 ───
+  /// 会话列表的「单聊」部分：消息中出现过的对方呼号 + 收藏/手动联系人。
+  /// （群聊另见 [chatGroups]，群呼号不算单聊。）
+  ///
+  /// 抽成静态纯函数的目的是让**会话列表**与**ADIF 导出**共用同一套规则：
+  /// 这类判定一旦被复制成两份就会漂移（APRSlocus 台站识别就这么翻过车）。
+  static List<String> partnersOf(
+    List<AprsMsg> messages,
+    List<ChatGroup> groups,
+    List<Station> stations,
+  ) {
+    final s = <String>{};
+    for (final m in messages) {
+      // 排除群聊消息（有 groupId 或收发件人是群呼号）
+      if (m.groupId != null) continue;
+      final isGroupCall = groups.any(
+        (g) =>
+            g.groupCall.toUpperCase() == m.to.toUpperCase() ||
+            g.groupCall.toUpperCase() == m.from.toUpperCase(),
+      );
+      if (isGroupCall) continue;
+      s.add(m.sent ? m.to : m.from);
+    }
+    // 收藏 / 手动联系人也显示在会话列表
+    for (final st in stations) {
+      if (st.favorite || st.manual) s.add(st.call);
+    }
+    return s.toList();
+  }
+
   /// 清空全部聊天记录
   void clearMessages() {
     messages.clear();
@@ -2549,6 +2929,92 @@ class AppState extends ChangeNotifier {
     _readAt.clear();
     _saveMessages();
     _notify();
+  }
+
+  /// 把给定呼号从「收藏 / 手动联系人」中撤下。
+  ///
+  /// 这两类台站**即使一条消息都没有**也会出现在会话列表里（见 partnersOf），
+  /// 所以「删除会话」若只删消息，它们会**继续留在列表里**，看起来像没删掉。
+  ///
+  /// 只清这两个标记、**不删台站本身** —— 台站仍可能通过 APRS 报文被收到，
+  /// 把它从台站列表里抹掉是另一件事，由台站面板的「删除台站」负责。
+  void _clearContactFlags(Set<String> targets) {
+    if (targets.isEmpty) return;
+    var touched = false;
+    for (final s in stations) {
+      if (targets.contains(s.call.toUpperCase()) && (s.favorite || s.manual)) {
+        s.favorite = false;
+        s.manual = false;
+        touched = true;
+      }
+    }
+    if (touched) {
+      // stationsVersion 是会话列表缓存键的一部分（messages_page._partners），
+      // 必须推进它，否则列表不刷新、行仍然在。
+      _bumpStationsVersion();
+      _saveStations();
+    }
+  }
+
+  /// 删除与某呼号的单聊会话（删该会话消息 + **移出会话列表**，不影响群聊）。
+  /// 呼号比较用大写（APRS 呼号大小写不敏感）。
+  void deleteConversation(String call) {
+    final target = call.trim().toUpperCase();
+    if (target.isEmpty) return;
+    messages.removeWhere((m) =>
+        m.from.toUpperCase() == target || m.to.toUpperCase() == target);
+    // 已读时间点一并清掉，否则重建同名会话时会沿用旧的已读位置
+    _readAt.remove(call);
+    _readAt.remove(target);
+    // 收藏/手动联系人也要撤下，否则没有消息了却仍留在会话列表里
+    _clearContactFlags({target});
+    _recalcUnread();
+    _saveMessages();
+    _notify();
+    _log(LogLevel.info, '消息', '已删除与 $target 的聊天记录');
+  }
+
+  /// 清空某群聊的聊天记录（**保留群组本身**，仅清消息）。
+  void clearGroupConversation(String groupId) {
+    if (groupId.isEmpty) return;
+    messages.removeWhere((m) => m.groupId == groupId);
+    _groupReadAt.remove(groupId);
+    _recalcUnread();
+    _saveMessages();
+    _notify();
+    _log(LogLevel.info, '消息', '已清空群聊聊天记录');
+  }
+
+  /// 批量删除会话（单聊呼号集合 + 群聊 ID 集合），一次性保存与通知。
+  /// 单聊：删该呼号的全部消息 + 移出会话列表；群聊：只清消息，保留群组本身。
+  /// 呼号一律按大写比对（APRS 呼号大小写不敏感）。
+  void deleteConversations(Iterable<String> calls, Iterable<String> groupIds) {
+    final cs = calls
+        .map((e) => e.trim().toUpperCase())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    final gs = groupIds.where((e) => e.isNotEmpty).toSet();
+    if (cs.isEmpty && gs.isEmpty) return;
+    messages.removeWhere((m) {
+      if (m.groupId != null) return gs.contains(m.groupId);
+      return cs.contains(m.from.toUpperCase()) ||
+          cs.contains(m.to.toUpperCase());
+    });
+    // 已读时间点一并清掉；键的大小写未必统一，按大写比对
+    _readAt.removeWhere((k, _) => cs.contains(k.toUpperCase()));
+    for (final g in gs) {
+      _groupReadAt.remove(g);
+    }
+    // 同上：收藏/手动联系人也撤下，保证选中的会话行确实从列表消失
+    _clearContactFlags(cs);
+    _recalcUnread();
+    _saveMessages();
+    _notify();
+    _log(
+      LogLevel.info,
+      '消息',
+      '已删除 ${cs.length} 个单聊、${gs.length} 个群聊的聊天记录',
+    );
   }
 
   /// 某会话的未读数（该呼号收到的、晚于已读时间点的消息数）
@@ -2633,7 +3099,13 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
-  void sendMessage(String to, String text) {
+  /// 发送私聊消息。
+  ///
+  /// [text] 是**用户写的原文**（聊天记录按它显示）；
+  /// [sentAs] 是**实际发到空中的文本**（发送前翻译时传入译文）。
+  /// 空中的报文用 `sentAs ?? text`，长度限制也按空中内容判定 ——
+  /// 否则会出现「原文 60 字符通过、译文 80 字符被对端丢弃」这种静默失败。
+  void sendMessage(String to, String text, {String? sentAs}) {
     if (text.trim().isEmpty) return;
     // 防止误发给群呼号：重定向到对应群聊
     for (final g in chatGroups) {
@@ -2642,17 +3114,27 @@ class AppState extends ChangeNotifier {
         return;
       }
     }
+    final wire = (sentAs ?? text).trim();
+    // TNC（射频）模式下的长度限制：APRS101 规定消息文本上限 67 字符。
+    // 超长时报文会被对端 TNC/网关丢弃，与其静默失败不如在源头拦住。
+    if (usingTnc && wire.length > tncMaxMsgLen) {
+      _log(LogLevel.warn, '消息',
+          'TNC 模式下单条消息限 $tncMaxMsgLen 字符，已中止发送（${wire.length} 字符）');
+      _notify();
+      return;
+    }
     final id = AprsFmt.randId();
-    final raw = AprsFmt.message(myFullCall, to, text.trim(), id);
+    final raw = AprsFmt.message(myFullCall, to, wire, id, path: txPath);
     messages.insert(
       0,
-      AprsMsg(myFullCall, to, text.trim(), DateTime.now(), sent: true, id: id),
+      AprsMsg(myFullCall, to, text.trim(), DateTime.now(),
+          sent: true, id: id, sentAs: sentAs == null ? null : wire),
     );
     _saveMessages();
     packetsTx++;
     AchievementCenter.instance.bump('sendMsg'); // 我发出去了吗？
     if (connected) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
     }
     _log(LogLevel.info, '消息', '发送给 $to：$text');
@@ -2673,8 +3155,17 @@ class AppState extends ChangeNotifier {
   /// 使用 no-ack 格式 `{id_`，避免每个成员自动回 ack 造成噪声
   int sendGroupMessage(String groupCall, String text, {String? groupId}) {
     if (text.trim().isEmpty || groupCall.isEmpty) return 0;
+    // TNC（射频）模式禁用群发：
+    //   ① 群聊靠 no-ack 广播 + 批量邀请，在共享信道上一次邀请就占大量时隙；
+    //   ② 群呼号不是真实台站，射频上无人能回答，实际是单向噪声。
+    if (usingTnc) {
+      _log(LogLevel.warn, '群发', 'TNC（射频）模式不支持群聊广播，已中止发送');
+      _notify();
+      return 0;
+    }
     final id = AprsFmt.randId();
-    final raw = AprsFmt.messageNoAck(myFullCall, groupCall, text.trim(), id);
+    final raw =
+        AprsFmt.messageNoAck(myFullCall, groupCall, text.trim(), id, path: txPath);
     AchievementCenter.instance.bump('sendMsg'); // 我发出去了吗？
     messages.insert(
       0,
@@ -2691,7 +3182,7 @@ class AppState extends ChangeNotifier {
     _saveMessages();
     packetsTx++;
     if (connected) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
     }
     _log(LogLevel.info, '群发', '发送到 $groupCall：$text');
@@ -2763,6 +3254,7 @@ class AppState extends ChangeNotifier {
       memberCall,
       'INVITE $groupCall $groupName',
       AprsFmt.randId(),
+      path: txPath,
     );
     _trySend(raw);
     _log(LogLevel.info, '群聊', '发送邀请给 $memberCall：$groupCall $groupName');
@@ -2775,6 +3267,7 @@ class AppState extends ChangeNotifier {
       ownerCall,
       'JOIN_CONFIRM $groupCall',
       AprsFmt.randId(),
+      path: txPath,
     );
     _trySend(raw);
     _log(LogLevel.info, '群聊', '确认加入 $groupCall');
@@ -2787,6 +3280,7 @@ class AppState extends ChangeNotifier {
       ownerCall,
       'LEFT $groupCall',
       AprsFmt.randId(),
+      path: txPath,
     );
     _trySend(raw);
     _log(LogLevel.info, '群聊', '离开 $groupCall');
@@ -2795,7 +3289,7 @@ class AppState extends ChangeNotifier {
   /// 尽力发送：连接就发，未连接只记录（等待重连后由定时器补发待发队列）
   void _trySend(String raw) {
     if (connected) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
       packetsTx++;
     } else {
@@ -2810,7 +3304,7 @@ class AppState extends ChangeNotifier {
     final list = List<String>.from(_pendingTx);
     _pendingTx.clear();
     for (final raw in list) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
       packetsTx++;
     }
@@ -2872,7 +3366,7 @@ class AppState extends ChangeNotifier {
     _pushPacket(Packet(raw, src, 'APRS', 'message', DateTime.now(), info: raw));
     packetsTx++;
     if (connected) {
-      aprs.send(raw);
+      _sendRaw(raw);
       _lastTx = DateTime.now();
     }
     _notify();
@@ -3029,33 +3523,183 @@ class AppState extends ChangeNotifier {
 
   String get myGrid => myHasFix ? maidenhead(myLat!, myLng!) : '--';
 
-  String get nextBeaconIn {
-    if (!beaconEnabled) return '已关闭';
-    if (!connected) return '未连接';
-    if (!myHasFix) return '等待定位';
+  /// 按当前 [locale] 取本地化实例。
+  /// 状态层没有 BuildContext（ChangeNotifier），故这里直接按语言构造；
+  /// 供通知栏等无法拿到 context 的场合使用。
+  ///
+  /// ⚠️ 本应用存储的语言码是**下划线**形式：'' / 'zh' / 'zh_TW' / 'en'
+  /// （见 OOBE 与设置页的 options；app.dart 的 `_localeOf` 也是按 '_' 切分）。
+  /// 不是 BCP-47 的 'zh-TW'——此处两种都认，避免繁體用户回落成简体。
+  AppLocalizations get l10n {
+    switch (locale) {
+      case 'en':
+        return AppLocalizationsEn();
+      case 'es':
+        return AppLocalizationsEs();
+      case 'ja':
+        return AppLocalizationsJa();
+      case 'id':
+        return AppLocalizationsId();
+      case 'zh_TW':
+      case 'zh-TW':
+        return AppLocalizationsZhTw();
+      default:
+        return AppLocalizationsZh();
+    }
+  }
+
+  /// 距下次自动上报剩余秒数（仅在 [BeaconPhase.counting] 时有意义）
+  int get beaconSecondsLeft {
     final remain =
         beaconIntervalNow - DateTime.now().difference(_lastBeacon).inSeconds;
-    return remain > 0 ? '${remain}s' : '即将';
+    return remain > 0 ? remain : 0;
+  }
+
+  /// 自动上报所处阶段。
+  ///
+  /// **不要用中文字符串表示状态**：此前 `nextBeaconIn` 直接返回
+  /// '未连接'/'已关闭'/'等待定位'/'45s'/'即将'，UI 还得拿 `== '即将'` 比较，
+  /// 既无法本地化又极易出错。现改为结构化枚举，由 UI 负责本地化。
+  BeaconPhase get beaconPhase {
+    if (!beaconEnabled) return BeaconPhase.off;
+    if (!connected) return BeaconPhase.disconnected;
+    if (!myHasFix) return BeaconPhase.waitingFix;
+    return beaconSecondsLeft > 0 ? BeaconPhase.counting : BeaconPhase.imminent;
+  }
+
+  /// 信标倒计时文案（已本地化）。保留此 getter 供通知栏/设置页等直接使用。
+  String get nextBeaconIn {
+    final l = l10n;
+    switch (beaconPhase) {
+      case BeaconPhase.off:
+        return l.beaconDisabled;
+      case BeaconPhase.disconnected:
+        return l.beaconNotConnected;
+      case BeaconPhase.waitingFix:
+        return l.beaconWaitingFix;
+      case BeaconPhase.imminent:
+        return l.beaconSoon;
+      case BeaconPhase.counting:
+        return '${beaconSecondsLeft}s';
+    }
   }
 
   /// 更新状态栏通知（前台服务常驻通知）
   void _updateNotification() {
+    final l = l10n;
     final parts = <String>[];
     if (connected) {
-      parts.add('已连接');
+      // TNC 模式：明确标出「射频」，否则用户会以为走的是网络，
+      // 从而忽略「发射要在自己呼号/执照下操作」这件事。
+      parts.add(usingTnc ? l.notifTncConnected : l.notifConnected);
     } else if (connecting) {
-      parts.add('连接中');
+      parts.add(l.notifConnecting);
     } else {
-      parts.add('未连接');
+      parts.add(usingTnc ? l.notifTncDisconnected : l.notifDisconnected);
     }
     if (myHasFix) {
       parts.add('GPS·$myGrid');
     }
-    parts.add('$online在线');
-    parts.add('收$packetsRx');
-    if (beaconEnabled) {
-      parts.add('信标$nextBeaconIn');
+    if (usingTnc) {
+      parts.add('RF·${tnc.rxFrames}/${tnc.txFrames}');
+    } else {
+      parts.add(l.notifOnline('$online'));
+      parts.add(l.notifRx('$packetsRx'));
+    }
+    // 信标倒计时仅在真会发射时显示：TNC 模式下未开启射频信标时显示倒计时
+    // 会让用户误以为正在发射。
+    if (beaconEnabled && (!usingTnc || tnc.config.rfBeacon)) {
+      parts.add(l.notifBeacon(nextBeaconIn));
     }
     loc.updateNotification(parts.join(' · '));
+  }
+}
+
+/// 自动上报阶段（结构化，供 UI 本地化；见 [AppState.beaconPhase]）
+enum BeaconPhase { off, disconnected, waitingFix, counting, imminent }
+
+/// 连接状态阶段（结构化，供 UI 本地化；见 [AppState.connInfo]）
+enum ConnPhase {
+  idle,
+  connectingServer,
+  connectingTnc,
+  online,
+  tncConnected,
+  unverified,
+  retryServer,
+  retryTnc,
+  linkLostServer,
+  linkLostTnc,
+  manual,
+  positionSent,
+  positionSentTnc,
+  demoBeacon,
+}
+
+/// TNC 链路错误码 → 可读文案。
+///
+/// 数据层只暴露稳定的**错误码**（`open-write-failed` 等），不是句子 ——
+/// 这样错误文本不会散落在各平台实现里，也不会漏掉本地化。
+String tncErrorText(AppLocalizations l, String code) {
+  final c = code.toLowerCase();
+  if (c.contains('no-device')) return l.tncErrNoDevice;
+  if (c.contains('unsupported')) return l.tncErrUnsupported;
+  if (c.contains('not-connected')) return l.tncErrNotConnected;
+  if (c.contains('open-read')) return l.tncErrOpenRead;
+  if (c.contains('open-write')) return l.tncErrOpenWrite;
+  if (c.contains('bad-format')) return l.tncErrBadFormat;
+  if (c.contains('frame-too-long')) return l.tncErrFrameTooLong;
+  if (c.contains('timeout')) return l.tncErrTimeout;
+  // 未识别的（如系统原始异常）：保留原文，便于上报排查
+  return code;
+}
+
+/// 连接状态 + 参数。文案在这里按语言生成，UI 不再需要任何哨兵映射。
+class ConnStatus {
+  final ConnPhase phase;
+
+  /// 目标主机 / 呼号 / 设备名 / 错误详情
+  final String arg;
+  final int seconds;
+
+  const ConnStatus(this.phase, {this.arg = '', this.seconds = 0});
+
+  String localized(AppLocalizations l) {
+    switch (phase) {
+      case ConnPhase.idle:
+        return l.connTapToConnect;
+      case ConnPhase.connectingServer:
+        return l.connConnectingTarget(arg);
+      case ConnPhase.connectingTnc:
+        return l.connectingToTnc(arg);
+      case ConnPhase.online:
+        return l.connOnline(arg);
+      case ConnPhase.tncConnected:
+        return l.connTncConnected(arg);
+      case ConnPhase.unverified:
+        return l.connPasscodeInvalid;
+      case ConnPhase.retryServer:
+        return l.connRetry(seconds);
+      case ConnPhase.retryTnc:
+        // 带错误详情：射频连接失败的常见原因各不相同（权限、设备被占用、
+        // 平台不支持…），只写「失败」用户无从排查；但直接把
+        // `open-write-failed: ...` 这种内部串抛给用户同样没用，
+        // 所以先经 [tncErrorText] 换成「下一步该做什么」。
+        return arg.isEmpty
+            ? l.connRetryTnc(seconds)
+            : l.connRetryTncDetail(tncErrorText(l, arg), seconds);
+      case ConnPhase.linkLostServer:
+        return l.connAutoReconnect(seconds);
+      case ConnPhase.linkLostTnc:
+        return l.connTncLinkLost(seconds);
+      case ConnPhase.manual:
+        return l.connManuallyDisconnected;
+      case ConnPhase.positionSent:
+        return l.connPositionSent(arg);
+      case ConnPhase.positionSentTnc:
+        return l.connTncPositionSent(arg);
+      case ConnPhase.demoBeacon:
+        return l.connDemoBeacon;
+    }
   }
 }

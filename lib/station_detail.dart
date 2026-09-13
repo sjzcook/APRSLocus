@@ -232,15 +232,142 @@ class _StationDetailState extends State<StationDetail> {
                                 ),
                                 SizedBox(height: 3),
                                 Text(
-                                  '${s.typeName} · ${s.comment ?? ''}',
+                                  '${localizedAprsSymbolName(context, s.symbol)} · ${s.comment ?? ''}',
                                   style: ts(12, c: C.slate),
                                 ),
                               ],
                             ),
                           ),
+                          // 台站操作：收藏 / 复制呼号 / 删除台站
+                          // 用可见的菜单入口，不依赖隐藏手势（长按等）
+                          PopupMenuButton<String>(
+                            icon: Icon(
+                              Icons.more_vert_rounded,
+                              color: C.grey,
+                            ),
+                            tooltip: S.of(context).stationActions,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            onSelected: (v) => _onStationAction(v, s),
+                            itemBuilder: (ctx) => [
+                              PopupMenuItem(
+                                value: 'fav',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      s.favorite
+                                          ? Icons.star_rounded
+                                          : Icons.star_border_rounded,
+                                      size: 18,
+                                      color: C.orange,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      s.favorite
+                                          ? S.of(ctx).unfavorite
+                                          : S.of(ctx).favorite,
+                                      style: ts(13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'copy',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.copy_rounded,
+                                      size: 18,
+                                      color: C.blue,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      S.of(ctx).copyCallsign,
+                                      style: ts(13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline_rounded,
+                                      size: 18,
+                                      color: C.red,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      S.of(ctx).deleteStation,
+                                      style: ts(13, c: C.red),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                           IconButton(
                             icon: Icon(Icons.close_rounded, color: C.grey),
                             onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      // 发送消息（详情面板最常用操作，置于头部之后，避免沉到页面底部）
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _msg,
+                              style: ts(13),
+                              decoration: InputDecoration(
+                                hintText: S.of(context).sendMessageTo(s.call),
+                                hintStyle: ts(13, c: C.grey),
+                                filled: true,
+                                fillColor: C.bgSoft,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              if (_msg.text.isNotEmpty) {
+                                widget.state.sendMessage(
+                                  s.call,
+                                  _msg.text.trim(),
+                                );
+                                _msg.clear();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(S.of(context).messageSent),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                            child: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: C.blue,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: softShadow(blur: 12, alpha: 0.2),
+                              ),
+                              child: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -425,6 +552,12 @@ class _StationDetailState extends State<StationDetail> {
                             () => _openUrl(
                               'https://aprs.fi/info/a/${s.call}',
                             ),
+                          ),
+                          // APRS.tv：点击后弹面板再选「详情页 / 地图」
+                          _action(
+                            Icons.travel_explore_rounded,
+                            S.of(context).aprsTv,
+                            () => _showAprsTvSheet(s),
                           ),
                         ],
                       ),
@@ -817,63 +950,6 @@ class _StationDetailState extends State<StationDetail> {
                         ),
                         SizedBox(height: 8),
                       ],
-                      // 快捷操作
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _msg,
-                              style: ts(13),
-                              decoration: InputDecoration(
-                                hintText: S.of(context).sendMessageTo(s.call),
-                                hintStyle: ts(13, c: C.grey),
-                                filled: true,
-                                fillColor: C.bgSoft,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () {
-                              if (_msg.text.isNotEmpty) {
-                                widget.state.sendMessage(
-                                  s.call,
-                                  _msg.text.trim(),
-                                );
-                                _msg.clear();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(S.of(context).messageSent),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: C.blue,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: softShadow(blur: 12, alpha: 0.2),
-                              ),
-                              child: const Icon(
-                                Icons.send_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
                 ),
@@ -955,7 +1031,134 @@ class _StationDetailState extends State<StationDetail> {
     );
   }
 
-  /// 用系统浏览器打开外站查询链接（QRZ / aprs.fi），失败提示
+  /// APRS.tv 查看：先弹底部面板让用户选入口，再交给系统浏览器。
+  ///
+  /// 两个入口不是同一件事，所以不直接跳：
+  /// - `aprs.tv/info/<呼号>` —— 该台站的详情页
+  /// - `aprs.tv/?call=<呼号>` —— 在地图上定位该台站
+  ///
+  /// 呼号用**完整呼号（含 SSID）**，与 aprs.fi 一致；APRS 服务需要靠 SSID
+  /// 区分同一操作员的多个设备（如 `BG7ABC-9` 车载台 / `BG7ABC-7` 手持）。
+  Future<void> _showAprsTvSheet(Station s) async {
+    final loc = S.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        // 不能加 const：C.white 是 static 字段（非常量）
+        decoration: BoxDecoration(
+          color: C.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 拖动指示条（与其他面板一致）
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: C.greyLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.travel_explore_rounded,
+                      size: 18,
+                      color: C.blue,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(loc.aprsTv, style: T.h3),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        s.call,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ts(12, c: C.grey, w: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              _aprsTvOption(
+                ctx,
+                icon: Icons.article_rounded,
+                label: loc.aprsTvInfo,
+                url: 'https://aprs.tv/info/${s.call}',
+              ),
+              _aprsTvOption(
+                ctx,
+                icon: Icons.map_rounded,
+                label: loc.aprsTvMap,
+                url: 'https://aprs.tv/?call=${s.call}',
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// APRS.tv 面板里的一行：图标 + 名称 + 实际链接（便于核对）
+  Widget _aprsTvOption(
+    BuildContext sheetCtx, {
+    required IconData icon,
+    required String label,
+    required String url,
+  }) {
+    return InkWell(
+      onTap: () {
+        // 先关面板再开外链：否则回来后仍停在这层面板上
+        Navigator.pop(sheetCtx);
+        _openUrl(url);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: C.blueBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: C.blue),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: ts(13, w: FontWeight.w700)),
+                  const SizedBox(height: 1),
+                  // 去掉 https:// 前缀，避免长 URL 被挤掉关键部分
+                  Text(
+                    url.replaceFirst('https://', ''),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: ts(10, c: C.grey),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.open_in_new_rounded, size: 16, color: C.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 用系统浏览器打开外站查询链接（QRZ / aprs.fi / APRS.tv），失败提示
   Future<void> _openUrl(String url) async {
     try {
       final uri = Uri.parse(url);
@@ -1113,6 +1316,55 @@ class _StationDetailState extends State<StationDetail> {
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  /// 台站操作菜单：收藏 / 复制呼号 / 删除台站
+  Future<void> _onStationAction(String action, Station s) async {
+    final st = widget.state;
+    if (action == 'fav') {
+      st.toggleFavorite(s.call);
+      if (!mounted) return;
+      setState(() {});
+      return;
+    }
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: s.call));
+      if (!mounted) return;
+      _toast(S.of(context).callsignCopied);
+      return;
+    }
+    if (action != 'delete') return;
+    // 先把文案与 messenger 取好，避免 await 之后再碰 context
+    final loc = S.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.deleteStation, style: T.h2),
+        content: Text(loc.deleteStationConfirm(s.call), style: ts(13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel, style: ts(13, c: C.slate)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.delete, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    st.removeContact(s.call);
+    if (!mounted) return;
+    Navigator.pop(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(loc.stationDeleted),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 

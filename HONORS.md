@@ -2,6 +2,9 @@
 
 > 面向维护者：**授予荣誉**、**新增称号**的完整流程与校验清单。
 > 数据源：`docs/members.json`（App 与官网运行时拉取，改完推送即生效，通常无需发版）。
+>
+> 👥 **面向用户的「怎么获得荣誉」** → 见 [`HONORS-GUIDE.md`](HONORS-GUIDE.md)。
+> 🔧 **代码层面「数据怎么解析、怎么查、缓存在哪」** → 见 [`HONORS-TECH.md`](HONORS-TECH.md)。
 
 ---
 
@@ -120,6 +123,11 @@ json.loads(io.open(p, encoding='utf-8').read())   # 语法自检
     "zh-TW": "不求現成的果實，親手編譯一粒種子，讓它在蘋果的園子裡長成一座信標。",
     "en": "Rather than wait for ripened fruit, they compiled the seed themselves — and let it grow into a beacon in Apple’s orchard."
   },
+  "criteria": {
+    "zh": "亲自编译 APRSlocus 并在苹果设备上运行",
+    "zh-TW": "親自編譯 APRSlocus 並在蘋果裝置上執行",
+    "en": "Compile APRSlocus yourself and run it on Apple devices"
+  },
   "color": "#8E8E93",
   "icon": "iSelfReliant"     // 可选；与 lib 的 iconMap key 同一命名空间
 }
@@ -127,6 +135,12 @@ json.loads(io.open(p, encoding='utf-8').read())   # 语法自检
 
 > **App 只读 `zh` 和 `desc.zh`**；`zh-TW` / `en` 仅供**官网**使用。
 > 也就是说：只填 `zh` 时 App 正常、官网繁体/英文会回落——但请务必三语齐全。
+>
+> `criteria`（**获得条件**）也是三语，**由官网显示**：`badge.html` 在诗意描述下方
+> 单独一行（淡底卡片）；`member-card.html` 的徽章胶囊用作悬停提示（`title`）。
+> **App 目前不读 `criteria`**，所以新增徽章时填上它只影响官网。
+> 另：`badge.html` / `member-card.html` 的**内置兜底表不含 `criteria`**，
+> 断网时悬停提示为空（不报错）—— 正常联网即可。
 
 ### 2. `lib/early_member.dart` → `iconMap`
 
@@ -317,4 +331,6 @@ flutter analyze   # 或交给 CI
 | `docs/firstfix.json` | FIRST FIX 至高荣誉的授勋名单（独立文件） |
 | `lib/early_member.dart` | App 侧：称号定义、兜底、在线拉取与解析 |
 | `lib/honor_wall_page.dart` | App 内荣誉墙页面 |
+| [`HONORS-GUIDE.md`](HONORS-GUIDE.md) | **面向用户**：荣誉怎么获得（成就条件 / 徽章含义 / 申请渠道） |
+| [`HONORS-TECH.md`](HONORS-TECH.md) | **技术说明**：解析与获取链路、查询 API、缓存键、易错点 |
 | `docs/index.html` | 官网首页（含荣誉墙入口） |

@@ -1,10 +1,13 @@
 package com.aprslocus.aprslocus
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
@@ -19,6 +22,9 @@ class MainActivity : FlutterActivity() {
     private val EVENT_CHANNEL = "com.aprslocus/location_events"
     private var permCompleter: MethodChannel.Result? = null
 
+    // 蓝牙 TNC（经典蓝牙 SPP）：只搬字节，KISS/AX.25 在 Dart 侧
+    private var tnc: TncManager? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -26,10 +32,16 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startService" -> {
-                    if (!hasPermissions()) {
+                    val mode = call.argument<String>("mode") ?: "gps_network"
+                    if (mode == LocationService.MODE_KEEPALIVE) {
+                        // 模拟位置模式：不需要定位权限，但**仍需前台服务**，
+                        // 否则应用一切到后台就会被冻结/回收：
+                        // APRS-IS 连接断开、信标定时器停摆、地图不再刷新。
+                        startLocationService(mode)
+                        result.success(true)
+                    } else if (!hasPermissions()) {
                         result.error("NO_PERMISSION", "缺少定位权限", null)
                     } else {
-                        val mode = call.argument<String>("mode") ?: "gps_network"
                         startLocationService(mode)
                         result.success(true)
                     }
@@ -84,6 +96,70 @@ class MainActivity : FlutterActivity() {
             }
         )
 
+        // 蓝牙 TNC 通道：列出已配对设备 / 连接 / 收发字节
+        val tncManager = TncManager(this)
+        tnc = tncManager
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TncManager.METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isSupported" -> result.success(tncManager.isSupported())
+                    "listBondedDevices" -> {
+                        try {
+                            result.success(tncManager.listBondedDevices())
+                        } catch (e: Exception) {
+                            result.error("BT_LIST_FAILED", e.message ?: "列出蓝牙设备失败", null)
+                        }
+                    }
+                    "connect" -> {
+                        val address = call.argument<String>("address")
+                        if (address.isNullOrEmpty()) {
+                            result.error("NO_ADDRESS", "缺少设备地址", null)
+                        } else {
+                            try {
+                                tncManager.connect(address)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("BT_CONNECT_FAILED", e.message ?: "连接失败", null)
+                            }
+                        }
+                    }
+                    "disconnect" -> {
+                        try {
+                            tncManager.disconnect()
+                        } catch (_: Exception) {
+                        }
+                        result.success(true)
+                    }
+                    "send" -> {
+                        val data = call.argument<ByteArray>("data")
+                        if (data == null) {
+                            result.error("NO_DATA", "缺少数据", null)
+                        } else {
+                            try {
+                                tncManager.send(data)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("BT_SEND_FAILED", e.message ?: "发送失败", null)
+                            }
+                        }
+                    }
+                    "requestPermissions" -> tncManager.requestPermissions(result)
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, TncManager.EVENT_CHANNEL)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                        tncManager.setEventSink(events)
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        tncManager.setEventSink(null)
+                    }
+                }
+            )
+
         // 安装器通道：安装 APK 更新包
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.aprslocus/installer").setMethodCallHandler { call, result ->
             when (call.method) {
@@ -136,6 +212,93 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // 导出通道：把文本文件写入「下载」目录（供 ADIF 导出使用）
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.aprslocus/export").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "saveToDownloads" -> {
+                    val filename = call.argument<String>("filename") ?: "export.adi"
+                    val content = call.argument<String>("content") ?: ""
+                    val path = saveToDownloads(filename, content)
+                    if (path == null) {
+                        result.error("SAVE_FAILED", "保存失败", null)
+                    } else {
+                        result.success(path)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    /// 把文本写入「下载」目录，返回用户可见的路径；失败返回 null。
+    ///
+    /// - Android 10（API 29）及以上：走 MediaStore，**无需任何存储权限**
+    ///   （应用向 Downloads 集合插入自己的内容不需要 WRITE_EXTERNAL_STORAGE）。
+    /// - Android 9 及以下：写入应用的外部私有目录（同样无需权限；
+    ///   在那些系统版本上该目录可被文件管理器直接浏览）。
+    private fun saveToDownloads(filename: String, content: String): String? {
+        // 文件名来自 Dart，做一次净化，避免路径穿越
+        val safe = filename.replace('/', '_').replace('\\', '_')
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, safe)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                    put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOWNLOADS
+                    )
+                }
+                val resolver = contentResolver
+                val uri = resolver.insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
+                ) ?: return null
+                resolver.openOutputStream(uri)?.use { out ->
+                    out.write(content.toByteArray(Charsets.UTF_8))
+                    out.flush()
+                } ?: return null
+                // 部分实现会根据 MIME（text/plain）给文件名**追加 .txt**，
+                // 使 APRSlocus_….adi 变成 APRSlocus_….adi.txt。
+                // 这里读回实际名字，不一致就改回原名（.adi 是 ADIF 的惯用扩展名）。
+                val actual = displayNameOf(uri)
+                if (actual != null && actual != safe) {
+                    try {
+                        resolver.update(
+                            uri,
+                            ContentValues().apply {
+                                put(MediaStore.MediaColumns.DISPLAY_NAME, safe)
+                            },
+                            null,
+                            null
+                        )
+                    } catch (_: Exception) {
+                        // 改不回去也不影响导出成功（内容已写入）
+                    }
+                }
+                "Download/$safe"
+            } else {
+                val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                val f = File(dir, safe)
+                f.writeText(content, Charsets.UTF_8)
+                f.absolutePath
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /// 查询 MediaStore 条目的实际显示名
+    private fun displayNameOf(uri: Uri): String? = try {
+        contentResolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    } catch (_: Exception) {
+        null
     }
 
     /// 系统分享面板：分享文本到其他 App（微信 / QQ / 短信等）
@@ -182,6 +345,9 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // 蓝牙权限请求走 TncManager 自己的 requestCode，勿与定位权限混淆
+        tnc?.onRequestPermissionsResult(requestCode, grantResults)
+        if (requestCode != 100) return
         val ok = hasPermissions()
         permCompleter?.success(ok)
         permCompleter = null
@@ -197,7 +363,7 @@ class MainActivity : FlutterActivity() {
         return fine || coarse
     }
 
-    private fun startLocationService(mode: String = "gps_network") {
+    private fun startLocationService(mode: String = LocationService.MODE_GPS_NETWORK) {
         val intent = Intent(this, LocationService::class.java).apply {
             putExtra(LocationService.EXTRA_MODE, mode)
         }
@@ -264,6 +430,11 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            tnc?.dispose()
+        } catch (_: Exception) {
+        }
+        tnc = null
         LocationBus.sink = null
         super.onDestroy()
     }

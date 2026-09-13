@@ -113,6 +113,7 @@ String localizedLocationStatus(BuildContext context, String value) {
   if (value == '未定位') return s.locationNotFixed;
   if (value == '模拟位置') return s.simulatedLocation;
   if (value == '已保存位置') return s.savedLocation;
+  if (value == '模拟位置 · 后台保活') return s.simulatedKeepAlive;
   if (value == '定位失败') return s.locationFailed;
   if (value == '定位已停止') return s.locationStopped;
   if (value == '已定位') return s.locationFixed;
@@ -128,48 +129,33 @@ String localizedLocationStatus(BuildContext context, String value) {
   return value;
 }
 
-String localizedNextBeaconValue(BuildContext context, String value) {
-  if (value == '已关闭') return S.of(context).beaconDisabled;
-  if (value == '等待定位') return S.of(context).waitingForLocation;
-  if (value == '即将') return S.of(context).imminent;
-  return value;
-}
+// 说明：原 `localizedNextBeaconValue()` 已移除。
+// 它属于「状态层返回中文串 → 此处映射回本地化文案」的旧模式；
+// 现 AppState.nextBeaconIn 已按 locale 自行本地化（并新增结构化的
+// AppState.beaconPhase / beaconSecondsLeft），故此映射不再需要。
 
-String localizedConnectionInfo(BuildContext context, String value) {
-  final s = S.of(context);
-  if (value == '未连接 · 点击播放按钮连接 APRS-IS') return s.connTapToConnect;
-  if (value == '未连接 · 已手动断开') return s.connManuallyDisconnected;
-  if (value == '未连接 · 位置已上报(模拟)') return s.connDemoBeacon;
-  if (value == '已连接 · 未验证（passcode 可能错误）') {
-    return s.connPasscodeInvalid;
-  }
-  var m = RegExp(r'^连接已断开 · (\d+)秒后自动重连…$').firstMatch(value);
-  if (m != null) return s.connAutoReconnect(int.parse(m.group(1)!));
-  m = RegExp(r'^正在连接 (.+)…$').firstMatch(value);
-  if (m != null) return s.connConnectingTarget(m.group(1)!);
-  m = RegExp(r'^已连接 · (.+) 在线$').firstMatch(value);
-  if (m != null) return s.connOnline(m.group(1)!);
-  m = RegExp(r'^连接失败 · (\d+)s 后重试…$').firstMatch(value);
-  if (m != null) return s.connRetry(int.parse(m.group(1)!));
-  m = RegExp(r'^已连接 · 位置已上传 \((.+)\)$').firstMatch(value);
-  if (m != null) return s.connPositionSent(m.group(1)!);
-  return value;
-}
+/// 连接状态说明。
+///
+/// `AppState.connInfo` 现在由状态层直接按当前语言生成（见 ConnStatus），
+/// 因此这里不再需要「拿中文当哨兵再映射」的老做法 —— 那种写法漏登记
+/// 一个新状态就会让界面在所有语言下漏出中文。
+/// 保留此函数作为调用点，避免各页面重复判断。
+String localizedConnectionInfo(BuildContext context, String value) => value;
 
 String localizedMapTypeLabel(BuildContext context, String name) =>
     switch (name) {
       'gaode' => S.of(context).mapTypeAmap,
       'gaode_sat' => S.of(context).mapTypeAmapSatellite,
       'vector' => S.of(context).mapTypeVector,
-      'vector_positron' => 'Carto Positron(浅色矢量)',
-      'carto' => 'Carto 浅色',
-      'carto_dark' => 'Carto 深色',
-      'carto_voyager' => 'Carto 航行者',
-      'osm' => 'OSM 标准',
-      'osm_hot' => 'OSM 人道',
-      'open_topo' => 'OpenTopo 地形',
-      'esri_street' => 'Esri 街道',
-      'esri_sat' => 'Esri 影像',
+      'vector_positron' => S.of(context).mapTypeCartoPositron,
+      'carto' => S.of(context).mapTypeCarto,
+      'carto_dark' => S.of(context).mapTypeCartoDark,
+      'carto_voyager' => S.of(context).mapTypeCartoVoyager,
+      'osm' => S.of(context).mapTypeOsm,
+      'osm_hot' => S.of(context).mapTypeOsmHot,
+      'open_topo' => S.of(context).mapTypeOpenTopo,
+      'esri_street' => S.of(context).mapTypeEsriStreet,
+      'esri_sat' => S.of(context).mapTypeEsriSat,
       _ => name,
     };
 

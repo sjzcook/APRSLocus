@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -7,6 +9,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme.dart';
 import 'models.dart';
 import 'state.dart';
+import 'chat_dates.dart';
+import 'chat_translate_ui.dart';
+import 'translate.dart';
+import 'translate_page.dart';
 import 'widgets.dart';
 import 'station_detail.dart';
 import 'tracker_page.dart';
@@ -20,6 +26,50 @@ class MessagesPage extends StatefulWidget {
 }
 
 class _MessagesPageState extends State<MessagesPage> {
+  /// 当前会话的翻译状态（按会话键取，切会话不丢译文）
+  ConvTransState get _trans {
+    final key = _convKey;
+    final st = ConvTransRegistry.instance.of(key);
+    // 首次取用时挂监听，译文/状态变化会重建气泡
+    if (!_watched.contains(key)) {
+      _watched.add(key);
+      st.addListener(_onTransChanged);
+    }
+    return st;
+  }
+
+  final Set<String> _watched = {};
+
+  void _onTransChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 当前会话键：群聊按 groupId、私聊按呼号
+  String get _convKey => convKeyOf(groupId: _selectedGroupId, call: _selected);
+
+  /// 发送前翻译的预览：原文 → 译文。
+  ///
+  /// 必须记录 [String] 的**原文**（[_outPreviewSrc]），因为用户可能在
+  /// 预览之后继续改字 —— 那时旧译文就不再对应当前输入，必须失效。
+  /// 直接拿预览当发送内容而不管输入变化，会把「你以为发的是新改的内容」
+  /// 变成「实际发的是旧译文」，这在射频上是不可撤销的。
+  String? _outPreview;
+  String? _outPreviewLang;
+  String _outPreviewSrc = '';
+  bool _outBusy = false;
+
+  void _clearOutPreview() {
+    if (_outPreview == null && _outPreviewLang == null) return;
+    setState(() {
+      _outPreview = null;
+      _outPreviewLang = null;
+      _outPreviewSrc = '';
+    });
+  }
+
+  /// 本会话的翻译偏好（目标语言 + 自动翻译）
+  ConvTranslatePref get _pref => TranslateService.instance.prefFor(_convKey);
+
   String _selected = '';
   bool _showList = true;
   bool _feedMode = true; // 瀑布流模式（默认）
@@ -36,6 +86,11 @@ class _MessagesPageState extends State<MessagesPage> {
   // _partners 缓存：消息/台站/群组未变化时复用，避免每秒/每次 build 全量扫描
   String _partnersKey = '';
   List<String> _partnersCache = const [];
+
+  // 会话管理（多选删除）：可见的「管理」入口，不依赖长按
+  bool _manageMode = false;
+  final Set<String> _selCalls = {}; // 选中的单聊呼号
+  final Set<String> _selGroups = {}; // 选中的群聊 ID
 
   Widget get _manualAddField => TextField(
     controller: _manualAddCtrl,
@@ -86,6 +141,11 @@ class _MessagesPageState extends State<MessagesPage> {
     _scrollGroup.dispose();
     _scrollChat.dispose();
     _manualAddCtrl.dispose();
+    // 翻译状态监听要显式摘掉：注册表是全局单例，不摘会在页面销毁后
+    // 仍持有回调并触发对已卸载 State 的 setState。
+    for (final k in _watched) {
+      ConvTransRegistry.instance.of(k).removeListener(_onTransChanged);
+    }
     super.dispose();
   }
 
@@ -94,23 +154,13 @@ class _MessagesPageState extends State<MessagesPage> {
         '${st.messages.length}|${st.messages.isEmpty ? 0 : st.messages.first.time.millisecondsSinceEpoch}|${st.stationsVersion}|${st.chatGroups.length}';
     if (key == _partnersKey) return _partnersCache;
     _partnersKey = key;
-    final s = <String>{};
-    for (final m in st.messages) {
-      // 排除群聊消息（有 groupId 或收件人是群呼号）
-      if (m.groupId != null) continue;
-      final isGroupCall = st.chatGroups.any(
-        (g) =>
-            g.groupCall.toUpperCase() == m.to.toUpperCase() ||
-            g.groupCall.toUpperCase() == m.from.toUpperCase(),
-      );
-      if (isGroupCall) continue;
-      s.add(m.sent ? m.to : m.from);
-    }
-    // 收藏/手动联系人也显示在会话列表
-    for (final st2 in st.stations) {
-      if (st2.favorite || st2.manual) s.add(st2.call);
-    }
-    _partnersCache = s.toList();
+    // 规则集中在 AppState.partnersOf：会话列表与 ADIF 导出共用，避免两处漂移。
+    // （这里仍保留上面的 key 缓存 —— 会话页重建很频繁，不能每次全量扫描。）
+    _partnersCache = AppState.partnersOf(
+      st.messages,
+      st.chatGroups,
+      st.stations,
+    );
     return _partnersCache;
   }
 
@@ -251,8 +301,15 @@ class _MessagesPageState extends State<MessagesPage> {
                     // 页面标题 + 瀑布流/会话切换
                     Row(
                       children: [
-                        Text(S.of(context).messages, style: T.h1),
-                        const Spacer(),
+                        // 英文下 "Messages" + "Feed/Chats" 同占一行会挤爆窄屏：
+                        // 标题改为 Expanded + ellipsis，把剩余宽度让给切换器
+                        Expanded(
+                          child: Text(S.of(context).messages,
+                              style: T.h1,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 8),
                         _modeToggle(),
                       ],
                     ),
@@ -313,13 +370,16 @@ class _MessagesPageState extends State<MessagesPage> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        // 英文标签较长时收紧横向内边距，避免两个 pill 把标题挤下去
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: sel ? C.blue : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: ts(12, c: sel ? Colors.white : C.slate, w: FontWeight.w600),
         ),
       ),
@@ -362,13 +422,23 @@ class _MessagesPageState extends State<MessagesPage> {
                       style: TextStyle(color: C.grey, fontSize: 13),
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollFeed,
-                    reverse: true,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: st.messages.length,
-                    itemBuilder: (_, i) {
-                      final m = st.messages[i];
+                : Builder(builder: (context) {
+                    // 瀑布流跨会话，日期分界线同样必要（否则翻历史不知道跨度）
+                    final rows = buildChatRows<AprsMsg>(
+                      st.messages,
+                      (m) => m.time,
+                    );
+                    return ListView.builder(
+                      controller: _scrollFeed,
+                      reverse: true,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: rows.length,
+                      itemBuilder: (_, i) {
+                      final row = rows[i];
+                      if (row.isDivider) {
+                        return ChatDateDivider.build(context, row.divider!);
+                      }
+                      final m = row.item!;
                       return GestureDetector(
                         onTap: () {
                           // 群聊消息 → 打开对应群聊；私聊 → 打开对应联系人
@@ -394,7 +464,8 @@ class _MessagesPageState extends State<MessagesPage> {
                         child: _feedBubble(m),
                       );
                     },
-                  ),
+                    );
+                  }),
           ),
           _inputBar(st),
         ],
@@ -414,21 +485,24 @@ class _MessagesPageState extends State<MessagesPage> {
         }
       }
     }
+    // 瀑布流里每条消息属于各自会话，翻译偏好也应按**该消息所属会话**取，
+    // 而不是当前打开的那个会话（瀑布流里可能同时显示多个会话）。
+    final mConv = convKeyOf(
+      groupId: m.groupId,
+      call: m.sent ? m.to : m.from,
+    );
     return GestureDetector(
-      onLongPress: () {
-        Clipboard.setData(ClipboardData(text: m.text));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(S.of(context).copiedClipboard),
-            backgroundColor: C.blue,
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-      },
+      onLongPress: () => showMessageActions(
+        context: context,
+        m: m,
+        pref: TranslateService.instance.prefFor(mConv),
+        st: ConvTransRegistry.instance.of(mConv),
+        convKey: mConv,
+        onChanged: () {
+          if (mounted) setState(() {});
+        },
+        onOpenSettings: _openTranslateSettings,
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -491,6 +565,14 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                   SizedBox(height: 2),
                   _urlRichText(m.text, ts(12, c: C.ink)),
+                  // 「已译发」与译文块：见 _bubble 处的同款说明（两个气泡都要有）
+                  sentAsBlock(context: context, m: m),
+                  translationBlock(
+                    context: context,
+                    m: m,
+                    st: ConvTransRegistry.instance.of(mConv),
+                    pref: TranslateService.instance.prefFor(mConv),
+                  ),
                 ],
               ),
             ),
@@ -500,67 +582,370 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  /// 自动翻译（按会话开关）：只处理收到的消息
+  void _maybeAutoTranslate(AprsMsg m) {
+    if (m.system || m.sent) return;
+    final st = _trans;
+    final key = msgKey(m);
+    if (st.has(key) || st.pending.contains(key)) return;
+    if (!_pref.auto) return;
+    if (!TransDirection.worthAuto(_pref)) return;
+    if (!TranslateService.instance.config.ready) return;
+    // 在首帧后发起：避免在 build 过程中 setState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(translateMessage(
+        context: context,
+        m: m,
+        side: TransSide.incoming,
+        pref: _pref,
+        st: st,
+        convKey: _convKey,
+        // 接口识别出「对方的语言」后立即刷新（角标/标签会变）
+        onPeerLangLearned: () {
+          if (mounted) setState(() {});
+        },
+      ));
+    });
+  }
+
+  /// 会话头部的翻译入口。
+  /// 已翻译条数做成角标：否则用户看不出「这个开关到底生效没」。
+  Widget _transBtn({required VoidCallback onTap}) {
+    final n = _trans.count;
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: C.cyanBg,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.translate_rounded, size: 15, color: C.cyan),
+          ),
+          if (n > 0)
+            Positioned(
+              right: -4,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: C.cyan,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text('$n',
+                    style: ts(8, c: Colors.white, w: FontWeight.w700)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 跳转翻译设置页（长按面板与会话面板共用）
+  void _openTranslateSettings() {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TranslateSettingsPage(state: widget.state),
+      ),
+    );
+  }
+
+  /// 打开会话翻译设置面板
+  Future<void> _openTransSheet({required String title}) async {
+    await showConvTranslateSheet(
+      context: context,
+      convKey: _convKey,
+      title: title,
+      icon: Icons.chat_bubble_rounded,
+      color: C.cyan,
+      myUiLocale: widget.state.locale,
+      // 群聊对方语言不唯一，不提供「发送前翻译」
+      allowOutgoing: _selectedGroupId == null,
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+      onOpenSettings: _openTranslateSettings,
+    );
+  }
+
   // ─── 输入栏（瀑布流 / 会话共用） ───
+  /// 「译发」按钮：把当前输入译成对方的语言
+  Widget _outTranslateButton(AppState st) {
+    final pref = _pref;
+    final enabled = st.msgLenLimit >= 0; // 始终可点，上下文不足时给出提示
+    return GestureDetector(
+      onTap: !enabled || _outBusy ? null : () => _translateInput(st),
+      child: Tooltip(
+        message: S.of(context).translateInput,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: _outPreview != null ? C.cyanBg : C.bgSoft,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _outPreview != null
+                  ? C.cyan.withValues(alpha: 0.5)
+                  : C.border,
+            ),
+          ),
+          child: _outBusy
+              ? const Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : Icon(
+                  Icons.translate_rounded,
+                  size: 18,
+                  color: _outPreview != null
+                      ? C.cyan
+                      : (TransDirection.canTranslateOutgoing(pref)
+                          ? C.slate
+                          : C.greyLight),
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// 翻译当前输入（不发送）。结果进了预览，用户可确认后再按发送。
+  Future<void> _translateInput(AppState st) async {
+    final s = S.of(context);
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    final pref = _pref;
+    if (!TransDirection.canTranslateOutgoing(pref)) {
+      // 不知道对方的语言就译不了 —— 给出可操作的提示，而不是静默失败
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.translateOutNeedPeer),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final svc = TranslateService.instance;
+    if (!svc.config.ready) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.translateNeedConfig),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _outBusy = true);
+    try {
+      final r = await svc.translate(text, to: pref.peerLang);
+      if (!mounted) return;
+      setState(() {
+        _outPreview = r.text;
+        _outPreviewLang = pref.peerLang;
+        _outPreviewSrc = text;
+      });
+      // 译完顺手检查长度：射频上有 67 字符上限，等到发送时才拦会白打一遍字
+      final limit = st.msgLenLimit;
+      if (TransDirection.exceedsLimit(r.text, limit)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(s.translateTooLongAfter(limit)),
+            backgroundColor: C.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on TranslateException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(explainTranslateError(s, e)),
+          backgroundColor: C.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _outBusy = false);
+    }
+  }
+
+  /// 发送前翻译的预览条（在输入栏上方）
+  Widget _outPreviewBar(AppState st) {
+    final t = _outPreview;
+    if (t == null) return const SizedBox.shrink();
+    final s = S.of(context);
+    final limit = st.msgLenLimit;
+    final tooLong = TransDirection.exceedsLimit(t, limit);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: tooLong ? C.orangeBg : C.cyanBg,
+        border: Border(top: BorderSide(color: C.border)),
+      ),
+      child: Row(children: [
+        Icon(Icons.translate_rounded,
+            size: 14, color: tooLong ? C.orange : C.cyan),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(s.translateOutPreview(t),
+                  style: ts(11,
+                      c: tooLong ? C.orange : C.cyan,
+                      w: FontWeight.w700,
+                      h: 1.3)),
+              const SizedBox(height: 2),
+              Text(
+                tooLong && limit > 0
+                    ? s.translateTooLongAfter(limit)
+                    : s.translateOutPreviewHint(
+                        TransLang.labelOf(_outPreviewLang ?? '')),
+                style: ts(10,
+                    c: tooLong
+                        ? C.orange.withValues(alpha: 0.9)
+                        : C.cyan.withValues(alpha: 0.85)),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: Icon(Icons.close_rounded, size: 16, color: C.grey),
+          tooltip: s.translateOutCancel,
+          onPressed: _clearOutPreview,
+        ),
+      ]),
+    );
+  }
+
   Widget _inputBar(AppState st) {
     final inGroupChat = _selectedGroupId != null;
     final group = inGroupChat
         ? st.chatGroups.where((g) => g.id == _selectedGroupId).firstOrNull
         : null;
+    // TNC（射频）模式：单条消息上限 67 字符（APRS101）。
+    // 直接写进输入提示，比「打完发送才发现被拦」友好。
+    final limit = st.msgLenLimit;
     final hintText = inGroupChat
         ? S.of(context).sendToGroupHint(group?.name ?? S.of(context).groupChat)
+        : limit > 0
+        ? S.of(context).tncMsgLimitHint('$limit')
         : _selected.isNotEmpty
         ? S.of(context).sendToCallHint(_selected)
         : S.of(context).selectMessageReply;
-    return Container(
-      padding: const EdgeInsets.all(12),
+    // 射频模式的限制说明：紧贴输入栏，解释「为什么这里能做的事变少了」。
+    final tncBanner = limit > 0
+        ? Container(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+            decoration: BoxDecoration(
+              color: C.orangeBg,
+              border: Border(top: BorderSide(color: C.border)),
+            ),
+            child: Row(children: [
+              Icon(Icons.settings_input_antenna_rounded,
+                  size: 14, color: C.orange),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(S.of(context).tncMsgTitle,
+                        style: ts(10, c: C.orange, w: FontWeight.w700)),
+                    Text(S.of(context).tncGroupDisabled,
+                        style: ts(10, c: C.orange.withValues(alpha: 0.85))),
+                  ],
+                ),
+              ),
+            ]),
+          )
+        : const SizedBox.shrink();
+
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      // 译发预览在输入栏正上方：用户能同时看到「要发的译文」与输入框里的原文
+      _outPreviewBar(st),
+      tncBanner,
+      Container(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: C.border)),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _input,
-              focusNode: _inputFocus,
-              textInputAction: TextInputAction.send,
-              style: ts(13),
-              decoration: InputDecoration(
-                hintText: hintText,
-                hintStyle: ts(13, c: C.grey),
-                filled: true,
-                fillColor: C.bgSoft,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      // 输入栏原先所有元素紧紧挤在一起（内边距 12、输入框与发送键间距 8），
+      // 且底部没有留安全区，在手势导航的机型上与系统导航条贴死。
+      // 这里：① 包一层安全区；② 加大内边距与间距；③ 输入框加描边，
+      // 让「输入框」和「发送键」成为两个可分辨的独立控件。
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _input,
+                  focusNode: _inputFocus,
+                  textInputAction: TextInputAction.send,
+                  style: ts(13),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    hintStyle: ts(13, c: C.grey),
+                    filled: true,
+                    fillColor: C.bgSoft,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.border, width: 0.6),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: C.border, width: 0.6),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                  onSubmitted: (_) => _send(),
+                  // 输入一旦改动，之前基于旧文本的译文就失效 —— 否则会出现
+                  // 「改了字却发出去旧译文」（射频上不可撤销）
+                  onChanged: (v) {
+                    if (_outPreview != null && v.trim() != _outPreviewSrc) {
+                      _clearOutPreview();
+                    }
+                  },
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 11,
+              ),
+              const SizedBox(width: 8),
+              // 译发按钮：把当前输入译成对方语言（RFC：对方语言未知时提示去设置）
+              _outTranslateButton(st),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _send,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: C.blue,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: softShadow(blur: 12, alpha: 0.2),
+                  ),
+                  child: const Icon(
+                    Icons.send_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
-              onSubmitted: (_) => _send(),
-            ),
+            ],
           ),
-          SizedBox(width: 8),
-          GestureDetector(
-            onTap: _send,
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: C.blue,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: softShadow(blur: 12, alpha: 0.2),
-              ),
-              child: const Icon(
-                Icons.send_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
+      ),
+      ],
     );
   }
 
@@ -575,58 +960,58 @@ class _MessagesPageState extends State<MessagesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(S.of(context).conversations, style: T.h2),
-                    Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
+                // 管理模式与普通模式整行切换，避免两套控件挤在同一行
+                // 两种模式内的胶囊/按钮都固定高度 26，杜绝字体度量差异造成的错位
+                if (_manageMode)
+                  _manageHead(st, partners)
+                else
+                  _listHead(st, partners),
+                const SizedBox(height: 10),
+                if (_manageMode)
+                  Text(S.of(context).chatManageHint, style: ts(10, c: C.grey))
+                else
+                  // 快捷操作：新建会话 / 群发 / 新建群聊
+                  Row(
+                    children: [
+                      _convActionBtn(
+                        Icons.add_comment_rounded,
+                        S.of(context).newConversation,
+                        C.blue,
+                        () {
+                          _showAddConversationDialog(st);
+                        },
                       ),
-                      decoration: BoxDecoration(
-                        color: C.blueBg,
-                        borderRadius: BorderRadius.circular(10),
+                      SizedBox(width: 6),
+                      _convActionBtn(
+                        Icons.campaign_rounded,
+                        S.of(context).broadcastShort,
+                        C.purple,
+                        () {
+                          _showBroadcastDialog(st);
+                        },
                       ),
-                      child: Text(
-                        '${st.messages.length}',
-                        style: ts(11, c: C.blue, w: FontWeight.w700),
+                      SizedBox(width: 6),
+                      _convActionBtn(
+                        Icons.group_add_rounded,
+                        S.of(context).newGroup,
+                        C.orange,
+                        () {
+                          if (!st.groupChatAllowed) {
+                            // 射频模式下群聊广播不可用：入口保留但说明原因，
+                            // 直接隐藏会让用户以为「功能被砍了」。
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(S.of(context).tncGroupDisabled),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          } else {
+                                                    _showCreateGroupDialog(st);
+                          }
+                        },
                       ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                // 快捷操作：新建会话 / 群发 / 新建群聊
-                Row(
-                  children: [
-                    _convActionBtn(
-                      Icons.add_comment_rounded,
-                      S.of(context).newConversation,
-                      C.blue,
-                      () {
-                        _showAddConversationDialog(st);
-                      },
-                    ),
-                    SizedBox(width: 6),
-                    _convActionBtn(
-                      Icons.campaign_rounded,
-                      S.of(context).broadcastShort,
-                      C.purple,
-                      () {
-                        _showBroadcastDialog(st);
-                      },
-                    ),
-                    SizedBox(width: 6),
-                    _convActionBtn(
-                      Icons.group_add_rounded,
-                      S.of(context).newGroup,
-                      C.orange,
-                      () {
-                        _showCreateGroupDialog(st);
-                      },
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -646,10 +1031,22 @@ class _MessagesPageState extends State<MessagesPage> {
                       // 群聊在前，单聊在后
                       if (i < st.chatGroups.length) {
                         final g = st.chatGroups[i];
-                        return _groupListItem(st, g);
+                        return _swipeable(
+                          key: 'grp-${g.id}',
+                          onDelete: () => _confirmDeleteConversation(
+                            st,
+                            g.groupCall,
+                            (id: g.id, name: g.name),
+                          ),
+                          child: _groupListItem(st, g),
+                        );
                       }
                       final p = partners[i - st.chatGroups.length];
-                      return _chatListItem(st, p);
+                      return _swipeable(
+                        key: 'conv-$p',
+                        onDelete: () => _confirmDeleteConversation(st, p, null),
+                        child: _chatListItem(st, p),
+                      );
                     },
                   ),
           ),
@@ -658,12 +1055,310 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  // ─── 会话管理（多选删除） ───
+  /// 选中项总数
+  int get _selCount => _selCalls.length + _selGroups.length;
+
+  /// 进入 / 退出管理模式
+  void _toggleManage() {
+    setState(() {
+      _manageMode = !_manageMode;
+      if (!_manageMode) {
+        _selCalls.clear();
+        _selGroups.clear();
+      }
+    });
+  }
+
+  /// 全选 / 取消全选
+  void _toggleSelectAll(AppState st, List<String> partners) {
+    setState(() {
+      final total = st.chatGroups.length + partners.length;
+      if (total > 0 && _selCount >= total) {
+        _selCalls.clear();
+        _selGroups.clear();
+      } else {
+        _selGroups
+          ..clear()
+          ..addAll(st.chatGroups.map((g) => g.id));
+        _selCalls
+          ..clear()
+          ..addAll(partners);
+      }
+    });
+  }
+
+  // ─── 列表头部 / 管理头部 ───
+  // 统一固定高度 26：计数徽章、「管理」、「完成」、图标按钮彼此严格对齐
+
+  /// 等高胶囊：计数徽章 / 「管理」 / 「完成」共用
+  Widget _pill(
+    String label,
+    Color fg,
+    Color bg, {
+    VoidCallback? onTap,
+    bool bold = true,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: ts(11, c: fg, w: bold ? FontWeight.w700 : FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  /// 等高方形图标按钮（管理模式），与胶囊严格同高
+  Widget _iconBtn(
+    IconData icon,
+    String tip,
+    Color fg,
+    Color bg,
+    VoidCallback? onTap,
+  ) {
+    return Tooltip(
+      message: tip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 26,
+          width: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 15, color: fg),
+        ),
+      ),
+    );
+  }
+
+  /// 普通模式头部：标题 + 消息计数 + 管理入口
+  Widget _listHead(AppState st, List<String> partners) {
+    return Row(
+      children: [
+        // 窄屏/横屏（列表栏仅 280 宽）下标题需可缩，否则加了
+        // 「管理」按钮后英文 Conversations 会溢出
+        // 必须用 Expanded（不要 Flexible + Spacer）：两者 flex 都是 1，
+        // 会各分走一半空白；Flexible 没占满的那份又被留到最右侧，
+        // 于是尾部的计数/管理按钮被顶离右边缘 —— 中文短标题「会话」实测偏 37.5px
+        // （英文标题够长会占满份额，碰巧掩盖这个 bug）。Expanded 吃掉全部剩余宽度。
+        Expanded(
+          child: Text(
+            S.of(context).conversations,
+            style: T.h2,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _pill('${st.messages.length}', C.blue, C.blueBg),
+        if (st.chatGroups.isNotEmpty || partners.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          // 可见的「管理」入口：不依赖长按这类隐藏手势
+          _pill(
+            S.of(context).manage,
+            C.slate,
+            C.bgSoft,
+            onTap: _toggleManage,
+            bold: false,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 管理模式头部：已选数量 + 全选 + 删除 + 完成
+  Widget _manageHead(AppState st, List<String> partners) {
+    final total = st.chatGroups.length + partners.length;
+    final all = total > 0 && _selCount >= total;
+    final s = S.of(context);
+    final has = _selCount > 0;
+    return Row(
+      children: [
+        // 同 _listHead：用 Expanded 而非 Flexible + Spacer，否则尾部按钮不贴右
+        Expanded(
+          child: Text(
+            s.selectedCount(_selCount),
+            // 与普通模式标题同字号：两种模式头部行高一致，
+            // 切换管理时下方列表不会因头部变矮而跳动
+            style: T.h2,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        _iconBtn(
+          all ? Icons.remove_done_rounded : Icons.done_all_rounded,
+          all ? s.deselectAll : s.selectAll,
+          C.slate,
+          C.bgSoft,
+          () => _toggleSelectAll(st, partners),
+        ),
+        const SizedBox(width: 6),
+        _iconBtn(
+          Icons.delete_outline_rounded,
+          s.deleteSelected(_selCount),
+          has ? C.red : C.greyLight,
+          has ? C.redBg : C.bgSoft,
+          has ? () => _deleteSelectedConversations(st) : null,
+        ),
+        const SizedBox(width: 6),
+        _pill(s.done, Colors.white, C.blue, onTap: _toggleManage),
+      ],
+    );
+  }
+
+  /// 左滑删除（管理模式下禁用，避免选择时误删）
+  /// 与「管理」入口互补：既能快速单删，也能批量删
+  Widget _swipeable({
+    required String key,
+    required Future<void> Function() onDelete,
+    required Widget child,
+  }) {
+    return Dismissible(
+      key: ValueKey(key),
+      direction: _manageMode
+          ? DismissDirection.none
+          : DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        color: C.redBg,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.delete_outline_rounded, size: 18, color: C.red),
+            const SizedBox(width: 6),
+            Text(
+              S.of(context).delete,
+              style: ts(12, c: C.red, w: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+      // 复用现成的确认流程；返回 false 让行由数据变更自然消失，
+      // 避免 Dismissible 自身的移除动画与列表重建竞争
+      confirmDismiss: (_) async {
+        await onDelete();
+        return false;
+      },
+      child: child,
+    );
+  }
+
+  /// 选中标记（管理模式）
+  /// 选中统一用红色，与选中行的红底/红边构成同一个「待删除」信号
+  Widget _selCheck(bool on) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: Icon(
+        on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+        size: 20,
+        color: on ? C.red : C.greyLight,
+      ),
+    );
+  }
+
+  /// 删除选中的会话（单聊删消息；群聊只清消息，保留群组）
+  Future<void> _deleteSelectedConversations(AppState st) async {
+    final n = _selCount;
+    if (n == 0) return;
+    // 只选中一个时走原有的单会话确认流程（文案更具体，复用已有键与提示）
+    if (n == 1) {
+      if (_selCalls.length == 1) {
+        await _confirmDeleteConversation(st, _selCalls.first, null);
+      } else {
+        final g = st.chatGroups
+            .where((x) => x.id == _selGroups.first)
+            .firstOrNull;
+        if (g == null) return;
+        await _confirmDeleteConversation(
+          st,
+          g.groupCall,
+          (id: g.id, name: g.name),
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _manageMode = false;
+        _selCalls.clear();
+        _selGroups.clear();
+      });
+      return;
+    }
+    final loc = S.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.deleteConversation, style: T.h2),
+        content: Text(loc.deleteSelectedConfirm(n), style: ts(13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel, style: ts(13, c: C.slate)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.delete, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final calls = Set<String>.from(_selCalls);
+    final groups = Set<String>.from(_selGroups);
+    st.deleteConversations(calls, groups);
+    if (!mounted) return;
+    setState(() {
+      _manageMode = false;
+      _selCalls.clear();
+      _selGroups.clear();
+      // 若当前正停留在被删掉的会话上，退回列表
+      final hitCall = _selected.isNotEmpty &&
+          calls.any((c) => c.toUpperCase() == _selected.toUpperCase());
+      final hitGroup =
+          _selectedGroupId != null && groups.contains(_selectedGroupId);
+      if (hitCall || hitGroup) _showList = true;
+    });
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(loc.conversationsDeleted(n)),
+        backgroundColor: C.blue,
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
   Widget _groupListItem(AppState st, ChatGroup g) {
     final unread = _groupUnreadCount(st, g);
     final last = _groupLastMsg(st, g);
     final sel = _selectedGroupId == g.id;
+    final checked = _selGroups.contains(g.id);
     return GestureDetector(
       onTap: () {
+        // 管理模式下：点击 = 选中/取消，而不是打开会话
+        if (_manageMode) {
+          setState(() {
+            checked ? _selGroups.remove(g.id) : _selGroups.add(g.id);
+          });
+          return;
+        }
         st.markGroupRead(g.id);
         setState(() {
           _selectedGroupId = g.id;
@@ -671,19 +1366,30 @@ class _MessagesPageState extends State<MessagesPage> {
           _showList = false;
         });
       },
+      // 长按 = 进入管理模式并选中该项（不再直接删除，避免误触又难发现）
+      onLongPress: () {
+        if (_manageMode) return;
+        setState(() {
+          _manageMode = true;
+          _selGroups.add(g.id);
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: sel ? C.orangeBg : Colors.transparent,
+          color: checked ? C.redBg : (sel ? C.orangeBg : Colors.transparent),
           border: Border(
             left: BorderSide(
-              color: sel ? C.orange : Colors.transparent,
+              color: checked
+                  ? C.red
+                  : (sel ? C.orange : Colors.transparent),
               width: 3,
             ),
           ),
         ),
         child: Row(
           children: [
+            if (_manageMode) _selCheck(checked),
             Container(
               width: 38,
               height: 38,
@@ -763,8 +1469,16 @@ class _MessagesPageState extends State<MessagesPage> {
     final last = msgs.isNotEmpty ? msgs.first : null;
     final unread = st.conversationUnread(p);
     final sel = _selected == p && _selectedGroupId == null;
+    final checked = _selCalls.contains(p);
     return GestureDetector(
       onTap: () {
+        // 管理模式下：点击 = 选中/取消，而不是打开会话
+        if (_manageMode) {
+          setState(() {
+            checked ? _selCalls.remove(p) : _selCalls.add(p);
+          });
+          return;
+        }
         widget.state.markConversationRead(p);
         setState(() {
           _selected = p;
@@ -772,19 +1486,28 @@ class _MessagesPageState extends State<MessagesPage> {
           _showList = false;
         });
       },
+      // 长按 = 进入管理模式并选中该项
+      onLongPress: () {
+        if (_manageMode) return;
+        setState(() {
+          _manageMode = true;
+          _selCalls.add(p);
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: sel ? C.blueBg : Colors.transparent,
+          color: checked ? C.redBg : (sel ? C.blueBg : Colors.transparent),
           border: Border(
             left: BorderSide(
-              color: sel ? C.blue : Colors.transparent,
+              color: checked ? C.red : (sel ? C.blue : Colors.transparent),
               width: 3,
             ),
           ),
         ),
         child: Row(
           children: [
+            if (_manageMode) _selCheck(checked),
             Container(
               width: 38,
               height: 38,
@@ -908,6 +1631,12 @@ class _MessagesPageState extends State<MessagesPage> {
                       ),
                     ),
                   ),
+                  _transBtn(
+                    onTap: () => _openTransSheet(
+                      title: group.name,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   // 邀请按钮（仅群主可见）
                   if (group.isOwner(st.myCall))
                     GestureDetector(
@@ -1022,22 +1751,32 @@ class _MessagesPageState extends State<MessagesPage> {
                         style: ts(13, c: C.grey),
                       ),
                     )
-                  : ListView.builder(
-                      controller: _scrollGroup,
-                      reverse: true,
-                      padding: const EdgeInsets.all(14),
-                      itemCount: msgs.length,
-                      itemBuilder: (_, i) {
-                        final (msg, sender) = msgs[i];
-                        return _bubble(
-                          msg,
-                          groupSender: sender,
-                          onSenderTap: sender == S.of(context).meLabel
-                              ? null
-                              : () => _openStation(st, sender),
-                        );
-                      },
-                    ),
+                  : Builder(builder: (context) {
+                      final rows = buildChatRows<(AprsMsg, String)>(
+                        msgs,
+                        (e) => e.$1.time,
+                      );
+                      return ListView.builder(
+                        controller: _scrollGroup,
+                        reverse: true,
+                        padding: const EdgeInsets.all(14),
+                        itemCount: rows.length,
+                        itemBuilder: (_, i) {
+                          final row = rows[i];
+                          if (row.isDivider) {
+                            return ChatDateDivider.build(context, row.divider!);
+                          }
+                          final (msg, sender) = row.item!;
+                          return _bubble(
+                            msg,
+                            groupSender: sender,
+                            onSenderTap: sender == S.of(context).meLabel
+                                ? null
+                                : () => _openStation(st, sender),
+                          );
+                        },
+                      );
+                    }),
             ),
             _inputBar(st),
           ],
@@ -1103,6 +1842,10 @@ class _MessagesPageState extends State<MessagesPage> {
                         ),
                       ),
                       Spacer(),
+                      _transBtn(
+                        onTap: () => _openTransSheet(title: _selected),
+                      ),
+                      const SizedBox(width: 10),
                       GestureDetector(
                         onTap: () => st.toggleFavorite(_selected),
                         child: Icon(
@@ -1122,15 +1865,28 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    controller: _scrollChat,
-                    reverse: true,
-                    padding: const EdgeInsets.all(14),
-                    children: _chatWith(
-                      st,
-                      _selected,
-                    ).map((m) => _bubble(m)).toList(),
-                  ),
+                  child: Builder(builder: (context) {
+                    // 日期分界线。列表本身是时间倒序（最新在前）+ reverse 渲染，
+                    // 因此下标 0 在视觉最底部，按数组顺序摊平即可 ——
+                    // 详见 buildChatRows 里关于「按视觉顺序分组」的说明。
+                    final rows = buildChatRows<AprsMsg>(
+                      _chatWith(st, _selected),
+                      (m) => m.time,
+                    );
+                    return ListView.builder(
+                      controller: _scrollChat,
+                      reverse: true,
+                      padding: const EdgeInsets.all(14),
+                      itemCount: rows.length,
+                      itemBuilder: (_, i) {
+                        final row = rows[i];
+                        if (row.isDivider) {
+                          return ChatDateDivider.build(context, row.divider!);
+                        }
+                        return _bubble(row.item!);
+                      },
+                    );
+                  }),
                 ),
                 _inputBar(st),
               ],
@@ -1157,23 +1913,23 @@ class _MessagesPageState extends State<MessagesPage> {
         ),
       );
     }
+    // 自动翻译：只翻对方发来的消息（自己发的没必要翻），
+    // 且同一条消息只排一次（pending/已完成都不重复排）。
+    _maybeAutoTranslate(m);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: () {
-          Clipboard.setData(ClipboardData(text: m.text));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(S.of(context).copiedClipboard),
-              backgroundColor: C.blue,
-              duration: const Duration(seconds: 1),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          );
-        },
+        onLongPress: () => showMessageActions(
+          context: context,
+          m: m,
+          pref: _pref,
+          st: _trans,
+          convKey: _convKey,
+          onChanged: () {
+            if (mounted) setState(() {});
+          },
+          onOpenSettings: _openTranslateSettings,
+        ),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1222,6 +1978,16 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                 ),
               _urlRichText(m.text, ts(13)),
+              // 「已译发」：这条当时是按对方语言发出的，显示实际发出的文本
+              sentAsBlock(context: context, m: m),
+              // 译文块：会话/群聊气泡与瀑布流气泡**必须都渲染**，
+              // 否则会出现「长按翻译成功但界面不显示」（曾经的实际 bug）
+              translationBlock(
+                context: context,
+                m: m,
+                st: _trans,
+                pref: _pref,
+              ),
               SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1303,7 +2069,70 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
-  /// 会话页快捷操作按钮
+  /// 确认并删除单个会话（管理模式中只选中一个时走此路径）。
+  ///
+  /// - 单聊（[group] 为 null）：删除与 [call] 的全部消息，会话从列表消失
+  ///   （除非该呼号是收藏/手动联系人）。
+  /// - 群聊：只清空该群的消息，**群组本身保留**（解散群组仍在群详情里，
+  ///   是另一个更重的操作，不混在此处）。
+  Future<void> _confirmDeleteConversation(
+    AppState st,
+    String call,
+    ({String id, String name})? group,
+  ) async {
+    // 先把文案取好，避免 await 之后再碰 context（use_build_context_synchronously）
+    final s = S.of(context);
+    final isGroup = group != null;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.deleteConversation, style: T.h2),
+        content: Text(
+          isGroup
+              ? s.clearGroupChatConfirm(group.name)
+              : s.deleteConversationConfirm(call),
+          style: ts(13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.cancel, style: ts(13, c: C.slate)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.delete, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    if (isGroup) {
+      st.clearGroupConversation(group.id);
+    } else {
+      st.deleteConversation(call);
+    }
+
+    if (!mounted) return;
+    // 单聊被删后，若当前正停留在该会话上，退回会话列表，
+    // 否则会停在一个已不存在的会话里（头部还挂着已删除的呼号）
+    if (!isGroup && _selected == call && _selectedGroupId == null) {
+      setState(() => _showList = true);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(s.chatCleared),
+        backgroundColor: C.blue,
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
   Widget _convActionBtn(
     IconData icon,
     String label,
@@ -1325,9 +2154,15 @@ class _MessagesPageState extends State<MessagesPage> {
             children: [
               Icon(icon, size: 14, color: color),
               const SizedBox(width: 4),
-              Text(
-                label,
-                style: ts(11, c: color, w: FontWeight.w700),
+              // 英文标签明显更长（New conversation / Broadcast / New group），
+              // 必须 Flexible + ellipsis，否则会溢出 Expanded 分到的宽度
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: ts(11, c: color, w: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -1432,7 +2267,8 @@ class _MessagesPageState extends State<MessagesPage> {
                                     style: ts(13, w: FontWeight.w600),
                                   ),
                                   Spacer(),
-                                  Text(s.typeName, style: ts(10, c: C.grey)),
+                                  Text(localizedAprsSymbolName(context, s.symbol),
+                                      style: ts(10, c: C.grey)),
                                 ],
                               ),
                             ),
@@ -1715,7 +2551,8 @@ class _MessagesPageState extends State<MessagesPage> {
                                         ),
                                         Spacer(),
                                         Text(
-                                          s.typeName,
+                                          localizedAprsSymbolName(
+                                            context, s.symbol),
                                           style: ts(10, c: C.grey),
                                         ),
                                       ],
@@ -2147,7 +2984,8 @@ class _MessagesPageState extends State<MessagesPage> {
                                         ),
                                         Spacer(),
                                         Text(
-                                          s.typeName,
+                                          localizedAprsSymbolName(
+                                            context, s.symbol),
                                           style: ts(10, c: C.grey),
                                         ),
                                       ],
@@ -3170,7 +4008,7 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
-  void _send() {
+  Future<void> _send() async {
     if (_input.text.isEmpty) return;
     // 群聊发送
     if (_selectedGroupId != null) {
@@ -3199,7 +4037,35 @@ class _MessagesPageState extends State<MessagesPage> {
       return;
     }
     if (_selected.isEmpty) return;
-    widget.state.sendMessage(_selected, _input.text.trim());
+    final typed = _input.text.trim();
+    // 发送内容：若当前预览正是这段原文，则发译文（用户已确认）；
+    // 否则按「发送前翻译」开关决定是否即时翻译。
+    final pref = _pref;
+    String? sentAs;
+    if (_outPreview != null && _outPreviewSrc == typed) {
+      sentAs = _outPreview;
+    } else if (pref.translateOutgoing &&
+        TransDirection.canTranslateOutgoing(pref) &&
+        TranslateService.instance.config.ready) {
+      try {
+        sentAs = (await TranslateService.instance
+                .translate(typed, to: pref.peerLang))
+            .text;
+      } on TranslateException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(explainTranslateError(S.of(context), e)),
+            backgroundColor: C.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return; // 译不了就不发原文 —— 否则会误发成对方看不懂的内容
+      }
+    }
+    if (!mounted) return;
+    widget.state.sendMessage(_selected, typed, sentAs: sentAs);
+    _clearOutPreview();
     _input.clear();
     Future.delayed(const Duration(milliseconds: 80), () {
       if (_scrollChat.hasClients) {
