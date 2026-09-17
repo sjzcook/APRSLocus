@@ -35,6 +35,8 @@
   --amber: #d97706;
   --red: #ef4444;
   --grad: linear-gradient(120deg, #0ea5e9, #0284c7);
+  /* 公告信笺顶部标线：与 --grad 同色系、亮一档，不另立色板 */
+  --grad-rule: linear-gradient(120deg, #38bdf8, #0284c7);
   --radius: 18px;
   --shadow: 0 18px 50px rgba(45, 70, 120, .14);
   --shadow-hover: 0 26px 64px rgba(45, 70, 120, .22);
@@ -85,6 +87,8 @@ code {
 
 /* ── 03. 通用容器 / 区块头 ── */
 .section { position: relative; z-index: 1; padding: 108px clamp(20px, 6vw, 96px); }
+section[id] { scroll-margin-top: 92px; }
+.hero[id] { scroll-margin-top: 0; }
 .section.alt {
   background: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .16));
   border-top: 1px solid rgba(255, 255, 255, .5);
@@ -452,6 +456,11 @@ body.loaded .hero::after { transform: translate(-50%,-50%) scale(1); opacity: 1;
 .c6 { background: linear-gradient(135deg, #f472b6, #db2777); }
 .c7 { background: linear-gradient(135deg, #0ea5e9, #2563eb); }
 .c8 { background: linear-gradient(135deg, #fb7185, #e11d48); }
+.c9 { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
+.c10 { background: linear-gradient(135deg, #38bdf8, #1d4ed8); }
+.c11 { background: linear-gradient(135deg, #22d3ee, #0891b2); }
+.c12 { background: linear-gradient(135deg, #4ade80, #16a34a); }
+.c13 { background: linear-gradient(135deg, #facc15, #ca8a04); }
 .card h3 { font-size: 19px; font-weight: 800; margin-bottom: 10px; }
 .card p { color: var(--text-dim); font-size: 14.5px; }
 .card-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
@@ -750,12 +759,18 @@ a:focus-visible, button:focus-visible, summary:focus-visible {
   animation-play-state: paused;
   animation-fill-mode: both;
 }
-/* 各元素登场：FIRST FIX 主视觉用“冲击式”放大渐显，其余依次上浮 */
-.hero-copy > *:nth-child(1) { animation: heroUp .8s var(--ease) both; animation-delay: .0s; }
+/* 各元素登场：主视觉用“冲击式”放大渐显，其余依次上浮。
+   默认给全部子元素挂上动画、只按序号改延迟，新增 hero 子元素不必再改这里。
+   反面教材：早先只写到第 5 个 :nth-child，后来插入新元素把「下载」按钮
+   挤到第 6 个，超出范围就不挂动画，而基础规则是 opacity: 0 —— 按钮直接消失。 */
+.hero-copy > * { animation: heroUp .8s var(--ease) both; }
+.hero-copy > *:nth-child(1) { animation-delay: .0s; }
 .hero-copy > *:nth-child(2) { animation: heroBoom .85s cubic-bezier(.2,.9,.25,1.2) both; animation-delay: .15s; }
-.hero-copy > *:nth-child(3) { animation: heroUp .8s var(--ease) both; animation-delay: .45s; }
-.hero-copy > *:nth-child(4) { animation: heroUp .8s var(--ease) both; animation-delay: .6s; }
-.hero-copy > *:nth-child(5) { animation: heroUp .8s var(--ease) both; animation-delay: .75s; }
+.hero-copy > *:nth-child(3) { animation-delay: .45s; }
+.hero-copy > *:nth-child(4) { animation-delay: .6s; }
+.hero-copy > *:nth-child(5) { animation-delay: .75s; }
+.hero-copy > *:nth-child(6) { animation-delay: .9s; }
+.hero-copy > *:nth-child(n+7) { animation-delay: 1.05s; }
 .hero-phone { animation: heroPop 1s var(--ease) both; animation-delay: .55s; }
 /* 仅在遮罩消失(loaded)后开始播放 */
 body.loaded .hero-copy > *,
@@ -842,6 +857,12 @@ body.loaded .hero-phone {
 }
 .contributor .c-name { font-size: 14px; font-weight: 700; color: var(--text); }
 .contributor .c-role { display: block; font-size: 11px; color: var(--text-faint); font-weight: 500; }
+
+/* ── 赞助名单（由 /sponsors.json 渲染）──
+   说明文字可能很长（如「赠我以琼瑶 · 承君厚赠，藏之于心；唯有砥砺，以报清音」），
+   所以限制宽度让文字换行，而不是把胶囊拉成一长条；圆角也相应收小。 */
+.contributors#sponsorList .contributor { max-width: 380px; border-radius: 16px; }
+.contributors#sponsorList .c-role { white-space: normal; }
 .cta-line { text-align: center; margin-top: 22px; font-size: 13.5px; color: var(--text-faint); }
 .cta-line a { color: var(--cyan); font-weight: 600; }
 .cta-line a:hover { text-decoration: underline; }
@@ -858,3 +879,90 @@ body.loaded .hero-phone {
 .cgroup-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .contributors { justify-content: flex-start; }
 @media (max-width: 640px) { .cgroup { margin-bottom: 20px; } }
+
+/* ════════════════════════════════════════════════════════════════
+   19. 2.0 BETA「TOUCH SKY」公告
+   —— 只做两件小事：导航给个提示点，公告写成一张干净的信笺。
+      刻意不引入新色板：全站继续用青→蓝主色，避免和原有玻璃态打架。
+   ════════════════════════════════════════════════════════════════ */
+
+/* 曾试过一层「天光 / 极光」氛围叠层（.sky-aurora）：青 + 紫 + 粉三团大范围径向
+   渐变压在 Hero 上，和原本干净的浅色玻璃态冲突，整页发灰发紫，已移除。
+   Hero 原本就有 .hero::after 中心辉光，氛围足够，不再叠第二层。 */
+
+/* 导航「公告」入口：一个会呼吸的小圆点，提示有新公告 */
+.nav-links a.nav-new { font-weight: 700; color: var(--cyan); }
+.nav-links a.nav-new::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+  margin-right: 7px; vertical-align: middle; background: var(--cyan);
+  animation: navPulse 2.2s ease-in-out infinite;
+}
+@keyframes navPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* 更新日志：2.0 BETA 标签沿用站点主色，不另起一套色板 */
+.cl-tag.beta { box-shadow: 0 10px 26px rgba(2, 132, 199, .28); }
+
+/* ── 公告信笺 ── */
+.announce { padding-top: 96px; }
+/* 直接沿用站内既有的玻璃卡片配方（--glass / --line / 16px 模糊），
+   不自创背景。与 .cl-version 同一种质感，放在一起才像同一个站点。 */
+.announce-card {
+  position: relative; overflow: hidden; max-width: 940px; margin: 0 auto;
+  padding: clamp(28px, 4.4vw, 56px) clamp(24px, 5vw, 62px);
+  border-radius: var(--radius);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(45, 70, 120, .12);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+/* 顶部一道 3px 主色标线：整张信笺唯一的装饰 */
+.announce-card::before {
+  content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 3px;
+  background: var(--grad-rule);
+}
+.announce-ribbon {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 9px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: #0369a1; background: rgba(240, 249, 255, .9);
+  border: 1px solid rgba(186, 230, 253, .9); padding: 6px 15px; border-radius: 999px;
+}
+.announce-ribbon .ar-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green); position: relative;
+}
+.announce-ribbon .ar-dot::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 1.5px solid var(--green); animation: pulse 1.8s ease-out infinite;
+}
+.announce-head { position: relative; z-index: 1; margin: 22px 0 30px; }
+.announce-kicker { font-size: 13px; font-weight: 700; letter-spacing: .06em; color: var(--text-faint); margin-bottom: 10px; }
+.announce-title {
+  font-size: clamp(32px, 4.6vw, 50px); font-weight: 900; letter-spacing: -.03em; line-height: 1.05;
+  color: var(--text);
+}
+.announce-title .announce-en {
+  display: block; margin-top: 10px; font-size: clamp(14px, 1.6vw, 17px); font-weight: 600;
+  letter-spacing: .04em; color: var(--text-dim);
+}
+.announce-sub { margin-top: 12px; color: var(--cyan); font-weight: 600; font-size: 15px; }
+.announce-body { position: relative; z-index: 1; }
+.announce-body p { color: var(--text-dim); font-size: clamp(15px, 1.7vw, 17px); line-height: 1.95; margin-bottom: 18px; }
+.announce-body p b { color: var(--text); font-weight: 800; }
+.announce-greet { font-weight: 800; color: var(--text) !important; font-size: clamp(16px, 1.9vw, 19px) !important; }
+.announce-quote {
+  margin: 26px 0 6px; padding: 16px 20px; border-left: 3px solid var(--cyan);
+  border-radius: 0 12px 12px 0;
+  background: rgba(56, 189, 248, .07);
+  color: var(--text) !important; font-weight: 700;
+}
+.announce-sign { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 24px; text-align: right; }
+.ann-sign-line { font-weight: 800; color: var(--text); }
+.ann-sign-team { font-size: 14px; color: var(--text-dim); }
+.ann-sign-date { font-size: 13px; color: var(--text-faint); }
+.announce-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 34px; }
+.announce-actions .btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+@media (max-width: 640px) {
+  .announce-sign { align-items: flex-start; text-align: left; }
+  .announce-actions .btn { width: 100%; justify-content: center; }
+}

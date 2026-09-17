@@ -25,6 +25,15 @@ class MainActivity : FlutterActivity() {
     // 蓝牙 TNC（经典蓝牙 SPP）：只搬字节，KISS/AX.25 在 Dart 侧
     private var tnc: TncManager? = null
 
+    // PKWDWPL 链路（Kenwood `$PKWDWPL` 航点语句）：同样的字节搬运，
+    // 但走**独立通道 + 独立 socket** —— 与 TNC 是并列的两条链路，
+    // 可以同时开着（各连各的设备）。协议区别全在 Dart 侧
+    // （lib/pkwdwpl.dart 按行解析 NMEA，而不是解 KISS 帧）。
+    private var pkwdwpl: TncManager? = null
+
+    // 声卡 TNC（AFSK 1200）：同样只搬 PCM 采样，调制解调在 Dart 侧
+    private var audio: AudioManager? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -96,66 +105,164 @@ class MainActivity : FlutterActivity() {
             }
         )
 
-        // 蓝牙 TNC 通道：列出已配对设备 / 连接 / 收发字节
+        // 蓝牙 SPP 链路通道。
+        //
+        // TNC 与 PKWDWPL 用的**是同一套字节搬运**（本管理类只搬字节，
+        // KISS/AX.25 与 NMEA 解析全在 Dart 侧）；差别只有通道名与套接字，
+        // 所以把「挂通道」抽成一个局部函数挂两次。
+        //
+        // 为什么必须两条独立通道：TncManager 内部只维护**一个** socket，
+        // 共用通道会让两条链路互抢同一条连接（开了 TNC，PKWDWPL 就断）。
+        // 各自独立之后可以同时运行，例如 TNC 接电台做 KISS 收发、
+        // PKWDWPL 接另一台电台只读航点。
+        fun wireSppLink(manager: TncManager, methodName: String, eventName: String) {
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, methodName)
+                .setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "isSupported" -> result.success(manager.isSupported())
+                        "listBondedDevices" -> {
+                            try {
+                                result.success(manager.listBondedDevices())
+                            } catch (e: Exception) {
+                                result.error("BT_LIST_FAILED", e.message ?: "列出蓝牙设备失败", null)
+                            }
+                        }
+                        "connect" -> {
+                            val address = call.argument<String>("address")
+                            if (address.isNullOrEmpty()) {
+                                result.error("NO_ADDRESS", "缺少设备地址", null)
+                            } else {
+                                try {
+                                    manager.connect(address)
+                                    // 蓝牙已接入：让前台服务声明 connectedDevice 类型。
+                                    // 与音频同一个坑 —— Android 14+ 不声明就会在退到
+                                    // 后台后限制蓝牙访问（表现为「切后台收不到报文」）。
+                                    setBtActive(true)
+                                    result.success(true)
+                                } catch (e: Exception) {
+                                    result.error("BT_CONNECT_FAILED", e.message ?: "连接失败", null)
+                                }
+                            }
+                        }
+                        "disconnect" -> {
+                            try {
+                                manager.disconnect()
+                            } catch (_: Exception) {
+                            }
+                            // 只有两条 SPP 链路都断开时才撤销 connectedDevice 声明。
+                            // 判断用「另一个 manager 是否还连着」而不是各记各的状态 ——
+                            // 否则先断开的那条会把仍在工作的那条的类型声明撤掉，
+                            // 重新落回「后台被限制蓝牙」的坑里。
+                            val other = if (manager === tnc) pkwdwpl else tnc
+                            setBtActive(other?.isConnected() == true)
+                            result.success(true)
+                        }
+                        "send" -> {
+                            val data = call.argument<ByteArray>("data")
+                            if (data == null) {
+                                // 明确的诊断信息：Dart 侧若传 List<int>（而不是 Uint8List），
+                                // StandardMessageCodec 会编成 ArrayList，这里必然取不到
+                                // ByteArray —— 曾经因此「蓝牙能收不能发且毫无提示」。
+                                val raw = call.argument<Any>("data")
+                                result.error(
+                                    "NO_DATA",
+                                    "缺少数据：期望 ByteArray，实际收到 " +
+                                        (raw?.javaClass?.name ?: "null") +
+                                        "。Dart 侧必须传 Uint8List（见 Kiss.escape 注释）",
+                                    null
+                                )
+                            } else {
+                                try {
+                                    manager.send(data)
+                                    result.success(true)
+                                } catch (e: Exception) {
+                                    result.error("BT_SEND_FAILED", e.message ?: "发送失败", null)
+                                }
+                            }
+                        }
+                        "requestPermissions" -> manager.requestPermissions(result)
+                        else -> result.notImplemented()
+                    }
+                }
+            EventChannel(flutterEngine.dartExecutor.binaryMessenger, eventName)
+                .setStreamHandler(
+                    object : EventChannel.StreamHandler {
+                        override fun onListen(arguments: Any?, things: EventChannel.EventSink?) {
+                            manager.setEventSink(things)
+                        }
+
+                        override fun onCancel(arguments: Any?) {
+                            manager.setEventSink(null)
+                        }
+                    }
+                )
+        }
+
+        // ① TNC（KISS 收发）
         val tncManager = TncManager(this)
         tnc = tncManager
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TncManager.METHOD_CHANNEL)
+        wireSppLink(tncManager, TncManager.METHOD_CHANNEL, TncManager.EVENT_CHANNEL)
+
+        // ② PKWDWPL（Kenwood 航点语句，只读）
+        val pkwdwplManager = TncManager(
+            this,
+            TncManager.METHOD_CHANNEL_PKWDWPL,
+            TncManager.EVENT_CHANNEL_PKWDWPL,
+            // 权限 requestCode 必须与 TNC 不同：下面 onRequestPermissionsResult
+            // 会把结果转发给**两个**实例，共用同一个 code 会让两边同时命中，
+            // 把对方尚未完成的 permResult 误 resolve。
+            TncManager.PERM_REQUEST_PKWDWPL,
+        )
+        pkwdwpl = pkwdwplManager
+        wireSppLink(
+            pkwdwplManager,
+            TncManager.METHOD_CHANNEL_PKWDWPL,
+            TncManager.EVENT_CHANNEL_PKWDWPL,
+        )
+
+        // 音频通道（声卡 TNC）：采集 PCM16 上传 / 接收 PCM16 播放
+        val audioManager = AudioManager(this)
+        audio = audioManager
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AudioManager.METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "isSupported" -> result.success(tncManager.isSupported())
-                    "listBondedDevices" -> {
-                        try {
-                            result.success(tncManager.listBondedDevices())
-                        } catch (e: Exception) {
-                            result.error("BT_LIST_FAILED", e.message ?: "列出蓝牙设备失败", null)
-                        }
+                    "isSupported" -> result.success(audioManager.isSupported())
+                    "requestPermissions" -> audioManager.requestPermissions(result)
+                    "startCapture" -> {
+                        val rate = call.argument<Int>("sampleRate") ?: 22050
+                        result.success(audioManager.startCapture(rate))
                     }
-                    "connect" -> {
-                        val address = call.argument<String>("address")
-                        if (address.isNullOrEmpty()) {
-                            result.error("NO_ADDRESS", "缺少设备地址", null)
-                        } else {
-                            try {
-                                tncManager.connect(address)
-                                result.success(true)
-                            } catch (e: Exception) {
-                                result.error("BT_CONNECT_FAILED", e.message ?: "连接失败", null)
-                            }
-                        }
-                    }
-                    "disconnect" -> {
-                        try {
-                            tncManager.disconnect()
-                        } catch (_: Exception) {
-                        }
+                    "stopCapture" -> {
+                        audioManager.stopCapture()
                         result.success(true)
                     }
-                    "send" -> {
+                    "play" -> {
                         val data = call.argument<ByteArray>("data")
+                        val rate = call.argument<Int>("sampleRate") ?: 22050
                         if (data == null) {
-                            result.error("NO_DATA", "缺少数据", null)
+                            result.error("NO_DATA", "缺少音频数据", null)
                         } else {
-                            try {
-                                tncManager.send(data)
-                                result.success(true)
-                            } catch (e: Exception) {
-                                result.error("BT_SEND_FAILED", e.message ?: "发送失败", null)
-                            }
+                            result.success(audioManager.play(data, rate))
                         }
                     }
-                    "requestPermissions" -> tncManager.requestPermissions(result)
+                    "stopPlayback" -> {
+                        audioManager.stopPlayback()
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }
-        EventChannel(flutterEngine.dartExecutor.binaryMessenger, TncManager.EVENT_CHANNEL)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, AudioManager.EVENT_CHANNEL)
             .setStreamHandler(
                 object : EventChannel.StreamHandler {
                     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                        tncManager.setEventSink(events)
+                        audioManager.setEventSink(events)
+                        setAudioCaptureActive(true)
                     }
 
                     override fun onCancel(arguments: Any?) {
-                        tncManager.setEventSink(null)
+                        audioManager.setEventSink(null)
+                        setAudioCaptureActive(false)
                     }
                 }
             )
@@ -251,6 +358,15 @@ class MainActivity : FlutterActivity() {
                     )
                 }
                 val resolver = contentResolver
+                // 音频 WAV 属于音乐/音频类型：放进 Downloads 的 Audio 子目录更整齐，
+                // 也让系统文件管理器的分类视图能直接找到。
+                val isAudio = safe.lowercase().endsWith(".wav")
+                if (isAudio) {
+                    values.put(
+                        MediaStore.MediaColumns.RELATIVE_PATH,
+                        Environment.DIRECTORY_DOWNLOADS + "/APRSlocusAudio"
+                    )
+                }
                 val uri = resolver.insert(
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
                 ) ?: return null
@@ -262,6 +378,8 @@ class MainActivity : FlutterActivity() {
                 // 使 APRSlocus_….adi 变成 APRSlocus_….adi.txt。
                 // 这里读回实际名字，不一致就改回原名（.adi 是 ADIF 的惯用扩展名）。
                 val actual = displayNameOf(uri)
+                // 媒体类型下部分系统会给音频文件补 .wav/.mp3 之类的后缀，
+                // 与文本同理：写回原名，保证与自检/日志里报告的路径一致。
                 if (actual != null && actual != safe) {
                     try {
                         resolver.update(
@@ -345,8 +463,10 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        // 蓝牙权限请求走 TncManager 自己的 requestCode，勿与定位权限混淆
+        // 蓝牙/录音权限请求走各自的 requestCode，勿与定位权限混淆
         tnc?.onRequestPermissionsResult(requestCode, grantResults)
+        pkwdwpl?.onRequestPermissionsResult(requestCode, grantResults)
+        audio?.onRequestPermissionsResult(requestCode, grantResults)
         if (requestCode != 100) return
         val ok = hasPermissions()
         permCompleter?.success(ok)
@@ -382,8 +502,40 @@ class MainActivity : FlutterActivity() {
         stopService(Intent(this, LocationService::class.java))
     }
 
+    /// 蓝牙是否在用 → 同步给前台服务（决定要不要声明 connectedDevice 类型）。
+    ///
+    /// 与音频的 setAudioCaptureActive 对应：Android 14（API 34）起，前台服务中
+    /// 访问蓝牙设备必须声明 connectedDevice 类型，否则系统会限制蓝牙访问 ——
+    /// 症状正是「能发不能收」或「退到后台就收不到」。当初只修了音频，漏了蓝牙。
+    private fun setBtActive(active: Boolean) {
+        try {
+            LocationService.setBtActiveStatic(active)
+            if (active) {
+                // 服务可能尚未启动（纯 TNC 模式、未开定位）：确保前台服务存在，
+                // 否则后台蓝牙读取没有前台服务兜底会被冻结。
+                startLocationService()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     private fun updateServiceNotification(text: String) {
         LocationService.updateNotificationStatic(text)
+    }
+
+    /// 音频采集会把麦克风带进前台服务：Android 14+ 必须让服务声明 microphone
+    /// 类型，否则切到后台后系统直接掐断录音（表现为「后台收不到报文」）。
+    /// 这里跟随音频 EventChannel 的监听状态切换 —— 有监听者就意味着音频链路在使用。
+    private fun setAudioCaptureActive(active: Boolean) {
+        try {
+            LocationService.setAudioActiveStatic(active)
+            if (active) {
+                // 服务可能尚未启动（纯音频模式、未开定位）：确保前台服务存在，
+                // 否则后台采集没有前台服务兜底会被冻结。
+                startLocationService()
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun openInstallSettings() {
@@ -435,6 +587,24 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {
         }
         tnc = null
+        try {
+            pkwdwpl?.dispose()
+        } catch (_: Exception) {
+        }
+        pkwdwpl = null
+        try {
+            audio?.dispose()
+        } catch (_: Exception) {
+        }
+        audio = null
+        // 撤销蓝牙/音频的前台服务类型声明：Activity 销毁后不该再声称在用这些设备，
+        // 否则服务会带着 connectedDevice/microphone 类型继续跑（系统可能因此在
+        // 下次启动时要求额外权限，也浪费电）。
+        setBtActive(false)
+        try {
+            LocationService.setAudioActiveStatic(false)
+        } catch (_: Exception) {
+        }
         LocationBus.sink = null
         super.onDestroy()
     }

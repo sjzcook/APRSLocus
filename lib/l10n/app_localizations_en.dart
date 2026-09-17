@@ -1045,6 +1045,655 @@ class AppLocalizationsEn extends AppLocalizations {
   String get codeContributionTranslation => 'Translation';
 
   @override
+  String get dataSourceTxHint =>
+      'You can enable several links at once to receive from all of them, but **only one transmits** (the dot on the right). Sending the same callsign over two links would duplicate packets.';
+
+  @override
+  String get dataSourceTxBadge => 'TX';
+
+  @override
+  String get dataSourceIgateHint =>
+      'To run a gateway (relay RF packets to the internet), enable both APRS-IS and TNC/audio, then turn on “Gateway” below.';
+
+  @override
+  String get igateTitle => 'Gateway (iGate)';
+
+  @override
+  String get igateSubtitle => 'Relay packets heard on RF into APRS-IS';
+
+  @override
+  String get igateEnable => 'Enable gateway';
+
+  @override
+  String get igateHint =>
+      'Packets heard on RF are forwarded to APRS-IS, tagged with qAr/qAR and your callsign to mark their origin. Requires both APRS-IS and an RF source (TNC / audio) enabled.';
+
+  @override
+  String get igateNeedRf =>
+      'No RF source yet: tick TNC or audio under “Data source” above, otherwise the gateway has nothing to relay from.';
+
+  @override
+  String get igateNeedIs =>
+      'APRS-IS is not enabled: tick it above, otherwise the gateway has nowhere to relay to.';
+
+  @override
+  String get igateTwoWay => 'Two-way gateway (forward messages to RF)';
+
+  @override
+  String get igateTwoWayHint =>
+      'When on, this **transmits on RF**: only point-to-point messages addressed to a station recently heard on RF are forwarded (broadcasts such as positions/weather are not, to avoid filling the channel). When off, RF→IS only.';
+
+  @override
+  String get igateStatToIs => 'Relayed → APRS-IS';
+
+  @override
+  String get igateStatToRf => 'Relayed → RF';
+
+  @override
+  String get igateStatDup => 'Duplicates dropped';
+
+  @override
+  String get igateResetStats => 'Reset counters';
+
+  @override
+  String grpSysJoined(String call) {
+    return '$call joined the group';
+  }
+
+  @override
+  String grpSysLeft(String call) {
+    return '$call left the group';
+  }
+
+  @override
+  String grpSysJoinReq(String call) {
+    return '$call asked to join';
+  }
+
+  @override
+  String grpSysDeclined(String call) {
+    return '$call declined the invite';
+  }
+
+  @override
+  String get grpInviteTitle => 'Group invite';
+
+  @override
+  String grpInviteBody(String from, String name) {
+    return '$from invited you to “$name”';
+  }
+
+  @override
+  String get grpNameInvalid =>
+      'Group name cannot be empty or contain a colon or newline';
+
+  @override
+  String grpNameTooLong(int max) {
+    return 'Group name is limited to $max characters (longer makes the invite exceed the APRS message limit)';
+  }
+
+  @override
+  String grpInviteSent(int n) {
+    return 'Invite sent to $n member(s)';
+  }
+
+  @override
+  String get grpSelfPending => 'Waiting for the owner';
+
+  @override
+  String get deviceOverviewTitle => 'Devices';
+
+  @override
+  String get deviceOverviewSubtitle => 'Data source, link status and self-test';
+
+  @override
+  String get deviceCurrentLink => 'Current link';
+
+  @override
+  String get deviceCurrentLinkDesc =>
+      'Read-only summary — edit parameters in the sub-pages';
+
+  @override
+  String get deviceEntries => 'Devices & parameters';
+
+  @override
+  String get deviceEntriesDesc =>
+      'One sub-page per link, each with its own settings';
+
+  @override
+  String get tncDeviceTitle => 'TNC device & parameters';
+
+  @override
+  String get tncDeviceDesc =>
+      'Bluetooth/serial binding, init string, KISS parameters and TX self-test';
+
+  @override
+  String get deviceLogTitle => 'Link log';
+
+  @override
+  String get deviceLogDesc =>
+      'Shows the log of the current source (TNC / audio switches automatically)';
+
+  @override
+  String get tncInitTitle => 'TNC init string';
+
+  @override
+  String get tncInitSubtitle =>
+      'Sent line by line after connecting (same as APRSdroid kiss.init)';
+
+  @override
+  String get tncInitTip =>
+      'If the TNC receives but will not transmit, try here first: many Bluetooth/serial TNC modules boot into command mode and need KISS ON / RESTART before they will forward in KISS. One command per line (CRLF is appended automatically).';
+
+  @override
+  String get tncInitDelay => 'Delay per line (ms)';
+
+  @override
+  String get tncInitDelayTip =>
+      'Wait between lines. Modules need time to process commands; too short drops them';
+
+  @override
+  String get tncInitSendAction => 'Send init string now';
+
+  @override
+  String tncInitSent(int n) {
+    return 'Sent $n init line(s)';
+  }
+
+  @override
+  String get tncInitEmpty => 'No init string configured';
+
+  @override
+  String get tncPushParams => 'Push KISS parameters on connect';
+
+  @override
+  String get tncPushParamsTip =>
+      'Off by default (same as APRSdroid). When on, the values above are pushed to the TNC on connect, overriding its own configuration — inappropriate values can make it back off forever without transmitting, so enable only if you want centralised control.';
+
+  @override
+  String get tncTxTestTitle => 'TX self-test';
+
+  @override
+  String get tncTxTestSubtitle =>
+      'Writes one test frame to the TNC to tell link problems from TNC problems';
+
+  @override
+  String get tncTxTestHint =>
+      'It sends a status frame (no coordinates), so it will not move your station on aprs.fi. If it reports \"written\" but nothing is transmitted, the problem is on the TNC side: try the init string (KISS ON / RESTART) first, then check TxDelay and channel occupancy.';
+
+  @override
+  String get tncTxTestAction => 'Write test frame';
+
+  @override
+  String get tncTxTestOkPrefix => 'Written';
+
+  @override
+  String tncTxTestOk(String n) {
+    return 'Written to the TNC ($n frames total). If the radio still does not transmit, the issue is on the TNC side: try the init string or check TxDelay.';
+  }
+
+  @override
+  String tncTxTestFail(String err) {
+    return 'Not written: $err';
+  }
+
+  @override
+  String get tncNeedConnected => 'Connect the TNC first';
+
+  @override
+  String msgLenCounter(int chars, int bytes) {
+    return '$chars/67 chars · $bytes/512 bytes total';
+  }
+
+  @override
+  String msgOverSpecAsk(int chars) {
+    return 'This message is $chars characters, over the APRS spec limit of 67. Most clients will still show it, but some clients/gateways truncate or reject it, so the other station may not be able to parse it. Send anyway?';
+  }
+
+  @override
+  String msgOverServerLimit(int bytes, int over) {
+    return 'The packet is $bytes bytes, over the 512-byte APRS-IS line limit. The server may drop it entirely (not even the header arrives). Please shorten by about $over bytes.';
+  }
+
+  @override
+  String get msgSendAnyway => 'Send anyway';
+
+  @override
+  String get msgSpecLimitHint =>
+      'The APRS spec recommends keeping a message under 67 characters: longer text may be truncated or fail to parse in some clients.';
+
+  @override
+  String get msgBlockedTooLong =>
+      'Send blocked: packet exceeds the APRS-IS limit';
+
+  @override
+  String get beaconRfBeaconOff => 'RF beacon is off';
+
+  @override
+  String get beaconRfEnableHint =>
+      'Automatic transmission on an RF source requires the “RF beacon” switch. Until then no position is transmitted automatically (and the countdown does not run).';
+
+  @override
+  String get beaconRfEnableAction => 'Enable RF beacon';
+
+  @override
+  String get beaconRfEnabled => 'RF beacon enabled — will transmit on schedule';
+
+  @override
+  String get beaconRfEnableWarn =>
+      'Transmission uses your callsign — operate within your licence';
+
+  @override
+  String get diagTitle => 'Link self-test';
+
+  @override
+  String get diagSubtitle =>
+      'Checks protocol, permissions and devices layer by layer';
+
+  @override
+  String get diagRun => 'Run self-test';
+
+  @override
+  String get diagRunning => 'Testing…';
+
+  @override
+  String diagPassed(int n) {
+    return '$n passed';
+  }
+
+  @override
+  String diagFailed(int n) {
+    return '$n failed';
+  }
+
+  @override
+  String get diagHint =>
+      'Protocol loops run without a radio: rule out software first, then check devices and wiring';
+
+  @override
+  String get diagTncSection => 'TNC (KISS / AX.25)';
+
+  @override
+  String get diagAudioSection => 'Audio (AFSK 1200)';
+
+  @override
+  String get diagKissEscape => 'KISS escaping';
+
+  @override
+  String get diagKissEscapeFail =>
+      'KISS unescaping failed (software issue — changing hardware will not help)';
+
+  @override
+  String get diagAx25 => 'AX.25 framing';
+
+  @override
+  String get diagAx25Fail => 'AX.25 encoding failed (malformed packet)';
+
+  @override
+  String diagAx25Mismatch(String got) {
+    return 'AX.25 round-trip mismatch, decoded: $got';
+  }
+
+  @override
+  String get diagFcs => 'FCS check';
+
+  @override
+  String get diagFcsFail =>
+      'FCS check is wrong (a one-byte change must be rejected)';
+
+  @override
+  String get diagTncLoopback => 'TNC protocol loop';
+
+  @override
+  String diagTncLoopbackOk(int len) {
+    return 'KISS/AX.25 round-trip identical ($len bytes)';
+  }
+
+  @override
+  String get diagAfskLoopback => 'AFSK modem loop';
+
+  @override
+  String diagAfskLoopbackOk(int samples, int rate) {
+    return 'Modulate → demodulate identical ($samples samples @${rate}Hz)';
+  }
+
+  @override
+  String diagAfskLoopbackFail(int n) {
+    return 'Decoded $n frame(s) — expected 1';
+  }
+
+  @override
+  String get diagAfskLevelFail =>
+      'Waveform level too low (output is nearly silent)';
+
+  @override
+  String get diagPlatform => 'Platform support';
+
+  @override
+  String diagPlatformOk(String name) {
+    return 'Available · backend $name';
+  }
+
+  @override
+  String get diagTncPlatformNo =>
+      'TNC links are not supported on this platform';
+
+  @override
+  String get diagAudioPlatformWarn =>
+      'No real-time audio — WAV file mode is still available';
+
+  @override
+  String get diagNoRealtime => 'not real-time';
+
+  @override
+  String get diagPermission => 'Mic permission';
+
+  @override
+  String get diagPermissionOk => 'Granted';
+
+  @override
+  String get diagSkipped => 'Skipped (unsupported platform)';
+
+  @override
+  String get diagCapture => 'Audio capture';
+
+  @override
+  String diagCaptureOk(int bytes, int rate) {
+    return 'Received $bytes bytes @${rate}Hz';
+  }
+
+  @override
+  String get diagCaptureNoData =>
+      'No audio data received — check the input device and permissions';
+
+  @override
+  String diagCaptureFailed(String err) {
+    return 'Could not start capture: $err';
+  }
+
+  @override
+  String get diagSpeaker => 'Speaker output';
+
+  @override
+  String get diagSpeakerOk => 'Test tone played';
+
+  @override
+  String diagSpeakerFail(String err) {
+    return 'Playback failed: $err';
+  }
+
+  @override
+  String get diagFileIo => 'WAV file I/O';
+
+  @override
+  String diagFileIoOk(int rate) {
+    return 'Write → read → decode identical @${rate}Hz';
+  }
+
+  @override
+  String diagFileWriteFail(String err) {
+    return 'File write failed: $err';
+  }
+
+  @override
+  String get diagFileReadFail => 'File read failed';
+
+  @override
+  String get diagFileDecodeFail =>
+      'No packet decoded from the file (maybe not an AFSK 1200 recording)';
+
+  @override
+  String get connAudioSourceHint =>
+      'Audio mode does not use the server, filters or KISS settings';
+
+  @override
+  String get testTxTitle => 'Test transmit';
+
+  @override
+  String get testTxDesc =>
+      'Sends a status packet to prove the link really reaches the air';
+
+  @override
+  String get testTxAction => 'Transmit test frame';
+
+  @override
+  String get testTxSent => 'Test frame handed to the link';
+
+  @override
+  String testTxFail(String err) {
+    return 'Test frame failed: $err';
+  }
+
+  @override
+  String get testTxNeedsConnect => 'Connect the link first';
+
+  @override
+  String get testTxHint =>
+      'This **really transmits** (a status packet, no coordinates). Make sure you are operating within your licence and callsign';
+
+  @override
+  String get audioStatsTitle => 'Audio statistics';
+
+  @override
+  String audioStatRx(int n) {
+    return '$n frames received';
+  }
+
+  @override
+  String audioStatTx(int n) {
+    return '$n frames sent';
+  }
+
+  @override
+  String audioStatDrop(int n) {
+    return '$n bytes dropped while transmitting';
+  }
+
+  @override
+  String get audioRestart => 'Restart audio link';
+
+  @override
+  String get audioTxDisabled => '\"Allow transmit\" is off — receiving only';
+
+  @override
+  String get audioLoopbackHint =>
+      'The self-test really modulates and demodulates; \"dropped while transmitting\" is normal half-duplex behaviour';
+
+  @override
+  String get notifAudioConnected => 'Audio link online';
+
+  @override
+  String get notifAudioDisconnected => 'Audio link disconnected';
+
+  @override
+  String connConnectingAudio(String name) {
+    return 'Opening audio ($name)…';
+  }
+
+  @override
+  String connAudioConnected(String rate) {
+    return 'Audio link online · $rate';
+  }
+
+  @override
+  String connRetryAudio(int seconds) {
+    return 'Could not open audio · retrying in ${seconds}s…';
+  }
+
+  @override
+  String connRetryAudioDetail(String detail, int seconds) {
+    return 'Audio failed ($detail) · retrying in ${seconds}s…';
+  }
+
+  @override
+  String connAudioLinkLost(int seconds) {
+    return 'Audio link lost · reconnecting in ${seconds}s…';
+  }
+
+  @override
+  String connAudioPositionSent(String call) {
+    return 'Sent over audio · position transmitted ($call)';
+  }
+
+  @override
+  String get dataSourceAudio => 'Audio (soundcard)';
+
+  @override
+  String get dataSourceAudioDesc =>
+      'AFSK 1200 to/from a radio via mic/speaker or a soundcard cable';
+
+  @override
+  String get audioSettings => 'Audio (soundcard TNC)';
+
+  @override
+  String get audioSettingsSubtitle =>
+      'Send and receive AFSK 1200 packets with your soundcard';
+
+  @override
+  String get audioBackend => 'Audio backend';
+
+  @override
+  String get audioUnsupported =>
+      'Real-time audio is not supported on this platform (WAV file mode is available)';
+
+  @override
+  String get audioNeedPermission =>
+      'Microphone permission (RECORD_AUDIO) is required — grant it and try again';
+
+  @override
+  String get audioCaptureTitle => 'Audio capture';
+
+  @override
+  String get audioCaptureDesc => 'Demodulate AFSK 1200 from the mic/line input';
+
+  @override
+  String get audioCaptureStart => 'Start capture';
+
+  @override
+  String get audioCaptureStop => 'Stop capture';
+
+  @override
+  String get audioSampleRate => 'Sample rate';
+
+  @override
+  String get audioSampleRateTip =>
+      '22050 Hz is the usual soundcard-TNC rate; use 44100/48000 if unsupported. Changing it restarts capture';
+
+  @override
+  String get audioLevel => 'Input level';
+
+  @override
+  String get audioLevelTip =>
+      'The meter rises with a signal; \"Demod locked\" lights up when AFSK is detected';
+
+  @override
+  String get audioSynced => 'Demod locked';
+
+  @override
+  String get audioUnlocked => 'Not locked';
+
+  @override
+  String audioBadFrames(int n) {
+    return '$n aborted decodes (noise / out of sync)';
+  }
+
+  @override
+  String get audioBaud => 'Bit rate';
+
+  @override
+  String get audioTones => 'Tones (mark/space)';
+
+  @override
+  String get audioTxTitle => 'Audio transmit';
+
+  @override
+  String get audioTxDesc => 'Listens before transmitting to avoid collisions';
+
+  @override
+  String get audioTxEnabled => 'Allow transmit';
+
+  @override
+  String get audioTxEnabledTip =>
+      'When off, receive only — handy if you just want to monitor beacons';
+
+  @override
+  String get audioTxDelayTip =>
+      'Preamble length: lets the far-end demod lock and the radio key up';
+
+  @override
+  String get audioToneMark => 'Mark tone (Hz)';
+
+  @override
+  String get audioToneSpace => 'Space tone (Hz)';
+
+  @override
+  String get audioMarkTip =>
+      'Bell 202 specifies mark 1200 Hz / space 2200 Hz; the tolerance is only a few Hz';
+
+  @override
+  String get audioSpaceTip =>
+      'Space tone. Together with mark it sets the FSK shift (1000 Hz nominal)';
+
+  @override
+  String get audioBaudTip =>
+      'APRS on VHF is always 1200 bd (Bell 202); 300 bd is for HF';
+
+  @override
+  String get audioTxDelayLabel => 'Tx preamble (ms)';
+
+  @override
+  String get audioTnc2Tip =>
+      'Format SRC>DEST,PATH:info, e.g. BG7LZQ-9>APALOC:>TEST';
+
+  @override
+  String get audioCsmaWait => 'Wait for a clear channel (ms)';
+
+  @override
+  String get audioCsmaWaitTip =>
+      'How long to wait when the channel is busy; 0 = transmit immediately';
+
+  @override
+  String get audioStopTx => 'Stop transmit';
+
+  @override
+  String get audioWavTitle => 'WAV file mode';
+
+  @override
+  String get audioWavDesc =>
+      'Decode a recording offline, or export a packet as audio';
+
+  @override
+  String get audioWavPath => 'File path';
+
+  @override
+  String get audioWavDecodeAction => 'Decode this WAV';
+
+  @override
+  String get audioWavExportAction => 'Export this packet';
+
+  @override
+  String get audioWavTnC2 => 'Packet to export (TNC2)';
+
+  @override
+  String get audioWavNone =>
+      'No packets decoded (maybe not an AFSK 1200 recording)';
+
+  @override
+  String audioWavFound(int n) {
+    return 'Decoded $n packet(s)';
+  }
+
+  @override
+  String audioWavWritten(String path) {
+    return 'Written to $path';
+  }
+
+  @override
+  String audioWavFailed(String err) {
+    return 'File I/O failed: $err';
+  }
+
+  @override
   String connTncConnected(String arg) {
     return 'TNC connected · $arg';
   }
@@ -1145,6 +1794,107 @@ class AppLocalizationsEn extends AppLocalizations {
   String translateFreeFailed(String e) {
     return 'The free endpoint is unavailable ($e) · switch to Google / Baidu / a custom endpoint in settings';
   }
+
+  @override
+  String get translateProviderAuto => 'Automatic (recommended)';
+
+  @override
+  String get translateProviderAutoDesc =>
+      'Tries several keyless endpoints in turn and keeps the first real translation';
+
+  @override
+  String get translateProviderGooglePublic =>
+      'Google public endpoint (keyless)';
+
+  @override
+  String get translateProviderGooglePublicDesc =>
+      'Good quality, but may be rate-limited (observed 429)';
+
+  @override
+  String get translateProviderMyMemory => 'MyMemory (keyless)';
+
+  @override
+  String get translateProviderMyMemoryDesc =>
+      'Official free API, but it is a translation memory: returns the source text when it has no match';
+
+  @override
+  String get translateProviderLibre => 'LibreTranslate (self-hostable)';
+
+  @override
+  String get translateProviderLibreDesc =>
+      'Open source and most reliable self-hosted; public instances now need a key and often lack Chinese';
+
+  @override
+  String get translateLibreUrl => 'Instance URL';
+
+  @override
+  String get translateLibreKey =>
+      'Instance API key (needed for public instances; leave empty when self-hosted)';
+
+  @override
+  String get translateUsedProvider => 'Actually used';
+
+  @override
+  String get translateUntranslated =>
+      'The endpoint did not actually translate (it returned the source text) — tried the next one';
+
+  @override
+  String translateAutoAllFailed(String e) {
+    return 'All keyless endpoints failed ($e) · switch to a Google/Baidu key or your own instance in settings';
+  }
+
+  @override
+  String get translateLangUnsupported =>
+      'This provider cannot translate into that language · try “Automatic” or another provider';
+
+  @override
+  String get translateLangScopeNote =>
+      'Providers differ in language coverage (e.g. Baidu standard supports Indonesian “id”, but not every direction) — when unsupported, the app suggests Automatic or another provider';
+
+  @override
+  String get langNameZh => 'Chinese (Simplified)';
+
+  @override
+  String get langNameZhTw => 'Chinese (Traditional)';
+
+  @override
+  String get langNameEn => 'English';
+
+  @override
+  String get langNameJa => 'Japanese';
+
+  @override
+  String get langNameKo => 'Korean';
+
+  @override
+  String get langNameEs => 'Spanish';
+
+  @override
+  String get langNameFr => 'French';
+
+  @override
+  String get langNameDe => 'German';
+
+  @override
+  String get langNameRu => 'Russian';
+
+  @override
+  String get langNamePt => 'Portuguese';
+
+  @override
+  String get langNameIt => 'Italian';
+
+  @override
+  String get langNameId => 'Indonesian';
+
+  @override
+  String get langNameTh => 'Thai';
+
+  @override
+  String get langNameVi => 'Vietnamese';
+
+  @override
+  String get langNameAr => 'Arabic';
 
   @override
   String get translateOutgoing =>
@@ -1327,7 +2077,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get translateLangAuto => 'Auto detect';
 
   @override
-  String get translateSameLang => 'Already in the target language';
+  String get translateSameLang =>
+      'Translation is identical to the original · may need no translation, or the provider failed to translate';
+
+  @override
+  String get translateNotNeeded =>
+      'Nothing to translate here (numbers / symbols / callsigns)';
 
   @override
   String translateBubbleCount(int n) {
@@ -1366,6 +2121,99 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dataSourceSwitchHint =>
       'Switching the data source disconnects the current link';
+
+  @override
+  String get dataSourcePkwdwpl => 'PKWDWPL (Kenwood waypoints)';
+
+  @override
+  String get dataSourcePkwdwplDesc =>
+      'Read the Kenwood \$PKWDWPL waypoint sentences from the radio over Bluetooth or serial (receive-only)';
+
+  @override
+  String get dataSourcePkwdwplHint =>
+      'PKWDWPL is a **receive-only** link: it brings in stations but never transmits (use APRS-IS / TNC / audio for transmitting)';
+
+  @override
+  String connConnectingPkwdwpl(String arg) {
+    return 'Connecting to PKWDWPL ($arg)…';
+  }
+
+  @override
+  String connPkwdwplConnected(String arg) {
+    return 'PKWDWPL connected · $arg';
+  }
+
+  @override
+  String get pkwdwplDeviceTitle => 'PKWDWPL device';
+
+  @override
+  String get pkwdwplDeviceDesc =>
+      'Bind the radio port and check waypoint reception';
+
+  @override
+  String get pkwdwplBindTitle => 'Device binding and status';
+
+  @override
+  String get pkwdwplBindSubtitle =>
+      'Pick the serial or Bluetooth port that outputs \$PKWDWPL sentences';
+
+  @override
+  String get pkwdwplRxOnly => 'Receive-only';
+
+  @override
+  String get pkwdwplReadOnly => 'Receive-only · this device transmits nothing';
+
+  @override
+  String get deviceConflictTitle => 'Two links are bound to the same device';
+
+  @override
+  String get deviceConflictDesc =>
+      'When TNC and PKWDWPL point at the same device, the received data is split between them — the symptom is \"transmits fine but receives nothing\". Give one of them a different device. TNC takes priority: PKWDWPL will refuse to connect.';
+
+  @override
+  String get deviceInUseByTnc => 'In use by TNC — cannot bind again';
+
+  @override
+  String get deviceInUseByPkwdwpl => 'In use by PKWDWPL — cannot bind again';
+
+  @override
+  String rxOnlyBanner(String arg) {
+    return '$arg connected · receive-only (the transmit source is offline)';
+  }
+
+  @override
+  String get pkwdwplTip =>
+      'Set the PC / GPS port output format on the radio to \"\$PKWDWPL\" (usually 4800 8N1). This link is read-only and transmits nothing.';
+
+  @override
+  String get pkwdwplStrictChecksum => 'Strict checksum (drop mismatches)';
+
+  @override
+  String get pkwdwplStrictChecksumTip =>
+      'Off by default: a mismatch is flagged and logged instead of dropped, because on a local cable it usually means the firmware format differs from the manual. Dropping every sentence would leave the screen empty and make diagnosis much harder.';
+
+  @override
+  String get pkwdwplErrReadOnly => 'receive-only link cannot transmit';
+
+  @override
+  String get pkwdwplStatTitle => 'Waypoint reception';
+
+  @override
+  String pkwdwplStats(String rx) {
+    return '$rx waypoints received';
+  }
+
+  @override
+  String get pkwdwplStatRejected => 'Dropped or invalid sentences';
+
+  @override
+  String get pkwdwplStatMismatch => 'Checksum mismatches';
+
+  @override
+  String get pkwdwplStatIgnored => 'Other NMEA sentences (ignored)';
+
+  @override
+  String get pkwdwplLogEmpty => 'No PKWDWPL log yet';
 
   @override
   String get tncBindTitle => 'Bluetooth TNC';

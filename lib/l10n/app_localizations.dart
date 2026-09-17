@@ -2115,6 +2115,1050 @@ abstract class AppLocalizations {
   /// **'翻译'**
   String get codeContributionTranslation;
 
+  /// No description provided for @dataSourceTxHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以同时勾选多条链路一起收报文，但**发射只有一条**（右侧圆点为发射来源）——同一个呼号从两条链路发出去会造成重复报文。'**
+  String get dataSourceTxHint;
+
+  /// No description provided for @dataSourceTxBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射'**
+  String get dataSourceTxBadge;
+
+  /// No description provided for @dataSourceIgateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'想当网关（把射频收到的报文转到互联网）就同时勾选 APRS-IS 与 TNC/音频，然后在下面打开「网关」。'**
+  String get dataSourceIgateHint;
+
+  /// No description provided for @igateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'网关（iGate）'**
+  String get igateTitle;
+
+  /// No description provided for @igateSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'把射频收到的报文送上 APRS-IS'**
+  String get igateSubtitle;
+
+  /// No description provided for @igateEnable.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用网关'**
+  String get igateEnable;
+
+  /// No description provided for @igateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频上收到的报文会被送上 APRS-IS（自动加上 qAr/qAR 与你的呼号标识来路）。需要同时启用 APRS-IS 和一个射频来源（TNC / 音频）。'**
+  String get igateHint;
+
+  /// No description provided for @igateNeedRf.
+  ///
+  /// In zh, this message translates to:
+  /// **'还差一个射频来源：请在上面的「数据来源」里勾选 TNC 或音频，否则网关没有可转递的射频链路。'**
+  String get igateNeedRf;
+
+  /// No description provided for @igateNeedIs.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没启用 APRS-IS：请在上面勾选 APRS-IS，否则网关没有可转递的目标网络。'**
+  String get igateNeedIs;
+
+  /// No description provided for @igateTwoWay.
+  ///
+  /// In zh, this message translates to:
+  /// **'双向网关（向射频转递消息）'**
+  String get igateTwoWay;
+
+  /// No description provided for @igateTwoWayHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开后会**在射频上真实发射**：只转「发给最近在射频上听到过的台站」的点对点消息（位置/天气等广播不转，避免占满信道）。关闭时只做 RF→IS。'**
+  String get igateTwoWayHint;
+
+  /// No description provided for @igateStatToIs.
+  ///
+  /// In zh, this message translates to:
+  /// **'已转递 → APRS-IS（条）'**
+  String get igateStatToIs;
+
+  /// No description provided for @igateStatToRf.
+  ///
+  /// In zh, this message translates to:
+  /// **'已转递 → 射频（条）'**
+  String get igateStatToRf;
+
+  /// No description provided for @igateStatDup.
+  ///
+  /// In zh, this message translates to:
+  /// **'重复丢弃（条）'**
+  String get igateStatDup;
+
+  /// No description provided for @igateResetStats.
+  ///
+  /// In zh, this message translates to:
+  /// **'清空统计'**
+  String get igateResetStats;
+
+  /// No description provided for @grpSysJoined.
+  ///
+  /// In zh, this message translates to:
+  /// **'{call} 加入了群聊'**
+  String grpSysJoined(String call);
+
+  /// No description provided for @grpSysLeft.
+  ///
+  /// In zh, this message translates to:
+  /// **'{call} 离开了群聊'**
+  String grpSysLeft(String call);
+
+  /// No description provided for @grpSysJoinReq.
+  ///
+  /// In zh, this message translates to:
+  /// **'{call} 申请加入群聊'**
+  String grpSysJoinReq(String call);
+
+  /// No description provided for @grpSysDeclined.
+  ///
+  /// In zh, this message translates to:
+  /// **'{call} 拒绝了邀请'**
+  String grpSysDeclined(String call);
+
+  /// No description provided for @grpInviteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊邀请'**
+  String get grpInviteTitle;
+
+  /// No description provided for @grpInviteBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'{from} 邀请你加入「{name}」'**
+  String grpInviteBody(String from, String name);
+
+  /// No description provided for @grpNameInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'群名不能为空、不能包含冒号或换行'**
+  String get grpNameInvalid;
+
+  /// No description provided for @grpNameTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'群名最长 {max} 个字符（过长会让邀请报文超出 APRS 消息上限）'**
+  String grpNameTooLong(int max);
+
+  /// No description provided for @grpInviteSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'已向 {n} 位成员发出邀请'**
+  String grpInviteSent(int n);
+
+  /// No description provided for @grpSelfPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待群主确认'**
+  String get grpSelfPending;
+
+  /// No description provided for @deviceOverviewTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备'**
+  String get deviceOverviewTitle;
+
+  /// No description provided for @deviceOverviewSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据来源、链路状态与自检'**
+  String get deviceOverviewSubtitle;
+
+  /// No description provided for @deviceCurrentLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前链路'**
+  String get deviceCurrentLink;
+
+  /// No description provided for @deviceCurrentLinkDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读摘要 · 改参数请进对应子页'**
+  String get deviceCurrentLinkDesc;
+
+  /// No description provided for @deviceEntries.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备与参数'**
+  String get deviceEntries;
+
+  /// No description provided for @deviceEntriesDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'每条链路一个子页，各管各的参数'**
+  String get deviceEntriesDesc;
+
+  /// No description provided for @tncDeviceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 设备与参数'**
+  String get tncDeviceTitle;
+
+  /// No description provided for @tncDeviceDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'蓝牙/串口绑定、初始化串、KISS 参数与发射自检'**
+  String get tncDeviceDesc;
+
+  /// No description provided for @deviceLogTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'链路日志'**
+  String get deviceLogTitle;
+
+  /// No description provided for @deviceLogDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示当前来源的日志（TNC / 音频自动切换）'**
+  String get deviceLogDesc;
+
+  /// No description provided for @tncInitTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 初始化串'**
+  String get tncInitTitle;
+
+  /// No description provided for @tncInitSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接后逐行发送（等价 APRSdroid 的 kiss.init）'**
+  String get tncInitSubtitle;
+
+  /// No description provided for @tncInitTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'若 TNC「能收不能发」，先在这里试：很多蓝牙/串口 TNC 模块上电停在命令模式，必须先收到 KISS ON、RESTART 等指令才进入 KISS 转发状态。每行一条命令（发送时自动补 CRLF）。'**
+  String get tncInitTip;
+
+  /// No description provided for @tncInitDelay.
+  ///
+  /// In zh, this message translates to:
+  /// **'行间隔 (ms)'**
+  String get tncInitDelay;
+
+  /// No description provided for @tncInitDelayTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'每行命令之间的等待时间。模块处理命令需要时间，太短会丢命令'**
+  String get tncInitDelayTip;
+
+  /// No description provided for @tncInitSendAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'立即发送初始化串'**
+  String get tncInitSendAction;
+
+  /// No description provided for @tncInitSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送 {n} 行初始化串'**
+  String tncInitSent(int n);
+
+  /// No description provided for @tncInitEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'未填写初始化串'**
+  String get tncInitEmpty;
+
+  /// No description provided for @tncPushParams.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接后下发 KISS 参数'**
+  String get tncPushParams;
+
+  /// No description provided for @tncPushParamsTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认关闭（与 APRSdroid 一致）。打开后连接时会把上面的参数推给 TNC，覆盖它自己的配置 —— 参数不合适可能让它一直退避而不发射，所以只在需要统一管理时打开。'**
+  String get tncPushParamsTip;
+
+  /// No description provided for @tncTxTestTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射自检'**
+  String get tncTxTestTitle;
+
+  /// No description provided for @tncTxTestSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'向 TNC 写一帧测试包，判断问题在链路还是 TNC'**
+  String get tncTxTestSubtitle;
+
+  /// No description provided for @tncTxTestHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'发的是一帧状态包（不含坐标），不会把台站在 aprs.fi 上挪位置。若这里显示「已写入」却仍然不发射，问题在 TNC 侧：先试初始化串（KISS ON / RESTART），再检查 TxDelay 与信道占用。'**
+  String get tncTxTestHint;
+
+  /// No description provided for @tncTxTestAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'写入测试帧'**
+  String get tncTxTestAction;
+
+  /// No description provided for @tncTxTestOkPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'已写入'**
+  String get tncTxTestOkPrefix;
+
+  /// No description provided for @tncTxTestOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'已写入 TNC（累计 {n} 帧）。若电台仍不发射，问题在 TNC 侧：试初始化串或检查 TxDelay。'**
+  String tncTxTestOk(String n);
+
+  /// No description provided for @tncTxTestFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'未写入：{err}'**
+  String tncTxTestFail(String err);
+
+  /// No description provided for @tncNeedConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先连接 TNC'**
+  String get tncNeedConnected;
+
+  /// No description provided for @msgLenCounter.
+  ///
+  /// In zh, this message translates to:
+  /// **'{chars}/67 字符 · 整包 {bytes}/512 字节'**
+  String msgLenCounter(int chars, int bytes);
+
+  /// No description provided for @msgOverSpecAsk.
+  ///
+  /// In zh, this message translates to:
+  /// **'这条消息 {chars} 个字符，超过 APRS 规范的 67 字符上限。多数客户端仍能读出，但部分客户端/网关会截断或拒收，对方可能解析不出来。仍要发送吗？'**
+  String msgOverSpecAsk(int chars);
+
+  /// No description provided for @msgOverServerLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'整包 {bytes} 字节，超过 APRS-IS 单行上限 512 字节，服务器可能直接丢弃整包（连报头都送不到）。请缩短约 {over} 字节。'**
+  String msgOverServerLimit(int bytes, int over);
+
+  /// No description provided for @msgSendAnyway.
+  ///
+  /// In zh, this message translates to:
+  /// **'仍要发送'**
+  String get msgSendAnyway;
+
+  /// No description provided for @msgSpecLimitHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'APRS 规范建议单条消息不超过 67 字符：超长文本在部分客户端上会显示不全或解析失败。'**
+  String get msgSpecLimitHint;
+
+  /// No description provided for @msgBlockedTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'已阻止发送：整包超出 APRS-IS 上限'**
+  String get msgBlockedTooLong;
+
+  /// No description provided for @beaconRfBeaconOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频信标未开启'**
+  String get beaconRfBeaconOff;
+
+  /// No description provided for @beaconRfEnableHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'射频来源的自动发射需要显式打开「射频信标」。在此之前不会自动发射位置（倒计时也不会走动）。'**
+  String get beaconRfEnableHint;
+
+  /// No description provided for @beaconRfEnableAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'开启射频信标'**
+  String get beaconRfEnableAction;
+
+  /// No description provided for @beaconRfEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开启射频信标，将按间隔自动发射'**
+  String get beaconRfEnabled;
+
+  /// No description provided for @beaconRfEnableWarn.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射将使用你的呼号，请在执照范围内操作'**
+  String get beaconRfEnableWarn;
+
+  /// No description provided for @diagTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'链路自检'**
+  String get diagTitle;
+
+  /// No description provided for @diagSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'逐层确认协议、权限、设备到底哪一环有问题'**
+  String get diagSubtitle;
+
+  /// No description provided for @diagRun.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始自检'**
+  String get diagRun;
+
+  /// No description provided for @diagRunning.
+  ///
+  /// In zh, this message translates to:
+  /// **'自检中…'**
+  String get diagRunning;
+
+  /// No description provided for @diagPassed.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过 {n} 项'**
+  String diagPassed(int n);
+
+  /// No description provided for @diagFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'失败 {n} 项'**
+  String diagFailed(int n);
+
+  /// No description provided for @diagHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'协议回路不接电台也能跑：先确认软件层没问题，再去查设备与接线'**
+  String get diagHint;
+
+  /// No description provided for @diagTncSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC（KISS / AX.25）'**
+  String get diagTncSection;
+
+  /// No description provided for @diagAudioSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频（AFSK 1200）'**
+  String get diagAudioSection;
+
+  /// No description provided for @diagKissEscape.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS 转义'**
+  String get diagKissEscape;
+
+  /// No description provided for @diagKissEscapeFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS 转义还原失败（软件层问题，换设备也没用）'**
+  String get diagKissEscapeFail;
+
+  /// No description provided for @diagAx25.
+  ///
+  /// In zh, this message translates to:
+  /// **'AX.25 帧编解码'**
+  String get diagAx25;
+
+  /// No description provided for @diagAx25Fail.
+  ///
+  /// In zh, this message translates to:
+  /// **'AX.25 编码失败（报文格式不合法）'**
+  String get diagAx25Fail;
+
+  /// No description provided for @diagAx25Mismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'AX.25 回路不一致，解回：{got}'**
+  String diagAx25Mismatch(String got);
+
+  /// No description provided for @diagFcs.
+  ///
+  /// In zh, this message translates to:
+  /// **'FCS 校验'**
+  String get diagFcs;
+
+  /// No description provided for @diagFcsFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'FCS 校验异常（改动一个字节本应被拒收）'**
+  String get diagFcsFail;
+
+  /// No description provided for @diagTncLoopback.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 协议回路'**
+  String get diagTncLoopback;
+
+  /// No description provided for @diagTncLoopbackOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'KISS/AX.25 编解码往返一致（{len} 字节）'**
+  String diagTncLoopbackOk(int len);
+
+  /// No description provided for @diagAfskLoopback.
+  ///
+  /// In zh, this message translates to:
+  /// **'AFSK 调制解调回路'**
+  String get diagAfskLoopback;
+
+  /// No description provided for @diagAfskLoopbackOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'调制→解调一致（{samples} 采样 @{rate}Hz）'**
+  String diagAfskLoopbackOk(int samples, int rate);
+
+  /// No description provided for @diagAfskLoopbackFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'解出 {n} 帧（应为 1 帧）'**
+  String diagAfskLoopbackFail(int n);
+
+  /// No description provided for @diagAfskLevelFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'波形幅度过低（调制结果接近静音）'**
+  String get diagAfskLevelFail;
+
+  /// No description provided for @diagPlatform.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台能力'**
+  String get diagPlatform;
+
+  /// No description provided for @diagPlatformOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'可用 · 后端 {name}'**
+  String diagPlatformOk(String name);
+
+  /// No description provided for @diagTncPlatformNo.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持 TNC 链路'**
+  String get diagTncPlatformNo;
+
+  /// No description provided for @diagAudioPlatformWarn.
+  ///
+  /// In zh, this message translates to:
+  /// **'不支持实时音频 · 仍可用 WAV 文件模式'**
+  String get diagAudioPlatformWarn;
+
+  /// No description provided for @diagNoRealtime.
+  ///
+  /// In zh, this message translates to:
+  /// **'非实时'**
+  String get diagNoRealtime;
+
+  /// No description provided for @diagPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'录音权限'**
+  String get diagPermission;
+
+  /// No description provided for @diagPermissionOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'已授权'**
+  String get diagPermissionOk;
+
+  /// No description provided for @diagSkipped.
+  ///
+  /// In zh, this message translates to:
+  /// **'已跳过（平台不支持）'**
+  String get diagSkipped;
+
+  /// No description provided for @diagCapture.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频采集'**
+  String get diagCapture;
+
+  /// No description provided for @diagCaptureOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'收到 {bytes} 字节 @{rate}Hz'**
+  String diagCaptureOk(int bytes, int rate);
+
+  /// No description provided for @diagCaptureNoData.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有收到任何音频数据 · 检查输入设备与权限'**
+  String get diagCaptureNoData;
+
+  /// No description provided for @diagCaptureFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开采集失败：{err}'**
+  String diagCaptureFailed(String err);
+
+  /// No description provided for @diagSpeaker.
+  ///
+  /// In zh, this message translates to:
+  /// **'扬声器输出'**
+  String get diagSpeaker;
+
+  /// No description provided for @diagSpeakerOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试音已播放'**
+  String get diagSpeakerOk;
+
+  /// No description provided for @diagSpeakerFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'播放失败：{err}'**
+  String diagSpeakerFail(String err);
+
+  /// No description provided for @diagFileIo.
+  ///
+  /// In zh, this message translates to:
+  /// **'WAV 文件读写'**
+  String get diagFileIo;
+
+  /// No description provided for @diagFileIoOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'写入→读出→解调一致 @{rate}Hz'**
+  String diagFileIoOk(int rate);
+
+  /// No description provided for @diagFileWriteFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件写入失败：{err}'**
+  String diagFileWriteFail(String err);
+
+  /// No description provided for @diagFileReadFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件读取失败'**
+  String get diagFileReadFail;
+
+  /// No description provided for @diagFileDecodeFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件里的音频解不出报文（可能不是 AFSK 1200 录音）'**
+  String get diagFileDecodeFail;
+
+  /// No description provided for @connAudioSourceHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频模式下不使用服务器、过滤器与 KISS 参数'**
+  String get connAudioSourceHint;
+
+  /// No description provided for @testTxTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试发射'**
+  String get testTxTitle;
+
+  /// No description provided for @testTxDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'发一条状态报文，验证链路真的通到空中'**
+  String get testTxDesc;
+
+  /// No description provided for @testTxAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射测试帧'**
+  String get testTxAction;
+
+  /// No description provided for @testTxSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试帧已交给链路'**
+  String get testTxSent;
+
+  /// No description provided for @testTxFail.
+  ///
+  /// In zh, this message translates to:
+  /// **'测试帧发送失败：{err}'**
+  String testTxFail(String err);
+
+  /// No description provided for @testTxNeedsConnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先连接链路'**
+  String get testTxNeedsConnect;
+
+  /// No description provided for @testTxHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是**真实发射**（状态报文，不含坐标）。射频发射请确认在自己的呼号与执照范围内'**
+  String get testTxHint;
+
+  /// No description provided for @audioStatsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频统计'**
+  String get audioStatsTitle;
+
+  /// No description provided for @audioStatRx.
+  ///
+  /// In zh, this message translates to:
+  /// **'收 {n} 帧'**
+  String audioStatRx(int n);
+
+  /// No description provided for @audioStatTx.
+  ///
+  /// In zh, this message translates to:
+  /// **'发 {n} 帧'**
+  String audioStatTx(int n);
+
+  /// No description provided for @audioStatDrop.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射期间丢弃 {n} 字节'**
+  String audioStatDrop(int n);
+
+  /// No description provided for @audioRestart.
+  ///
+  /// In zh, this message translates to:
+  /// **'重启音频链路'**
+  String get audioRestart;
+
+  /// No description provided for @audioTxDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'「允许发射」已关闭，仅接收'**
+  String get audioTxDisabled;
+
+  /// No description provided for @audioLoopbackHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'自检会真的做一次调制→解调；提示「发射期间丢弃」属正常半双工行为'**
+  String get audioLoopbackHint;
+
+  /// No description provided for @notifAudioConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频链路在线'**
+  String get notifAudioConnected;
+
+  /// No description provided for @notifAudioDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频链路已断开'**
+  String get notifAudioDisconnected;
+
+  /// No description provided for @connConnectingAudio.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在打开音频（{name}）…'**
+  String connConnectingAudio(String name);
+
+  /// No description provided for @connAudioConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频链路在线 · {rate}'**
+  String connAudioConnected(String rate);
+
+  /// No description provided for @connRetryAudio.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频链路打开失败 · {seconds}s 后重试…'**
+  String connRetryAudio(int seconds);
+
+  /// No description provided for @connRetryAudioDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频打开失败（{detail}）· {seconds}s 后重试…'**
+  String connRetryAudioDetail(String detail, int seconds);
+
+  /// No description provided for @connAudioLinkLost.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频链路中断 · {seconds}秒后自动重连…'**
+  String connAudioLinkLost(int seconds);
+
+  /// No description provided for @connAudioPositionSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频已发射 · 位置已发送 ({call})'**
+  String connAudioPositionSent(String call);
+
+  /// No description provided for @dataSourceAudio.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频（声卡）'**
+  String get dataSourceAudio;
+
+  /// No description provided for @dataSourceAudioDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'用麦克风/扬声器或声卡线接电台，收发 AFSK 1200'**
+  String get dataSourceAudioDesc;
+
+  /// No description provided for @audioSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频（声卡 TNC）'**
+  String get audioSettings;
+
+  /// No description provided for @audioSettingsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用声卡收发 AFSK 1200 报文'**
+  String get audioSettingsSubtitle;
+
+  /// No description provided for @audioBackend.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频后端'**
+  String get audioBackend;
+
+  /// No description provided for @audioUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台不支持实时音频（可用 WAV 文件模式）'**
+  String get audioUnsupported;
+
+  /// No description provided for @audioNeedPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要录音权限（RECORD_AUDIO），请授权后重试'**
+  String get audioNeedPermission;
+
+  /// No description provided for @audioCaptureTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频采集'**
+  String get audioCaptureTitle;
+
+  /// No description provided for @audioCaptureDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'从麦克风/线路输入解调 AFSK 1200'**
+  String get audioCaptureDesc;
+
+  /// No description provided for @audioCaptureStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开采集'**
+  String get audioCaptureStart;
+
+  /// No description provided for @audioCaptureStop.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止采集'**
+  String get audioCaptureStop;
+
+  /// No description provided for @audioSampleRate.
+  ///
+  /// In zh, this message translates to:
+  /// **'采样率'**
+  String get audioSampleRate;
+
+  /// No description provided for @audioSampleRateTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'22050Hz 是声卡 TNC 常用值；设备不支持时改用 44100/48000。修改会重启采集'**
+  String get audioSampleRateTip;
+
+  /// No description provided for @audioLevel.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入电平'**
+  String get audioLevel;
+
+  /// No description provided for @audioLevelTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'有信号时电平条会抬起；收到 AFSK 时「解调锁定」会点亮'**
+  String get audioLevelTip;
+
+  /// No description provided for @audioSynced.
+  ///
+  /// In zh, this message translates to:
+  /// **'解调锁定'**
+  String get audioSynced;
+
+  /// No description provided for @audioUnlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'未锁定'**
+  String get audioUnlocked;
+
+  /// No description provided for @audioBadFrames.
+  ///
+  /// In zh, this message translates to:
+  /// **'解码中止 {n} 次（噪声/失步）'**
+  String audioBadFrames(int n);
+
+  /// No description provided for @audioBaud.
+  ///
+  /// In zh, this message translates to:
+  /// **'比特率'**
+  String get audioBaud;
+
+  /// No description provided for @audioTones.
+  ///
+  /// In zh, this message translates to:
+  /// **'音调（标/空）'**
+  String get audioTones;
+
+  /// No description provided for @audioTxTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'音频发射'**
+  String get audioTxTitle;
+
+  /// No description provided for @audioTxDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射前先听信道，避免与其它台站碰撞'**
+  String get audioTxDesc;
+
+  /// No description provided for @audioTxEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许发射'**
+  String get audioTxEnabled;
+
+  /// No description provided for @audioTxEnabledTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭后只接收不发射（只想听信标时最省心）'**
+  String get audioTxEnabledTip;
+
+  /// No description provided for @audioTxDelayTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射前导时长：给对端解调器锁定时间、给电台 PTT 建立时间'**
+  String get audioTxDelayTip;
+
+  /// No description provided for @audioToneMark.
+  ///
+  /// In zh, this message translates to:
+  /// **'标号频率 (Hz)'**
+  String get audioToneMark;
+
+  /// No description provided for @audioToneSpace.
+  ///
+  /// In zh, this message translates to:
+  /// **'空号频率 (Hz)'**
+  String get audioToneSpace;
+
+  /// No description provided for @audioMarkTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'Bell 202 规定标号 1200Hz、空号 2200Hz；只有 ±几 Hz 的容差，不要随意改'**
+  String get audioMarkTip;
+
+  /// No description provided for @audioSpaceTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'空号音调。与标号音调一起决定 FSK 频偏（标准为 1000Hz）'**
+  String get audioSpaceTip;
+
+  /// No description provided for @audioBaudTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'APRS 在 VHF 上固定 1200 bd（Bell 202），HF 才用 300'**
+  String get audioBaudTip;
+
+  /// No description provided for @audioTxDelayLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射前导 (ms)'**
+  String get audioTxDelayLabel;
+
+  /// No description provided for @audioTnc2Tip.
+  ///
+  /// In zh, this message translates to:
+  /// **'格式 SRC>DEST,PATH:info，例如 BG7LZQ-9>APALOC:>TEST'**
+  String get audioTnc2Tip;
+
+  /// No description provided for @audioCsmaWait.
+  ///
+  /// In zh, this message translates to:
+  /// **'发射前等待信道空闲 (ms)'**
+  String get audioCsmaWait;
+
+  /// No description provided for @audioCsmaWaitTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'检测到信道占用时最多等待多久；0 = 不等待直接发射'**
+  String get audioCsmaWaitTip;
+
+  /// No description provided for @audioStopTx.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止发射'**
+  String get audioStopTx;
+
+  /// No description provided for @audioWavTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'WAV 文件模式'**
+  String get audioWavTitle;
+
+  /// No description provided for @audioWavDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'离线解码一段录音，或把报文导出成音频文件'**
+  String get audioWavDesc;
+
+  /// No description provided for @audioWavPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件路径'**
+  String get audioWavPath;
+
+  /// No description provided for @audioWavDecodeAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'解码此 WAV'**
+  String get audioWavDecodeAction;
+
+  /// No description provided for @audioWavExportAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出此报文'**
+  String get audioWavExportAction;
+
+  /// No description provided for @audioWavTnC2.
+  ///
+  /// In zh, this message translates to:
+  /// **'待导出报文 (TNC2)'**
+  String get audioWavTnC2;
+
+  /// No description provided for @audioWavNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'未解出报文（可能不是 AFSK 1200 录音）'**
+  String get audioWavNone;
+
+  /// No description provided for @audioWavFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'解出 {n} 条报文'**
+  String audioWavFound(int n);
+
+  /// No description provided for @audioWavWritten.
+  ///
+  /// In zh, this message translates to:
+  /// **'已写入 {path}'**
+  String audioWavWritten(String path);
+
+  /// No description provided for @audioWavFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件读写失败：{err}'**
+  String audioWavFailed(String err);
+
   /// No description provided for @connTncConnected.
   ///
   /// In zh, this message translates to:
@@ -2282,6 +3326,186 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'免费接口暂时不可用（{e}）· 可在设置里改用 Google / 百度 / 自定义接口'**
   String translateFreeFailed(String e);
+
+  /// No description provided for @translateProviderAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动（推荐）'**
+  String get translateProviderAuto;
+
+  /// No description provided for @translateProviderAutoDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'依次尝试多个免密钥接口，取第一个真正翻译成功的结果'**
+  String get translateProviderAutoDesc;
+
+  /// No description provided for @translateProviderGooglePublic.
+  ///
+  /// In zh, this message translates to:
+  /// **'Google 公开端点（免密钥）'**
+  String get translateProviderGooglePublic;
+
+  /// No description provided for @translateProviderGooglePublicDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'质量较好，但可能被限流（实测会返回 429）'**
+  String get translateProviderGooglePublicDesc;
+
+  /// No description provided for @translateProviderMyMemory.
+  ///
+  /// In zh, this message translates to:
+  /// **'MyMemory（免密钥）'**
+  String get translateProviderMyMemory;
+
+  /// No description provided for @translateProviderMyMemoryDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'官方免费接口，但本质是翻译记忆库：无匹配语料时会返回原文'**
+  String get translateProviderMyMemoryDesc;
+
+  /// No description provided for @translateProviderLibre.
+  ///
+  /// In zh, this message translates to:
+  /// **'LibreTranslate（可自建）'**
+  String get translateProviderLibre;
+
+  /// No description provided for @translateProviderLibreDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'开源、可自建最可靠；公共实例现已要求密钥且常不支持中文'**
+  String get translateProviderLibreDesc;
+
+  /// No description provided for @translateLibreUrl.
+  ///
+  /// In zh, this message translates to:
+  /// **'实例地址'**
+  String get translateLibreUrl;
+
+  /// No description provided for @translateLibreKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'实例 API Key（公共实例需要，自建可留空）'**
+  String get translateLibreKey;
+
+  /// No description provided for @translateUsedProvider.
+  ///
+  /// In zh, this message translates to:
+  /// **'本次实际使用'**
+  String get translateUsedProvider;
+
+  /// No description provided for @translateUntranslated.
+  ///
+  /// In zh, this message translates to:
+  /// **'接口没有真正翻译（返回了原文）· 已自动尝试下一个接口'**
+  String get translateUntranslated;
+
+  /// No description provided for @translateAutoAllFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'所有免密钥接口都不可用（{e}）· 建议在设置里改用 Google / 百度密钥或自建实例'**
+  String translateAutoAllFailed(String e);
+
+  /// No description provided for @translateLangUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'该接口不支持翻译成这一语言 · 可改用「自动」或其它接口'**
+  String get translateLangUnsupported;
+
+  /// No description provided for @translateLangScopeNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'各接口支持的语种范围不同（例如百度标准版支持印尼语 id，但并非所有方向都支持）· 遇到不支持时会提示改用自动或其它接口'**
+  String get translateLangScopeNote;
+
+  /// No description provided for @langNameZh.
+  ///
+  /// In zh, this message translates to:
+  /// **'简体中文'**
+  String get langNameZh;
+
+  /// No description provided for @langNameZhTw.
+  ///
+  /// In zh, this message translates to:
+  /// **'繁体中文'**
+  String get langNameZhTw;
+
+  /// No description provided for @langNameEn.
+  ///
+  /// In zh, this message translates to:
+  /// **'英语'**
+  String get langNameEn;
+
+  /// No description provided for @langNameJa.
+  ///
+  /// In zh, this message translates to:
+  /// **'日语'**
+  String get langNameJa;
+
+  /// No description provided for @langNameKo.
+  ///
+  /// In zh, this message translates to:
+  /// **'韩语'**
+  String get langNameKo;
+
+  /// No description provided for @langNameEs.
+  ///
+  /// In zh, this message translates to:
+  /// **'西班牙语'**
+  String get langNameEs;
+
+  /// No description provided for @langNameFr.
+  ///
+  /// In zh, this message translates to:
+  /// **'法语'**
+  String get langNameFr;
+
+  /// No description provided for @langNameDe.
+  ///
+  /// In zh, this message translates to:
+  /// **'德语'**
+  String get langNameDe;
+
+  /// No description provided for @langNameRu.
+  ///
+  /// In zh, this message translates to:
+  /// **'俄语'**
+  String get langNameRu;
+
+  /// No description provided for @langNamePt.
+  ///
+  /// In zh, this message translates to:
+  /// **'葡萄牙语'**
+  String get langNamePt;
+
+  /// No description provided for @langNameIt.
+  ///
+  /// In zh, this message translates to:
+  /// **'意大利语'**
+  String get langNameIt;
+
+  /// No description provided for @langNameId.
+  ///
+  /// In zh, this message translates to:
+  /// **'印尼语'**
+  String get langNameId;
+
+  /// No description provided for @langNameTh.
+  ///
+  /// In zh, this message translates to:
+  /// **'泰语'**
+  String get langNameTh;
+
+  /// No description provided for @langNameVi.
+  ///
+  /// In zh, this message translates to:
+  /// **'越南语'**
+  String get langNameVi;
+
+  /// No description provided for @langNameAr.
+  ///
+  /// In zh, this message translates to:
+  /// **'阿拉伯语'**
+  String get langNameAr;
 
   /// No description provided for @translateOutgoing.
   ///
@@ -2574,8 +3798,14 @@ abstract class AppLocalizations {
   /// No description provided for @translateSameLang.
   ///
   /// In zh, this message translates to:
-  /// **'原文已是目标语言'**
+  /// **'译文与原文相同 · 可能无需翻译，或该接口未能翻译'**
   String get translateSameLang;
+
+  /// No description provided for @translateNotNeeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'该内容无需翻译（数字 / 符号 / 呼号）'**
+  String get translateNotNeeded;
 
   /// No description provided for @translateBubbleCount.
   ///
@@ -2642,6 +3872,162 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'切换数据来源会断开当前连接'**
   String get dataSourceSwitchHint;
+
+  /// No description provided for @dataSourcePkwdwpl.
+  ///
+  /// In zh, this message translates to:
+  /// **'PKWDWPL（Kenwood 航点）'**
+  String get dataSourcePkwdwpl;
+
+  /// No description provided for @dataSourcePkwdwplDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'用蓝牙/串口读取电台输出的 Kenwood \$PKWDWPL 航点语句（只收不发）'**
+  String get dataSourcePkwdwplDesc;
+
+  /// No description provided for @dataSourcePkwdwplHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'PKWDWPL 是**只读**链路：能收台站、不参与发射（发射请用 APRS-IS / TNC / 音频）'**
+  String get dataSourcePkwdwplHint;
+
+  /// No description provided for @connConnectingPkwdwpl.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在连接 PKWDWPL（{arg}）…'**
+  String connConnectingPkwdwpl(String arg);
+
+  /// No description provided for @connPkwdwplConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'PKWDWPL 已连接 · {arg}'**
+  String connPkwdwplConnected(String arg);
+
+  /// No description provided for @pkwdwplDeviceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'PKWDWPL 设备'**
+  String get pkwdwplDeviceTitle;
+
+  /// No description provided for @pkwdwplDeviceDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'绑定电台端口 · 查看航点接收状态'**
+  String get pkwdwplDeviceDesc;
+
+  /// No description provided for @pkwdwplBindTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备绑定与状态'**
+  String get pkwdwplBindTitle;
+
+  /// No description provided for @pkwdwplBindSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择输出 \$PKWDWPL 语句的那个串口 / 蓝牙端口'**
+  String get pkwdwplBindSubtitle;
+
+  /// No description provided for @pkwdwplRxOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只收不发'**
+  String get pkwdwplRxOnly;
+
+  /// No description provided for @pkwdwplReadOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读接收中 · 本机不会发射任何报文'**
+  String get pkwdwplReadOnly;
+
+  /// No description provided for @deviceConflictTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'两条链路绑定了同一台设备'**
+  String get deviceConflictTitle;
+
+  /// No description provided for @deviceConflictDesc.
+  ///
+  /// In zh, this message translates to:
+  /// **'TNC 与 PKWDWPL 指向同一台设备时，接收到的数据会被两条链路瓜分 —— 表现是「能发不能收」（发送正常、收不到报文）。请给其中一条换一台设备。TNC 优先：PKWDWPL 会拒绝连接。'**
+  String get deviceConflictDesc;
+
+  /// No description provided for @deviceInUseByTnc.
+  ///
+  /// In zh, this message translates to:
+  /// **'已被 TNC 使用，不能重复绑定'**
+  String get deviceInUseByTnc;
+
+  /// No description provided for @deviceInUseByPkwdwpl.
+  ///
+  /// In zh, this message translates to:
+  /// **'已被 PKWDWPL 使用，不能重复绑定'**
+  String get deviceInUseByPkwdwpl;
+
+  /// No description provided for @rxOnlyBanner.
+  ///
+  /// In zh, this message translates to:
+  /// **'{arg} 已连接 · 仅接收（当前发射来源未连接）'**
+  String rxOnlyBanner(String arg);
+
+  /// No description provided for @pkwdwplTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'在电台菜单里把 PC / GPS 端口的输出格式设为 \"\$PKWDWPL\"（一般 4800 8N1）；这条链路只读，不会发射任何报文'**
+  String get pkwdwplTip;
+
+  /// No description provided for @pkwdwplStrictChecksum.
+  ///
+  /// In zh, this message translates to:
+  /// **'严格校验和（不符即丢弃）'**
+  String get pkwdwplStrictChecksum;
+
+  /// No description provided for @pkwdwplStrictChecksumTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认关闭：验证不符时只标注并记日志，不丢句子 —— 本地线缆上的不符多半是固件格式与手册有出入，整条丢弃会让界面「什么都不显示」，反而更难排查'**
+  String get pkwdwplStrictChecksumTip;
+
+  /// No description provided for @pkwdwplErrReadOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读链路，不能发射'**
+  String get pkwdwplErrReadOnly;
+
+  /// No description provided for @pkwdwplStatTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'航点接收'**
+  String get pkwdwplStatTitle;
+
+  /// No description provided for @pkwdwplStats.
+  ///
+  /// In zh, this message translates to:
+  /// **'已收航点 {rx} 条'**
+  String pkwdwplStats(String rx);
+
+  /// No description provided for @pkwdwplStatRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'丢弃/无效语句'**
+  String get pkwdwplStatRejected;
+
+  /// No description provided for @pkwdwplStatMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'校验和不符'**
+  String get pkwdwplStatMismatch;
+
+  /// No description provided for @pkwdwplStatIgnored.
+  ///
+  /// In zh, this message translates to:
+  /// **'其它 NMEA 语句（已忽略）'**
+  String get pkwdwplStatIgnored;
+
+  /// No description provided for @pkwdwplLogEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无 PKWDWPL 日志'**
+  String get pkwdwplLogEmpty;
 
   /// No description provided for @tncBindTitle.
   ///

@@ -14,6 +14,8 @@ import 'chat_translate_ui.dart';
 import 'translate.dart';
 import 'translate_page.dart';
 import 'widgets.dart';
+import 'group_chat.dart';
+import 'msg_limit.dart';
 import 'station_detail.dart';
 import 'tracker_page.dart';
 
@@ -45,7 +47,24 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   /// 当前会话键：群聊按 groupId、私聊按呼号
+  /// （与 state 的 convKeyOfMsg 同一套前缀，便于「当前会话」判定）
   String get _convKey => convKeyOf(groupId: _selectedGroupId, call: _selected);
+
+  /// 把「当前正在看的会话」同步给状态层。
+  ///
+  /// 未读数会据此跳过当前会话 —— 否则「正看着的会话来新消息」会留下一个
+  /// 必须退出再进才能消掉的红点（用户反馈的「小红点有时候不消」之一）。
+  /// 页面不在前台（isActive=false）或停在列表上时传 null。
+  void _syncActiveConversation() {
+    if (!widget.isActive || _showList || _feedMode) {
+      widget.state.setActiveConversation();
+      return;
+    }
+    widget.state.setActiveConversation(
+      groupId: _selectedGroupId,
+      call: _selected.isEmpty ? null : _selected,
+    );
+  }
 
   /// 发送前翻译的预览：原文 → 译文。
   ///
@@ -265,6 +284,8 @@ class _MessagesPageState extends State<MessagesPage> {
 
   @override
   Widget build(BuildContext context) {
+    // 每次重建都把「当前会话」同步给状态层（很便宜：键相同就直接返回）
+    _syncActiveConversation();
     return ListenableBuilder(
       listenable: widget.state,
       builder: (context, _) {
@@ -585,6 +606,8 @@ class _MessagesPageState extends State<MessagesPage> {
   /// 自动翻译（按会话开关）：只处理收到的消息
   void _maybeAutoTranslate(AprsMsg m) {
     if (m.system || m.sent) return;
+    // 无需翻译的内容（数字/符号/呼号）在自动模式下直接跳过，连请求都不发
+    if (!TransSanity.needsTranslation(m.text)) return;
     final st = _trans;
     final key = msgKey(m);
     if (st.has(key) || st.pending.contains(key)) return;
@@ -807,7 +830,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 tooLong && limit > 0
                     ? s.translateTooLongAfter(limit)
                     : s.translateOutPreviewHint(
-                        TransLang.labelOf(_outPreviewLang ?? '')),
+                        langName(context, _outPreviewLang ?? '')),
                 style: ts(10,
                     c: tooLong
                         ? C.orange.withValues(alpha: 0.9)
@@ -840,6 +863,39 @@ class _MessagesPageState extends State<MessagesPage> {
         : _selected.isNotEmpty
         ? S.of(context).sendToCallHint(_selected)
         : S.of(context).selectMessageReply;
+    // 长度计数器：APRS-IS 与射频都会「太长就解析不出来」，但此前只有
+    // 射频侧在发送时才拦。这里把实际占用（字符 + 整包字节）实时显示出来，
+    // 让用户在打字过程中就知道自己在逼近哪条线 —— 发送前的弹窗只作兜底。
+    final wired = _outPreview != null && _outPreviewSrc == _input.text.trim()
+        ? _outPreview!
+        : _input.text.trim();
+    final fit = MsgLimit.check(
+      from: st.myFullCall,
+      path: st.txPath,
+      to: inGroupChat ? (group?.groupCall ?? '') : _selected,
+      text: wired,
+    );
+    final counter = Container(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+      child: Row(children: [
+        Icon(
+          fit.fit == MsgFit.ok ? Icons.check_circle_outline_rounded
+              : fit.fit == MsgFit.overSpec ? Icons.warning_amber_rounded
+              : Icons.error_rounded,
+          size: 12,
+          color: fit.fit == MsgFit.ok ? C.grey
+              : fit.fit == MsgFit.overSpec ? C.orange : C.red,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          S.of(context).msgLenCounter(fit.textChars, fit.packetBytes),
+          style: ts(9.5,
+              c: fit.fit == MsgFit.ok ? C.grey
+                  : fit.fit == MsgFit.overSpec ? C.orange : C.red),
+        ),
+      ]),
+    );
+
     // 射频模式的限制说明：紧贴输入栏，解释「为什么这里能做的事变少了」。
     final tncBanner = limit > 0
         ? Container(
@@ -870,6 +926,7 @@ class _MessagesPageState extends State<MessagesPage> {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       // 译发预览在输入栏正上方：用户能同时看到「要发的译文」与输入框里的原文
       _outPreviewBar(st),
+      counter,
       tncBanner,
       Container(
       decoration: BoxDecoration(
@@ -1784,6 +1841,16 @@ class _MessagesPageState extends State<MessagesPage> {
       );
     }
     // ─── 单聊视图 ───
+    // 与群聊一致：**每次重建都标记已读**。
+    // 原来只在点开会话时标一次，于是「会话开着时来了新消息」会一直计为未读，
+    // 必须退出再进才消 —— 这是红点不消的另一个来源。
+    if (_selected.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedGroupId == null && _selected.isNotEmpty) {
+          widget.state.markConversationRead(_selected);
+        }
+      });
+    }
     return _selected.isEmpty
         ? Center(
             child: Column(
@@ -3021,7 +3088,25 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                   onPressed: nameCtrl.text.trim().isEmpty
                       ? null
-                      : () => setDialogState(() => step = 2),
+                      : () {
+                          // 在这里就校验：群名非法/过长会让**每一个**邀请
+                          // 报文都超限或结构被破坏，等创建完再失败更绕。
+                          final err = GroupProto.validateName(nameCtrl.text);
+                          if (err != null) {
+                            final l = S.of(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(err == 'too-long'
+                                    ? l.grpNameTooLong(GroupProto.maxGroupNameLen)
+                                    : l.grpNameInvalid),
+                                backgroundColor: C.red,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                            return;
+                          }
+                          setDialogState(() => step = 2);
+                        },
                   child: Text(
                     S.of(context).next,
                     style: ts(13, c: Colors.white, w: FontWeight.w700),
@@ -3044,7 +3129,18 @@ class _MessagesPageState extends State<MessagesPage> {
                           for (final m in selected) {
                             widget.state.sendInvite(g.groupCall, m, g.name);
                           }
+                          final inviteCount = selected.length;
                           Navigator.pop(ctx);
+                          // 明确回执：否则「建完群不知道邀请发出去没有」，
+                          // 而未连接时 sendInvite 只会记日志、不会报错。
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  S.of(context).grpInviteSent(inviteCount)),
+                              backgroundColor: C.green,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
                           setState(() {
                             _selectedGroupId = g.id;
                             _selected = '';
@@ -4008,19 +4104,73 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  /// 发送前的长度/可解析性预检。返回 true = 可以继续发送。
+  ///
+  /// 为什么必须在**发送前**问：APRS 消息发出去没有回滚（射频上更是如此），
+  /// 而「太长」有两种后果完全不同：
+  ///   * 超 67 字符（APRS101 规范上限）—— 多数客户端仍能读，属于
+  ///     「可能解析不出来」，所以给用户一次确认，而不是硬拦；
+  ///   * 整包超 512 字节（APRS-IS 单行上限）—— 服务器可能整包丢弃，
+  ///     连报头都送不到对方，这种**直接拦下**才有意义。
+  Future<bool> _confirmLength(AppState st, String to, String text) async {
+    final l = S.of(context);
+    final r = MsgLimit.check(
+      from: st.myFullCall,
+      path: st.txPath,
+      to: to,
+      text: text,
+    );
+    if (r.fit == MsgFit.overServerLimit) {
+      _snack(l.msgBlockedTooLong, C.red);
+      _snack(l.msgOverServerLimit(r.packetBytes, -r.bytesLeft), C.red);
+      return false;
+    }
+    if (r.fit == MsgFit.overSpec) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l.msgSpecLimitHint),
+          content: Text(l.msgOverSpecAsk(r.textChars)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(S.of(ctx).cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(S.of(ctx).msgSendAnyway),
+            ),
+          ],
+        ),
+      );
+      return ok == true;
+    }
+    return true;
+  }
+
+  void _snack(String text, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _send() async {
     if (_input.text.isEmpty) return;
+    final st = widget.state;
     // 群聊发送
     if (_selectedGroupId != null) {
       final group = widget.state.chatGroups
           .where((g) => g.id == _selectedGroupId)
           .firstOrNull;
       if (group != null) {
-        widget.state.sendGroupMessage(
-          group.groupCall,
-          _input.text.trim(),
-          groupId: group.id,
-        );
+        final text = _input.text.trim();
+        if (!await _confirmLength(st, group.groupCall, text)) return;
+        widget.state.sendGroupMessage(group.groupCall, text, groupId: group.id);
       }
       _input.clear();
       Future.delayed(const Duration(milliseconds: 80), () {
@@ -4063,6 +4213,10 @@ class _MessagesPageState extends State<MessagesPage> {
         return; // 译不了就不发原文 —— 否则会误发成对方看不懂的内容
       }
     }
+    if (!mounted) return;
+    // 校验用 **实际发出的正文**：译发时正文是译文，长度可能与原文差很多
+    // （中文→英文常变长），拿原文校验会放过真正会超长的那一条。
+    if (!await _confirmLength(st, _selected, sentAs ?? typed)) return;
     if (!mounted) return;
     widget.state.sendMessage(_selected, typed, sentAs: sentAs);
     _clearOutPreview();

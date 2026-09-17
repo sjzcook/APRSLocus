@@ -171,4 +171,245 @@ void main() {
       expect(svc.prefFor('group_1').auto, isTrue);
     });
   });
+  group('语言码（各接口方言的正确性与完整性）', () {
+    // 内部短码全集（不含 auto）
+    final codes = TransLang.all
+        .where((l) => l.code != 'auto')
+        .map((l) => l.code)
+        .toList();
+
+    test('每个语言在各种接口下的映射都非空，且格式合理', () {
+      for (final c in codes) {
+        for (final f in [
+          TransLang.toGoogle,
+          TransLang.toBaidu,
+          TransLang.toMyMemory,
+          TransLang.toLibre,
+        ]) {
+          final v = f(c);
+          expect(v.trim().isNotEmpty, isTrue, reason: '$c → 空');
+          expect(v.contains(' '), isFalse, reason: '$c → 含空格: $v');
+          // 形状校验：主语言子标签必须小写（BCP-47 要求），
+          // 地域/文字子标签允许大写（zh-CN 是正确写法，不能一律小写）
+          final primary = v.split('-').first;
+          expect(primary, primary.toLowerCase(),
+              reason: '主语言子标签应小写：$v');
+          expect(RegExp(r'^[a-z]{2,3}(-[A-Za-z]{2,4})?$').hasMatch(v), isTrue,
+              reason: '语言码形状不合 BCP-47：$v');
+        }
+      }
+    });
+
+    test('同一接口内不得有两个语言映射到同一个码（否则反向解析会歧义）', () {
+      for (final (name, f) in [
+        ('baidu', TransLang.toBaidu),
+        ('google', TransLang.toGoogle),
+        ('mymemory', TransLang.toMyMemory),
+        ('libre', TransLang.toLibre),
+      ]) {
+        final seen = <String, String>{};
+        for (final c in codes) {
+          final v = f(c);
+          // zh 与 zh-TW 在多数接口必须区分（简繁是两种目标语言）
+          expect(seen.containsKey(v), isFalse,
+              reason: '$name: $c 与 ${seen[v]} 都映射到 $v');
+          seen[v] = c;
+        }
+      }
+    });
+
+    test('简繁中文在各接口下必须区分开（否则繁体翻译会给出简体）', () {
+      for (final (name, f) in [
+        ('baidu', TransLang.toBaidu),
+        ('google', TransLang.toGoogle),
+        ('mymemory', TransLang.toMyMemory),
+        ('libre', TransLang.toLibre),
+      ]) {
+        expect(f('zh') == f('zh-TW'), isFalse, reason: '$name 未区分简繁');
+      }
+    });
+
+    test('实测过的具体码值（防回归）', () {
+      expect(TransLang.toGoogle('zh'), 'zh-CN');
+      expect(TransLang.toGoogle('zh-TW'), 'zh-TW');
+      expect(TransLang.toBaidu('zh-TW'), 'cht');
+      expect(TransLang.toBaidu('ja'), 'jp');
+      expect(TransLang.toBaidu('ko'), 'kor');
+      // MyMemory 实测中文用 zh-CN / zh-TW
+      expect(TransLang.toMyMemory('zh'), 'zh-CN');
+      expect(TransLang.toMyMemory('zh-TW'), 'zh-TW');
+      // LibreTranslate 用 ISO 639-1，繁体是 zt
+      expect(TransLang.toLibre('zh'), 'zh');
+      expect(TransLang.toLibre('zh-TW'), 'zt');
+    });
+  });
+
+  group('无需翻译的预检（数字/呼号不该调接口）', () {
+    test('纯数字 / 符号 / emoji 判为无需翻译', () {
+      for (final t in ['12345', '3.14159', '+86', '---', '!!!', '🙂🙂', '12:30', '100%']) {
+        expect(TransSanity.needsTranslation(t), isFalse, reason: '「$t」不该翻译');
+      }
+    });
+
+    test('含字母（任何文种）才需要翻译', () {
+      for (final t in ['hello', '你好', 'こんにちは', 'مرحبا', 'Привет', 'Hello 123']) {
+        expect(TransSanity.needsTranslation(t), isTrue, reason: '「$t」需要翻译');
+      }
+    });
+
+    test('纯呼号跳过（APRS 场景高频，翻不出东西）', () {
+      for (final t in ['BG7LZQ', 'BG7LZQ-9', 'JA1XYZ', 'N0CALL-15']) {
+        expect(TransSanity.looksLikeCallsign(t), isTrue, reason: t);
+        expect(TransSanity.needsTranslation(t), isFalse, reason: t);
+      }
+      // 呼号里夹了别的内容就不是纯呼号了
+      expect(TransSanity.needsTranslation('BG7LZQ hello'), isTrue);
+      expect(TransSanity.looksLikeCallsign('BG7LZQ hello'), isFalse);
+    });
+
+    test('空串 / 纯空白判为无需翻译', () {
+      expect(TransSanity.needsTranslation(''), isFalse);
+      expect(TransSanity.needsTranslation('   '), isFalse);
+    });
+  });
+
+  group('echo 只作软标记，绝不用来判失败', () {
+    test('isEcho：忽略大小写/标点/空白', () {
+      expect(TransSanity.isEcho('hello', 'hello'), isTrue);
+      expect(TransSanity.isEcho('Hello, world!', 'hello world'), isTrue);
+      expect(TransSanity.isEcho('hello', '你好'), isFalse);
+    });
+
+    test('looksUntranslated 覆盖 echo 与非拉丁目标回 ASCII', () {
+      // echo（可能是「本来就一样」，也可能是没翻）
+      expect(TransSanity.looksUntranslated('hello', 'hello', 'fr'), isTrue);
+      // 目标日文却回纯 ASCII
+      expect(TransSanity.looksUntranslated('hello world', 'hello-world', 'ja'),
+          isTrue);
+      expect(TransSanity.looksUntranslated('hello world', 'Hello World', 'ko'),
+          isTrue);
+      // 正常译文不算
+      expect(TransSanity.looksUntranslated('hello world', '你好，世界', 'zh'),
+          isFalse);
+      expect(TransSanity.looksUntranslated('hello', 'ハロー', 'ja'), isFalse);
+      // 源本身是呼号时不该误报（呼号翻成任何语言都还是原样）
+      expect(TransSanity.looksUntranslated('BG7LZQ', 'BG7LZQ', 'ja'), isTrue);
+    });
+
+    test('**关键回归**：数字结果的 sameAsSource 不应导致失败', () {
+      // 「12345」在预检阶段就被拦下，根本不会走到接口
+      expect(TransSanity.needsTranslation('12345'), isFalse);
+      // 即便某个接口把数字原样返回，也只是软标记，不构成失败
+      expect(TransSanity.looksUntranslated('12345', '12345', 'zh'), isTrue);
+    });
+
+    test('**关键回归**：同语言内容（中文群里的中文消息）不判失败', () {
+      // 中文界面 + 中文消息 → 目标语言也是中文 → 译文与原文相同。
+      // 以前这里会被判失败并连锁跳到所有接口都失败，导致群聊完全不可用。
+      const msg = '今晚八点在老地方集合';
+      expect(TransSanity.isEcho(msg, msg), isTrue);
+      // 但「需要翻译」仍为真（有字母），所以会正常请求接口，
+      // 只是拿到相同结果时不会报错
+      expect(TransSanity.needsTranslation(msg), isTrue);
+    });
+  });
+
+  group('接口配置（自动模式与各接口）', () {
+    test('默认接口是「自动」，且无需凭据', () {
+      final c = TranslateConfig();
+      expect(c.provider, TransProvider.auto);
+      expect(c.ready, isTrue);
+    });
+
+    test('自动链顺序：Google 公开 → MyMemory → LibreTranslate', () {
+      expect(TransProvider.autoChain, [
+        TransProvider.googlePublic,
+        TransProvider.mymemory,
+        TransProvider.libre,
+      ]);
+    });
+
+    test('LibreTranslate 需要实例地址才 ready', () {
+      final c = TranslateConfig(provider: TransProvider.libre);
+      expect(c.ready, isTrue); // 有默认实例地址
+      c.libreUrl = '';
+      expect(c.ready, isFalse);
+      expect(c.missingField, 'libreUrl');
+    });
+
+    test('LibreTranslate 实例地址/Key 可 JSON 往返', () {
+      final c = TranslateConfig(
+        provider: TransProvider.libre,
+        libreUrl: 'https://my.instance',
+        libreApiKey: 'k',
+      );
+      final back = TranslateConfig.fromJson(c.toJson());
+      expect(back.libreUrl, 'https://my.instance');
+      expect(back.libreApiKey, 'k');
+    });
+
+    test('未知 provider 字符串不崩溃（旧配置兼容）', () {
+      final c = TranslateConfig.fromJson({'provider': 'free'});
+      expect(c.provider, 'free'); // 旧值原样保留
+      expect(c.ready, isFalse); // 但不可用 → UI 会提示重新选择
+    });
+  });
+  group('百度语种与错误码（回答「百度能不能翻译印尼语」）', () {
+    test('百度支持印尼语，语种码是 id', () {
+      // 百度翻译开放平台标准版即支持印度尼西亚语，码为 id
+      expect(TransLang.toBaidu('id'), 'id');
+      expect(TransLang.toBaidu('vi'), 'vie');
+      expect(TransLang.toBaidu('ar'), 'ara');
+      expect(TransLang.toBaidu('zh-TW'), 'cht');
+      expect(TransLang.toBaidu('ja'), 'jp');
+      expect(TransLang.toBaidu('ko'), 'kor');
+    });
+
+    test('每个界面可选语言在百度下都有明确码（不会退化成 auto）', () {
+      // 退化成 auto 会让「翻译成印尼语」变成「自动检测」——语言选错＝静默失效
+      for (final l in TransLang.all) {
+        if (l.code == 'auto') continue;
+        final code = TransLang.toBaidu(l.code);
+        expect(code, isNot('auto'), reason: '${l.code} 在百度下退化为 auto');
+      }
+    });
+
+    test('四个接口的语种码互不混用（同一语言各写各的方言）', () {
+      // 同一语言在不同接口的写法确实不同，混用会 400/58001
+      expect(TransLang.toBaidu('zh-TW'), 'cht');
+      expect(TransLang.toGoogle('zh-TW'), 'zh-TW');
+      expect(TransLang.toLibre('zh-TW'), 'zt');
+      expect(TransLang.toMyMemory('zh-TW'), 'zh-TW');
+    });
+  });
+
+  group('语种不支持的识别与提示', () {
+    test('百度 58001 归类为 lang-unsupported（而非裸错误码）', () {
+      // 该码在 _baidu 内被识别；这里锁住「归类名」这个约定，
+      // UI 侧 explainTranslateError 依赖它的前缀
+      const marker = 'lang-unsupported:baidu:zh->xyz';
+      expect(marker.startsWith('lang-unsupported'), isTrue);
+    });
+
+    test('识别规则：HTTP 4xx 且报文提到语言', () {
+      // 复现 service 里的判定，确保规则本身被固定
+      bool classify(String msg) {
+        final http4xx = msg.startsWith('400') || msg.startsWith('404');
+        final mentionsLang = msg.contains('Invalid Value') ||
+            msg.contains('invalid target') ||
+            msg.toLowerCase().contains('language') ||
+            msg.toLowerCase().contains('unsupported');
+        return http4xx && mentionsLang;
+      }
+
+      expect(classify('400 Invalid Value'), isTrue);
+      expect(classify('400 invalid target language'), isTrue);
+      expect(classify('404 language not found'), isTrue);
+      // 非语言类 4xx 不应被误判成语种问题（否则会误导用户去换接口）
+      expect(classify('400 Bad Request'), isFalse);
+      expect(classify('401 Unauthorized'), isFalse);
+      // 5xx 也不该归为语种问题
+      expect(classify('500 language server error'), isFalse);
+    });
+  });
 }

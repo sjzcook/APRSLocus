@@ -54,12 +54,34 @@ class TransLang {
   static TransLang? byCode(String code) =>
       all.where((l) => l.code == code).firstOrNull;
 
+  /// 该语言是否从右往左书写。
+  ///
+  /// 需要这个是因为：阿拉伯语语言名混在中文/英文界面里时，
+  /// 文本方向不一致会导致标点跳到错误一侧（例如「阿拉伯语 ·
+  /// العربية」里的分隔点跑到开头）。显示时给 RTL 标签单独包一层
+  /// Directionality 才能正确排版。
+  static bool isRtl(String code) => code == 'ar';
+
   static String labelOf(String code) => byCode(code)?.label ?? code;
 
   /// → Google 写法
   static String toGoogle(String code) => switch (code) {
         'zh' => 'zh-CN',
         'zh-TW' => 'zh-TW',
+        _ => code,
+      };
+
+  /// → MyMemory 写法（实测：中文用 zh-CN / zh-TW）
+  static String toMyMemory(String code) => switch (code) {
+        'zh' => 'zh-CN',
+        'zh-TW' => 'zh-TW',
+        _ => toGoogle(code),
+      };
+
+  /// → LibreTranslate 写法（ISO 639-1；繁体在部分实例是 zt）
+  static String toLibre(String code) => switch (code) {
+        'zh' => 'zh',
+        'zh-TW' => 'zt',
         _ => code,
       };
 
@@ -112,10 +134,45 @@ class TransLang {
 
 // ───────────────────────── 配置 ─────────────────────────
 
+/// 翻译接口标识。
+///
+/// 之所以用常量而不是 enum：这些值会落盘到 SharedPreferences，
+/// 字符串更利于将来增删而不破坏已存配置（enum 的 index 会错位）。
+class TransProvider {
+  TransProvider._();
+
+  /// **自动**：按顺序尝试多个免密钥接口，直到拿到「确实翻译过」的结果。
+  /// 这是默认值 —— 因为实测表明**任何单一免密钥接口都不可靠**
+  /// （Google 公开端点会被限流、MyMemory 对部分语对直接返回原文、
+  /// 公共 LibreTranslate 实例已要求密钥且常缺中文）。
+  static const String auto = 'auto';
+
+  /// Google 翻译网页端公开端点（免密钥、质量好，但会被限流）
+  static const String googlePublic = 'googlePublic';
+
+  /// MyMemory（免密钥官方接口，但本质是翻译记忆库：无匹配时返回原文）
+  static const String mymemory = 'mymemory';
+
+  /// LibreTranslate（开源，理论可自建；公共实例多已要求密钥）
+  static const String libre = 'libre';
+
+  /// Google Cloud Translation v2（需 API Key，最稳定）
+  static const String google = 'google';
+
+  /// 百度翻译开放平台（需 App ID + 密钥）
+  static const String baidu = 'baidu';
+
+  /// 自定义 HTTP 接口
+  static const String custom = 'custom';
+
+  /// 「自动」模式按此顺序尝试（前者失败则退到后者）
+  static const List<String> autoChain = [googlePublic, mymemory, libre];
+}
+
 class TranslateConfig {
-  /// 'free' | 'google' | 'baidu' | 'custom'
+  /// 见 [TransProvider]
   ///
-  /// 默认 **free**：免密钥、开箱即用。需要更高配额/稳定性时再自备密钥。
+  /// 默认 **auto**：见 [TransProvider.auto] 的说明。
   String provider;
 
   String targetLang;
@@ -123,6 +180,12 @@ class TranslateConfig {
   String googleApiKey;
   String baiduAppId;
   String baiduKey;
+
+  /// LibreTranslate 实例地址（可自建）。公共实例可能要密钥。
+  String libreUrl;
+
+  /// LibreTranslate 的 API Key（公共实例现在需要；自建通常为空）
+  String libreApiKey;
 
   String customUrl;
   String customMethod; // GET / POST
@@ -136,11 +199,13 @@ class TranslateConfig {
   bool customPlainText;
 
   TranslateConfig({
-    this.provider = 'free',
+    this.provider = TransProvider.auto,
     this.targetLang = 'zh',
     this.googleApiKey = '',
     this.baiduAppId = '',
     this.baiduKey = '',
+    this.libreUrl = 'https://libretranslate.com',
+    this.libreApiKey = '',
     this.customUrl = '',
     this.customMethod = 'POST',
     this.customHeaders = '{"Content-Type": "application/json"}',
@@ -156,6 +221,8 @@ class TranslateConfig {
         'googleApiKey': googleApiKey,
         'baiduAppId': baiduAppId,
         'baiduKey': baiduKey,
+        'libreUrl': libreUrl,
+        'libreApiKey': libreApiKey,
         'customUrl': customUrl,
         'customMethod': customMethod,
         'customHeaders': customHeaders,
@@ -175,6 +242,8 @@ class TranslateConfig {
       googleApiKey: s('googleApiKey', c.googleApiKey),
       baiduAppId: s('baiduAppId', c.baiduAppId),
       baiduKey: s('baiduKey', c.baiduKey),
+      libreUrl: s('libreUrl', c.libreUrl),
+      libreApiKey: s('libreApiKey', c.libreApiKey),
       customUrl: s('customUrl', c.customUrl),
       customMethod: s('customMethod', c.customMethod),
       customHeaders: s('customHeaders', c.customHeaders),
@@ -187,20 +256,29 @@ class TranslateConfig {
 
   /// 当前接口是否已配置到「可发起请求」的程度
   bool get ready => switch (provider) {
-        // 免费接口不需要任何凭据
-        'free' => true,
-        'google' => googleApiKey.trim().isNotEmpty,
-        'baidu' => baiduAppId.trim().isNotEmpty && baiduKey.trim().isNotEmpty,
-        'custom' => customUrl.trim().isNotEmpty,
+        // 自动模式与免密钥接口都不需要凭据
+        TransProvider.auto => true,
+        TransProvider.googlePublic => true,
+        TransProvider.mymemory => true,
+        // 自建实例通常不需要 Key；公共实例需要由用户填，故不强制
+        TransProvider.libre => libreUrl.trim().isNotEmpty,
+        TransProvider.google => googleApiKey.trim().isNotEmpty,
+        TransProvider.baidu =>
+          baiduAppId.trim().isNotEmpty && baiduKey.trim().isNotEmpty,
+        TransProvider.custom => customUrl.trim().isNotEmpty,
         _ => false,
       };
 
   /// 配置缺失的具体原因（用于界面提示，非本地化文本 → 由 UI 转文案）
   String get missingField => switch (provider) {
-        'free' => '',
-        'google' => 'googleApiKey',
-        'baidu' => baiduAppId.trim().isEmpty ? 'baiduAppId' : 'baiduKey',
-        'custom' => 'customUrl',
+        TransProvider.auto => '',
+        TransProvider.googlePublic => '',
+        TransProvider.mymemory => '',
+        TransProvider.libre => 'libreUrl',
+        TransProvider.google => 'googleApiKey',
+        TransProvider.baidu =>
+          baiduAppId.trim().isEmpty ? 'baiduAppId' : 'baiduKey',
+        TransProvider.custom => 'customUrl',
         _ => 'provider',
       };
 }
@@ -293,7 +371,83 @@ class TransDirection {
 
 // ───────────────────────── 翻译服务 ─────────────────────────
 
-/// 翻译结果 + 接口识别出的源语言
+/// 译文处理策略。
+///
+/// 这里记录两条**实测得来**的教训，改动前请先读完：
+///
+/// 1. **「返回原文」不能当成失败，更不能因此切换接口。**
+///    原文与译文相同有两种完全正当的情形：
+///      - 内容本来就不需要翻译（数字、坐标、呼号、URL、纯符号）
+///      - 源语言已经是目标语言（中文群里中文用户看中文消息）
+///    曾经把 echo 判为失败并自动跳到下一个接口，结果是：中文群聊里
+///    每条消息都会「翻译失败 → 跳接口 → 三个都失败」，群聊看起来完全不能用。
+///    现在 echo 只作为一个**软标记**交给界面如实说明，绝不触发跳接口。
+///
+/// 2. **连接口都不该调的输入要提前拦掉**：数字/符号/呼号调翻译 API
+///    既浪费额度又必然拿到 echo。
+class TransSanity {
+  TransSanity._();
+
+  /// 归一化：去掉空白、标点、符号，并统一小写
+  static String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s\p{P}\p{S}]', unicode: true), '');
+
+  /// 输出是否与输入实质相同（忽略大小写/标点/空白）
+  static bool isEcho(String src, String out) {
+    final a = _norm(src);
+    final b = _norm(out);
+    if (a.isEmpty || b.isEmpty) return false;
+    return a == b;
+  }
+
+  /// 是否像业余无线电呼号（含 SSID）：`BG7LZQ` / `BG7LZQ-9` / `JA1XYZ`
+  ///
+  /// APRS 消息里大量出现呼号，这类内容翻不出东西，
+  /// 提前识别可省掉一次注定无用的请求。
+  static final RegExp _callsign =
+      RegExp(r'^[A-Za-z]{1,2}[0-9][A-Za-z]{1,4}(-[0-9]{1,2})?$');
+
+  static bool looksLikeCallsign(String s) =>
+      _callsign.hasMatch(s.trim());
+
+  /// 该内容是否**需要**翻译。
+  ///
+  /// 返回 false 时调用方应直接使用原文、不请求任何接口。
+  /// 判据：里面得至少有一个字母；纯数字/标点/符号/emoji 没有可翻译的内容。
+  static bool needsTranslation(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return false;
+    // 纯呼号直接跳过（本应用场景高频出现）
+    if (looksLikeCallsign(t)) return false;
+    // 需要至少一个「字母类」字符（任何文种，含中日韩）
+    return RegExp(r'[\p{L}]', unicode: true).hasMatch(t);
+  }
+
+  /// 目标语言是否属「非拉丁文字」体系
+  static bool needsNonLatin(String lang) =>
+      const {'zh', 'zh-TW', 'ja', 'ko', 'th', 'ar', 'ru'}.contains(lang);
+
+  /// **仅供参考**的「看起来没有真正翻译」判断。
+  ///
+  /// 注意：**绝不可以用它来判失败或切换接口** —— 它无法区分
+  /// 「接口没翻」与「本来就该一样」（数字、同语言）。仅用于在界面上
+  /// 给用户一句如实的说明。
+  static bool looksUntranslated(String src, String out, String target) {
+    if (out.trim().isEmpty) return true;
+    if (isEcho(src, out)) return true;
+    // 目标是中日韩等文种，却只回来 ASCII 字母 → 很可能没翻
+    if (needsNonLatin(target) &&
+        !RegExp(r'[^\x00-\x7F]').hasMatch(out) &&
+        RegExp(r'[A-Za-z]').hasMatch(out) &&
+        !looksLikeCallsign(src)) {
+      return true;
+    }
+    return false;
+  }
+}
+
+/// 翻译结果 + 接口识别出的源语言/// 翻译结果 + 接口识别出的源语言
 ///
 /// 为什么要带识别结果：本应用支持「翻译成**对方的**语言」，而对方说什么
 /// 语言用户通常并不知道。三家接口在 `from=auto` 时都会回传识别结果
@@ -306,7 +460,18 @@ class TranslateResult {
   /// 接口识别出的源语言（内部短码）；接口未回传时为 null
   final String? detected;
 
-  const TranslateResult(this.text, {this.detected});
+  /// **无需翻译**（数字/符号/呼号等），[text] 即原文，未请求任何接口
+  final bool skipped;
+
+  /// 接口返回的内容与原文实质相同（可能是正常的，也可能未翻译）
+  final bool sameAsSource;
+
+  const TranslateResult(
+    this.text, {
+    this.detected,
+    this.skipped = false,
+    this.sameAsSource = false,
+  });
 }
 
 class TranslateException implements Exception {
@@ -392,6 +557,8 @@ class TranslateService {
       ..googleApiKey = from.googleApiKey
       ..baiduAppId = from.baiduAppId
       ..baiduKey = from.baiduKey
+      ..libreUrl = from.libreUrl
+      ..libreApiKey = from.libreApiKey
       ..customUrl = from.customUrl
       ..customMethod = from.customMethod
       ..customHeaders = from.customHeaders
@@ -436,8 +603,11 @@ class TranslateService {
 
   /// 翻译。失败抛 [TranslateException]（消息已是可读文本）。
   ///
-  /// 返回 [TranslateResult]：除译文外还带接口**识别出的源语言** ——
-  /// 这是「翻译成对方语言」能自动工作的关键（见 [TranslateResult] 的说明）。
+  /// 流程（顺序很重要）：
+  ///   ① **预检**：数字/符号/呼号等无需翻译的内容直接返回原文，
+  ///      **连接口都不调**（省额度、也避免拿到无意义的 echo）
+  ///   ② 自动模式按候选链尝试；**只在硬失败（网络/HTTP/解析）时才换下一个接口**
+  ///   ③ 结果与原文相同时**不判失败**，只标记 `sameAsSource` 交给界面说明
   Future<TranslateResult> translate(
     String text, {
     String from = 'auto',
@@ -446,33 +616,113 @@ class TranslateService {
     final target = to ?? config.targetLang;
     final src = text.trim();
     if (src.isEmpty) return const TranslateResult('');
+    // ① 预检：没有可翻译的内容（纯数字/符号/呼号）→ 原样返回，不发请求
+    if (!TransSanity.needsTranslation(src)) {
+      return TranslateResult(src, skipped: true, detected: from == 'auto' ? null : from);
+    }
     if (!config.ready) {
       throw TranslateException('not-configured:${config.missingField}');
     }
-    final key = _cacheKey(src, from, target);
-    final hit = _cache[key];
-    if (hit != null) return TranslateResult(hit);
+    final cacheKey = _cacheKey(src, from, target);
+    final hit = _cache[cacheKey];
+    if (hit != null) {
+      return TranslateResult(
+        hit,
+        sameAsSource: TransSanity.looksUntranslated(src, hit, target),
+      );
+    }
 
     requestCount++;
     try {
-      final r = switch (config.provider) {
-        'free' => await _free(src, from, target),
-        'google' => await _google(src, from, target),
-        'baidu' => await _baidu(src, from, target),
-        'custom' => await _custom(src, from, target),
-        _ => throw TranslateException('unknown-provider:${config.provider}'),
-      };
+      final r = config.provider == TransProvider.auto
+          ? await _viaAutoChain(src, from, target)
+          : await _viaOne(config.provider, src, from, target);
       final out = r.text.trim();
-      _cache[key] = out;
+      _cache[cacheKey] = out;
       unawaited(_persistCache());
-      return TranslateResult(out, detected: r.detected);
+      // ③ echo 只作软标记：绝大多数情况是「本来就无需翻译」或
+      //    「源语言已是目标语言」，不该报错、更不该换接口
+      return TranslateResult(
+        out,
+        detected: r.detected,
+        sameAsSource:
+            TransSanity.looksUntranslated(src, out, target),
+      );
     } catch (e) {
       failureCount++;
       rethrow;
     }
   }
 
-  /// 只要译文的便捷入口
+  /// 自动模式：按候选链尝试，返回第一个**硬成功**的结果。
+  ///
+  /// **只在硬失败时才换下一个接口**（超时/网络/HTTP 错误/解析失败）。
+  /// 不因为「译文与原文相同」而换接口 —— 那种情况往往是内容本来就无需
+  /// 翻译（数字、呼号）或源语言已是目标语言，换接口既浪费额度，
+  /// 还会把本来正常的结果变成「全部失败」。详见 [TransSanity] 的说明。
+  Future<TranslateResult> _viaAutoChain(
+      String text, String from, String to) async {
+    final tried = <String>[];
+    for (final p in TransProvider.autoChain) {
+      if (p == TransProvider.libre && config.libreUrl.trim().isEmpty) continue;
+      try {
+        final r = await _viaOne(p, text, from, to);
+        lastProviderUsed = p;
+        return r;
+      } catch (e) {
+        tried.add('$p:${_short(e)}');
+      }
+    }
+    lastProviderUsed = '';
+    throw TranslateException('auto-all-failed:${tried.join(', ')}');
+  }
+
+  /// 最近一次成功使用的接口（自动模式下让用户知道实际用了谁）
+  String lastProviderUsed = '';
+
+  static String _short(Object e) {
+    final s = '$e'.replaceAll('TranslateException: ', '');
+    return s.length > 60 ? '${s.substring(0, 60)}…' : s;
+  }
+
+  Future<TranslateResult> _viaOne(
+      String provider, String text, String from, String to) async {
+    final TranslateResult r;
+    try {
+      r = switch (provider) {
+        TransProvider.googlePublic => await _googlePublic(text, from, to),
+        TransProvider.mymemory => await _mymemoryOnly(text, from, to),
+        TransProvider.libre => await _libre(text, from, to),
+        TransProvider.google => await _google(text, from, to),
+        TransProvider.baidu => await _baidu(text, from, to),
+        TransProvider.custom => await _custom(text, from, to),
+        _ => throw TranslateException('unknown-provider:$provider'),
+      };
+    } on TranslateException catch (e) {
+      // 把「该接口不支持这个语言」从一堆 HTTP 细节里识别出来。
+      //
+      // 各接口语种范围不同（百度标准版支持印尼语 id，但并非所有方向都支持），
+      // 这类失败若不单独归类，用户只会看到「400 Invalid Value」，
+      // 完全不知道换一个接口就能解决 —— 这是最需要可行动提示的场景。
+      final msg = e.message;
+      final http4xx = msg.startsWith('400') || msg.startsWith('404');
+      final mentionsLang = msg.contains('Invalid Value') ||
+          msg.contains('invalid target') ||
+          msg.toLowerCase().contains('language') ||
+          msg.toLowerCase().contains('unsupported');
+      if (http4xx && mentionsLang) {
+        throw TranslateException('lang-unsupported:$provider:$to');
+      }
+      rethrow;
+    }
+    // 注意：这里**不再**因为「译文与原文相同」而判失败或换接口。
+    // 那会把「数字/呼号/同语言」这类正常情况误报成失败，
+    // 并在自动模式下连锁跳到全部接口失败。软标记交给上层（见 translate）。
+    lastProviderUsed = provider;
+    return r;
+  }
+
+  /// 只要译文的便捷入口  /// 只要译文的便捷入口
   Future<String> translateText(String text, {String from = 'auto', String? to}) async =>
       (await translate(text, from: from, to: to)).text;
 
@@ -502,28 +752,16 @@ class TranslateService {
 
   // ─── 各接口实现 ───
 
-  /// 免密钥接口。
-  ///
-  /// 主用 Google 翻译网页端同款公开端点（`translate_a/single`）：
-  ///   - 无需密钥，支持 `sl=auto` 自动识别（识别结果能回填「对方的语言」）
-  ///   - **非官方**：可能被限流、被墙或随时变动，故失败后还有一层回退
-  /// 回退 MyMemory：同样免密钥，但它要求**明确指定源语言**，
-  /// 因此只在 `from != auto` 时尝试（否则请求本身就无意义）。
-  ///
-  /// 明确不做的：把失败静默成空译文 —— 用户会以为「翻译出来是空的」。
-  Future<TranslateResult> _free(String text, String from, String to) async {
-    Object? firstError;
-    try {
-      return await _googlePublic(text, from, to);
-    } catch (e) {
-      firstError = e;
+  /// MyMemory（免密钥；**翻译记忆库**，无匹配语料时返回原文 ——
+  /// 因此调用方必须用 [TransSanity] 校验，不能直接采信）
+  Future<TranslateResult> _mymemoryOnly(
+      String text, String from, String to) async {
+    // MyMemory 不支持自动识别：拿不到源语言就没法用（这也是它不能
+    // 单独当默认接口的原因之一）
+    if (from == 'auto') {
+      throw TranslateException('mymemory-needs-source');
     }
-    if (from != 'auto') {
-      try {
-        return await _myMemory(text, from, to);
-      } catch (_) {}
-    }
-    throw TranslateException('free-unavailable:$firstError');
+    return _myMemory(text, from, to);
   }
 
   /// Google 公开端点（网页版 translate.googleapis.com）
@@ -574,7 +812,8 @@ class TranslateService {
       String text, String from, String to) async {
     final uri = Uri.https('api.mymemory.translated.net', '/get', {
       'q': text,
-      'langpair': '${TransLang.toGoogle(from)}|${TransLang.toGoogle(to)}',
+      // MyMemory 的中文是 zh-CN / zh-TW（与 Google 同形但不完全等价）
+      'langpair': '${TransLang.toMyMemory(from)}|${TransLang.toMyMemory(to)}',
     });
     final resp = await _send('GET', uri);
     final map = _decodeJson(resp);
@@ -586,6 +825,86 @@ class TranslateService {
       }
     }
     throw TranslateException('mymemory-empty:${_trunc(resp)}');
+  }
+
+  /// LibreTranslate（开源，建议自建；公共实例现在多要求 API Key）
+  ///
+  /// 与其它接口的关键差异：**支持的语言由实例决定**（自建时尤其如此，
+  /// 只装了几种语言的实例翻译不了别的语种）。而 /languages 接口可以
+  /// 列出该实例的真实能力 —— 所以这里先探测再翻译，避免发出注定 400 的请求。
+  Future<TranslateResult> _libre(String text, String from, String to) async {
+    final base = config.libreUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    if (base.isEmpty) throw TranslateException('libre-url-empty');
+    final key = config.libreApiKey.trim();
+    final target = TransLang.toLibre(to);
+
+    // ① 能力探测（带缓存）：不支持就直接报「此实例不支持该语言」，
+    //    这比让用户看到一条 400/500 有用得多
+    final langs = await _libreLanguages(base);
+    if (langs != null && langs.isNotEmpty && !langs.contains(target)) {
+      throw TranslateException('libre-unsupported-lang:$target');
+    }
+
+    final body = <String, dynamic>{
+      'q': text,
+      'source': from == 'auto' ? 'auto' : TransLang.toLibre(from),
+      'target': target,
+      'format': 'text',
+    };
+    if (key.isNotEmpty) body['api_key'] = key;
+
+    final resp = await _send(
+      'POST',
+      Uri.parse('$base/translate'),
+      headers: const {'Content-Type': 'application/json; charset=utf-8'},
+      body: jsonEncode(body),
+    );
+    final map = _decodeJson(resp);
+    final t = map['translatedText'];
+    if (t == null) {
+      final err = map['error'] ?? map['message'] ?? _trunc(resp);
+      throw TranslateException('libre-error:$err');
+    }
+    // LibreTranslate 在 source=auto 时会回传 detectedLanguage
+    final det = map['detectedLanguage'] ?? map['detected_language'];
+    final detected = det is Map ? det['language']?.toString() : det?.toString();
+    return TranslateResult('$t',
+        detected: detected == null ? null : _libreToShort(detected));
+  }
+
+  /// 实例支持的语言码集合（按 base URL 缓存；探测失败返回 null 表示
+  /// 「不知道」，此时仍继续翻译而不是直接判死）
+  final Map<String, Set<String>> _libreLangs = {};
+
+  Future<Set<String>?> _libreLanguages(String base) async {
+    final cached = _libreLangs[base];
+    if (cached != null) return cached;
+    try {
+      final resp = await _send('GET', Uri.parse('$base/languages'));
+      final list = jsonDecode(resp);
+      if (list is List) {
+        final set = <String>{};
+        for (final it in list) {
+          if (it is Map && it['code'] != null) set.add('${it['code']}');
+        }
+        if (set.isNotEmpty) {
+          _libreLangs[base] = set;
+          return set;
+        }
+      }
+    } catch (_) {
+      // 探测失败不阻断：有些实例禁用了 /languages
+    }
+    return null;
+  }
+
+  /// LibreTranslate 语言码 → 内部短码（[toLibre] 的逆映射）
+  static String? _libreToShort(String code) {
+    for (final l in TransLang.all) {
+      if (l.code == 'auto') continue;
+      if (TransLang.toLibre(l.code) == code) return l.code;
+    }
+    return TransLang.byCode(code) != null ? code : null;
   }
 
   /// Google Cloud Translation v2：
@@ -657,8 +976,19 @@ class TranslateService {
     );
     final map = _decodeJson(resp);
     if (map['error_code'] != null) {
+      final code = '${map['error_code']}';
+      // 语言的「支持范围」是各接口最实际的差异：百度标准版就支持印尼语（id），
+      // 但并非所有语种/方向都支持。58001 就是「该语言方向不支持」——
+      // 这类失败最容易被误读成「应用坏了」，必须给出可行动的提示。
+      if (code == '58001') {
+        throw TranslateException(
+          'lang-unsupported:baidu:'
+          '${TransLang.toBaidu(from)}->${TransLang.toBaidu(to)}',
+        );
+      }
       throw TranslateException(
-        'baidu ${map['error_code']}: ${map['error_msg'] ?? ''}',
+        'baidu $code: ${_baiduErrorText(code)}'
+        '${map['error_msg'] == null ? '' : ' (${map['error_msg']})'}',
       );
     }
     final list = _dig(map, 'trans_result');
@@ -779,6 +1109,26 @@ class TranslateService {
     }
     return cur;
   }
+
+  /// 百度常见错误码 → 人话。
+  ///
+  /// 官方只给数字码，用户看到「error_code 54001」完全无从下手。
+  /// 这些是官方文档明确记载的码，映射固定、不会漂移。
+  static String _baiduErrorText(String code) => switch (code) {
+        '52001' => 'request timeout',
+        '52002' => 'system error',
+        '52003' => 'unauthorized: check App ID / key',
+        '54000' => 'missing required parameter',
+        '54001' => 'invalid signature: check App ID and secret',
+        '54003' => 'rate limited: slow down or upgrade quota',
+        '54004' => 'insufficient balance',
+        '54005' => 'too many long queries at once',
+        '58000' => 'client IP not allowed',
+        '58001' => 'language direction not supported',
+        '58002' => 'service disabled',
+        '90107' => 'auth not effective yet',
+        _ => 'baidu error',
+      };
 
   /// Google 的语言码（zh-CN / zh-TW / en …）→ 内部短码
   static String? _googleToShort(String? code) {

@@ -1,8 +1,13 @@
+import 'dart:typed_data';
+
 import 'tnc_base.dart';
 
 /// Web：浏览器无法访问经典蓝牙 SPP / 串口，Web Serial 也仅 Chromium 且需用户手势。
 /// 本版本先不实现，返回「不支持」，UI 会给出提示。
 TncTransport createTncTransport() => TncStub();
+
+/// PKWDWPL 链路同样需要串口/蓝牙，Web 不支持（UI 会给出提示）
+TncTransport createPkwdwplTransport() => TncStub();
 
 class TncStub implements TncTransport {
   @override
@@ -21,6 +26,12 @@ class TncStub implements TncTransport {
   void Function()? onClosed;
 
   @override
+  void Function(String reason)? onTxFailed;
+
+  @override
+  void Function(int size)? onTxAck;
+
+  @override
   Future<List<TncDevice>> listDevices() async => const [];
 
   @override
@@ -33,5 +44,5 @@ class TncStub implements TncTransport {
   Future<void> disconnect() async {}
 
   @override
-  void send(List<int> bytes) {}
+  void send(Uint8List bytes) {}
 }

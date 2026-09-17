@@ -1045,6 +1045,655 @@ class AppLocalizationsId extends AppLocalizations {
   String get codeContributionTranslation => 'Terjemahan';
 
   @override
+  String get dataSourceTxHint =>
+      'Beberapa tautan dapat diaktifkan sekaligus untuk menerima, tetapi **hanya satu yang memancar** (titik di kanan). Mengirim tanda panggil sama lewat dua tautan akan menduplikasi paket.';
+
+  @override
+  String get dataSourceTxBadge => 'TX';
+
+  @override
+  String get dataSourceIgateHint =>
+      'Untuk menjadi gateway (meneruskan paket RF ke internet), aktifkan APRS-IS dan TNC/audio, lalu nyalakan \"Gateway\" di bawah.';
+
+  @override
+  String get igateTitle => 'Gateway (iGate)';
+
+  @override
+  String get igateSubtitle => 'Teruskan paket RF ke APRS-IS';
+
+  @override
+  String get igateEnable => 'Aktifkan gateway';
+
+  @override
+  String get igateHint =>
+      'Paket yang diterima di RF diteruskan ke APRS-IS, ditandai qAr/qAR dan tanda panggil Anda. Perlu APRS-IS dan sumber RF (TNC/audio) aktif.';
+
+  @override
+  String get igateNeedRf =>
+      'Belum ada sumber RF: centang TNC atau audio di \"Sumber data\" di atas.';
+
+  @override
+  String get igateNeedIs => 'APRS-IS belum aktif: centang di atas.';
+
+  @override
+  String get igateTwoWay => 'Gateway dua arah (teruskan pesan ke RF)';
+
+  @override
+  String get igateTwoWayHint =>
+      'Bila aktif, ini **memancar di RF**: hanya pesan point-to-point untuk stasiun yang baru terdengar di RF yang diteruskan. Bila mati, hanya RF→IS.';
+
+  @override
+  String get igateStatToIs => 'Diteruskan → APRS-IS';
+
+  @override
+  String get igateStatToRf => 'Diteruskan → RF';
+
+  @override
+  String get igateStatDup => 'Duplikat dibuang';
+
+  @override
+  String get igateResetStats => 'Reset penghitung';
+
+  @override
+  String grpSysJoined(String call) {
+    return '$call bergabung ke grup';
+  }
+
+  @override
+  String grpSysLeft(String call) {
+    return '$call keluar dari grup';
+  }
+
+  @override
+  String grpSysJoinReq(String call) {
+    return '$call meminta bergabung';
+  }
+
+  @override
+  String grpSysDeclined(String call) {
+    return '$call menolak undangan';
+  }
+
+  @override
+  String get grpInviteTitle => 'Undangan grup';
+
+  @override
+  String grpInviteBody(String from, String name) {
+    return '$from mengundang Anda ke \"$name\"';
+  }
+
+  @override
+  String get grpNameInvalid =>
+      'Nama grup tidak boleh kosong atau berisi titik dua/baris baru';
+
+  @override
+  String grpNameTooLong(int max) {
+    return 'Nama grup maksimal $max karakter (lebih panjang membuat undangan melebihi batas pesan APRS)';
+  }
+
+  @override
+  String grpInviteSent(int n) {
+    return 'Undangan dikirim ke $n anggota';
+  }
+
+  @override
+  String get grpSelfPending => 'Menunggu pemilik grup';
+
+  @override
+  String get deviceOverviewTitle => 'Perangkat';
+
+  @override
+  String get deviceOverviewSubtitle =>
+      'Sumber data, status tautan, dan uji mandiri';
+
+  @override
+  String get deviceCurrentLink => 'Tautan saat ini';
+
+  @override
+  String get deviceCurrentLinkDesc =>
+      'Ringkasan hanya-baca — ubah parameter di sub-halaman';
+
+  @override
+  String get deviceEntries => 'Perangkat & parameter';
+
+  @override
+  String get deviceEntriesDesc =>
+      'Satu sub-halaman per tautan, setelannya masing-masing';
+
+  @override
+  String get tncDeviceTitle => 'Perangkat & parameter TNC';
+
+  @override
+  String get tncDeviceDesc =>
+      'Binding Bluetooth/serial, string init, parameter KISS, uji pancar';
+
+  @override
+  String get deviceLogTitle => 'Log tautan';
+
+  @override
+  String get deviceLogDesc =>
+      'Menampilkan log sumber saat ini (TNC / audio otomatis)';
+
+  @override
+  String get tncInitTitle => 'String init TNC';
+
+  @override
+  String get tncInitSubtitle =>
+      'Dikirim baris demi baris setelah terhubung (setara kiss.init APRSdroid)';
+
+  @override
+  String get tncInitTip =>
+      'Bila TNC menerima tetapi tidak memancar, coba di sini dulu: banyak modul TNC Bluetooth/serial menyala dalam mode perintah dan perlu KISS ON / RESTART agar mau meneruskan dalam KISS. Satu perintah per baris (CRLF ditambahkan otomatis).';
+
+  @override
+  String get tncInitDelay => 'Jeda per baris (ms)';
+
+  @override
+  String get tncInitDelayTip =>
+      'Jeda antar baris. Modul butuh waktu memproses perintah; terlalu singkat bisa terlewat';
+
+  @override
+  String get tncInitSendAction => 'Kirim string init sekarang';
+
+  @override
+  String tncInitSent(int n) {
+    return '$n baris init terkirim';
+  }
+
+  @override
+  String get tncInitEmpty => 'String init belum diisi';
+
+  @override
+  String get tncPushParams => 'Kirim parameter KISS saat terhubung';
+
+  @override
+  String get tncPushParamsTip =>
+      'Mati secara bawaan (sama seperti APRSdroid). Bila aktif, nilai di atas dikirim ke TNC saat terhubung dan menimpa konfigurasinya — nilai yang tidak cocok bisa membuatnya terus menunggu tanpa memancar, jadi aktifkan hanya bila ingin dikelola terpusat.';
+
+  @override
+  String get tncTxTestTitle => 'Uji pancar';
+
+  @override
+  String get tncTxTestSubtitle =>
+      'Menulis satu bingkai uji ke TNC untuk memisahkan masalah tautan vs TNC';
+
+  @override
+  String get tncTxTestHint =>
+      'Yang dikirim adalah bingkai status (tanpa koordinat), jadi tidak memindahkan stasiun Anda di aprs.fi. Bila tertulis \"tertulis\" tetapi tetap tidak memancar, masalahnya di sisi TNC: coba string init (KISS ON / RESTART) dulu, lalu periksa TxDelay dan okupansi kanal.';
+
+  @override
+  String get tncTxTestAction => 'Tulis bingkai uji';
+
+  @override
+  String get tncTxTestOkPrefix => 'Tertulis';
+
+  @override
+  String tncTxTestOk(String n) {
+    return 'Tertulis ke TNC (total $n bingkai). Bila radio tetap tidak memancar, masalahnya di sisi TNC: coba string init atau periksa TxDelay.';
+  }
+
+  @override
+  String tncTxTestFail(String err) {
+    return 'Tidak tertulis: $err';
+  }
+
+  @override
+  String get tncNeedConnected => 'Hubungkan TNC dulu';
+
+  @override
+  String msgLenCounter(int chars, int bytes) {
+    return '$chars/67 karakter · total $bytes/512 byte';
+  }
+
+  @override
+  String msgOverSpecAsk(int chars) {
+    return 'Pesan ini $chars karakter, melebihi batas spesifikasi APRS yaitu 67. Sebagian besar klien masih bisa menampilkannya, tetapi sebagian klien/gateway memotong atau menolaknya, sehingga stasiun lawan mungkin tidak dapat mengurainya. Tetap kirim?';
+  }
+
+  @override
+  String msgOverServerLimit(int bytes, int over) {
+    return 'Paket berukuran $bytes byte, melebihi batas 512 byte per baris APRS-IS. Server mungkin membuang seluruh paket (bahkan header tidak sampai). Mohon perpendek sekitar $over byte.';
+  }
+
+  @override
+  String get msgSendAnyway => 'Tetap kirim';
+
+  @override
+  String get msgSpecLimitHint =>
+      'Spesifikasi APRS menyarankan pesan di bawah 67 karakter: teks yang lebih panjang dapat terpotong atau gagal diurai di sebagian klien.';
+
+  @override
+  String get msgBlockedTooLong =>
+      'Pengiriman diblokir: paket melebihi batas APRS-IS';
+
+  @override
+  String get beaconRfBeaconOff => 'Beacon RF mati';
+
+  @override
+  String get beaconRfEnableHint =>
+      'Pemancaran otomatis pada sumber RF memerlukan sakelar \"Beacon RF\". Sebelum itu posisi tidak dipancarkan otomatis (hitung mundur juga tidak berjalan).';
+
+  @override
+  String get beaconRfEnableAction => 'Aktifkan beacon RF';
+
+  @override
+  String get beaconRfEnabled => 'Beacon RF aktif — akan memancar sesuai jadwal';
+
+  @override
+  String get beaconRfEnableWarn =>
+      'Pemancaran memakai tanda panggil Anda — patuhi lisensi';
+
+  @override
+  String get diagTitle => 'Uji mandiri tautan';
+
+  @override
+  String get diagSubtitle =>
+      'Memeriksa protokol, izin, dan perangkat lapis demi lapis';
+
+  @override
+  String get diagRun => 'Jalankan uji';
+
+  @override
+  String get diagRunning => 'Menguji…';
+
+  @override
+  String diagPassed(int n) {
+    return '$n lulus';
+  }
+
+  @override
+  String diagFailed(int n) {
+    return '$n gagal';
+  }
+
+  @override
+  String get diagHint =>
+      'Uji protokol bisa jalan tanpa radio: pastikan perangkat lunak dulu, lalu cek perangkat dan kabel';
+
+  @override
+  String get diagTncSection => 'TNC (KISS / AX.25)';
+
+  @override
+  String get diagAudioSection => 'Audio (AFSK 1200)';
+
+  @override
+  String get diagKissEscape => 'Escape KISS';
+
+  @override
+  String get diagKissEscapeFail =>
+      'Gagal membalik escape KISS (masalah perangkat lunak — ganti perangkat tidak membantu)';
+
+  @override
+  String get diagAx25 => 'Pembingkaian AX.25';
+
+  @override
+  String get diagAx25Fail => 'Pengodean AX.25 gagal (format paket salah)';
+
+  @override
+  String diagAx25Mismatch(String got) {
+    return 'Hasil bolak-balik AX.25 tidak cocok: $got';
+  }
+
+  @override
+  String get diagFcs => 'Pemeriksaan FCS';
+
+  @override
+  String get diagFcsFail =>
+      'Pemeriksaan FCS salah (perubahan satu byte harus ditolak)';
+
+  @override
+  String get diagTncLoopback => 'Loop protokol TNC';
+
+  @override
+  String diagTncLoopbackOk(int len) {
+    return 'Bolak-balik KISS/AX.25 identik ($len byte)';
+  }
+
+  @override
+  String get diagAfskLoopback => 'Loop modem AFSK';
+
+  @override
+  String diagAfskLoopbackOk(int samples, int rate) {
+    return 'Modulasi → demodulasi identik ($samples sampel @${rate}Hz)';
+  }
+
+  @override
+  String diagAfskLoopbackFail(int n) {
+    return '$n bingkai terdekode — seharusnya 1';
+  }
+
+  @override
+  String get diagAfskLevelFail =>
+      'Level gelombang terlalu rendah (hampir senyap)';
+
+  @override
+  String get diagPlatform => 'Dukungan platform';
+
+  @override
+  String diagPlatformOk(String name) {
+    return 'Tersedia · backend $name';
+  }
+
+  @override
+  String get diagTncPlatformNo => 'Tautan TNC tidak didukung di platform ini';
+
+  @override
+  String get diagAudioPlatformWarn =>
+      'Tanpa audio waktu-nyata — mode berkas WAV tetap tersedia';
+
+  @override
+  String get diagNoRealtime => 'bukan waktu-nyata';
+
+  @override
+  String get diagPermission => 'Izin mikrofon';
+
+  @override
+  String get diagPermissionOk => 'Diberikan';
+
+  @override
+  String get diagSkipped => 'Dilewati (platform tidak didukung)';
+
+  @override
+  String get diagCapture => 'Penangkapan audio';
+
+  @override
+  String diagCaptureOk(int bytes, int rate) {
+    return 'Menerima $bytes byte @${rate}Hz';
+  }
+
+  @override
+  String get diagCaptureNoData =>
+      'Tidak ada data audio — periksa perangkat masukan dan izin';
+
+  @override
+  String diagCaptureFailed(String err) {
+    return 'Gagal memulai penangkapan: $err';
+  }
+
+  @override
+  String get diagSpeaker => 'Keluaran speaker';
+
+  @override
+  String get diagSpeakerOk => 'Nada uji diputar';
+
+  @override
+  String diagSpeakerFail(String err) {
+    return 'Pemutaran gagal: $err';
+  }
+
+  @override
+  String get diagFileIo => 'I/O berkas WAV';
+
+  @override
+  String diagFileIoOk(int rate) {
+    return 'Tulis → baca → dekode identik @${rate}Hz';
+  }
+
+  @override
+  String diagFileWriteFail(String err) {
+    return 'Gagal menulis berkas: $err';
+  }
+
+  @override
+  String get diagFileReadFail => 'Gagal membaca berkas';
+
+  @override
+  String get diagFileDecodeFail =>
+      'Tidak ada paket terdekode dari berkas (mungkin bukan rekaman AFSK 1200)';
+
+  @override
+  String get connAudioSourceHint =>
+      'Mode audio tidak memakai server, filter, atau setelan KISS';
+
+  @override
+  String get testTxTitle => 'Uji pancar';
+
+  @override
+  String get testTxDesc =>
+      'Mengirim paket status untuk membuktikan tautan benar-benar ke udara';
+
+  @override
+  String get testTxAction => 'Pancarkan bingkai uji';
+
+  @override
+  String get testTxSent => 'Bingkai uji diberikan ke tautan';
+
+  @override
+  String testTxFail(String err) {
+    return 'Bingkai uji gagal: $err';
+  }
+
+  @override
+  String get testTxNeedsConnect => 'Hubungkan tautan dulu';
+
+  @override
+  String get testTxHint =>
+      'Ini **benar-benar memancar** (paket status, tanpa koordinat). Pastikan sesuai lisensi dan tanda panggil Anda';
+
+  @override
+  String get audioStatsTitle => 'Statistik audio';
+
+  @override
+  String audioStatRx(int n) {
+    return '$n bingkai diterima';
+  }
+
+  @override
+  String audioStatTx(int n) {
+    return '$n bingkai terkirim';
+  }
+
+  @override
+  String audioStatDrop(int n) {
+    return '$n byte dibuang saat memancar';
+  }
+
+  @override
+  String get audioRestart => 'Mulai ulang tautan audio';
+
+  @override
+  String get audioTxDisabled => '\"Izinkan pancar\" mati — hanya menerima';
+
+  @override
+  String get audioLoopbackHint =>
+      'Uji mandiri benar-benar memodulasi lalu mendemodulasi; \"dibuang saat memancar\" normal pada half-duplex';
+
+  @override
+  String get notifAudioConnected => 'Tautan audio aktif';
+
+  @override
+  String get notifAudioDisconnected => 'Tautan audio terputus';
+
+  @override
+  String connConnectingAudio(String name) {
+    return 'Membuka audio ($name)…';
+  }
+
+  @override
+  String connAudioConnected(String rate) {
+    return 'Tautan audio aktif · $rate';
+  }
+
+  @override
+  String connRetryAudio(int seconds) {
+    return 'Gagal membuka audio · coba lagi dalam ${seconds}s…';
+  }
+
+  @override
+  String connRetryAudioDetail(String detail, int seconds) {
+    return 'Audio gagal ($detail) · coba lagi dalam ${seconds}s…';
+  }
+
+  @override
+  String connAudioLinkLost(int seconds) {
+    return 'Tautan audio terputus · menyambung ulang dalam ${seconds}s…';
+  }
+
+  @override
+  String connAudioPositionSent(String call) {
+    return 'Terkirim via audio · posisi terkirim ($call)';
+  }
+
+  @override
+  String get dataSourceAudio => 'Audio (kartu suara)';
+
+  @override
+  String get dataSourceAudioDesc =>
+      'AFSK 1200 ke/dari radio lewat mic/speaker atau kabel kartu suara';
+
+  @override
+  String get audioSettings => 'Audio (TNC kartu suara)';
+
+  @override
+  String get audioSettingsSubtitle =>
+      'Kirim/terima paket AFSK 1200 dengan kartu suara';
+
+  @override
+  String get audioBackend => 'Backend audio';
+
+  @override
+  String get audioUnsupported =>
+      'Audio waktu-nyata tidak didukung di platform ini (mode berkas WAV tersedia)';
+
+  @override
+  String get audioNeedPermission =>
+      'Izin mikrofon (RECORD_AUDIO) diperlukan — berikan lalu coba lagi';
+
+  @override
+  String get audioCaptureTitle => 'Penangkapan audio';
+
+  @override
+  String get audioCaptureDesc => 'Demodulasi AFSK 1200 dari masukan mic/line';
+
+  @override
+  String get audioCaptureStart => 'Mulai tangkap';
+
+  @override
+  String get audioCaptureStop => 'Hentikan';
+
+  @override
+  String get audioSampleRate => 'Laju sampel';
+
+  @override
+  String get audioSampleRateTip =>
+      '22050Hz adalah nilai umum TNC kartu suara; pakai 44100/48000 bila tidak didukung. Mengubahnya memulai ulang penangkapan';
+
+  @override
+  String get audioLevel => 'Level masukan';
+
+  @override
+  String get audioLevelTip =>
+      'Meter naik saat ada sinyal; \"Demod terkunci\" menyala saat AFSK terdeteksi';
+
+  @override
+  String get audioSynced => 'Demod terkunci';
+
+  @override
+  String get audioUnlocked => 'Tidak terkunci';
+
+  @override
+  String audioBadFrames(int n) {
+    return '$n dekode dibatalkan (derau/kehilangan sinkron)';
+  }
+
+  @override
+  String get audioBaud => 'Laju bit';
+
+  @override
+  String get audioTones => 'Nada (mark/space)';
+
+  @override
+  String get audioTxTitle => 'Pemancaran audio';
+
+  @override
+  String get audioTxDesc =>
+      'Mendengarkan sebelum memancar untuk menghindari tabrakan';
+
+  @override
+  String get audioTxEnabled => 'Izinkan pancar';
+
+  @override
+  String get audioTxEnabledTip =>
+      'Jika mati, hanya menerima — praktis bila hanya ingin memantau beacon';
+
+  @override
+  String get audioTxDelayTip =>
+      'Panjang preamble: memberi waktu demod lawan mengunci dan PTT radio aktif';
+
+  @override
+  String get audioToneMark => 'Nada mark (Hz)';
+
+  @override
+  String get audioToneSpace => 'Nada space (Hz)';
+
+  @override
+  String get audioMarkTip =>
+      'Bell 202 menetapkan mark 1200Hz / space 2200Hz; toleransinya hanya beberapa Hz';
+
+  @override
+  String get audioSpaceTip =>
+      'Nada space. Bersama mark menentukan shift FSK (nominal 1000Hz)';
+
+  @override
+  String get audioBaudTip =>
+      'APRS di VHF selalu 1200 bd (Bell 202); 300 untuk HF';
+
+  @override
+  String get audioTxDelayLabel => 'Preamble Tx (ms)';
+
+  @override
+  String get audioTnc2Tip =>
+      'Format SRC>DEST,PATH:info, mis. BG7LZQ-9>APALOC:>TEST';
+
+  @override
+  String get audioCsmaWait => 'Tunggu kanal bebas (ms)';
+
+  @override
+  String get audioCsmaWaitTip =>
+      'Berapa lama menunggu saat kanal sibuk; 0 = langsung pancar';
+
+  @override
+  String get audioStopTx => 'Hentikan pancar';
+
+  @override
+  String get audioWavTitle => 'Mode berkas WAV';
+
+  @override
+  String get audioWavDesc =>
+      'Dekode rekaman secara offline, atau ekspor paket sebagai audio';
+
+  @override
+  String get audioWavPath => 'Jalur berkas';
+
+  @override
+  String get audioWavDecodeAction => 'Dekode WAV ini';
+
+  @override
+  String get audioWavExportAction => 'Ekspor paket ini';
+
+  @override
+  String get audioWavTnC2 => 'Paket untuk ekspor (TNC2)';
+
+  @override
+  String get audioWavNone =>
+      'Tidak ada paket terdekode (mungkin bukan rekaman AFSK 1200)';
+
+  @override
+  String audioWavFound(int n) {
+    return '$n paket terdekode';
+  }
+
+  @override
+  String audioWavWritten(String path) {
+    return 'Ditulis ke $path';
+  }
+
+  @override
+  String audioWavFailed(String err) {
+    return 'Gagal baca/tulis berkas: $err';
+  }
+
+  @override
   String connTncConnected(String arg) {
     return 'TNC terhubung · $arg';
   }
@@ -1144,6 +1793,107 @@ class AppLocalizationsId extends AppLocalizations {
   String translateFreeFailed(String e) {
     return 'Endpoint gratis sedang tidak tersedia ($e) · ganti ke Google / Baidu / kustom di pengaturan';
   }
+
+  @override
+  String get translateProviderAuto => 'Otomatis (disarankan)';
+
+  @override
+  String get translateProviderAutoDesc =>
+      'Mencoba beberapa endpoint tanpa kunci dan memakai hasil terjemahan pertama yang válid';
+
+  @override
+  String get translateProviderGooglePublic =>
+      'Endpoint publik Google (tanpa kunci)';
+
+  @override
+  String get translateProviderGooglePublicDesc =>
+      'Kualitas baik, tetapi bisa dibatasi (teramati 429)';
+
+  @override
+  String get translateProviderMyMemory => 'MyMemory (tanpa kunci)';
+
+  @override
+  String get translateProviderMyMemoryDesc =>
+      'API gratis resmi, tetapi berupa memori terjemahan: mengembalikan teks asli bila tidak ada kecocokan';
+
+  @override
+  String get translateProviderLibre => 'LibreTranslate (bisa self-host)';
+
+  @override
+  String get translateProviderLibreDesc =>
+      'Open source; paling andal bila di-self-host. Instans publik kini butuh kunci dan sering tanpa bahasa Tionghoa';
+
+  @override
+  String get translateLibreUrl => 'URL instans';
+
+  @override
+  String get translateLibreKey =>
+      'Kunci API instans (perlu untuk publik; kosongkan bila self-host)';
+
+  @override
+  String get translateUsedProvider => 'Yang dipakai';
+
+  @override
+  String get translateUntranslated =>
+      'Endpoint tidak benar-benar menerjemahkan (mengembalikan teks asli) — mencoba yang berikutnya';
+
+  @override
+  String translateAutoAllFailed(String e) {
+    return 'Semua endpoint tanpa kunci gagal ($e) · beralih ke kunci Google/Baidu atau instans sendiri di pengaturan';
+  }
+
+  @override
+  String get translateLangUnsupported =>
+      'Penyedia ini tidak bisa menerjemahkan ke bahasa itu · coba “Otomatis” atau penyedia lain';
+
+  @override
+  String get translateLangScopeNote =>
+      'Cakupan bahasa tiap penyedia berbeda (mis. Baidu standar mendukung bahasa Indonesia “id”, tetapi tidak semua arah) — bila tidak didukung, aplikasi menyarankan Otomatis atau penyedia lain';
+
+  @override
+  String get langNameZh => 'Tionghoa Sederhana';
+
+  @override
+  String get langNameZhTw => 'Tionghoa Tradisional';
+
+  @override
+  String get langNameEn => 'Inggris';
+
+  @override
+  String get langNameJa => 'Jepang';
+
+  @override
+  String get langNameKo => 'Korea';
+
+  @override
+  String get langNameEs => 'Spanyol';
+
+  @override
+  String get langNameFr => 'Prancis';
+
+  @override
+  String get langNameDe => 'Jerman';
+
+  @override
+  String get langNameRu => 'Rusia';
+
+  @override
+  String get langNamePt => 'Portugis';
+
+  @override
+  String get langNameIt => 'Italia';
+
+  @override
+  String get langNameId => 'Indonesia';
+
+  @override
+  String get langNameTh => 'Thai';
+
+  @override
+  String get langNameVi => 'Vietnam';
+
+  @override
+  String get langNameAr => 'Arab';
 
   @override
   String get translateOutgoing =>
@@ -1327,7 +2077,12 @@ class AppLocalizationsId extends AppLocalizations {
   String get translateLangAuto => 'Deteksi otomatis';
 
   @override
-  String get translateSameLang => 'Sudah dalam bahasa target';
+  String get translateSameLang =>
+      'Terjemahan sama dengan aslinya · mungkin tidak perlu diterjemahkan, atau penyedia gagal';
+
+  @override
+  String get translateNotNeeded =>
+      'Tidak ada yang perlu diterjemahkan (angka / simbol / tanda panggil)';
 
   @override
   String translateBubbleCount(int n) {
@@ -1366,6 +2121,101 @@ class AppLocalizationsId extends AppLocalizations {
   @override
   String get dataSourceSwitchHint =>
       'Mengganti sumber data akan memutus koneksi saat ini';
+
+  @override
+  String get dataSourcePkwdwpl => 'PKWDWPL (waypoint Kenwood)';
+
+  @override
+  String get dataSourcePkwdwplDesc =>
+      'Baca kalimat waypoint Kenwood \$PKWDWPL dari radio lewat Bluetooth/serial (hanya terima)';
+
+  @override
+  String get dataSourcePkwdwplHint =>
+      'PKWDWPL adalah tautan **hanya terima**: menerima stasiun tetapi tidak pernah memancar (gunakan APRS-IS / TNC / audio untuk memancar)';
+
+  @override
+  String connConnectingPkwdwpl(String arg) {
+    return 'Menghubungkan PKWDWPL ($arg)…';
+  }
+
+  @override
+  String connPkwdwplConnected(String arg) {
+    return 'PKWDWPL terhubung · $arg';
+  }
+
+  @override
+  String get pkwdwplDeviceTitle => 'Perangkat PKWDWPL';
+
+  @override
+  String get pkwdwplDeviceDesc =>
+      'Pasangkan port radio dan lihat status penerimaan waypoint';
+
+  @override
+  String get pkwdwplBindTitle => 'Pemasangan perangkat dan status';
+
+  @override
+  String get pkwdwplBindSubtitle =>
+      'Pilih port serial atau Bluetooth yang mengeluarkan kalimat \$PKWDWPL';
+
+  @override
+  String get pkwdwplRxOnly => 'Hanya terima';
+
+  @override
+  String get pkwdwplReadOnly =>
+      'Hanya terima · perangkat ini tidak memancarkan apa pun';
+
+  @override
+  String get deviceConflictTitle => 'Dua tautan terikat ke perangkat yang sama';
+
+  @override
+  String get deviceConflictDesc =>
+      'Bila TNC dan PKWDWPL menunjuk perangkat yang sama, data terima dibagi antara keduanya — gejalanya \"bisa kirim tetapi tidak bisa terima\". Gantilah salah satunya ke perangkat lain. TNC diprioritaskan: PKWDWPL akan menolak terhubung.';
+
+  @override
+  String get deviceInUseByTnc => 'Sedang dipakai TNC — tidak bisa diikat lagi';
+
+  @override
+  String get deviceInUseByPkwdwpl =>
+      'Sedang dipakai PKWDWPL — tidak bisa diikat lagi';
+
+  @override
+  String rxOnlyBanner(String arg) {
+    return '$arg terhubung · hanya terima (sumber kirim belum aktif)';
+  }
+
+  @override
+  String get pkwdwplTip =>
+      'Setel format keluaran port PC / GPS di radio ke \"\$PKWDWPL\" (biasanya 4800 8N1). Tautan ini hanya baca dan tidak memancarkan apa pun.';
+
+  @override
+  String get pkwdwplStrictChecksum => 'Checksum ketat (buang jika tidak cocok)';
+
+  @override
+  String get pkwdwplStrictChecksumTip =>
+      'Nonaktif secara bawaan: ketidakcocokan hanya ditandai dan dicatat, tidak dibuang, karena pada kabel lokal hal ini biasanya berarti format firmware berbeda dari manual. Membuang semuanya akan membuat layar kosong dan jauh lebih sulit ditelusuri.';
+
+  @override
+  String get pkwdwplErrReadOnly => 'tautan hanya terima tidak dapat memancar';
+
+  @override
+  String get pkwdwplStatTitle => 'Penerimaan waypoint';
+
+  @override
+  String pkwdwplStats(String rx) {
+    return '$rx waypoint diterima';
+  }
+
+  @override
+  String get pkwdwplStatRejected => 'Kalimat dibuang atau tidak valid';
+
+  @override
+  String get pkwdwplStatMismatch => 'Ketidakcocokan checksum';
+
+  @override
+  String get pkwdwplStatIgnored => 'Kalimat NMEA lain (diabaikan)';
+
+  @override
+  String get pkwdwplLogEmpty => 'Belum ada log PKWDWPL';
 
   @override
   String get tncBindTitle => 'TNC Bluetooth';

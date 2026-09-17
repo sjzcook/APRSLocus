@@ -6,6 +6,9 @@ import 'widgets.dart';
 import 'settings_widgets.dart';
 import 'log_page.dart';
 import 'tile_map.dart';
+import 'audio_page.dart';
+import 'device_page.dart';
+import 'pkwdwpl_device_page.dart';
 import 'tnc_page.dart';
 import 'early_member.dart';
 import 'weather.dart';
@@ -1027,6 +1030,44 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
             SettingsRow2(S.of(context).beaconsSent,
             S.of(context).beaconsSentCount('${st.beaconsSent}')),
             SettingsRow2(S.of(context).nextBeacon, st.nextBeaconIn),
+            // 射频来源没开「射频信标」时，倒计时不会走动也不会发射。
+            // 这里直接把「为什么」和「怎么改」摆在同一条上：只显示
+            // 「射频信标未开启」会让人去找开关，而开关在另一张卡片里。
+            if (st.beaconNeedsRfEnable)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SettingsHint(S.of(context).beaconRfEnableHint,
+                        color: C.orange,
+                        icon: Icons.warning_amber_rounded),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          await st.enableRfBeacon();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  '${S.of(context).beaconRfEnabled}'
+                                  ' · ${S.of(context).beaconRfEnableWarn}'),
+                              backgroundColor: C.green,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.wifi_tethering_rounded, size: 16),
+                        label: Text(S.of(context).beaconRfEnableAction,
+                            style: ts(12, c: Colors.white, w: FontWeight.w700)),
+                        style: FilledButton.styleFrom(backgroundColor: C.orange),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // 模拟位置模式：不显示 GPS 启动按钮，改为提示
             if (st.useSimLocation)
               Padding(
@@ -1552,22 +1593,34 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
           icon: Icons.wifi_rounded,
           color: C.purple,
           body: Column(children: [
-            // ⓪ 数据来源：TNC 模式下列表里的服务器/过滤/存储三项都不适用，
-            //    所以先让用户确认来源，再决定下面显示什么 —— 比「灰掉一片
-            //    用户看不懂的输入框」清楚得多。
+            // ⓪ 数据来源：先让用户确认来源，再决定下面显示什么 —— 比
+            //    「灰掉一片用户看不懂的输入框」清楚得多。
             DataSourceCard(state: st),
             const SizedBox(height: 16),
-            if (st.usingTnc)
-              _tncCard()
-            else ...[
-              // ① APRS-IS 连接（连接状态 + 服务器参数，原为两张重复卡）
+            // 多选：**每条已启用的来源都要有自己的卡片**，顺序固定为
+            // APRS-IS → TNC → 音频。此前只按「发射来源」显示一张，
+            // 于是「APRS-IS + TNC」时 TNC 的绑定状态/统计完全看不到。
+            if (st.aprsIsOn) ...[
               _connectionCard(),
               const SizedBox(height: 16),
-              // ② 过滤中心：只管「取哪些台站」
               _filterCard(),
               const SizedBox(height: 16),
-              // ③ 存储上限：只管「保留多少数据」（原误放在过滤卡片内）
               _storageCard(),
+              const SizedBox(height: 16),
+            ],
+            if (st.tncOn) ...[
+              _tncCard(),
+              const SizedBox(height: 16),
+            ],
+            if (st.audioOn) ...[
+              _audioCard(),
+              const SizedBox(height: 16),
+            ],
+            // PKWDWPL 是只读链路：有它自己的卡片（设备/统计/校验严格度），
+            // 且**不复用**服务器那张卡（地址/端口/passcode/过滤器全不生效）
+            if (st.pkwdwplOn) ...[
+              _pkwdwplCard(),
+              const SizedBox(height: 16),
             ],
             const SizedBox(height: 16),
             // ④ 接收筛选：按国家或地区（客户端本地筛选，两个来源都适用）
@@ -1707,8 +1760,31 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
   }
 
   Widget _connBanner() {
-    // 数据来源标签：射频模式下写「APRS-IS」会误导用户以为走的是网络
-    final srcLabel = st.usingTnc ? S.of(context).dataSourceTnc : 'APRS-IS';
+    // 数据来源标签：多选时把**全部已启用来源**列出来（只写发射来源会
+    // 让用户以为另一条没在工作），并标出发射是哪条。
+    final names = <String>[
+      if (st.aprsIsOn) 'APRS-IS',
+      if (st.tncOn) S.of(context).dataSourceTnc,
+      if (st.audioOn) S.of(context).dataSourceAudio,
+      if (st.pkwdwplOn) S.of(context).dataSourcePkwdwpl,
+    ];
+    final txIdx = [
+      if (st.aprsIsOn) AppState.srcAprsIs,
+      if (st.tncOn) AppState.srcTnc,
+      if (st.audioOn) AppState.srcAudio,
+      if (st.pkwdwplOn) AppState.srcPkwdwpl,
+    ].indexOf(st.dataSource);
+    final srcLabel = names.isEmpty
+        ? 'APRS-IS'
+        : (names.length == 1
+            ? names.first
+            : names
+                .asMap()
+                .entries
+                .map((e) => e.key == txIdx
+                    ? '${e.value}(${S.of(context).dataSourceTxBadge})'
+                    : e.value)
+                .join(' + '));
     final col = st.connected
         ? C.green
         : st.connecting
@@ -1811,6 +1887,125 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
                 foregroundColor: C.indigo,
                 side: BorderSide(color: C.indigo.withValues(alpha: 0.5)),
                 textStyle: ts(12, w: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 音频（声卡 TNC）模式下的连接卡片。
+  ///
+  /// 与 `_tncCard()` 同样的取舍：不复用服务器那张卡片（地址/端口/passcode/
+  /// 过滤器在音频模式下全不生效），只放「链路状态 + 音频关键信息 + 进入音频页」。
+  Widget _audioCard() {
+    final a = st.audio;
+    return SettingsSectionCard(
+      title: S.of(context).connectionCard2,
+      subtitle: S.of(context).dataSourceAudioDesc,
+      icon: Icons.graphic_eq_rounded,
+      color: C.cyan,
+      children: [
+        _connBanner(),
+        Divider(height: 1, color: C.border),
+        SettingsRow2(
+          S.of(context).audioBackend,
+          a.backendName,
+        ),
+        SettingsRow2(
+          S.of(context).audioSampleRate,
+          '${a.config.afsk.sampleRate} Hz',
+        ),
+        if (st.connected)
+          SettingsRow2(
+            S.of(context).connection,
+            S.of(context).tncStats('${a.rxFrames}', '${a.txFrames}'),
+          ),
+        // 「会不会真的发射」是关键信息，放在连接卡片里比藏进音频页更容易被看到
+        SettingsRow2(
+          S.of(context).kissRfBeacon,
+          a.config.rfBeacon
+              ? S.of(context).tncSwitchOn
+              : S.of(context).tncSwitchOff,
+          valueColor: a.config.rfBeacon ? C.green : C.grey,
+        ),
+        SettingsHint(S.of(context).connAudioSourceHint),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AudioSettingsPage(state: st),
+                ),
+              ),
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: Text(S.of(context).audioSettings, style: ts(12, w: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: C.cyan,
+                side: BorderSide(color: C.cyan.withValues(alpha: 0.5)),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// PKWDWPL（Kenwood 航点）模式下的连接卡片。
+  ///
+  /// 与 `_tncCard()` / `_audioCard()` 同一取舍：只放这条链路**真的有**的东西。
+  /// 额外多写一条「只收不发」—— 它没有发射开关、没有中继路径、没有 67 字符
+  /// 限长，不写明的话用户会一直找「怎么用它发位置」。
+  Widget _pkwdwplCard() {
+    final p = st.pkwdwpl;
+    return SettingsSectionCard(
+      title: S.of(context).connectionCard2,
+      subtitle: S.of(context).dataSourcePkwdwplDesc,
+      icon: Icons.route_rounded,
+      color: C.green,
+      children: [
+        _connBanner(),
+        Divider(height: 1, color: C.border),
+        SettingsRow2(
+          S.of(context).tncBoundDevice,
+          p.device?.label ?? S.of(context).tncNotBound,
+          valueColor: p.device == null ? C.grey : C.ink,
+        ),
+        SettingsRow2(
+          S.of(context).connection,
+          p.connected
+              ? S.of(context).pkwdwplStats('${p.rxFrames}')
+              : S.of(context).disconnected,
+          valueColor: p.connected ? C.green : C.slate,
+        ),
+        // 只收不发：这是它与 TNC 最大的区别，必须写在卡片里
+        SettingsRow2(
+          S.of(context).dataSourcePkwdwpl,
+          S.of(context).pkwdwplRxOnly,
+          valueColor: C.orange,
+        ),
+        SettingsHint(S.of(context).dataSourcePkwdwplHint, color: C.orange),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PkwdwplDevicePage(state: st),
+                ),
+              ),
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: Text(S.of(context).pkwdwplDeviceTitle,
+                  style: ts(12, w: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: C.green,
+                side: BorderSide(color: C.green.withValues(alpha: 0.5)),
               ),
             ),
           ),
@@ -2648,12 +2843,16 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
 ///
 /// 完整实现在 `tnc_page.dart`：蓝牙/串口 TNC 绑定 + KISS 参数下发。
 /// 这里只做转发，避免把 3000 行的 settings_pages.dart 继续撑大。
+/// 兼容旧入口名：实际实现已拆到 `lib/device_page.dart`（概览页）。
+///
+/// 保留这个名字是因为连接页 / 设置首页 / OOBE 都用它做跳转入口，
+/// 改名只会带来无意义的 churn。
 class DeviceSettingsPage extends StatelessWidget {
   final AppState state;
   const DeviceSettingsPage({super.key, required this.state});
 
   @override
-  Widget build(BuildContext context) => TncSettingsPage(state: state);
+  Widget build(BuildContext context) => DeviceOverviewPage(state: state);
 }
 
 /// ─── 数据维护 ───

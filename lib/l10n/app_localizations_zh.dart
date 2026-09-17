@@ -1032,6 +1032,617 @@ class AppLocalizationsZh extends AppLocalizations {
   String get codeContributionTranslation => '翻译';
 
   @override
+  String get dataSourceTxHint =>
+      '可以同时勾选多条链路一起收报文，但**发射只有一条**（右侧圆点为发射来源）——同一个呼号从两条链路发出去会造成重复报文。';
+
+  @override
+  String get dataSourceTxBadge => '发射';
+
+  @override
+  String get dataSourceIgateHint =>
+      '想当网关（把射频收到的报文转到互联网）就同时勾选 APRS-IS 与 TNC/音频，然后在下面打开「网关」。';
+
+  @override
+  String get igateTitle => '网关（iGate）';
+
+  @override
+  String get igateSubtitle => '把射频收到的报文送上 APRS-IS';
+
+  @override
+  String get igateEnable => '启用网关';
+
+  @override
+  String get igateHint =>
+      '射频上收到的报文会被送上 APRS-IS（自动加上 qAr/qAR 与你的呼号标识来路）。需要同时启用 APRS-IS 和一个射频来源（TNC / 音频）。';
+
+  @override
+  String get igateNeedRf => '还差一个射频来源：请在上面的「数据来源」里勾选 TNC 或音频，否则网关没有可转递的射频链路。';
+
+  @override
+  String get igateNeedIs => '还没启用 APRS-IS：请在上面勾选 APRS-IS，否则网关没有可转递的目标网络。';
+
+  @override
+  String get igateTwoWay => '双向网关（向射频转递消息）';
+
+  @override
+  String get igateTwoWayHint =>
+      '打开后会**在射频上真实发射**：只转「发给最近在射频上听到过的台站」的点对点消息（位置/天气等广播不转，避免占满信道）。关闭时只做 RF→IS。';
+
+  @override
+  String get igateStatToIs => '已转递 → APRS-IS（条）';
+
+  @override
+  String get igateStatToRf => '已转递 → 射频（条）';
+
+  @override
+  String get igateStatDup => '重复丢弃（条）';
+
+  @override
+  String get igateResetStats => '清空统计';
+
+  @override
+  String grpSysJoined(String call) {
+    return '$call 加入了群聊';
+  }
+
+  @override
+  String grpSysLeft(String call) {
+    return '$call 离开了群聊';
+  }
+
+  @override
+  String grpSysJoinReq(String call) {
+    return '$call 申请加入群聊';
+  }
+
+  @override
+  String grpSysDeclined(String call) {
+    return '$call 拒绝了邀请';
+  }
+
+  @override
+  String get grpInviteTitle => '群聊邀请';
+
+  @override
+  String grpInviteBody(String from, String name) {
+    return '$from 邀请你加入「$name」';
+  }
+
+  @override
+  String get grpNameInvalid => '群名不能为空、不能包含冒号或换行';
+
+  @override
+  String grpNameTooLong(int max) {
+    return '群名最长 $max 个字符（过长会让邀请报文超出 APRS 消息上限）';
+  }
+
+  @override
+  String grpInviteSent(int n) {
+    return '已向 $n 位成员发出邀请';
+  }
+
+  @override
+  String get grpSelfPending => '等待群主确认';
+
+  @override
+  String get deviceOverviewTitle => '设备';
+
+  @override
+  String get deviceOverviewSubtitle => '数据来源、链路状态与自检';
+
+  @override
+  String get deviceCurrentLink => '当前链路';
+
+  @override
+  String get deviceCurrentLinkDesc => '只读摘要 · 改参数请进对应子页';
+
+  @override
+  String get deviceEntries => '设备与参数';
+
+  @override
+  String get deviceEntriesDesc => '每条链路一个子页，各管各的参数';
+
+  @override
+  String get tncDeviceTitle => 'TNC 设备与参数';
+
+  @override
+  String get tncDeviceDesc => '蓝牙/串口绑定、初始化串、KISS 参数与发射自检';
+
+  @override
+  String get deviceLogTitle => '链路日志';
+
+  @override
+  String get deviceLogDesc => '显示当前来源的日志（TNC / 音频自动切换）';
+
+  @override
+  String get tncInitTitle => 'TNC 初始化串';
+
+  @override
+  String get tncInitSubtitle => '连接后逐行发送（等价 APRSdroid 的 kiss.init）';
+
+  @override
+  String get tncInitTip =>
+      '若 TNC「能收不能发」，先在这里试：很多蓝牙/串口 TNC 模块上电停在命令模式，必须先收到 KISS ON、RESTART 等指令才进入 KISS 转发状态。每行一条命令（发送时自动补 CRLF）。';
+
+  @override
+  String get tncInitDelay => '行间隔 (ms)';
+
+  @override
+  String get tncInitDelayTip => '每行命令之间的等待时间。模块处理命令需要时间，太短会丢命令';
+
+  @override
+  String get tncInitSendAction => '立即发送初始化串';
+
+  @override
+  String tncInitSent(int n) {
+    return '已发送 $n 行初始化串';
+  }
+
+  @override
+  String get tncInitEmpty => '未填写初始化串';
+
+  @override
+  String get tncPushParams => '连接后下发 KISS 参数';
+
+  @override
+  String get tncPushParamsTip =>
+      '默认关闭（与 APRSdroid 一致）。打开后连接时会把上面的参数推给 TNC，覆盖它自己的配置 —— 参数不合适可能让它一直退避而不发射，所以只在需要统一管理时打开。';
+
+  @override
+  String get tncTxTestTitle => '发射自检';
+
+  @override
+  String get tncTxTestSubtitle => '向 TNC 写一帧测试包，判断问题在链路还是 TNC';
+
+  @override
+  String get tncTxTestHint =>
+      '发的是一帧状态包（不含坐标），不会把台站在 aprs.fi 上挪位置。若这里显示「已写入」却仍然不发射，问题在 TNC 侧：先试初始化串（KISS ON / RESTART），再检查 TxDelay 与信道占用。';
+
+  @override
+  String get tncTxTestAction => '写入测试帧';
+
+  @override
+  String get tncTxTestOkPrefix => '已写入';
+
+  @override
+  String tncTxTestOk(String n) {
+    return '已写入 TNC（累计 $n 帧）。若电台仍不发射，问题在 TNC 侧：试初始化串或检查 TxDelay。';
+  }
+
+  @override
+  String tncTxTestFail(String err) {
+    return '未写入：$err';
+  }
+
+  @override
+  String get tncNeedConnected => '请先连接 TNC';
+
+  @override
+  String msgLenCounter(int chars, int bytes) {
+    return '$chars/67 字符 · 整包 $bytes/512 字节';
+  }
+
+  @override
+  String msgOverSpecAsk(int chars) {
+    return '这条消息 $chars 个字符，超过 APRS 规范的 67 字符上限。多数客户端仍能读出，但部分客户端/网关会截断或拒收，对方可能解析不出来。仍要发送吗？';
+  }
+
+  @override
+  String msgOverServerLimit(int bytes, int over) {
+    return '整包 $bytes 字节，超过 APRS-IS 单行上限 512 字节，服务器可能直接丢弃整包（连报头都送不到）。请缩短约 $over 字节。';
+  }
+
+  @override
+  String get msgSendAnyway => '仍要发送';
+
+  @override
+  String get msgSpecLimitHint =>
+      'APRS 规范建议单条消息不超过 67 字符：超长文本在部分客户端上会显示不全或解析失败。';
+
+  @override
+  String get msgBlockedTooLong => '已阻止发送：整包超出 APRS-IS 上限';
+
+  @override
+  String get beaconRfBeaconOff => '射频信标未开启';
+
+  @override
+  String get beaconRfEnableHint =>
+      '射频来源的自动发射需要显式打开「射频信标」。在此之前不会自动发射位置（倒计时也不会走动）。';
+
+  @override
+  String get beaconRfEnableAction => '开启射频信标';
+
+  @override
+  String get beaconRfEnabled => '已开启射频信标，将按间隔自动发射';
+
+  @override
+  String get beaconRfEnableWarn => '发射将使用你的呼号，请在执照范围内操作';
+
+  @override
+  String get diagTitle => '链路自检';
+
+  @override
+  String get diagSubtitle => '逐层确认协议、权限、设备到底哪一环有问题';
+
+  @override
+  String get diagRun => '开始自检';
+
+  @override
+  String get diagRunning => '自检中…';
+
+  @override
+  String diagPassed(int n) {
+    return '通过 $n 项';
+  }
+
+  @override
+  String diagFailed(int n) {
+    return '失败 $n 项';
+  }
+
+  @override
+  String get diagHint => '协议回路不接电台也能跑：先确认软件层没问题，再去查设备与接线';
+
+  @override
+  String get diagTncSection => 'TNC（KISS / AX.25）';
+
+  @override
+  String get diagAudioSection => '音频（AFSK 1200）';
+
+  @override
+  String get diagKissEscape => 'KISS 转义';
+
+  @override
+  String get diagKissEscapeFail => 'KISS 转义还原失败（软件层问题，换设备也没用）';
+
+  @override
+  String get diagAx25 => 'AX.25 帧编解码';
+
+  @override
+  String get diagAx25Fail => 'AX.25 编码失败（报文格式不合法）';
+
+  @override
+  String diagAx25Mismatch(String got) {
+    return 'AX.25 回路不一致，解回：$got';
+  }
+
+  @override
+  String get diagFcs => 'FCS 校验';
+
+  @override
+  String get diagFcsFail => 'FCS 校验异常（改动一个字节本应被拒收）';
+
+  @override
+  String get diagTncLoopback => 'TNC 协议回路';
+
+  @override
+  String diagTncLoopbackOk(int len) {
+    return 'KISS/AX.25 编解码往返一致（$len 字节）';
+  }
+
+  @override
+  String get diagAfskLoopback => 'AFSK 调制解调回路';
+
+  @override
+  String diagAfskLoopbackOk(int samples, int rate) {
+    return '调制→解调一致（$samples 采样 @${rate}Hz）';
+  }
+
+  @override
+  String diagAfskLoopbackFail(int n) {
+    return '解出 $n 帧（应为 1 帧）';
+  }
+
+  @override
+  String get diagAfskLevelFail => '波形幅度过低（调制结果接近静音）';
+
+  @override
+  String get diagPlatform => '平台能力';
+
+  @override
+  String diagPlatformOk(String name) {
+    return '可用 · 后端 $name';
+  }
+
+  @override
+  String get diagTncPlatformNo => '当前平台不支持 TNC 链路';
+
+  @override
+  String get diagAudioPlatformWarn => '不支持实时音频 · 仍可用 WAV 文件模式';
+
+  @override
+  String get diagNoRealtime => '非实时';
+
+  @override
+  String get diagPermission => '录音权限';
+
+  @override
+  String get diagPermissionOk => '已授权';
+
+  @override
+  String get diagSkipped => '已跳过（平台不支持）';
+
+  @override
+  String get diagCapture => '音频采集';
+
+  @override
+  String diagCaptureOk(int bytes, int rate) {
+    return '收到 $bytes 字节 @${rate}Hz';
+  }
+
+  @override
+  String get diagCaptureNoData => '没有收到任何音频数据 · 检查输入设备与权限';
+
+  @override
+  String diagCaptureFailed(String err) {
+    return '打开采集失败：$err';
+  }
+
+  @override
+  String get diagSpeaker => '扬声器输出';
+
+  @override
+  String get diagSpeakerOk => '测试音已播放';
+
+  @override
+  String diagSpeakerFail(String err) {
+    return '播放失败：$err';
+  }
+
+  @override
+  String get diagFileIo => 'WAV 文件读写';
+
+  @override
+  String diagFileIoOk(int rate) {
+    return '写入→读出→解调一致 @${rate}Hz';
+  }
+
+  @override
+  String diagFileWriteFail(String err) {
+    return '文件写入失败：$err';
+  }
+
+  @override
+  String get diagFileReadFail => '文件读取失败';
+
+  @override
+  String get diagFileDecodeFail => '文件里的音频解不出报文（可能不是 AFSK 1200 录音）';
+
+  @override
+  String get connAudioSourceHint => '音频模式下不使用服务器、过滤器与 KISS 参数';
+
+  @override
+  String get testTxTitle => '测试发射';
+
+  @override
+  String get testTxDesc => '发一条状态报文，验证链路真的通到空中';
+
+  @override
+  String get testTxAction => '发射测试帧';
+
+  @override
+  String get testTxSent => '测试帧已交给链路';
+
+  @override
+  String testTxFail(String err) {
+    return '测试帧发送失败：$err';
+  }
+
+  @override
+  String get testTxNeedsConnect => '请先连接链路';
+
+  @override
+  String get testTxHint => '这是**真实发射**（状态报文，不含坐标）。射频发射请确认在自己的呼号与执照范围内';
+
+  @override
+  String get audioStatsTitle => '音频统计';
+
+  @override
+  String audioStatRx(int n) {
+    return '收 $n 帧';
+  }
+
+  @override
+  String audioStatTx(int n) {
+    return '发 $n 帧';
+  }
+
+  @override
+  String audioStatDrop(int n) {
+    return '发射期间丢弃 $n 字节';
+  }
+
+  @override
+  String get audioRestart => '重启音频链路';
+
+  @override
+  String get audioTxDisabled => '「允许发射」已关闭，仅接收';
+
+  @override
+  String get audioLoopbackHint => '自检会真的做一次调制→解调；提示「发射期间丢弃」属正常半双工行为';
+
+  @override
+  String get notifAudioConnected => '音频链路在线';
+
+  @override
+  String get notifAudioDisconnected => '音频链路已断开';
+
+  @override
+  String connConnectingAudio(String name) {
+    return '正在打开音频（$name）…';
+  }
+
+  @override
+  String connAudioConnected(String rate) {
+    return '音频链路在线 · $rate';
+  }
+
+  @override
+  String connRetryAudio(int seconds) {
+    return '音频链路打开失败 · ${seconds}s 后重试…';
+  }
+
+  @override
+  String connRetryAudioDetail(String detail, int seconds) {
+    return '音频打开失败（$detail）· ${seconds}s 后重试…';
+  }
+
+  @override
+  String connAudioLinkLost(int seconds) {
+    return '音频链路中断 · $seconds秒后自动重连…';
+  }
+
+  @override
+  String connAudioPositionSent(String call) {
+    return '音频已发射 · 位置已发送 ($call)';
+  }
+
+  @override
+  String get dataSourceAudio => '音频（声卡）';
+
+  @override
+  String get dataSourceAudioDesc => '用麦克风/扬声器或声卡线接电台，收发 AFSK 1200';
+
+  @override
+  String get audioSettings => '音频（声卡 TNC）';
+
+  @override
+  String get audioSettingsSubtitle => '用声卡收发 AFSK 1200 报文';
+
+  @override
+  String get audioBackend => '音频后端';
+
+  @override
+  String get audioUnsupported => '当前平台不支持实时音频（可用 WAV 文件模式）';
+
+  @override
+  String get audioNeedPermission => '需要录音权限（RECORD_AUDIO），请授权后重试';
+
+  @override
+  String get audioCaptureTitle => '音频采集';
+
+  @override
+  String get audioCaptureDesc => '从麦克风/线路输入解调 AFSK 1200';
+
+  @override
+  String get audioCaptureStart => '打开采集';
+
+  @override
+  String get audioCaptureStop => '停止采集';
+
+  @override
+  String get audioSampleRate => '采样率';
+
+  @override
+  String get audioSampleRateTip =>
+      '22050Hz 是声卡 TNC 常用值；设备不支持时改用 44100/48000。修改会重启采集';
+
+  @override
+  String get audioLevel => '输入电平';
+
+  @override
+  String get audioLevelTip => '有信号时电平条会抬起；收到 AFSK 时「解调锁定」会点亮';
+
+  @override
+  String get audioSynced => '解调锁定';
+
+  @override
+  String get audioUnlocked => '未锁定';
+
+  @override
+  String audioBadFrames(int n) {
+    return '解码中止 $n 次（噪声/失步）';
+  }
+
+  @override
+  String get audioBaud => '比特率';
+
+  @override
+  String get audioTones => '音调（标/空）';
+
+  @override
+  String get audioTxTitle => '音频发射';
+
+  @override
+  String get audioTxDesc => '发射前先听信道，避免与其它台站碰撞';
+
+  @override
+  String get audioTxEnabled => '允许发射';
+
+  @override
+  String get audioTxEnabledTip => '关闭后只接收不发射（只想听信标时最省心）';
+
+  @override
+  String get audioTxDelayTip => '发射前导时长：给对端解调器锁定时间、给电台 PTT 建立时间';
+
+  @override
+  String get audioToneMark => '标号频率 (Hz)';
+
+  @override
+  String get audioToneSpace => '空号频率 (Hz)';
+
+  @override
+  String get audioMarkTip =>
+      'Bell 202 规定标号 1200Hz、空号 2200Hz；只有 ±几 Hz 的容差，不要随意改';
+
+  @override
+  String get audioSpaceTip => '空号音调。与标号音调一起决定 FSK 频偏（标准为 1000Hz）';
+
+  @override
+  String get audioBaudTip => 'APRS 在 VHF 上固定 1200 bd（Bell 202），HF 才用 300';
+
+  @override
+  String get audioTxDelayLabel => '发射前导 (ms)';
+
+  @override
+  String get audioTnc2Tip => '格式 SRC>DEST,PATH:info，例如 BG7LZQ-9>APALOC:>TEST';
+
+  @override
+  String get audioCsmaWait => '发射前等待信道空闲 (ms)';
+
+  @override
+  String get audioCsmaWaitTip => '检测到信道占用时最多等待多久；0 = 不等待直接发射';
+
+  @override
+  String get audioStopTx => '停止发射';
+
+  @override
+  String get audioWavTitle => 'WAV 文件模式';
+
+  @override
+  String get audioWavDesc => '离线解码一段录音，或把报文导出成音频文件';
+
+  @override
+  String get audioWavPath => '文件路径';
+
+  @override
+  String get audioWavDecodeAction => '解码此 WAV';
+
+  @override
+  String get audioWavExportAction => '导出此报文';
+
+  @override
+  String get audioWavTnC2 => '待导出报文 (TNC2)';
+
+  @override
+  String get audioWavNone => '未解出报文（可能不是 AFSK 1200 录音）';
+
+  @override
+  String audioWavFound(int n) {
+    return '解出 $n 条报文';
+  }
+
+  @override
+  String audioWavWritten(String path) {
+    return '已写入 $path';
+  }
+
+  @override
+  String audioWavFailed(String err) {
+    return '文件读写失败：$err';
+  }
+
+  @override
   String connTncConnected(String arg) {
     return 'TNC 已连接 · $arg';
   }
@@ -1126,6 +1737,99 @@ class AppLocalizationsZh extends AppLocalizations {
   String translateFreeFailed(String e) {
     return '免费接口暂时不可用（$e）· 可在设置里改用 Google / 百度 / 自定义接口';
   }
+
+  @override
+  String get translateProviderAuto => '自动（推荐）';
+
+  @override
+  String get translateProviderAutoDesc => '依次尝试多个免密钥接口，取第一个真正翻译成功的结果';
+
+  @override
+  String get translateProviderGooglePublic => 'Google 公开端点（免密钥）';
+
+  @override
+  String get translateProviderGooglePublicDesc => '质量较好，但可能被限流（实测会返回 429）';
+
+  @override
+  String get translateProviderMyMemory => 'MyMemory（免密钥）';
+
+  @override
+  String get translateProviderMyMemoryDesc => '官方免费接口，但本质是翻译记忆库：无匹配语料时会返回原文';
+
+  @override
+  String get translateProviderLibre => 'LibreTranslate（可自建）';
+
+  @override
+  String get translateProviderLibreDesc => '开源、可自建最可靠；公共实例现已要求密钥且常不支持中文';
+
+  @override
+  String get translateLibreUrl => '实例地址';
+
+  @override
+  String get translateLibreKey => '实例 API Key（公共实例需要，自建可留空）';
+
+  @override
+  String get translateUsedProvider => '本次实际使用';
+
+  @override
+  String get translateUntranslated => '接口没有真正翻译（返回了原文）· 已自动尝试下一个接口';
+
+  @override
+  String translateAutoAllFailed(String e) {
+    return '所有免密钥接口都不可用（$e）· 建议在设置里改用 Google / 百度密钥或自建实例';
+  }
+
+  @override
+  String get translateLangUnsupported => '该接口不支持翻译成这一语言 · 可改用「自动」或其它接口';
+
+  @override
+  String get translateLangScopeNote =>
+      '各接口支持的语种范围不同（例如百度标准版支持印尼语 id，但并非所有方向都支持）· 遇到不支持时会提示改用自动或其它接口';
+
+  @override
+  String get langNameZh => '简体中文';
+
+  @override
+  String get langNameZhTw => '繁体中文';
+
+  @override
+  String get langNameEn => '英语';
+
+  @override
+  String get langNameJa => '日语';
+
+  @override
+  String get langNameKo => '韩语';
+
+  @override
+  String get langNameEs => '西班牙语';
+
+  @override
+  String get langNameFr => '法语';
+
+  @override
+  String get langNameDe => '德语';
+
+  @override
+  String get langNameRu => '俄语';
+
+  @override
+  String get langNamePt => '葡萄牙语';
+
+  @override
+  String get langNameIt => '意大利语';
+
+  @override
+  String get langNameId => '印尼语';
+
+  @override
+  String get langNameTh => '泰语';
+
+  @override
+  String get langNameVi => '越南语';
+
+  @override
+  String get langNameAr => '阿拉伯语';
 
   @override
   String get translateOutgoing => '发送前翻译成对方的语言';
@@ -1302,7 +2006,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get translateLangAuto => '自动检测';
 
   @override
-  String get translateSameLang => '原文已是目标语言';
+  String get translateSameLang => '译文与原文相同 · 可能无需翻译，或该接口未能翻译';
+
+  @override
+  String get translateNotNeeded => '该内容无需翻译（数字 / 符号 / 呼号）';
 
   @override
   String translateBubbleCount(int n) {
@@ -1338,6 +2045,97 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dataSourceSwitchHint => '切换数据来源会断开当前连接';
+
+  @override
+  String get dataSourcePkwdwpl => 'PKWDWPL（Kenwood 航点）';
+
+  @override
+  String get dataSourcePkwdwplDesc =>
+      '用蓝牙/串口读取电台输出的 Kenwood \$PKWDWPL 航点语句（只收不发）';
+
+  @override
+  String get dataSourcePkwdwplHint =>
+      'PKWDWPL 是**只读**链路：能收台站、不参与发射（发射请用 APRS-IS / TNC / 音频）';
+
+  @override
+  String connConnectingPkwdwpl(String arg) {
+    return '正在连接 PKWDWPL（$arg）…';
+  }
+
+  @override
+  String connPkwdwplConnected(String arg) {
+    return 'PKWDWPL 已连接 · $arg';
+  }
+
+  @override
+  String get pkwdwplDeviceTitle => 'PKWDWPL 设备';
+
+  @override
+  String get pkwdwplDeviceDesc => '绑定电台端口 · 查看航点接收状态';
+
+  @override
+  String get pkwdwplBindTitle => '设备绑定与状态';
+
+  @override
+  String get pkwdwplBindSubtitle => '选择输出 \$PKWDWPL 语句的那个串口 / 蓝牙端口';
+
+  @override
+  String get pkwdwplRxOnly => '只收不发';
+
+  @override
+  String get pkwdwplReadOnly => '只读接收中 · 本机不会发射任何报文';
+
+  @override
+  String get deviceConflictTitle => '两条链路绑定了同一台设备';
+
+  @override
+  String get deviceConflictDesc =>
+      'TNC 与 PKWDWPL 指向同一台设备时，接收到的数据会被两条链路瓜分 —— 表现是「能发不能收」（发送正常、收不到报文）。请给其中一条换一台设备。TNC 优先：PKWDWPL 会拒绝连接。';
+
+  @override
+  String get deviceInUseByTnc => '已被 TNC 使用，不能重复绑定';
+
+  @override
+  String get deviceInUseByPkwdwpl => '已被 PKWDWPL 使用，不能重复绑定';
+
+  @override
+  String rxOnlyBanner(String arg) {
+    return '$arg 已连接 · 仅接收（当前发射来源未连接）';
+  }
+
+  @override
+  String get pkwdwplTip =>
+      '在电台菜单里把 PC / GPS 端口的输出格式设为 \"\$PKWDWPL\"（一般 4800 8N1）；这条链路只读，不会发射任何报文';
+
+  @override
+  String get pkwdwplStrictChecksum => '严格校验和（不符即丢弃）';
+
+  @override
+  String get pkwdwplStrictChecksumTip =>
+      '默认关闭：验证不符时只标注并记日志，不丢句子 —— 本地线缆上的不符多半是固件格式与手册有出入，整条丢弃会让界面「什么都不显示」，反而更难排查';
+
+  @override
+  String get pkwdwplErrReadOnly => '只读链路，不能发射';
+
+  @override
+  String get pkwdwplStatTitle => '航点接收';
+
+  @override
+  String pkwdwplStats(String rx) {
+    return '已收航点 $rx 条';
+  }
+
+  @override
+  String get pkwdwplStatRejected => '丢弃/无效语句';
+
+  @override
+  String get pkwdwplStatMismatch => '校验和不符';
+
+  @override
+  String get pkwdwplStatIgnored => '其它 NMEA 语句（已忽略）';
+
+  @override
+  String get pkwdwplLogEmpty => '暂无 PKWDWPL 日志';
 
   @override
   String get tncBindTitle => '蓝牙 TNC';
@@ -5517,6 +6315,617 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get codeContributionTranslation => '翻譯';
 
   @override
+  String get dataSourceTxHint =>
+      '可以同時勾選多條鏈路一起收報文，但**發射只有一條**（右側圓點為發射來源）——同一個呼號從兩條鏈路發出去會造成重複報文。';
+
+  @override
+  String get dataSourceTxBadge => '發射';
+
+  @override
+  String get dataSourceIgateHint =>
+      '想當閘道（把射頻收到的報文轉到網際網路）就同時勾選 APRS-IS 與 TNC/音訊，然後在下面打開「閘道」。';
+
+  @override
+  String get igateTitle => '閘道（iGate）';
+
+  @override
+  String get igateSubtitle => '把射頻收到的報文送上 APRS-IS';
+
+  @override
+  String get igateEnable => '啟用閘道';
+
+  @override
+  String get igateHint =>
+      '射頻上收到的報文會被送上 APRS-IS（自動加上 qAr/qAR 與你的呼號標識來路）。需要同時啟用 APRS-IS 和一個射頻來源（TNC / 音訊）。';
+
+  @override
+  String get igateNeedRf => '還差一個射頻來源：請在上面的「資料來源」裡勾選 TNC 或音訊，否則閘道沒有可轉遞的射頻鏈路。';
+
+  @override
+  String get igateNeedIs => '還沒啟用 APRS-IS：請在上面勾選 APRS-IS，否則閘道沒有可轉遞的目標網路。';
+
+  @override
+  String get igateTwoWay => '雙向閘道（向射頻轉遞訊息）';
+
+  @override
+  String get igateTwoWayHint =>
+      '打開後會**在射頻上真實發射**：只轉「發給最近在射頻上聽到過的台站」的點對點訊息（位置/天氣等廣播不轉，避免佔滿通道）。關閉時只做 RF→IS。';
+
+  @override
+  String get igateStatToIs => '已轉遞 → APRS-IS（條）';
+
+  @override
+  String get igateStatToRf => '已轉遞 → 射頻（條）';
+
+  @override
+  String get igateStatDup => '重複丟棄（條）';
+
+  @override
+  String get igateResetStats => '清空統計';
+
+  @override
+  String grpSysJoined(String call) {
+    return '$call 加入了群聊';
+  }
+
+  @override
+  String grpSysLeft(String call) {
+    return '$call 離開了群聊';
+  }
+
+  @override
+  String grpSysJoinReq(String call) {
+    return '$call 申請加入群聊';
+  }
+
+  @override
+  String grpSysDeclined(String call) {
+    return '$call 拒絕了邀請';
+  }
+
+  @override
+  String get grpInviteTitle => '群聊邀請';
+
+  @override
+  String grpInviteBody(String from, String name) {
+    return '$from 邀請你加入「$name」';
+  }
+
+  @override
+  String get grpNameInvalid => '群名不能為空、不能包含冒號或換行';
+
+  @override
+  String grpNameTooLong(int max) {
+    return '群名最長 $max 個字元（過長會讓邀請報文超出 APRS 訊息上限）';
+  }
+
+  @override
+  String grpInviteSent(int n) {
+    return '已向 $n 位成員發出邀請';
+  }
+
+  @override
+  String get grpSelfPending => '等待群主確認';
+
+  @override
+  String get deviceOverviewTitle => '裝置';
+
+  @override
+  String get deviceOverviewSubtitle => '資料來源、鏈路狀態與自檢';
+
+  @override
+  String get deviceCurrentLink => '目前鏈路';
+
+  @override
+  String get deviceCurrentLinkDesc => '唯讀摘要 · 改參數請進對應子頁';
+
+  @override
+  String get deviceEntries => '裝置與參數';
+
+  @override
+  String get deviceEntriesDesc => '每條鏈路一個子頁，各管各的參數';
+
+  @override
+  String get tncDeviceTitle => 'TNC 裝置與參數';
+
+  @override
+  String get tncDeviceDesc => '藍牙/序列綁定、初始化串、KISS 參數與發射自檢';
+
+  @override
+  String get deviceLogTitle => '鏈路日誌';
+
+  @override
+  String get deviceLogDesc => '顯示目前來源的日誌（TNC / 音訊自動切換）';
+
+  @override
+  String get tncInitTitle => 'TNC 初始化字串';
+
+  @override
+  String get tncInitSubtitle => '連線後逐行傳送（等價 APRSdroid 的 kiss.init）';
+
+  @override
+  String get tncInitTip =>
+      '若 TNC「能收不能發」，先在這裡試：很多藍牙/序列 TNC 模組上電停在命令模式，必須先收到 KISS ON、RESTART 等指令才進入 KISS 轉發狀態。每行一條命令（傳送時自動補 CRLF）。';
+
+  @override
+  String get tncInitDelay => '行間隔 (ms)';
+
+  @override
+  String get tncInitDelayTip => '每行命令之間的等待時間。模組處理命令需要時間，太短會丟命令';
+
+  @override
+  String get tncInitSendAction => '立即傳送初始化字串';
+
+  @override
+  String tncInitSent(int n) {
+    return '已傳送 $n 行初始化字串';
+  }
+
+  @override
+  String get tncInitEmpty => '未填寫初始化字串';
+
+  @override
+  String get tncPushParams => '連線後下發 KISS 參數';
+
+  @override
+  String get tncPushParamsTip =>
+      '預設關閉（與 APRSdroid 一致）。打開後連線時會把上面的參數推給 TNC，覆蓋它自己的設定 —— 參數不合適可能讓它一直退避而不發射，所以只在需要統一管理時打開。';
+
+  @override
+  String get tncTxTestTitle => '發射自檢';
+
+  @override
+  String get tncTxTestSubtitle => '向 TNC 寫一幀測試包，判斷問題在鏈路還是 TNC';
+
+  @override
+  String get tncTxTestHint =>
+      '發的是一幀狀態包（不含座標），不會把台站在 aprs.fi 上挪位置。若這裡顯示「已寫入」卻仍然不發射，問題在 TNC 側：先試初始化字串（KISS ON / RESTART），再檢查 TxDelay 與通道佔用。';
+
+  @override
+  String get tncTxTestAction => '寫入測試幀';
+
+  @override
+  String get tncTxTestOkPrefix => '已寫入';
+
+  @override
+  String tncTxTestOk(String n) {
+    return '已寫入 TNC（累計 $n 幀）。若電台仍不發射，問題在 TNC 側：試初始化字串或檢查 TxDelay。';
+  }
+
+  @override
+  String tncTxTestFail(String err) {
+    return '未寫入：$err';
+  }
+
+  @override
+  String get tncNeedConnected => '請先連接 TNC';
+
+  @override
+  String msgLenCounter(int chars, int bytes) {
+    return '$chars/67 字元 · 整包 $bytes/512 位元組';
+  }
+
+  @override
+  String msgOverSpecAsk(int chars) {
+    return '這則訊息 $chars 個字元，超過 APRS 規範的 67 字元上限。多數用戶端仍能讀出，但部分用戶端/閘道會截斷或拒收，對方可能解析不出來。仍要傳送嗎？';
+  }
+
+  @override
+  String msgOverServerLimit(int bytes, int over) {
+    return '整包 $bytes 位元組，超過 APRS-IS 單行上限 512 位元組，伺服器可能直接丟棄整包（連標頭都送不到）。請縮短約 $over 位元組。';
+  }
+
+  @override
+  String get msgSendAnyway => '仍要傳送';
+
+  @override
+  String get msgSpecLimitHint =>
+      'APRS 規範建議單則訊息不超過 67 字元：過長文字在部分用戶端上會顯示不全或解析失敗。';
+
+  @override
+  String get msgBlockedTooLong => '已阻止傳送：整包超出 APRS-IS 上限';
+
+  @override
+  String get beaconRfBeaconOff => '射頻信標未開啟';
+
+  @override
+  String get beaconRfEnableHint =>
+      '射頻來源的自動發射需要明確開啟「射頻信標」。在此之前不會自動發射位置（倒數也不會走動）。';
+
+  @override
+  String get beaconRfEnableAction => '開啟射頻信標';
+
+  @override
+  String get beaconRfEnabled => '已開啟射頻信標，將按間隔自動發射';
+
+  @override
+  String get beaconRfEnableWarn => '發射將使用你的呼號，請在執照範圍內操作';
+
+  @override
+  String get diagTitle => '鏈路自檢';
+
+  @override
+  String get diagSubtitle => '逐層確認協定、權限、裝置到底哪一環有問題';
+
+  @override
+  String get diagRun => '開始自檢';
+
+  @override
+  String get diagRunning => '自檢中…';
+
+  @override
+  String diagPassed(int n) {
+    return '通過 $n 項';
+  }
+
+  @override
+  String diagFailed(int n) {
+    return '失敗 $n 項';
+  }
+
+  @override
+  String get diagHint => '協定迴路不接電台也能跑：先確認軟體層沒問題，再去查裝置與接線';
+
+  @override
+  String get diagTncSection => 'TNC（KISS / AX.25）';
+
+  @override
+  String get diagAudioSection => '音訊（AFSK 1200）';
+
+  @override
+  String get diagKissEscape => 'KISS 跳脫';
+
+  @override
+  String get diagKissEscapeFail => 'KISS 跳脫還原失敗（軟體層問題，換裝置也沒用）';
+
+  @override
+  String get diagAx25 => 'AX.25 幀編解碼';
+
+  @override
+  String get diagAx25Fail => 'AX.25 編碼失敗（報文格式不合法）';
+
+  @override
+  String diagAx25Mismatch(String got) {
+    return 'AX.25 迴路不一致，解回：$got';
+  }
+
+  @override
+  String get diagFcs => 'FCS 校驗';
+
+  @override
+  String get diagFcsFail => 'FCS 校驗異常（改動一個位元組本應被拒收）';
+
+  @override
+  String get diagTncLoopback => 'TNC 協定迴路';
+
+  @override
+  String diagTncLoopbackOk(int len) {
+    return 'KISS/AX.25 編解碼往返一致（$len 位元組）';
+  }
+
+  @override
+  String get diagAfskLoopback => 'AFSK 調變解調迴路';
+
+  @override
+  String diagAfskLoopbackOk(int samples, int rate) {
+    return '調變→解調一致（$samples 取樣 @${rate}Hz）';
+  }
+
+  @override
+  String diagAfskLoopbackFail(int n) {
+    return '解出 $n 幀（應為 1 幀）';
+  }
+
+  @override
+  String get diagAfskLevelFail => '波形幅度過低（調變結果接近靜音）';
+
+  @override
+  String get diagPlatform => '平台能力';
+
+  @override
+  String diagPlatformOk(String name) {
+    return '可用 · 後端 $name';
+  }
+
+  @override
+  String get diagTncPlatformNo => '目前平台不支援 TNC 鏈路';
+
+  @override
+  String get diagAudioPlatformWarn => '不支援即時音訊 · 仍可用 WAV 檔案模式';
+
+  @override
+  String get diagNoRealtime => '非即時';
+
+  @override
+  String get diagPermission => '錄音權限';
+
+  @override
+  String get diagPermissionOk => '已授權';
+
+  @override
+  String get diagSkipped => '已跳過（平台不支援）';
+
+  @override
+  String get diagCapture => '音訊擷取';
+
+  @override
+  String diagCaptureOk(int bytes, int rate) {
+    return '收到 $bytes 位元組 @${rate}Hz';
+  }
+
+  @override
+  String get diagCaptureNoData => '沒有收到任何音訊資料 · 檢查輸入裝置與權限';
+
+  @override
+  String diagCaptureFailed(String err) {
+    return '開啟擷取失敗：$err';
+  }
+
+  @override
+  String get diagSpeaker => '揚聲器輸出';
+
+  @override
+  String get diagSpeakerOk => '測試音已播放';
+
+  @override
+  String diagSpeakerFail(String err) {
+    return '播放失敗：$err';
+  }
+
+  @override
+  String get diagFileIo => 'WAV 檔案讀寫';
+
+  @override
+  String diagFileIoOk(int rate) {
+    return '寫入→讀出→解調一致 @${rate}Hz';
+  }
+
+  @override
+  String diagFileWriteFail(String err) {
+    return '檔案寫入失敗：$err';
+  }
+
+  @override
+  String get diagFileReadFail => '檔案讀取失敗';
+
+  @override
+  String get diagFileDecodeFail => '檔案裡的音訊解不出報文（可能不是 AFSK 1200 錄音）';
+
+  @override
+  String get connAudioSourceHint => '音訊模式下不使用伺服器、過濾器與 KISS 參數';
+
+  @override
+  String get testTxTitle => '測試發射';
+
+  @override
+  String get testTxDesc => '發一條狀態報文，驗證鏈路真的通到空中';
+
+  @override
+  String get testTxAction => '發射測試幀';
+
+  @override
+  String get testTxSent => '測試幀已交給鏈路';
+
+  @override
+  String testTxFail(String err) {
+    return '測試幀發送失敗：$err';
+  }
+
+  @override
+  String get testTxNeedsConnect => '請先連接鏈路';
+
+  @override
+  String get testTxHint => '這是**真實發射**（狀態報文，不含座標）。射頻發射請確認在自己的呼號與執照範圍內';
+
+  @override
+  String get audioStatsTitle => '音訊統計';
+
+  @override
+  String audioStatRx(int n) {
+    return '收 $n 幀';
+  }
+
+  @override
+  String audioStatTx(int n) {
+    return '發 $n 幀';
+  }
+
+  @override
+  String audioStatDrop(int n) {
+    return '發射期間丟棄 $n 位元組';
+  }
+
+  @override
+  String get audioRestart => '重啟音訊鏈路';
+
+  @override
+  String get audioTxDisabled => '「允許發射」已關閉，僅接收';
+
+  @override
+  String get audioLoopbackHint => '自檢會真的做一次調變→解調；提示「發射期間丟棄」屬正常半雙工行為';
+
+  @override
+  String get notifAudioConnected => '音訊鏈路線上';
+
+  @override
+  String get notifAudioDisconnected => '音訊鏈路已中斷';
+
+  @override
+  String connConnectingAudio(String name) {
+    return '正在開啟音訊（$name）…';
+  }
+
+  @override
+  String connAudioConnected(String rate) {
+    return '音訊鏈路線上 · $rate';
+  }
+
+  @override
+  String connRetryAudio(int seconds) {
+    return '音訊鏈路開啟失敗 · ${seconds}s 後重試…';
+  }
+
+  @override
+  String connRetryAudioDetail(String detail, int seconds) {
+    return '音訊開啟失敗（$detail）· ${seconds}s 後重試…';
+  }
+
+  @override
+  String connAudioLinkLost(int seconds) {
+    return '音訊鏈路中斷 · $seconds秒後自動重連…';
+  }
+
+  @override
+  String connAudioPositionSent(String call) {
+    return '音訊已發射 · 位置已傳送 ($call)';
+  }
+
+  @override
+  String get dataSourceAudio => '音訊（音效卡）';
+
+  @override
+  String get dataSourceAudioDesc => '用麥克風/揚聲器或音效卡線接電台，收發 AFSK 1200';
+
+  @override
+  String get audioSettings => '音訊（音效卡 TNC）';
+
+  @override
+  String get audioSettingsSubtitle => '用音效卡收發 AFSK 1200 報文';
+
+  @override
+  String get audioBackend => '音訊後端';
+
+  @override
+  String get audioUnsupported => '目前平台不支援即時音訊（可用 WAV 檔案模式）';
+
+  @override
+  String get audioNeedPermission => '需要錄音權限（RECORD_AUDIO），請授權後重試';
+
+  @override
+  String get audioCaptureTitle => '音訊擷取';
+
+  @override
+  String get audioCaptureDesc => '從麥克風/線路輸入解調 AFSK 1200';
+
+  @override
+  String get audioCaptureStart => '開啟擷取';
+
+  @override
+  String get audioCaptureStop => '停止擷取';
+
+  @override
+  String get audioSampleRate => '取樣率';
+
+  @override
+  String get audioSampleRateTip =>
+      '22050Hz 是音效卡 TNC 常用值；裝置不支援時改用 44100/48000。修改會重啟擷取';
+
+  @override
+  String get audioLevel => '輸入電平';
+
+  @override
+  String get audioLevelTip => '有訊號時電平條會抬起；收到 AFSK 時「解調鎖定」會點亮';
+
+  @override
+  String get audioSynced => '解調鎖定';
+
+  @override
+  String get audioUnlocked => '未鎖定';
+
+  @override
+  String audioBadFrames(int n) {
+    return '解碼中止 $n 次（雜訊/失步）';
+  }
+
+  @override
+  String get audioBaud => '位元率';
+
+  @override
+  String get audioTones => '音調（標/空）';
+
+  @override
+  String get audioTxTitle => '音訊發射';
+
+  @override
+  String get audioTxDesc => '發射前先聽通道，避免與其他台站碰撞';
+
+  @override
+  String get audioTxEnabled => '允許發射';
+
+  @override
+  String get audioTxEnabledTip => '關閉後只接收不發射（只想聽信標時最省心）';
+
+  @override
+  String get audioTxDelayTip => '發射前導時長：給對端解調器鎖定時間、給電台 PTT 建立時間';
+
+  @override
+  String get audioToneMark => '標號頻率 (Hz)';
+
+  @override
+  String get audioToneSpace => '空號頻率 (Hz)';
+
+  @override
+  String get audioMarkTip =>
+      'Bell 202 規定標號 1200Hz、空號 2200Hz；只有 ±幾 Hz 的容差，不要隨意改';
+
+  @override
+  String get audioSpaceTip => '空號音調。與標號音調一起決定 FSK 頻偏（標準為 1000Hz）';
+
+  @override
+  String get audioBaudTip => 'APRS 在 VHF 上固定 1200 bd（Bell 202），HF 才用 300';
+
+  @override
+  String get audioTxDelayLabel => '發射前導 (ms)';
+
+  @override
+  String get audioTnc2Tip => '格式 SRC>DEST,PATH:info，例如 BG7LZQ-9>APALOC:>TEST';
+
+  @override
+  String get audioCsmaWait => '發射前等待通道空閒 (ms)';
+
+  @override
+  String get audioCsmaWaitTip => '偵測到通道佔用時最多等待多久；0 = 不等待直接發射';
+
+  @override
+  String get audioStopTx => '停止發射';
+
+  @override
+  String get audioWavTitle => 'WAV 檔案模式';
+
+  @override
+  String get audioWavDesc => '離線解碼一段錄音，或把報文匯出成音訊檔案';
+
+  @override
+  String get audioWavPath => '檔案路徑';
+
+  @override
+  String get audioWavDecodeAction => '解碼此 WAV';
+
+  @override
+  String get audioWavExportAction => '匯出此報文';
+
+  @override
+  String get audioWavTnC2 => '待匯出報文 (TNC2)';
+
+  @override
+  String get audioWavNone => '未解出報文（可能不是 AFSK 1200 錄音）';
+
+  @override
+  String audioWavFound(int n) {
+    return '解出 $n 條報文';
+  }
+
+  @override
+  String audioWavWritten(String path) {
+    return '已寫入 $path';
+  }
+
+  @override
+  String audioWavFailed(String err) {
+    return '檔案讀寫失敗：$err';
+  }
+
+  @override
   String connTncConnected(String arg) {
     return 'TNC 已連線 · $arg';
   }
@@ -5611,6 +7020,99 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String translateFreeFailed(String e) {
     return '免費介面暫時無法使用（$e）· 可在設定裡改用 Google / 百度 / 自訂介面';
   }
+
+  @override
+  String get translateProviderAuto => '自動（推薦）';
+
+  @override
+  String get translateProviderAutoDesc => '依次嘗試多個免密鑰介面，取第一個真正翻譯成功的結果';
+
+  @override
+  String get translateProviderGooglePublic => 'Google 公開端點（免密鑰）';
+
+  @override
+  String get translateProviderGooglePublicDesc => '品質較好，但可能被限流（實測會回傳 429）';
+
+  @override
+  String get translateProviderMyMemory => 'MyMemory（免密鑰）';
+
+  @override
+  String get translateProviderMyMemoryDesc => '官方免費介面，但本質是翻譯記憶庫：無匹配語料時會回傳原文';
+
+  @override
+  String get translateProviderLibre => 'LibreTranslate（可自建）';
+
+  @override
+  String get translateProviderLibreDesc => '開源、可自建最可靠；公共實例現已要求密鑰且常不支援中文';
+
+  @override
+  String get translateLibreUrl => '實例網址';
+
+  @override
+  String get translateLibreKey => '實例 API Key（公共實例需要，自建可留空）';
+
+  @override
+  String get translateUsedProvider => '本次實際使用';
+
+  @override
+  String get translateUntranslated => '介面沒有真正翻譯（回傳了原文）· 已自動嘗試下一個介面';
+
+  @override
+  String translateAutoAllFailed(String e) {
+    return '所有免密鑰介面都無法使用（$e）· 建議在設定裡改用 Google / 百度密鑰或自建實例';
+  }
+
+  @override
+  String get translateLangUnsupported => '該介面不支援翻譯成這一語言 · 可改用「自動」或其它介面';
+
+  @override
+  String get translateLangScopeNote =>
+      '各介面支援的語種範圍不同（例如百度標準版支援印尼語 id，但並非所有方向都支援）· 遇到不支援時會提示改用自動或其它介面';
+
+  @override
+  String get langNameZh => '簡體中文';
+
+  @override
+  String get langNameZhTw => '繁體中文';
+
+  @override
+  String get langNameEn => '英語';
+
+  @override
+  String get langNameJa => '日語';
+
+  @override
+  String get langNameKo => '韓語';
+
+  @override
+  String get langNameEs => '西班牙語';
+
+  @override
+  String get langNameFr => '法語';
+
+  @override
+  String get langNameDe => '德語';
+
+  @override
+  String get langNameRu => '俄語';
+
+  @override
+  String get langNamePt => '葡萄牙語';
+
+  @override
+  String get langNameIt => '義大利語';
+
+  @override
+  String get langNameId => '印尼語';
+
+  @override
+  String get langNameTh => '泰語';
+
+  @override
+  String get langNameVi => '越南語';
+
+  @override
+  String get langNameAr => '阿拉伯語';
 
   @override
   String get translateOutgoing => '傳送前翻譯成對方的語言';
@@ -5787,7 +7289,10 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get translateLangAuto => '自動偵測';
 
   @override
-  String get translateSameLang => '原文已是目標語言';
+  String get translateSameLang => '譯文與原文相同 · 可能無需翻譯，或該介面未能翻譯';
+
+  @override
+  String get translateNotNeeded => '該內容無需翻譯（數字 / 符號 / 呼號）';
 
   @override
   String translateBubbleCount(int n) {
@@ -5823,6 +7328,97 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get dataSourceSwitchHint => '切換資料來源會中斷目前連線';
+
+  @override
+  String get dataSourcePkwdwpl => 'PKWDWPL（Kenwood 航點）';
+
+  @override
+  String get dataSourcePkwdwplDesc =>
+      '用藍牙/串列埠讀取電台輸出的 Kenwood \$PKWDWPL 航點語句（只收不發）';
+
+  @override
+  String get dataSourcePkwdwplHint =>
+      'PKWDWPL 是**唯讀**鏈路：能收台站、不參與發射（發射請用 APRS-IS / TNC / 音訊）';
+
+  @override
+  String connConnectingPkwdwpl(String arg) {
+    return '正在連線 PKWDWPL（$arg）…';
+  }
+
+  @override
+  String connPkwdwplConnected(String arg) {
+    return 'PKWDWPL 已連線 · $arg';
+  }
+
+  @override
+  String get pkwdwplDeviceTitle => 'PKWDWPL 裝置';
+
+  @override
+  String get pkwdwplDeviceDesc => '綁定電台連接埠 · 檢視航點接收狀態';
+
+  @override
+  String get pkwdwplBindTitle => '裝置綁定與狀態';
+
+  @override
+  String get pkwdwplBindSubtitle => '選擇輸出 \$PKWDWPL 語句的那個串列埠 / 藍牙埠';
+
+  @override
+  String get pkwdwplRxOnly => '只收不發';
+
+  @override
+  String get pkwdwplReadOnly => '唯讀接收中 · 本機不會發射任何報文';
+
+  @override
+  String get deviceConflictTitle => '兩條鏈路綁定了同一臺裝置';
+
+  @override
+  String get deviceConflictDesc =>
+      'TNC 與 PKWDWPL 指向同一臺裝置時，接收到的資料會被兩條鏈路瓜分 —— 表現是「能發不能收」（發送正常、收不到報文）。請給其中一條換一臺裝置。TNC 優先：PKWDWPL 會拒絕連線。';
+
+  @override
+  String get deviceInUseByTnc => '已被 TNC 使用，不能重複綁定';
+
+  @override
+  String get deviceInUseByPkwdwpl => '已被 PKWDWPL 使用，不能重複綁定';
+
+  @override
+  String rxOnlyBanner(String arg) {
+    return '$arg 已連線 · 僅接收（目前發射來源未連線）';
+  }
+
+  @override
+  String get pkwdwplTip =>
+      '在電台選單裡把 PC / GPS 埠的輸出格式設為 \"\$PKWDWPL\"（一般 4800 8N1）；這條鏈路唯讀，不會發射任何報文';
+
+  @override
+  String get pkwdwplStrictChecksum => '嚴格校驗和（不符即丟棄）';
+
+  @override
+  String get pkwdwplStrictChecksumTip =>
+      '預設關閉：驗證不符時只標註並記日誌，不丟句子 —— 本機線纜上的不符多半是韌體格式與手冊有出入，整條丟棄會讓介面「什麼都不顯示」，反而更難排查';
+
+  @override
+  String get pkwdwplErrReadOnly => '唯讀鏈路，不能發射';
+
+  @override
+  String get pkwdwplStatTitle => '航點接收';
+
+  @override
+  String pkwdwplStats(String rx) {
+    return '已收航點 $rx 條';
+  }
+
+  @override
+  String get pkwdwplStatRejected => '丟棄/無效語句';
+
+  @override
+  String get pkwdwplStatMismatch => '校驗和不符';
+
+  @override
+  String get pkwdwplStatIgnored => '其它 NMEA 語句（已忽略）';
+
+  @override
+  String get pkwdwplLogEmpty => '暫無 PKWDWPL 日誌';
 
   @override
   String get tncBindTitle => '藍牙 TNC';

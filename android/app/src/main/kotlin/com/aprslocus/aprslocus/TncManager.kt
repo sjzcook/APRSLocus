@@ -18,25 +18,75 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 蓝牙 TNC（经典蓝牙 SPP / RFCOMM）链路管理。
  *
  * 设计取舍：原生侧**只搬字节**，不理解 APRS —— KISS 组帧与 AX.25 编解码
- * 全在 Dart 侧（lib/kiss.dart）完成。这样：
- *   ① 协议实现只有一份，可单元测试（test/kiss_test.dart）；
- *   ② 将来加串口 / KISS-over-TCP 等其他传输时无需再写一遍协议；
- *   ③ 原生侧不随协议变动而需要重新发版。
+ * 全在 Dart 侧（lib/kiss.dart）完成。
  *
- * SPP 使用蓝牙标准串口服务 UUID 0x1101，绝大多数 APRS TNC 蓝牙模块
- * （HC-05/06、Mobilinkd、Kenwood 内置蓝牙等）都支持。
+ * ── 并发模型（这里曾经出过「有概率发射后断开连接」的故障）──
+ *
+ * 用**代次（generation）**隔离每一条链路：每次 `connect()` 成功后代次 +1，
+ * reader / writer 线程都只处理自己那一代的套接字，并且在退出时**只允许
+ * 当前代次**宣布「链路断开」。为什么必须这样：
+ *
+ *   旧实现里 reader 退出时无条件 `running.set(false)`。而 `connect()` 是
+ *   「关旧 socket → 阻塞 connect 新 socket → 置 running=true」的顺序，
+ *   于是旧 reader 只要**醒得慢一点**（在新连接已建立之后才从已关闭的
+ *   socket 上抛错），就会把新链路的 running 翻成 false 并广播 "closed"：
+ *   新 reader 随即因 running=false 直接退出 —— 表现就是「刚连上/刚发射完
+ *   就断开，而且之后再也连不稳」。是否发生完全取决于线程调度时机，
+ *   所以症状是**有概率**的。
+ *
+ * 写入也放在**单独的 writer 线程**上串行执行，原因有二：
+ *   ① `BluetoothSocket.write` 在模块忙（正在发射）时可能阻塞数秒，
+ *      放在主线程会卡住界面与平台通道（Dart 侧 `txSelfTest` 也依赖
+ *      主线程回调，会被一起拖住）；
+ *   ② 两帧并发写会让 KISS 字节流**交错**（FEND 出现在帧中间），
+ *      部分 TNC 会把这当成非法帧甚至复位链路。
  */
-class TncManager(private val activity: Activity) {
+class TncManager(
+    private val activity: Activity,
+    /**
+     * 平台通道名。参数化而不是写死，是为了让 **PKWDWPL 链路**
+     * （Kenwood `$PKWDWPL` 航点语句）复用同一套字节搬运实现。
+     *
+     * 为什么不能共用通道：本类只维护**一个** socket，两条链路共用会出现
+     * 「开了 TNC 之后 PKWDWPL 断、来回争抢」—— 各自一个实例、一个通道才对，
+     * 而 SPP 的并发坑（代次隔离、写队列串行、权限回调）已经在这里踩完了，
+     * 复制一份必然漏掉其中某个修复。
+     */
+    private val methodChannelName: String = METHOD_CHANNEL,
+    private val eventChannelName: String = EVENT_CHANNEL,
+    /**
+     * 运行时权限的 requestCode。
+     *
+     * **必须每个实例不同**：MainActivity 会把 onRequestPermissionsResult
+     * 转发给**两个** TncManager（TNC 与 PKWDWPL），而两边靠 requestCode
+     * 认领自己的回调。若共用一个值，两边的判断会**同时命中** ——
+     * 在 A 链路的页面请求权限，会把 B 链路尚未完成的 permResult 一并
+     * resolve（用不属于它的 grantResults），反之亦然。
+     *
+     * 这正是「参数化通道名就能复用」这种想法容易漏掉的那类**隐式共享状态**。
+     */
+    private val permRequestCode: Int = PERM_REQUEST,
+) {
 
     companion object {
         const val METHOD_CHANNEL = "com.aprslocus/tnc"
         const val EVENT_CHANNEL = "com.aprslocus/tnc_events"
+
+        /** PKWDWPL 链路（Kenwood 航点语句，只收不发）的独立通道 */
+        const val METHOD_CHANNEL_PKWDWPL = "com.aprslocus/pkwdwpl"
+        const val EVENT_CHANNEL_PKWDWPL = "com.aprslocus/pkwdwpl_events"
+
+        /** PKWDWPL 实例专用的权限 requestCode（与 TNC 的 0x7A31 区分开） */
+        const val PERM_REQUEST_PKWDWPL = 0x7A32
 
         /** 蓝牙串口服务（SPP）标准 UUID */
         private val SPP_UUID: UUID =
@@ -48,15 +98,29 @@ class TncManager(private val activity: Activity) {
             Manifest.permission.BLUETOOTH_SCAN
         )
         private const val PERM_REQUEST = 0x7A31
+
+        /** 待写队列上限。APRS 突发很小，几十帧足够；满了说明模块已经不消费了。 */
+        private const val WRITE_QUEUE_MAX = 64
     }
 
     private val main = Handler(Looper.getMainLooper())
-    private val running = AtomicBoolean(false)
 
+    /**
+     * 当前链路代次。0 或负数表示没有有效链路。
+     * 每次 connect 成功 +1；断开时也 +1（让在飞的线程立刻失效）。
+     */
+    private val generation = AtomicInteger(0)
+
+    /** 连接过程互斥：避免两次 connect 同时跑（第二次会把第一次的 socket 关掉）。 */
+    private val connecting = AtomicBoolean(false)
+
+    @Volatile
     private var socket: BluetoothSocket? = null
-    private var input: InputStream? = null
-    private var output: OutputStream? = null
     private var reader: Thread? = null
+    private var writer: Thread? = null
+
+    /** 待写队列：send() 只入队，实际写出在 writer 线程串行执行 */
+    private val writeQueue = LinkedBlockingQueue<ByteArray>(WRITE_QUEUE_MAX)
 
     private var events: EventChannel.EventSink? = null
     private var permResult: MethodChannel.Result? = null
@@ -86,11 +150,12 @@ class TncManager(private val activity: Activity) {
             return
         }
         permResult = result
-        ActivityCompat.requestPermissions(activity, BT_PERMISSIONS, PERM_REQUEST)
+        ActivityCompat.requestPermissions(activity, BT_PERMISSIONS, permRequestCode)
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
-        if (requestCode != PERM_REQUEST) return
+        // 只认领自己的 requestCode —— 另一个实例的回调不归我处理
+        if (requestCode != permRequestCode) return
         val ok = grantResults.isNotEmpty() &&
                 grantResults.all { it == PackageManager.PERMISSION_GRANTED }
         permResult?.success(ok)
@@ -132,79 +197,205 @@ class TncManager(private val activity: Activity) {
         if (!hasBtPermission()) {
             throw SecurityException("缺少蓝牙权限（BLUETOOTH_CONNECT）")
         }
-        val a = adapter() ?: throw IllegalStateException("蓝牙不可用或未开启")
-        closeQuietly()
-
-        val device = a.getRemoteDevice(address)
-        // 发现附近设备会严重拖慢甚至导致 RFCOMM 连接失败，必须先取消
-        try {
-            if (a.isDiscovering) a.cancelDiscovery()
-        } catch (_: SecurityException) {
+        // 并发保护：两次 connect 同时跑时，后一次会把前一次刚建好的 socket 关掉，
+        // 表现为「刚连上就断」。宁可让调用方收到明确错误、稍后重试。
+        if (!connecting.compareAndSet(false, true)) {
+            throw IllegalStateException("正在连接中，请稍后重试")
         }
+        try {
+            val a = adapter() ?: throw IllegalStateException("蓝牙不可用或未开启")
+            // 关掉旧链路并把代次推进，使旧的 reader/writer 立刻失效
+            teardown()
 
-        val sock = device.createRfcommSocketToServiceRecord(SPP_UUID)
-        sock.connect() // 阻塞；失败抛 IOException
+            val device = a.getRemoteDevice(address)
+            // 发现附近设备会严重拖慢甚至导致 RFCOMM 连接失败，必须先取消
+            try {
+                if (a.isDiscovering) a.cancelDiscovery()
+            } catch (_: SecurityException) {
+            }
 
-        socket = sock
-        input = sock.inputStream
-        output = sock.outputStream
-        running.set(true)
-        startReader()
-        emitState("connected")
+            val sock = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            sock.connect() // 阻塞；失败抛 IOException
+
+            val gen = generation.incrementAndGet()
+            socket = sock
+            startWriter(sock, gen)
+            startReader(sock, gen)
+            // 只有真的活着才广播 connected。
+            // startWriter / startReader 在里面拿不到流时会 teardown()（清掉 socket
+            // 并推进代次），此时再无条件广播 connected 会让界面显示「已连接」
+            // 而链路其实是废的 —— 正是这个“看着正常、实际不通”的状态让问题难查。
+            if (isConnected()) emitState("connected")
+        } finally {
+            connecting.set(false)
+        }
     }
 
-    private fun startReader() {
+    /**
+     * reader：把模块吐回的字节送上 Flutter。
+     *
+     * [gen] 是本线程所属代次；一旦代次不再匹配（重连或断开），线程立刻退出，
+     * 且**不允许**宣布链路断开 —— 那是新代次的事。
+     */
+    private fun startReader(sock: BluetoothSocket, gen: Int) {
+        val inp: InputStream = try {
+            sock.inputStream
+        } catch (e: Exception) {
+            // 拿不到 inputStream：这条链路等于废了。必须 teardown 而不仅仅是
+            // 广播 closed —— 否则 socket 引用还在，send() 会继续通过校验、
+            // 把字节入队到已经没人消费的队列里（＝界面显示发送成功但实际没发）。
+            teardown()
+            main.post { emitState("closed") }
+            return
+        }
         reader = Thread {
             val buf = ByteArray(1024)
+            var reason: String? = null
             try {
-                while (running.get()) {
-                    val n = input?.read(buf) ?: -1
-                    if (n < 0) break
-                    if (n > 0) emitBytes(buf.copyOf(n))
+                while (generation.get() == gen) {
+                    val n = try {
+                        inp.read(buf)
+                    } catch (e: Exception) {
+                        reason = e.message ?: "read-error"
+                        break
+                    }
+                    if (n < 0) {
+                        reason = "eof"
+                        break
+                    }
+                    if (n > 0) emitBytes(buf.copyOf(n), gen)
                 }
-            } catch (_: Exception) {
-                // 对端掉线 / 读写异常：统一走关闭流程
             } finally {
-                if (running.getAndSet(false)) {
+                // 只有「仍然是当前代次」的 reader 才有资格宣布断开；
+                // 若已经是新代次，说明这是一次正常重连，不能误报断开
+                // （旧实现正是在这里把新链路误判为断开）。
+                if (reason != null && generation.compareAndSet(gen, gen + 1)) {
+                    writeQueue.clear()
+                    // 关键：把 socket / 线程引用一并清掉。
+                    //
+                    // 只清队列是不够的 —— send() 的判据是
+                    //   `gen <= 0 || socket?.isConnected != true`
+                    // 而此处 socket 仍非 null、isConnected 仍为 true，于是后续
+                    // send() 会**通过校验并成功入队**，但写线程已在上面因代次
+                    // 不匹配退出 —— 队列再也不会被消费。
+                    //
+                    // 后果就是用户报的「**能发不能收**」：每次发射都在界面上
+                    // 显示成功，实际一个字节都没出去，同时接收早已死掉，
+                    // 而且两端都没有任何报错可供定位。
+                    //
+                    // CAS 成功说明我们仍是当前代次（新建连接会再次 +1 使 CAS 失败），
+                    // 所以这里清掉引用不会误伤新链路。
+                    socket = null
+                    reader = null
+                    writer = null
                     main.post { emitState("closed") }
                 }
             }
         }.also {
             it.isDaemon = true
+            it.name = "tnc-reader-$gen"
             it.start()
         }
     }
 
-    fun send(data: ByteArray) {
-        val out = output ?: throw IllegalStateException("链路未连接")
-        out.write(data)
-        out.flush()
+    /**
+     * writer：串行写出待发字节。
+     *
+     * 串行化的意义不只是「不阻塞主线程」：两帧并发写会让 KISS 字节流交错
+     * （FEND 落到帧中间），部分 TNC 会当作非法帧甚至复位链路 ——
+     * 表现为「有概率发射后断开」。
+     */
+    private fun startWriter(sock: BluetoothSocket, gen: Int) {
+        val out: OutputStream = try {
+            sock.outputStream
+        } catch (e: Exception) {
+            // 同上：拿不到 outputStream 也不能只广播 closed，
+            // 否则 send() 仍会误以为能发，把数据入队给一个已退出的写线程。
+            teardown()
+            main.post { emitState("closed") }
+            return
+        }
+        writer = Thread {
+            while (generation.get() == gen) {
+                val data = try {
+                    writeQueue.poll(200, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    break
+                } ?: continue
+                try {
+                    out.write(data)
+                    out.flush()
+                    // 实际写出后才回报，供 Dart 侧区分「入队」与「真的发出去了」
+                    emitTxOk(gen, data.size)
+                } catch (e: Exception) {
+                    val msg = e.message ?: e.javaClass.simpleName
+                    main.post { if (generation.get() == gen) events?.success(
+                        mapOf("type" to "txfail", "message" to msg)) }
+                    // 写失败通常意味着链路已经死了（对端关闭/模块复位）。
+                    // 主动关掉 socket，让 reader 报错退出 → Dart 侧触发重连；
+                    // 否则会「显示已连接，但既发不出也收不到」。
+                    try {
+                        sock.close()
+                    } catch (_: Exception) {
+                    }
+                    break
+                }
+            }
+        }.also {
+            it.isDaemon = true
+            it.name = "tnc-writer-$gen"
+            it.start()
+        }
     }
 
+    /** 入队发送（实际写出在 writer 线程，串行执行） */
+    fun send(data: ByteArray) {
+        val gen = generation.get()
+        if (gen <= 0 || socket?.isConnected != true) {
+            throw IllegalStateException("链路未连接")
+        }
+        // 队列满说明模块长时间不消费（多半已经卡死），明确报错而不是无限堆积
+        if (!writeQueue.offer(data)) {
+            throw IllegalStateException(
+                "发送队列已满（${writeQueue.size}/$WRITE_QUEUE_MAX），TNC 可能已停止响应"
+            )
+        }
+    }
+
+    /**
+     * 链路是否仍处于**有效代次**上。
+     *
+     * 不能只看 `socket != null`：断开时 socket 已置 null 但代次还没推进的瞬间
+     * 会读到过期状态。代次 > 0 且 socket 在，才算真的连着。
+     */
+    fun isConnected(): Boolean = generation.get() > 0 && socket?.isConnected == true
+
     fun disconnect() {
-        running.set(false)
-        closeQuietly()
+        // 推进代次 + 拆链路：在飞的 reader/writer 会在下一轮循环退出，
+        // 且不会误报 "closed"（只有当前代次的 reader 才有资格报）
+        teardown()
         emitState("closed")
     }
 
-    private fun closeQuietly() {
-        running.set(false)
+    /** 推进代次并释放套接字（幂等，不广播状态） */
+    private fun teardown() {
+        generation.incrementAndGet()
+        writeQueue.clear()
         try {
-            input?.close()
+            socket?.inputStream?.close()
         } catch (_: Exception) {
         }
         try {
-            output?.close()
+            socket?.outputStream?.close()
         } catch (_: Exception) {
         }
         try {
             socket?.close()
         } catch (_: Exception) {
         }
-        input = null
-        output = null
         socket = null
         reader = null
+        writer = null
     }
 
     // ─── 事件通道 ───
@@ -213,8 +404,23 @@ class TncManager(private val activity: Activity) {
         events = sink
     }
 
-    private fun emitBytes(data: ByteArray) {
-        main.post { events?.success(mapOf("type" to "bytes", "data" to data)) }
+    /** 只上报当前代次的数据，旧链路的残留字节直接丢弃 */
+    private fun emitBytes(data: ByteArray, gen: Int) {
+        if (generation.get() != gen) return
+        main.post {
+            if (generation.get() == gen) {
+                events?.success(mapOf("type" to "bytes", "data" to data))
+            }
+        }
+    }
+
+    private fun emitTxOk(gen: Int, size: Int) {
+        if (generation.get() != gen) return
+        main.post {
+            if (generation.get() == gen) {
+                events?.success(mapOf("type" to "txok", "size" to size))
+            }
+        }
     }
 
     private fun emitState(state: String) {
@@ -222,7 +428,10 @@ class TncManager(private val activity: Activity) {
     }
 
     fun dispose() {
-        disconnect()
+        try {
+            disconnect()
+        } catch (_: Exception) {
+        }
         events = null
     }
 }

@@ -1,5 +1,982 @@
 # 更新日志
 
+## [1.6.113] - 2026-09-15
+
+### ⚡ 修一个会「越用越卡」的累积性缺陷：APRS-IS 被反复重建 + socket 泄漏
+### Fixed an accumulating defect that made the app get slower the longer it ran
+
+**结论：有，而且是可以累积到很严重的卡顿。已经修掉。**
+
+**机制**（三处凑在一起才发作）：
+
+`lib/net/aprs_io.dart` 的 `connect()` 里：
+
+```dart
+final sock = await Socket.connect(...);
+_sock = sock;             // ← 旧 _sock 引用被覆盖，从未 destroy()
+_sub = sock.listen(...);  // ← 旧 _sub 被覆盖，从未 cancel()
+```
+
+而 `_connect()` 会**无条件**调用 `_connectAprsIs()`，后者**没有「已连接」检查**。
+于是：
+
+1. 只要有一条**已启用但连不上**的链路（未绑定设备、设备没开机、被设备冲突拦下…），
+   重连定时器就会一直按 8→16→32→60 秒重试；
+2. 每次重试都走一遍 `_connect()` → `_connectAprsIs()` → **新建一个 TCP 连接**，
+   旧 socket 失去引用变成**孤儿**，但**它仍在继续把数据喂给解析管线**；
+3. 于是同一条报文被重复处理 N 次，而 **N 随时间增长** —— 跑十分钟就有十几个
+   孤儿连接。表现就是**越用越卡**（而且连接数不会自己降下来）。
+
+**触发条件很常见**：数据来源是多选的，用户勾了 TNC 但还没绑设备（或设备没开），
+就已经满足条件了。
+
+**修复（四道）**
+
+1. **`AprsIo.connect()` 先静默收掉旧连接再建新的** —— 从源头杜绝孤儿 socket。
+   刻意用「静默」（不触发 `onDisconnected`），否则会误报一次断开、再排一次重连。
+2. **`_connectAprsIs()` 增加「已经连着就别重建」守卫** —— 重连 tick 不该拆掉
+   一条好好的 TCP 连接（那还会重发过滤器与身份帧）。
+3. **`_connect()` 只连「当前没连着」的链路** —— 要重试的只是那条掉线的链路。
+4. **新增 `_permanentlyDown()`**：把「重试也没用」的链路（未绑定设备 / 平台不支持 /
+   被设备冲突拦下）算作「不必再重试」，让重连定时器不再空转。**「没权限」不算** ——
+   用户授权后就能连上。
+
+**诚实说明两点**
+
+- 这三处缺陷**在 v1.6.107 就已存在**（我用 `git show v1.6.107:` 核对过 `_sock = sock`
+  与 `_connectAprsIs` 的原文），**不是新引入的**；
+- 但**我上一版（1.6.112）的修改把暴露面放宽了** —— 修好「断开后永不重连」之后，
+  重连不再被任何条件跳过，于是走到这个泄漏路径的机会比以前多。这一版把它堵上了。
+
+**还有一处我在修的过程中自己踩到的坑**（记录在此以免日后重犯）：我先给 `_connect()`
+的三条链路都加了 `&& !_permanentlyDown(...)`，结果**一条已有测试立刻失败** ——
+`_connectPkwdwpl()` 里那段「记录 `device-in-use` 错误」的代码**再也到不了**，
+用户点连接会完全没有反馈。已改成：`_permanentlyDown` **只用于决定要不要再排重连**，
+不用来决定要不要尝试连接（它的代价只是几个提前 return，不会空转）。
+
+新增 1 项源码级护栏（`test/tnc_reconnect_guard_test.dart` → 3 项）：断言
+`connect()` 必须先收旧连接再赋值、`_connectAprsIs` 必须有「已连着」守卫、
+`_connect()` 必须用「未连上」条件包住每条链路、以及 `_allExpectedLinksUp` 必须
+把永久失败的链路算作「不用再试」。
+
+---
+
+**Yes — there was, and it could accumulate into serious lag. Fixed.**
+
+`AprsIo.connect()` overwrites `_sock` and `_sub` without releasing the previous values, and
+`_connect()`/`_connectAprsIs()` had no "already connected" check. So any enabled link that
+stays down (no device bound, radio off, blocked by a device conflict…) made the retry timer
+fire every 8→16→32→60 seconds, and **each tick rebuilt the APRS-IS connection**: a new socket
+was created while the old one became an orphan that *still fed the parser*. Every packet was
+then processed N times, with N growing over time — the app got slower the longer it ran, and
+nothing brought the connection count back down.
+
+Four fixes: silently tear down the previous connection before reconnecting (at the source);
+skip rebuilding APRS-IS when it is already up; only connect links that are actually down; and
+treat "retrying cannot help" links (no device bound / unsupported / device conflict) as
+nothing-left-to-do so the retry timer stops spinning. "No permission" is deliberately *not*
+treated that way, since the user can fix it.
+
+Two honest notes: these defects are **pre-existing** (verified against v1.6.107, not
+introduced now) — but my previous release **widened the exposure** by making reconnection
+never skippable, so this release closes the path it opened.
+
+I also hit a real interaction while fixing it and documented it: adding `_permanentlyDown` to
+the link-skip condition made an existing test fail, because `_connectPkwdwpl()`'s code that
+records the `device-in-use` error became unreachable — leaving the user with no feedback.
+`_permanentlyDown` now only decides whether to *schedule another retry*.
+
+---
+
+## [1.6.112] - 2026-09-15
+
+### 🚨 找到「TNC 能发不能收」的真正原因（与 PKWDWPL 无关）
+### The actual cause of "TNC transmits but receives nothing" (nothing to do with PKWDWPL)
+
+**先纠正我上一版的判断。** 我把「能发不能收」归因为「TNC 与 PKWDWPL 绑定了同一台
+设备、接收字节流被瓜分」。但用户提供的现象推翻了它：**在从未绑定过 PKWDWPL 设备
+的情况下，TNC 同样收不到**。那个冲突是真实存在的缺陷（已修），但它**不是**这个
+问题的原因。
+
+我用 `git diff v1.6.107 HEAD` 逐文件核对，确认 `lib/tnc.dart`、`lib/kiss.dart`
+**一行未改**，`state.dart` 的接收路径（`onLine` / `_wireTnc` / `_onAprsLine`）
+也**完全没动** —— 所以问题不在协议层，而在**接收线程死亡之后**的处理。真正的
+原因有两处，两者叠加正好构成「能发不能收」：
+
+**① 原生侧：reader 线程死了，socket 引用却没清（`TncManager.kt`）**
+
+reader 线程在只读循环里发现链路断了之后，会推进代次、清空写队列、广播 `closed`
+—— 但**没有把 `socket` 置空**。而 `send()` 的校验是：
+
+```kotlin
+if (gen <= 0 || socket?.isConnected != true) throw IllegalStateException("链路未连接")
+```
+
+`socket` 还在、`isConnected` 还是 true → **校验通过，字节成功入队**。可是写线程
+已经在同一时刻因代次不匹配退出了，**队列再也不会有人消费**。
+
+表现就是：每次发射界面都显示成功，实际**一个字节都没出去**；而接收线程早已死掉。
+两端都没有任何报错可查。
+
+**② Dart 侧：断开后永不重连（`state.dart` 的 `_wireTnc`）**
+
+```dart
+if (!usingTnc && !multiSource) return;   // ← 本意只是「非发射来源断了不必改横幅」
+...
+if (!_userDisconnected && tnc.config.autoReconnect) _scheduleReconnect();  // 永远到不了
+```
+
+这句 `return` 把后面的 `_scheduleReconnect()` 一起跳过了。而**默认配置正好命中
+这个条件**（只启用 APRS-IS，`dataSource = aprsis`）—— 于是 TNC 链路一旦断开就
+**静默地永不重连**：不写日志（因为日志也在 return 之后）、不改连接状态、不重连。
+
+**为什么这个 bug 这么难查**：症状是「发送正常、接收没了」，且没有任何提示；
+排查时最容易怀疑电台、线缆、TNC 参数，而真正的原因是**两个静默失败叠在一起**
+（发送假成功 + 重连被跳过）。
+
+**修复**
+
+- reader 线程死亡时**清掉 `socket` / `reader` / `writer` 引用** —— 之后 `send()`
+  会如实抛「链路未连接」，而不是假装成功（CAS 成功即证明仍是当前代次，不会误伤
+  新建链路）。
+- `startReader` / `startWriter` 拿不到输入/输出流时改为 `teardown()`，而不是只广播
+  `closed`（否则同样会留下「能发不能收」的假象）。
+- `connect()` 里改为**只有链路真的活着才广播 `connected`** —— 否则会显示「已连接」
+  而链路是废的。
+- `onClosed` 里把「要不要改横幅」与「要不要重连」彻底分开：重连不再被任何条件
+  挡住；非发射来源断开时也留一条日志（这是唯一能回溯的证据）。
+
+**回归护栏**：新增 `test/tnc_reconnect_guard_test.dart`，断言 `_wireTnc` 的
+`onClosed` 里不得在安排重连之前 `return`（只看代码行、排除注释 —— 注释里会引用
+旧写法做说明），以及退出/销毁时必须释放三条射频链路。
+
+---
+
+**First, a correction.** I attributed "transmits but receives nothing" to TNC and PKWDWPL
+being bound to the same device. The user's report disproved it: TNC fails to receive **even
+when a PKWDWPL device was never bound**. That conflict was a real defect (and is fixed), but
+it was not the cause of this.
+
+`git diff v1.6.107 HEAD` confirms `lib/tnc.dart` and `lib/kiss.dart` are **unchanged**, and
+the receive path in `state.dart` (`onLine` / `_wireTnc` / `_onAprsLine`) was never touched —
+so the fault lies *after* the receive thread dies. Two bugs combine to produce the symptom:
+
+**Android side:** when the reader thread exits after a read error, it advances the generation
+and broadcasts `closed` but **leaves `socket` non-null**. `send()` validates
+`socket?.isConnected != true`, which still passes — so bytes are enqueued successfully into a
+queue whose writer thread has just exited. Every transmit reports success; not a single byte
+leaves the device. Nothing errors anywhere.
+
+**Dart side:** `onClosed` contained `if (!usingTnc && !multiSource) return;` — intended only to
+skip a banner update for a non-transmit source, but the `return` also skipped
+`_scheduleReconnect()`. The default configuration matches that condition exactly, so the TNC
+link, once dropped, **silently never reconnects** — no log line (it sits after the return), no
+status change, no retry.
+
+The fixes clear the socket references when the reader dies (so `send()` honestly reports
+"not connected"), tear down properly when streams cannot be obtained, only broadcast
+`connected` when the link is genuinely alive, and separate "should the banner change" from
+"should we reconnect" so reconnection can never be skipped — while still logging a dropped
+non-transmit link, since that log is the only trace available afterwards.
+
+---
+
+## [1.6.111] - 2026-09-15
+
+### 🔍 全面复查设备机制：又找到 4 个「界面与事实不符」的问题
+### Full audit of the device layer: four more cases where the UI contradicted reality
+
+上一版修了「两条链路绑同一台设备」后我做了彻底复查，又发现四处
+**同一类根因**的问题 —— 症状都是「界面说的和实际情况不一样」：
+
+**① 设备页手动连接会绕过 AppState，连上却不被记账**
+
+两个设备页都是**直接**调链路对象的 `connect()`（不走 AppState 的自动连接路径），
+于是：
+
+- 手动连上后 `_linkUp` 表没更新，而 `connected` 是从它推导的
+  （任何 `_setLinkUp` 都会重算）→ 界面**又变回「未连接」**；
+- 我上一版加的**设备冲突守卫对设备页完全无效** —— 它只挂在那条不经过设备页的
+  路径上。
+
+现在设备页的连接/断开统一回落到 AppState：`guardDeviceConnect()`（连之前问）
++ `adoptDeviceLink()`（连之后记账并启用来源）。TNC 与 PKWDWPL 走同一条路。
+
+**② 横幅会说「未连接 APRS-IS 服务器」，而用户刚连上了别的链路**
+
+横幅原先只能表达「发射来源通不通」。设备页刚连上 TNC、而发射仍走未连接的
+APRS-IS 时，界面硬说「未连接」—— 与事实相反。现在有链路在收时显示
+「**XX 已连接 · 仅接收（当前发射来源未连接）**」。
+
+**③ 冲突会导致无限重连**
+
+重连判据是「所有已启用的链路都 up」，而被冲突拦下的 PKWDWPL 永远不可能 up
+→ 定时器 8→16→32→60 秒无休止重试。现在这类链路被判定为「不可能连上」而跳过
+（`blockedByConflict`），两个判断点收口到同一个 `_allExpectedLinksUp`，
+避免只改一处又漏。
+
+**④ 退出应用时射频链路没被释放**
+
+`shutdownForExit()` 与 `dispose()` 原先只断 APRS-IS。蓝牙 socket / 串口句柄
+不释放会占住电台，**下次打开应用可能连不上**。现在 TNC / 音频 / PKWDWPL
+一并断开。
+
+**另外：权限 requestCode 冲突（隔离漏洞）**
+
+`MainActivity` 把 `onRequestPermissionsResult` 转发给**两个** TncManager，
+而两边靠 requestCode 认领回调 —— 原先**共用同一个值**，于是在 A 链路请求权限
+会把 B 链路尚未完成的请求一并 resolve（用不属于它的结果）。现在两个实例
+各有自己的 code（`0x7A31` / `0x7A32`）。
+
+这是我上一版说「参数化通道名就能安全复用」时漏掉的**隐式共享状态**。
+隔离真正干净的只有三步：**通道名、socket、requestCode** —— 缺一不可。
+
+**顺带清掉一处死代码**：`syncPkwdwplLink()` 被 `adoptDeviceLink()` 取代后
+没有调用者，删掉而不是留着（留着的死代码会让下一个人以为设备页还在用它）。
+
+新增 4 项回归测试（pkwdwpl_test 38 → 41）。
+
+---
+
+**After fixing the shared-device problem, I audited the whole device layer and found four
+more issues with one shared root cause: the UI disagreeing with reality.**
+
+Both device pages call the link object's `connect()` **directly**, bypassing AppState's own
+connect path. As a result the `_linkUp` ledger was never updated (so `connected` — which is
+derived from it — flipped back to false, showing "not connected" again), and the device
+conflict guard added in the previous release **did not apply to the device pages at all**,
+since it only lived on the path they don't use. Device-page connects now route back through
+AppState via `guardDeviceConnect()` and `adoptDeviceLink()`.
+
+The connection banner could only express "is the transmit source up", so connecting a TNC
+while APRS-IS remained the transmit source produced "not connected to APRS-IS" — the
+opposite of the truth. It now says "**X connected · receive-only (the transmit source is
+offline)**" whenever a link is receiving.
+
+A conflict also caused an infinite reconnect loop: the criterion was "every enabled link is
+up", and the blocked PKWDWPL could never come up, so the backoff timer retried forever. Such
+links are now recognised as un-connectable and skipped, with both decision points funnelled
+through one `_allExpectedLinksUp` so a future edit cannot miss one.
+
+Finally, exiting the app only disconnected APRS-IS, leaving Bluetooth sockets and serial
+handles open — which holds the radio and can make the *next* launch fail to connect. TNC,
+audio and PKWDWPL are now released too.
+
+**Isolation hole:** `MainActivity` forwards `onRequestPermissionsResult` to *both* TncManager
+instances, and they claimed their callbacks by request code — which was **shared**. A
+permission request from one link would resolve the other's pending request with results that
+were not its own. Each instance now has its own code. This is precisely the kind of **implicit
+shared state** I missed when claiming that parameterising the channel name made reuse safe:
+isolation actually requires the channel name, the socket **and** the request code.
+
+---
+
+## [1.6.110] - 2026-09-15
+
+### 🚨 修复：TNC 与 PKWDWPL 绑定同一台设备，会把接收数据「瓜分」——表现为 TNC 能发不能收
+### Fix: TNC and PKWDWPL bound to the same device split the received data — TNC transmits but receives nothing
+
+**这是我上一版（1.6.108）引入的问题，责任在我。**
+
+1.6.108 新增 PKWDWPL 时，我特意给两条链路做了**独立通道**，理由是「共用一个 socket
+会互相拆连接」。这个判断本身没错，但**我漏掉了另一半**：既然两条链路能各自独立地
+连，它们就能各自连到**同一台设备**上 —— 而这时：
+
+| 连接方式 | 会发生什么 |
+| --- | --- |
+| 串口（Windows / Linux） | 两个句柄都能打开（共享模式），读到的字节**各拿一部分** |
+| 蓝牙 SPP（Android） | 第二条 RFCOMM 连接**顶掉**第一条 |
+
+两者的症状完全一样：**发送正常，接收没了**（或收得残缺）。而且因为发送走得通，
+从界面上根本看不出原因 —— 只会看到「台站不上图了」。你自己去查的话，最容易怀疑的
+是电台、线缆、TNC 参数，恰恰不会想到是另一条链路在抢字节。
+
+**新增三道防护：**
+
+1. **设备列表里禁止重复绑定**：TNC 与 PKWDWPL 的设备页会把「已被另一条链路占用」
+   的设备标灰并写明原因，点不动。
+2. **连接时的守卫**（防止旧配置绕过上一条）：
+   - **TNC 优先** —— 两条链路指向同一台设备时，TNC 连接会先把 PKWDWPL 断开让出
+     设备（TNC 是发射链路，不能让它失效），并写进日志说明原因；
+   - PKWDWPL 连接时遇到冲突则**拒绝连接**，错误码 `device-in-use`。
+3. **两处设备页顶部显示红色冲突警告**，把「能发不能收」的成因直接写在界面上。
+
+**如果你已经踩到了**（1.6.108 / 1.6.109 上 TNC 收不到报文）：升级到本版即可；急于恢复
+也可以先取消勾选「数据来源 → PKWDWPL」，或在设备页解绑 PKWDWPL 的设备。
+
+新增 3 项回归测试：冲突识别、非冲突不误报、冲突时 PKWDWPL 必须被拦在「发起连接之前」
+（断言错误码是 `device-in-use` 而不是底层的连接失败，否则说明守卫没生效）。
+
+---
+
+**This was introduced by my own change in 1.6.108, and it is on me.**
+
+When PKWDWPL was added, I deliberately gave the two links **separate platform channels**,
+reasoning that sharing one socket would make them tear down each other's connection. That
+reasoning was right, but **I missed the other half**: if the links connect independently,
+they can also independently connect to the *same device* — and then:
+
+| Connection | What happens |
+| --- | --- |
+| Serial (Windows / Linux) | Both handles open (shared mode) and the incoming bytes are **split between them** |
+| Bluetooth SPP (Android) | The second RFCOMM connection **displaces** the first |
+
+Both produce the same symptom: **transmit works, receive is gone** (or only partial). And
+because transmitting still works, nothing in the UI points at the cause — you just see
+stations stop appearing. When investigating, the obvious suspects are the radio, the cable
+and the TNC parameters, not another link quietly taking the bytes.
+
+**Three layers of protection were added:** the device list now refuses to bind a device that
+another link already holds (greyed out, with the reason stated); a connection-time guard
+backs that up (TNC takes priority and disconnects PKWDWPL first, while a conflicting PKWDWPL
+connection is refused with `device-in-use`); and both device pages show a red conflict warning
+at the top, so the cause is written on the screen rather than left to guesswork.
+
+---
+
+## [1.6.109] - 2026-09-15
+
+### 🔘 主页按钮加大 + 允许「只收不发」的纯接收配置 / Bigger home buttons + receive-only setups allowed
+
+**1. 主页「手动上报」按钮加大**
+
+这是主页最高频的动作，原来只有 34px 高、11 号字，在手机上偏小。
+
+- 高度 **34 → 44**（44 是 Material 的最小可点区域，手指不容易点偏）
+- 字号 **11 → 13**、图标 15 → 18、字重加粗
+- 「连接」按钮同步调整 —— 两个按钮并排，一大一小会显得很怪
+- 加回归测试 `test/home_buttons_layout_test.dart`：在 320dp 窄屏下断言**不溢出**
+  且高度 ≥ 44，并锁住 13 号字（改小会让测试失败，避免被无意改回去）
+
+**2. 可以只留 PKWDWPL 一条来源了（纯接收）**
+
+上一个版本（1.6.108）把「只剩只读来源」当成配置错误**挡掉了** —— 理由是怕
+信标/消息/网关空转而界面看不出来。**这个判断是错的，本次放开**：拿电台当
+纯接收机用（挂机收台站、记台账）完全合理，那时应用依然完整可用（地图、
+台账、距离方位都在），只是不发射。
+
+放开后必须处理一个真问题：`connected` 的真实含义一直是「**发射链路**可用」
+（全应用的 `if (connected)` 守卫都只服务于发射：信标、消息、ack、保活），
+所以只读模式下它必须是 `false` —— 否则会直接引发误发射。但界面又不能因此
+显示「未连接」（报文其实一直在收）。因此新增两个明确的 getter 把这个区别
+写进类型里：
+
+| getter | 含义 | 只读模式下的值 |
+| --- | --- | --- |
+| `connected` / `txSourceUp` | 发射链路可用（能不能发） | **false** |
+| `rxActive` | 任一已启用链路在收（有没有在工作） | **true** |
+| `readOnlyMode` | 没有任何可发射的已启用来源 | **true** |
+
+界面据此显示「**只读接收中 · 本机不会发射任何报文**」+ 已收航点数，而不是
+「未连接」；「手动上报」按钮**置灰**并把文案改成「只收不发」（不隐藏：位置
+突然少一个按钮会让人找不到，置灰+说明反而直接回答了「为什么发不出去」）；
+系统通知栏同样显示「只读接收」而不是「未连接」。
+
+顺带修掉一个多来源下的计数漏报：通知栏原来用 if/else 二选一显示链路计数，
+同时开 APRS-IS 与 PKWDWPL 时会漏掉一条，现在改为分别追加。
+
+新增 5 项测试，其中「只读模式下依然拒绝发射」与「`connected=false` 但
+`rxActive=true`」两条是这次改动最要紧的护栏。
+
+The manual-beacon button is the most used action on the home page, yet it was only
+34px tall with an 11px label. It is now 44px tall (Material's minimum touch
+target) with a 13px bold label, and the adjacent connect button matches so the
+pair stays visually even. A layout regression test asserts no overflow on a 320dp
+screen and locks the 13px size.
+
+**Receive-only setups are now allowed.** The previous release treated "only a
+read-only source remains" as a misconfiguration and blocked it. That was wrong
+and has been reverted: using a radio purely as a receiver (logging stations
+without ever transmitting) is entirely reasonable, and the app stays fully
+functional for it. The subtlety is that `connected` has always meant "the
+*transmit* link is up" — every `if (connected)` guard serves transmitting only —
+so under a receive-only config it must stay `false`, or the app would try to
+transmit. The UI therefore distinguishes the two states through `txSourceUp`,
+`rxActive` and `readOnlyMode`, showing "receive-only · this device transmits
+nothing" plus the waypoint count instead of "disconnected", greying out the
+beacon button with a matching label, and passing the same wording to the system
+notification. A multi-source counting bug in the notification (an if/else that
+dropped one link's stats) was fixed in passing.
+
+---
+
+## [1.6.108] - 2026-09-15
+
+### 🔗 新增「PKWDWPL」数据来源（Kenwood 航点语句，只收不发）/ New data source: PKWDWPL (Kenwood waypoints, receive-only)
+
+数据来源从 3 条变 4 条：**APRS-IS / TNC / 音频 / PKWDWPL**。前三条都要求
+报文是 APRS（KISS 帧里的 AX.25），而 Kenwood 电台还能把**收到的台站**从
+PC / GPS 端口以 NMEA 明文吐出来（`$PKWDWPL,...`，共 14 个字段）。这类输出
+以前在本应用里完全没有入口 —— 现在把它接成一条独立链路，台站直接上图。
+
+**刻意做成「只读」**（这是与其余三条最大的区别，代码里有两道防线）：
+
+- Kenwood 的航点语句是**电台单向输出**的，链路上没有任何可发的报文，
+  因此 `dataSource`（发射来源）永远不会是 `pkwdwpl`；界面上也不给它发射圆点，
+  即使旧配置里把它存成了发射来源，加载时也会回落到 APRS-IS。
+- 它单独开一条**独立通道**（蓝牙 SPP / 串口，与 TNC 各连各的设备），
+  两条链路可以同时开着互不干扰 —— 共用通道会互相拆掉对方的连接
+  （原生 `TncManager` 只维护一个 socket，所以那是必然的）。
+- 最后一条来源不允许取消勾选，且**不能只剩只读来源**：否则信标 / 消息 / 网关
+  全部成了空转，而界面上看不出异常（想单用它记台账请用同作者的 PKWDWPL Lite）。
+
+**解析**（`lib/pkwdwpl.dart`，纯 Dart）：
+
+- NMEA XOR 校验和（用 NMEA 0183 权威示例 `$GPGGA` 交叉验证算法本身）。
+- 度分 → 十进制：`3954.98` = 39°54.98′ = **39.9163°**；分值 ≥ 60 判为语句损坏。
+- 字段数有 **10 / 11 / 12** 三种（第 8 / 9 / 11 字段常为空），所以按固定下标硬取
+  是错的 —— 那会把字段少的**整条丢掉**，而里面就有校验和正确的正常语句。
+  改为左锚定 + 正则定位日期 + 右锚定呼号/图标。
+- 呼号格式校验（补 XOR 查不出字符换位：`BI4PGN1-1` 与 `BI4PGN-11` 校验和相同）。
+- 默认**不丢**校验不符的句子（只标注 + 记日志），可在设备页打开严格模式。
+  本地线缆上的不符多半是固件格式与手册有出入，整条丢弃会让界面「什么都不显示」，
+  反而更难排查。
+
+**分帧**（蓝牙回调不按行对齐）：一条语句可能被切成两三块、一次回调也可能挤进好几条。
+写测试时抓到一个真 bug：超长垃圾行溢出缓冲后，只清缓冲**不够** ——
+那条行的剩余字节会继续累积，于是下一条正常语句被拼上垃圾尾巴
+（收到 `A$PKWDWPL,X`，校验和必然不符，而线路其实是好的）。现在溢出后进入
+「重新同步」状态，丢掉字节直到看见 `$`（NMEA 语句只可能以 `$` 开头）。
+
+新增 31 项测试（`test/pkwdwpl_test.dart`），期望值取自 BI7NOR 采集的**真实语句**。
+
+The data sources went from three to four: **APRS-IS / TNC / audio / PKWDWPL**. The
+first three all carry APRS inside AX.25 frames, while Kenwood radios can also
+print the stations they hear as plain NMEA on the PC/GPS port
+(`$PKWDWPL,...`, 14 fields) — output this app previously had no way to read.
+
+It is deliberately **receive-only**, enforced in two places: the radio only ever
+writes those sentences, so `dataSource` is never `pkwdwpl` (the UI shows no
+transmit dot, and an old config storing it as the transmit source falls back to
+APRS-IS on load). It gets its **own platform channel** so TNC and PKWDWPL can both
+stay connected to different radios — sharing one channel would make them tear down
+each other's socket. The last enabled source can never be a receive-only one.
+
+Parsing lives in `lib/pkwdwpl.dart`: NMEA XOR checksum (cross-checked against the
+authoritative `$GPGGA` example), degrees-and-minutes conversion
+(`3954.98` → **39.9163°**, minutes ≥ 60 treated as corrupt), tolerance for the
+10/11/12-field variants that real captures show (hard-coded indices would drop
+whole valid sentences), callsign format validation (XOR cannot catch character
+transpositions), and a configurable strict mode. The line splitter — which the
+test suite caught a real bug in — now resynchronises on `$` after an oversized
+garbage run instead of gluing its tail onto the next valid sentence.
+
+---
+
+## [1.6.107] - 2026-09-15
+
+### 🌐 新增网关（iGate）+ 数据来源改为**多选** / New: gateway (iGate) + multi-select data sources
+
+**数据来源可以同时开几条了。** 这是一个刻意的语义分工，写在代码注释里以免日后
+被改坏：
+
+- `enabledSources` = **同时连接哪几条链路**（多选）。几条链路一起收报文，
+  收到的都进同一条解析管线。
+- `dataSource` = **发射走哪一条**（仍然单选）。所有与发射有关的判断
+  （txPath / 67 字符限长 / 群聊禁用 / 射频信标 / 保活帧）都还用它，
+  因此这部分逻辑在多选改造中一行未改。
+- 为什么发射不能也多选：同一个呼号从两条链路发出去会造成重复报文
+  （射频上还白占一次时隙），ack 也会回两次。
+- 界面上每条来源是一行复选框 + **实时连通状态点**，右侧圆点指定「发射来源」。
+  最后一条来源不允许取消勾选（全关掉应用就什么都不收，而界面不会有任何提示）。
+- 单选的旧配置会自动迁移（把旧值当成唯一启用项），升级后不会「什么都没启用」。
+
+**网关**（把射频收到的报文送上 APRS-IS，需要同时启用 APRS-IS 与一个射频来源）：
+
+- **RF→IS**：自动加上 `qAr`（单向）/ `qAR`（双向）与你的呼号标识来路，
+  去掉中继上的 `*`（那是本机听到的本地观察，不属于报文本身）。
+- **防环**（这一段最容易出错、也最致命）：含 `TCPIP*`/`TCPXX*` 的报文说明
+  它本来就来自互联网；含 **q 构造**的说明已被别的网关注入过 —— 两种都绝不
+  再送回 IS，否则同一条报文会在互联网上无限增殖。
+- **去重**：同一帧会经不同中继路径多次到达，30 秒窗口内只注入一次，
+  否则 IS 上会出现多条一模一样的报文（看起来像网关在刷屏）。
+- **IS→RF**（可选，默认关，**会真实发射**）：只转「发给最近在射频上听到过的
+  台站」的点对点消息；位置/天气这类广播不转（转了只会占满信道，这也是多数
+  网关被投诉的原因）。用到射频时按配置剥掉所有互联网专有路径项再接上本机中继。
+- 网关逻辑全部是**纯函数**（`lib/igate.dart`），26 项测试覆盖环路防护、
+  q 构造、去重窗口、「听到过」列表过期等。写测试时当场抓出两个真 bug：
+  ① 只丢 q 构造本身、**漏掉了它后面的网关呼号**（会被当成中继留在报文里，
+  凭空多出一个不存在的 digipeater）；② `A>:x` 这种没有目的呼号的畸形报文
+  会被放行灌进 IS。
+
+The data sources are now **multi-select**. `enabledSources` decides which links are
+connected at once (all their packets feed one pipeline); `dataSource` still decides
+which one **transmits**, so every transmit-related rule (txPath, the 67-character
+limit, group chat, RF beacon, keepalive) was left untouched. Transmit cannot be
+multi-select because sending one callsign over two links duplicates packets (and
+wastes an RF slot). The gateway relays RF→IS with proper `qAr`/`qAR` tagging,
+**loop protection** (packets carrying `TCPIP*`/`TCPXX*` or a q-construct are never
+sent back to IS), 30-second de-duplication of the same frame arriving via different
+digipeaters, and optional IS→RF message gating limited to stations recently heard
+on RF. All of it lives in pure functions with 26 tests — which immediately caught
+two real bugs: the gateway callsign following a q-construct was being kept as a
+digipeater, and malformed packets with no destination were passed through.
+
+### 🧹 设备页再收拾：默认一屏只看三件事 / Device page tidied further
+
+上一版拆成三页后，概览页仍然平铺了 6 张卡片，其中「自检结果」与「日志」又高又
+不常看，把最常看的「通不通」顶到了需要滚动的位置。现在：
+
+- **默认可见**：① 数据来源（多选 + 发射来源）② 网关 ③ 每条链路的状态行
+  ④ 两个子页入口
+- **折叠**：链路自检、链路日志（点标题展开）
+- 链路状态卡里每条来源一行（名称 · 发射标记 · 地址/设备 · 收帧数），
+  多选时不会混淆是哪条在收
+- 日志按来源**分段显示**（APRS-IS / TNC / 音频各一段并各自可复制），
+  多选时混在一起会把「收不到」的排查彻底变成猜谜
+
+After splitting into three pages, the overview still stacked six cards, and the
+tall-but-rarely-needed self-test and log pushed “is my link up?” below the fold.
+Now only the data source, gateway, per-link status and the two entries are visible
+by default; self-test and logs are collapsible folds. Link status has one row per
+enabled source, and logs are grouped per source (each copyable) so a multi-source
+setup stays debuggable.
+
+
+## [1.6.106] - 2026-09-14
+
+### 🔴 真正修好「蓝牙 TNC 只能接收、不能发射」（Android）/ The actual fix for “Bluetooth TNC receives but will not transmit” (Android)
+
+上一版（1.6.105）我只做了兼容性对齐和几个新能力，**没有修好这个问题** —— 因为
+真正的根因在 Dart → 原生的**字节数组类型**上，而且它把错误吞得一点痕迹都没有。
+
+**根因**：发送路径是 `Dart → MethodChannel → Kotlin → BluetoothSocket`。
+Flutter 的 `StandardMessageCodec` 对字节数组有**两条不同的编码分支**：
+
+| Dart 侧类型 | 编码标记 | Kotlin 侧拿到的 |
+|---|---|---|
+| `Uint8List` | `_valueUint8List` | **`byte[]`** ✅ |
+| `List<int>` | `_valueList` | `ArrayList` ❌ |
+
+我们的 `Kiss.escape()/dataFrame()/paramFrame()/commandFrame()` 全部返回
+`List<int>`（`final out = <int>[]`），于是 Kotlin 侧
+`call.argument<ByteArray>("data")` 拿到 **null** → 抛 `NO_DATA`。而
+`invokeMethod` 的失败是**异步**抛出的，被包在同步 `try/catch (_) {}` 里 ——
+**完全静默**。所以表现就是：收得到（接收方向我们写了
+`raw is Uint8List` / `raw is List` 双容错）、发不出去、而且毫无提示。
+桌面串口走 `dart:io` 的 `writeFrom(List<int>)`，不做类型转换，所以只有
+Android 蓝牙中招 —— 这也是它一直没被发现的原因。APRSdroid 是 Kotlin 直接
+持有 `OutputStream`，**根本没有跨语言编解码这一层**，不可能踩这个坑。
+
+**修法（用类型钉死，不靠「记得转换」）**：
+- `Kiss` 四个组帧函数改为返回 `Uint8List`；初始化串的字节同样处理；
+- `TncTransport.send` 签名改为 `Uint8List` —— 以后任何地方再传 `List<int>`
+  会**编译失败**；
+- 发送失败不再吞掉：原生失败经 `onTxFailed` 上报，写入链路日志
+  （设备页可见），Kotlin 侧的错误信息也带上「期望 ByteArray，实际收到 X」；
+- **修正上一版「发射自检」的误报**：它此前直接看 `txFrames++`（发送后
+  无条件自增），字节全丢了也报「已写入」。现在改为等链路层回话
+  （`Future` + 400ms），有错就如实报失败。
+
+**回归测试**（`test/tnc_send_type_test.dart`、`test/tnc_tx_selftest_test.dart`）：
+用**真实的 `StandardMessageCodec`** 复现两条编码分支的差异，并断言
+`Kiss.*` 的返回类型必须是 `Uint8List`；另一个用假传输层断言「字节没出去时
+自检必须报失败」。这样这条坑再被踩到会立刻测试失败。
+
+Last release only added compatibility tweaks and new capabilities — it did
+**not** fix this, because the real cause is the *byte-array type* crossing
+Dart → platform, and it swallowed every error silently. `StandardMessageCodec`
+encodes `Uint8List` as `byte[]` but `List<int>` as `ArrayList`; our KISS
+builders returned `List<int>`, so Kotlin's `call.argument<ByteArray>("data")`
+got `null` → `NO_DATA` — and since `invokeMethod` fails **asynchronously**,
+the synchronous `try/catch (_) {}` hid it completely. Hence: receives fine
+(the receive path tolerates both types), transmits nothing, no error shown.
+Desktop serial uses `writeFrom(List<int>)` with no such conversion, which is
+why only Bluetooth was affected. APRSdroid holds the `OutputStream` directly in
+Kotlin and has no cross-language codec layer at all. The fix pins the type at
+compile time (`Kiss` returns `Uint8List`, `send(Uint8List)`), surfaces write
+failures through `onTxFailed` into the link log, and corrects the previous
+release's TX self-test, which had been reporting “written” even when every byte
+was dropped.
+
+
+## [1.6.105] - 2026-09-14
+
+### 🎛 设备设置页重构：一个「什么都有」的页面 → 按问题分层的三页 / Device settings refactor: one catch-all page → three pages organised by the question you are asking
+
+原来一页里堆了：数据来源、TNC 绑定、9 项 KISS 参数、射频行为、链路自检、
+音频入口、链路日志 —— 最常做的事（看当前链路通不通）要划过一屏参数才能看到，
+调参时又要来回滚。现在按「使用者的问题」拆开：
+
+- **设备（概览）**：数据来源 + 当前链路只读摘要 + 链路自检 + 按来源自动切换的日志
+- **TNC 设备与参数**：绑定/扫描/连接/重启、初始化串、KISS 参数、发射自检、射频行为
+- **音频**：声卡链路的参数与 WAV 文件模式
+- 连接页与设置首页的入口不变（`DeviceSettingsPage` 仍指向概览页），因此用户
+  习惯的路径没有被改动；变的只是「进去以后不再迷路」。
+- 顺带修掉：概览页此前**只显示 TNC 日志**，音频模式下看不到任何链路日志。
+
+The old page mixed the data source, TNC binding, nine KISS parameters, RF
+behaviour, self-test, the audio entry and the link log, so the most common task
+— “is my link up?” — required scrolling past a screenful of parameters. It is
+now split by the question you are asking: **Devices (overview)**, **TNC device &
+parameters** and **Audio**, with the log following the active source (previously
+the audio link had no visible log at all).
+
+### 💬 群聊重构：协议层收口成一个状态机 / Group chat refactor: the protocol now goes through a single parser
+
+群聊是 APRS 之上的自订协议（群呼号广播 + 发往群主的私信命令）。原实现把协议
+判定散在四个函数里，各自 `startsWith` + **按固定长度 `substring`** 取值。这类
+写法会实实在在产生 bug，本次修掉的四处：
+
+- **同一语义两处判断**：群内 `【JOIN】` 与私信 `JOIN_CONFIRM` 是同一件事，却写在
+  两个分支里 —— 只补一处就漏另一处。现在统一由 `GroupProto.parse` 解析一次，
+  按 `GroupKind` 分派。
+- **建群后群主自己不在群成员里**：`createGroup` 把**所有人（含群主）**都置为
+  `pending`，而收件人只取 `joined` —— 于是群主自己都收不到群消息。现在群主立即
+  `joined`。
+- **点了「同意加入」却没进群**：`sendJoinConfirm`/`sendLeave` 只发包、不更新本地
+  状态，成员表里自己一直停在 `pending`。现在本地状态与发包同时更新。
+- **重复送达导致重复提示**：同一帧可能经多路径送达（同时连 APRS-IS 与射频、或经
+  iGate 回环），同一次「确认加入」会反复插系统消息、反复弹通知；而邀请每次收到
+  都弹一次确认框。现在协议消息 2 分钟内去重，邀请只对首次弹窗，成员状态不变时
+  不再重复提示。
+- 另外：群名/群呼号在源头校验（空、含冒号/换行、超长会破坏 APRS 报文结构或让
+  AX.25 地址被截断）；建群后会明确回执邀请发给了几人。
+- 新增 `lib/group_chat.dart`（纯协议，12 项回归测试），并把上面每个 bug 都钉住。
+
+The group chat is a custom protocol on top of APRS messages. Its parsing was
+spread across four functions using `startsWith` and **fixed-length `substring`**
+slicing, which produced four real bugs — all fixed and covered by tests: the same
+semantic was parsed in two places (`【JOIN】` vs `JOIN_CONFIRM`); `createGroup`
+marked **everyone including the owner** as `pending` while recipients only
+include `joined`, so the owner missed their own group's messages;
+`sendJoinConfirm`/`sendLeave` sent the packet but never updated local state, so
+“I accepted but I am not in the group”; and duplicate delivery (multi-path or
+iGate loop-back) re-inserted system messages and re-opened the invite dialog.
+Protocol messages are now de-duplicated for two minutes, invites only prompt on
+first receipt, and group names/callsigns are validated at the source.
+
+### 📡 蓝牙 TNC「能收不能发」：逐字节比对参考实现 + 补齐 APRSdroid 的能力 / Bluetooth TNC “receives but will not transmit”: byte-level comparison and the missing APRSdroid capability
+
+拿 APRSdroid 与 direwolf 的源码逐项核对后，**先排除**了几处常见嫌疑：KISS 帧
+格式、写后 `flush`、以及「KISS 载荷是否含 FCS」（`kiss.c` 明确写“not including
+the FCS”，我们本来就不含，空中 HDLC 才加）。随后做了三件有实际意义的事：
+
+- **地址 C 位对齐参考实现**：direwolf 组帧时目的地址 SSID 字节为
+  `0x80|0x60 = 0xE0`（C 位 = 1），源地址为 `0x60`（C 位 = 0）；我们此前对所有
+  地址都写 `0x60`。现已按角色区分。**说明**：direwolf 自己的注释也说「APRS 里
+  四种组合都有人用、大家都忽略它」，所以这是兼容性对齐，不敢保证就是根因。
+- **新增「TNC 初始化串」**（等价 APRSdroid 的 `kiss.init`，支持多行 + 行间延时）
+  —— 这是我们此前**完全没有**的能力，也是「能收不能发」最值得先试的一招：
+  不少蓝牙/串口 TNC 模块上电停在命令模式，要先收到 `KISS ON`/`RESTART` 才会
+  进入 KISS 转发。
+- **KISS 参数改为默认不下发**：APRSdroid 默认一个参数帧都不发，而我们连上就强推
+  TxDelay/P/SlotTime/TxTail/FullDuplex —— 推错值会让 TNC 在共享信道上一直退避
+  而不发射。现在默认不推（可在设备页显式打开），需要时仍可手动下发一次。
+- **新增「发射自检」**：向 TNC 写一帧状态包（不含坐标，不会挪动 aprs.fi 上的
+  位置），把「没连上 / 帧超限 / 格式错 / 写失败 / 写成功但电台不发射」区分开，
+  并直接给出下一步（试初始化串、查 TxDelay）。
+
+Byte-level comparison against APRSdroid and direwolf ruled out the usual
+suspects first (KISS framing, `flush` after write, and whether the KISS payload
+carries the FCS — `kiss.c` says “not including the FCS”, which is what we do).
+Three substantive changes followed: the destination address C bit now matches the
+reference (`0xE0` for destination, `0x60` for source — though direwolf's own
+comment notes APRS ignores it, so this is compatibility, not a proven root
+cause); a **TNC init string** (the `kiss.init` equivalent we were missing) is now
+supported with per-line delays; KISS parameters are **no longer pushed by
+default** (pushing wrong TxDelay/Persistence can make a TNC back off forever);
+and a **TX self-test** now separates “not connected / frame too long / bad format
+/ write failed / written but not transmitted”.
+
+### ⏱ 修复「倒计时结束没有发射」（音频 / TNC）/ Fixed: the countdown finished but nothing was transmitted (audio / TNC)
+
+射频来源的自动发射被 `canAutoBeacon` 门控在「射频信标」开关之后（默认关），
+但倒计时 UI 只判断 `beaconEnabled/connected/myHasFix` —— 于是**倒计时一路走到 0
+却什么也不发射，界面也从不说原因**。现在把「是否会发射」收敛成一个条件
+`rfBeaconEnabled`，倒计时与自动发射共用它：不会发射时显示「射频信标未开启」
+并在设置页给出「一键开启」（仍保持显式授权，不会偷偷开始发射）。四个界面
+（设置页/地图胶囊/沉浸页/首页）全部一致。附 4 项回归测试。
+
+Automatic transmission on an RF source is gated behind the “RF beacon” switch
+(off by default), but the countdown only looked at `beaconEnabled/connected/
+myHasFix` — so it ran to zero and nothing happened, with no explanation. Whether
+we will transmit is now a single condition (`rfBeaconEnabled`) shared by the
+countdown and the transmitter: when it cannot transmit, the UI says “RF beacon is
+off” and offers a one-tap enable (still an explicit user action). All four
+surfaces (settings, map chip, immersive page, home) agree.
+
+### 🔤 APRS-IS 聊天文本过长提示 / Long-message warnings for APRS-IS chat
+
+射频侧一直有 67 字符上限提示，APRS-IS 侧**完全没有**长度预检 —— 长文本看起来
+发出去了，对方却解析不出来（或服务器整包丢弃）。现在把「太长」按后果分成两种：
+
+- **超 67 字符（规范上限）**：多数客户端仍能读，属于「可能解析不出来」→ 发送前
+  弹窗确认，而不是硬拦；
+- **整包超 512 字节（APRS-IS 单行上限）**：服务器可能整包丢弃、连报头都送不到
+  → 直接拦下并说明还差多少字节。
+- 输入框旁新增实时计数器（字符 / 整包字节），打字过程中就能看到自己在逼近哪条线；
+- 校验用的是**实际发出的正文**（译发时是译文），避免「拿原文校验放过超长译文」。
+- 新增 `lib/msg_limit.dart`（7 项回归测试）。
+
+The RF side had a 67-character limit; APRS-IS had **no** length check at all, so
+long text appeared to send but could not be parsed (or was dropped by the
+server). Oversize is now split by consequence: over the 67-character spec limit
+warns and asks for confirmation; a packet over the 512-byte APRS-IS line limit is
+blocked outright with the exact number of bytes to trim. A live counter next to
+the input shows characters and packet bytes while typing, and validation uses the
+text that will actually be sent (the translation, when translating).
+
+
+## [1.6.104] - 2026-09-14
+
+### 📻 新增数据来源「音频（声卡 TNC）」：用麦克风/扬声器收发 AFSK 1200 / New data source: Audio (soundcard TNC) — AFSK 1200 over mic/speaker
+
+数据来源从两个变成三个：APRS-IS（互联网）、TNC（KISS over 蓝牙/串口）、
+**音频（AFSK 1200 / Bell 202）**。音频链路与 TNC 一样是「经电台上空」的射频
+来源，因此共用同一套约束：目的呼号 `APALOC`（不加 `TCPIP*`）、单条消息 67 字符
+上限、禁用群聊广播、自动周期发射需显式打开「射频信标」（默认关），并且
+**发射前先听信道（CSMA）**，不与其它台站抢时隙。
+
+- **协议层是纯 Dart 的**（`lib/afsk.dart`）：Bell 202 调制（1200/2200Hz、
+  相位连续）、NRZI、HDLC 位填充、CRC-16/X.25（FCS）、一比特窗复数相关解调 +
+  数字锁相（DPLL）。收发数据都走**与另两个来源完全相同的解析管线**，
+  所以台站上图、消息收发、过滤、成就不会出现「音频模式下不工作」的分叉。
+- **音频 I/O 零新增依赖**：Android 用原生 `AudioRecord`/`AudioTrack`
+  （优先 UNPROCESSED 音源绕开 AGC/降噪）；Windows 用 `dart:ffi` 直调系统
+  自带的 winmm（`waveIn`/`waveOut`）；Linux/macOS 暂无实时后端，改用 WAV 文件模式。
+- **WAV 文件模式**：导入一段录音离线解码（现场没接上音频线也能事后分析），
+  或把报文导出成 WAV 再由外部设备播放发射。Android 导出到「下载/APRSlocusAudio」。
+- **半双工**：发射期间不喂解调器（否则会把自己的报文当外来报文收一遍，
+  还会打乱 DPLL 锁定），丢弃的字节数在音频页可见。
+- **Android 后台采集**：前台服务按需声明 `microphone` 类型（Android 14+ 必须，
+  否则切后台就被系统掐断麦克风），并新增 `RECORD_AUDIO` 等权限。
+- i18n：新增 100+ 键 × 6 种语言（简体/繁体/英/日/印尼/西）。
+
+The data source list grows from two to three: APRS-IS, TNC (KISS over
+Bluetooth/serial) and **Audio (AFSK 1200 / Bell 202)**. Audio is an on-air
+source like TNC, so it shares the same rules: `APALOC` destination (no
+`TCPIP*`), the 67-character message limit, no group broadcast, automatic
+beaconing behind an explicit “RF beacon” switch (off by default) and
+**listen-before-transmit (CSMA)** so it never grabs a slot from another station.
+
+- The protocol layer is **pure Dart** (`lib/afsk.dart`): Bell 202 modulation
+  (1200/2200 Hz, phase-continuous), NRZI, HDLC bit stuffing, CRC-16/X.25 and a
+  one-bit-window complex-correlation demodulator with a digital PLL. Decoded
+  packets enter **exactly the same pipeline** as the other two sources, so
+  stations, messages, filters and achievements cannot silently break in audio mode.
+- **No new dependencies for audio I/O**: Android uses native `AudioRecord` /
+  `AudioTrack` (UNPROCESSED source first, to bypass AGC/noise suppression);
+  Windows calls the built-in winmm (`waveIn`/`waveOut`) through `dart:ffi`.
+  Linux/macOS fall back to the WAV file mode.
+- **WAV file mode**: decode a recording offline, or export a packet as audio to
+  be played by an external device. On Android it lands in Downloads/APRSlocusAudio.
+- **Half duplex**: the demodulator is fed nothing while transmitting, otherwise
+  the app would receive its own packet and disturb the PLL lock.
+- **Android background capture**: the foreground service declares the
+  `microphone` type on demand (required from Android 14), plus `RECORD_AUDIO`.
+
+### 🔍 新增「链路自检」：TNC 与音频都能一键分层排查 / New “Link self-test” for both TNC and audio
+
+射频链路出问题时，用户看到的只有「连不上 / 收不到」，原因却横跨协议、平台、
+权限、设备、接线好几层。自检把每一层变成一条**可独立判断**的结论：
+
+- **协议回路**（不需要接电台）：KISS 转义 + AX.25 编解码 + FCS 校验；
+  音频侧还会真的做一次「调制 → 解调」端到端比对。
+- **平台与权限**：后端是否可用（winmm / native）、录音权限是否已授予。
+- **实时收发**：采集是否真的有 PCM 数据上来；扬声器能否播出测试音（1200Hz，
+  **不发射报文**）；WAV 写入→读出→解调回路。
+- **测试发射**：发一条**状态**报文（`>` 开头，不含坐标）—— 不会把台站在
+  aprs.fi 上挪到某个坐标，但足以在对方/网关的原始报文里确认链路真的通了。
+  这是真实发射，界面上有醒目提示。
+
+When an RF link fails, all the user sees is “cannot connect / nothing
+received”, while the cause may sit in the protocol, the platform, permissions,
+the device or the wiring. The self-test turns each layer into an independently
+judgeable result: protocol loops that run **without a radio** (KISS escaping,
+AX.25 framing, FCS, and a real modulate→demodulate round trip for audio),
+platform/permission probes, a live capture probe, a speaker test tone
+(1200 Hz, **no packet transmitted**) and a WAV write→read→decode loop. The
+“test transmit” action sends a **status** packet (no coordinates), so it proves
+the link without moving your station on aprs.fi.
+
+### ✅ 交叉验证：用一份独立实现校验调制解调 / Cross-verified against an independent implementation
+
+「自己编、自己解」最容易把同一个理解错误两头都掩盖掉，所以另写了一份独立的
+Python 参考实现（`tool/afsk_reference.py`，暴力时钟搜索 + FCS 裁决）互相校验，
+并把它生成的录音（含噪声、直流偏置、+25Hz 频偏、静音）固化为回归测试
+（`test/reference/afsk1200_reference.wav`）。**这套校验当场抓出一个真 bug**：
+NRZI 变号被写在了逐采样循环里（应为每比特一次），等效于在 0 比特期间发出
+近奈奎斯特的噪声 —— 两边都解不出任何帧。修正后双向校验通过。
+
+A pure-Dart modem is easy to “self-verify” wrongly, so a completely separate
+Python reference implementation (`tool/afsk_reference.py`) cross-checks both
+directions, and its generated recording (with noise, DC offset, +25 Hz offset
+and silence) is committed as a regression fixture. **It caught a real bug
+immediately**: the NRZI toggle was applied per sample instead of per bit, which
+emits near-Nyquist noise during 0 bits and made the signal undecodable.
+
+
+## [1.6.103] - 2026-09-13
+
+### 🔴 修复：消息小红点有时候不会消除 / Fixed: the unread badge sometimes would not clear
+
+这是一组相互关联的缺陷，根因是**未读数靠手动 `++` 维护**，
+与「已读时间点」是两套状态，必然脱节。已改为**派生值**（单一真源）。
+
+- **读完群聊不消**：`markGroupRead` 只写已读时间点、**漏了重算未读**
+- **群消息根本不加角标**：收消息时是 `if (!isGroupMsg) unreadMessages++` ——
+  于是群消息要等别的操作触发重算才**突然冒出**，而读了又消不掉
+- **正看着的会话来消息**：私聊只在**点开时**标一次已读（群聊是每次重建都标），
+  所以开着会话时收到的消息会一直计为未读，必须退出再进
+- **大小写**：APRS 呼号大小写不敏感，但已读键与统计键来源不一致，
+  会出现「已读写在 A 键、统计时看 B 键」—— 永不消除
+- 现在的行为（每一条都有回归测试，且验证过「测试能真的抓出对应 bug」）：
+  - 未读数**统一由一次重算得出**，收消息/标已读/切会话都会重算
+  - **正在看的会话不计未读**；离开后重新计入
+  - 呼号统一归一化比对；已读之后到达的消息仍计未读，旧消息不再一直红着
+- This is a cluster of related defects with one root cause: the unread count was kept
+  by hand (`unreadMessages++`) alongside a separate “last read” timestamp, so the two
+  drifted apart. It is now a **derived value** with a single source of truth: reading a
+  group never recalculated the badge; incoming group messages never incremented it (so
+  the badge appeared late and then would not clear); a private chat was only marked read
+  **once on open** (groups were marked on every rebuild), so messages arriving while you
+  were looking at the chat stayed unread until you left and re-entered; and callsigns were
+  compared case-sensitively even though APRS callsigns are case-insensitive, so the read
+  mark could be written under one key and looked up under another. Now one recalculation
+  produces the count, the **currently open conversation is excluded**, and callsigns are
+  normalised. Every rule has a regression test, and each test was verified to actually
+  fail when the corresponding bug is reintroduced.
+
+## [1.6.102] - 2026-09-13
+
+### 🐛 群聊翻译不可用（与「数字被误判」同根） / Group chat translation was broken — same root cause as numbers being misjudged
+
+- **现象**：群里翻译任何消息都失败，最后提示「所有免密钥接口都不可用」
+- **根因**：中文界面下目标语言就是中文，而群聊消息本来就是中文 →
+  接口返回的内容与原文相同 → 而上一版把「译文＝原文」**当成失败并自动跳到
+  下一个接口** → 三个候选都「失败」→ 报错。**数字、呼号、坐标同理**。
+- **修法**（也就是你说得对的那件事）：
+  - 「译文与原文相同」**不再算失败、不再跳接口**，只作为一个标记
+  - 界面不再把原文再抄一遍，而是如实说明：
+    「译文与原文相同 · 可能无需翻译，或该接口未能翻译」
+- **不在群聊里加「发送前翻译」**：群里多位成员、对方语言不唯一，强做会发错（仍然只有私聊有该开关）
+- Symptom: translating any message in a group chat failed with “all keyless endpoints
+  failed”. Root cause: with a Chinese UI the target language is Chinese and the group
+  messages are already Chinese, so the provider echoed the source — and the previous build
+  **treated “translation == original” as a failure and jumped to the next provider**, so all
+  three candidates “failed”. **Numbers, callsigns and coordinates hit the same path.**
+  Fixed as it should have been: an echoed result is **no longer a failure and no longer
+  switches providers**; it becomes a flag, and the UI says so honestly (“Translation is
+  identical to the original · may need no translation, or the provider failed to
+  translate”) instead of repeating the original text. “Translate before sending” stays
+  **off for group chats** (several members, no single other language).
+
+### 🔢 无需翻译的内容不再请求接口 / No pointless requests for content that needs no translation
+
+- 新增**预检**：纯数字 / 坐标 / 标点符号 / emoji / 纯呼号（如 `BG7LZQ-9`）
+  **直接使用原文，连请求都不发** —— 省额度，也不再拿到无意义的 echo
+- 自动翻译在预检阶段就跳过这类消息
+- 你主动长按点「翻译」时，若内容无需翻译，会明确提示
+  「该内容无需翻译（数字 / 符号 / 呼号）」，而不是没反应
+- Adds a **pre-check**: pure numbers, coordinates, punctuation, emoji and bare callsigns
+  (`BG7LZQ-9`) **use the original text without any request at all**, saving quota and
+  avoiding meaningless echoes. Auto-translate skips such messages at the pre-check, and if
+  you explicitly long-press → translate on them, the app says “Nothing to translate here
+  (numbers / symbols / callsigns)” instead of silently doing nothing.
+
+### 🔧 顺带修正 / Also fixed
+
+- 翻译**我发出的**内容时会把源语言（我的语言）明确传给接口，
+  使 MyMemory 这类「要求指定源语言」的接口也能用上
+- 提示文案不再断言「原文已是目标语言」——同样相同的结果也可能是接口没翻，
+  现在的措辞两种可能都包含
+- When translating **your own** content the source language (yours) is now passed
+  explicitly, so providers that require it (MyMemory) become usable; and the hint no
+  longer asserts “already in the target language”, since an identical result may equally
+  mean the provider did not translate.
+
+## [1.6.101] - 2026-09-13
+
+> 📌 本版专注把**翻译真正做得可用**：免密钥接口从 1 个变成一整套候选链，
+> 并堵住「接口返回原文却被当成翻译成功」这个会让人误以为功能坏掉的漏洞。
+>
+> This release focuses on making translation **actually work**: a single keyless
+> endpoint becomes a whole candidate chain, and an endpoint echoing the source text back
+> is no longer accepted as a successful translation.
+
+### 🔍 实测结论：没有单一可靠的免密钥接口 / Measured reality: no single keyless endpoint is reliable
+
+本版首先是把各接口**实测**了一遍（结论已写进代码注释）：
+
+- **Google 公开端点**：质量好，但会被限流（实测 429 / 拦截页）
+- **MyMemory**：官方免密钥，但本质是**翻译记忆库** —— 实测 `en→ja` 返回
+  `hello-world`、`en→ko` 返回 `Hello World`，即**原文照抄**
+- **LibreTranslate 公共实例**：已要求 API Key，且语言列表里**没有中文**
+- **Lingva 公共实例**：三个全 403/500，已停服
+- **百度**：可达、语种码正确，标准版即支持印尼语（`id`）
+
+因此本版不再找「更可靠的免费接口」（不存在），而是靠工程手段提高可靠性。
+
+- This version starts by **measuring** each endpoint (findings are recorded in code
+  comments): Google's public endpoint is rate-limited (observed 429), MyMemory is a
+  **translation memory** that echoes the source back (`en→ja` → `hello-world`), public
+  LibreTranslate instances now demand an API key and often lack Chinese, and the Lingva
+  instances are all dead (403/500). Baidu is reachable with correct language codes and
+  supports Indonesian (`id`) even on the standard tier. So instead of hunting for a
+  “more reliable free endpoint” (there isn't one), reliability is engineered in.
+
+### 🔀 接口从 4 个增到 7 个，默认改为「自动」 / 7 providers now, with Automatic as the default
+
+- 可选：**自动**（默认）/ Google 公开端点 / MyMemory /
+  **LibreTranslate（可自建）** / Google Cloud / 百度 / 自定义
+- **「自动」按 Google 公开 → MyMemory → LibreTranslate 依次尝试**，
+  取第一个真正翻译成功的结果 —— 这是可靠性的主要来源
+- **LibreTranslate 支持自建**（填实例地址 + 可选密钥），并会读 `/languages`
+  **探测该实例的真实语种范围**，避免发出注定 400 的请求
+- 每个接口在设置里都标出**已知限制**（如「Google 公开端点可能被限流」、
+  「MyMemory 无匹配语料时返回原文」）—— 不写清楚的话，用户只会以为应用坏了
+- 自动模式下显示**本次实际使用的接口**
+
+- Choices are now: **Automatic** (default), Google's public endpoint, MyMemory,
+  **LibreTranslate (self-hostable)**, Google Cloud, Baidu and Custom. **Automatic tries
+  Google-public → MyMemory → LibreTranslate** and keeps the first real translation, which
+  is where the reliability comes from. LibreTranslate can be **self-hosted** (instance URL
+  plus optional key) and its `/languages` endpoint is queried to **detect the instance's
+  actual language coverage**, avoiding requests bound to fail with 400. Every provider
+  shows its **known limits** in settings (e.g. “Google's public endpoint may be
+  rate-limited”, “MyMemory echoes the source when it has no match”) — without that, users
+  just assume the app is broken. In Automatic mode the provider that was **actually used**
+  is shown.
+
+### ✅ 译文有效性校验：裆住「返回原文」的假成功 / Rejecting the “echoed source” fake success
+
+- 完全相同的输出（忽略大小写/标点/空白）**判为未翻译**
+- 目标是非拉丁文字（中/日/韩/泰/阿/俄）却只回 ASCII 字母 → **判为未翻译**
+- **指定单一接口时同样校验**：否则用户看到「翻译＝原文」还以为成功了
+- 判定失败时**自动尝试下一个接口**，而不是把假结果展示出去
+- 已用真实 MyMemory 响应验证：`hello-world` 被正确识破
+- To make this concrete: identical output (ignoring case, punctuation and whitespace) is
+  **treated as untranslated**; a non-Latin target (Chinese/Japanese/Korean/Thai/Arabic/
+  Russian) that comes back as pure ASCII letters is **treated as untranslated**; and the
+  same validation applies **even when a single provider is selected**, otherwise
+  “translation == original” would look like success. On rejection the next candidate is
+  tried instead of showing a fake result. Verified against a live MyMemory response.
+
+### 🌐 语言名称国际化与语言码正确性 / Localized language names and correct language codes
+
+- 语言名现在**跟随界面语言**：中文界面显示「日语」，英文界面显示 “Japanese”
+  （15 种语言 × 6 个界面语言）—— 之前永远显示各语言的自称
+- **阿拉伯语等 RTL 名称单独包 Directionality**：不处理的话标点在混排时会跳到错误一侧
+- 语言码**按接口分别映射**（`zh-TW` 在百度是 `cht`、Google 是 `zh-TW`、
+  LibreTranslate 是 `zt`、MyMemory 是 `zh-TW`），并用单测锁住三点：
+  同一接口内**无冲突**（否则反向解析歧义）、**简繁必须区分**、形状合 BCP-47
+- **百度错误码 → 人话**（58001 语种不支持、54001 签名错误、54003 频率限制、
+  54004 余额不足等）—— 原来只招数字码，用户无从下手
+- **语种不支持 → 可行动提示**：百度 58001 / Google 400 Invalid Value /
+  LibreTranslate 不支持语种统一归类，提示「可改用自动或其它接口」，
+  而不是用一条 400 把问题搪塞过去
+- Language names now **follow the UI language** (a Chinese UI shows 「日语」, an English
+  UI shows “Japanese”; 15 languages × 6 UI languages) instead of always showing
+  endonyms, and **RTL names such as Arabic are wrapped in a Directionality** so punctuation
+  does not jump sides when mixed. Language codes are **mapped per provider** (`zh-TW` is
+  `cht` on Baidu, `zh-TW` on Google, `zt` on LibreTranslate), pinned by tests for no
+  collisions within a provider, Simplified/Traditional being distinct, and BCP-47 shape.
+  **Baidu error codes are translated into plain language** (58001 unsupported direction,
+  54001 bad signature, 54003 rate limit, 54004 no balance) because raw numbers give users
+  nothing to act on, and **an unsupported language becomes an actionable hint** (“try
+  Automatic or another provider”) rather than a bare 400.
+
 ## [1.6.100] - 2026-09-13
 
 > 📌 本版包含：蓝牙 TNC 数据来源（含完整 KISS 控制）、聊天翻译（**默认免密钥免费接口**）、

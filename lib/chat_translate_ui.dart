@@ -27,6 +27,52 @@ import 'widgets.dart';
 ///     落盘会导致换语言后旧译文残留。代价是重启后需重新翻 ——
 ///     但结果缓存（[TranslateService]）是落盘的，同一句话不会再调接口。
 
+/// 语言名的本地化显示（供全应用复用）。
+///
+/// 两个要点：
+///   ① 名称跟随**界面语言**（中文界面看到「日语」，英文界面看到 "Japanese"），
+///      而不是永远显示该语言的自称；
+///   ② 阿拉伯语要从右往左排 —— 直接混进 LTR 文本会让标点跳到错误一侧，
+///      所以 RTL 名称单独包一层 Directionality。
+Widget langLabel(BuildContext context, String code) {
+  final name = S.of(context).transLangName(code);
+  if (!TransLang.isRtl(code)) {
+    return Text(name);
+  }
+  return Directionality(textDirection: TextDirection.rtl, child: Text(name));
+}
+
+/// 语言名（纯字符串，用于拼进已有 Text，不处理方向）
+String langName(BuildContext context, String code) =>
+    S.of(context).transLangName(code);
+
+/// 语言名 → 界面语言下的名称。
+///
+/// 放在 UI 层（而不是 translate.dart 数据层）是因为：Dart 没有结构化类型，
+/// 生成的 AppLocalizations 不会自动满足数据层自定义的接口 —— 硬要复用
+/// 就得让数据层 import l10n 生成物，反而更脏。这里用 extension 最贴合。
+extension TransLangNameX on AppLocalizations {
+  String transLangName(String code) => switch (code) {
+        'zh' => langNameZh,
+        'zh-TW' => langNameZhTw,
+        'en' => langNameEn,
+        'ja' => langNameJa,
+        'ko' => langNameKo,
+        'es' => langNameEs,
+        'fr' => langNameFr,
+        'de' => langNameDe,
+        'ru' => langNameRu,
+        'pt' => langNamePt,
+        'it' => langNameIt,
+        'id' => langNameId,
+        'th' => langNameTh,
+        'vi' => langNameVi,
+        'ar' => langNameAr,
+        // 未收录的语言码：退回该语言的自称（endonym），总比显示裸码好
+        _ => code,
+      };
+}
+
 /// 消息指纹：呼号 + 方向 + 时间 + 文本，足够稳定地区分同一条消息
 String msgKey(AprsMsg m) =>
     '${m.from}|${m.to}|${m.time.millisecondsSinceEpoch}|${m.text}';
@@ -61,15 +107,40 @@ class ConvTransState extends ChangeNotifier {
   /// 正在显示原文（用户点了「显示原文」，即暂时隐藏译文）
   final Set<String> showingOriginal = {};
 
+  /// 译文与原文实质相同（软标记，**不是错误**）。
+  ///
+  /// 两种正当来源：内容本就无需翻译（数字/呼号）；源语言已是目标语言
+  /// （中文群里中文用户看中文消息）。界面据此如实说明，
+  /// 而不是显示一段和原文一模一样的「译文」让人以为翻译坏了。
+  final Set<String> sameAsSource = {};
+
+  /// 无需翻译（数字/符号/呼号），未请求任何接口
+  final Set<String> notNeeded = {};
+
   bool has(String key) => translations.containsKey(key);
 
   int get count => translations.length;
 
-  void setTranslated(String key, String text, String target) {
+  void setTranslated(String key, String text, String target,
+      {bool sameAsSource = false}) {
     translations[key] = text;
     targets[key] = target;
     pending.remove(key);
     errors.remove(key);
+    this.sameAsSource.remove(key);
+    notNeeded.remove(key);
+    if (sameAsSource) this.sameAsSource.add(key);
+    notifyListeners();
+  }
+
+  /// 该内容无需翻译（不显示译文块，也不报错）
+  void setNotNeeded(String key) {
+    pending.remove(key);
+    errors.remove(key);
+    translations.remove(key);
+    targets.remove(key);
+    sameAsSource.remove(key);
+    notNeeded.add(key);
     notifyListeners();
   }
 
@@ -101,6 +172,8 @@ class ConvTransState extends ChangeNotifier {
     pending.clear();
     errors.clear();
     showingOriginal.clear();
+    sameAsSource.clear();
+    notNeeded.clear();
     notifyListeners();
   }
 }
@@ -137,6 +210,9 @@ Future<void> translateMessage({
   required String convKey,
   bool persistLearned = true,
   void Function()? onPeerLangLearned,
+  /// 用户主动点了「翻译」（而非自动翻译）：此时「无需翻译」要给出提示，
+  /// 否则用户点了没反应，会以为功能坏了。
+  bool explicit = false,
 }) async {
   final key = msgKey(m);
   final svc = TranslateService.instance;
@@ -145,6 +221,12 @@ Future<void> translateMessage({
   final target = side == TransSide.incoming
       ? TransDirection.targetForIncoming(pref, fallback)
       : TransDirection.targetForOutgoing(pref, fallback);
+  // 翻译「我发出的」内容时，源语言是确定的（我的语言）——
+  // 明确传入可让「要求指定源语言」的接口（如 MyMemory）也能用上。
+  final fromHint =
+      side == TransSide.outgoing && pref.targetLang.isNotEmpty
+          ? pref.targetLang
+          : 'auto';
 
   if (side == TransSide.outgoing && pref.peerLang.isEmpty) {
     // 还不知道对方说什么：不硬翻（翻了可能是同一种语言），
@@ -162,8 +244,17 @@ Future<void> translateMessage({
   }
   st.setPending(key);
   try {
-    final r = await svc.translate(m.text, to: target);
-    st.setTranslated(key, r.text, target);
+    final r = await svc.translate(m.text, to: target, from: fromHint);
+    // 无需翻译（数字/符号/呼号）：不显示译文块、不报错。
+    // 用户主动点过则给一句提示，避免「点了没反应」。
+    if (r.skipped) {
+      st.setNotNeeded(key);
+      if (explicit) {
+        _toast(context, s.translateNotNeeded);
+      }
+      return;
+    }
+    st.setTranslated(key, r.text, target, sameAsSource: r.sameAsSource);
     // 学习对方的语言：仅在翻译「对方消息」时回填，且只在确实识别出
     // 且与已知值不同时才写盘（避免每翻一条就写一次 SharedPreferences）
     final det = r.detected;
@@ -184,12 +275,37 @@ Future<void> translateMessage({
   }
 }
 
+void _toast(BuildContext context, String msg) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: C.ink,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
+}
+
 /// 把接口错误翻译成用户能理解的说法（原始错误码对用户没有意义）
 String explainTranslateError(S s, TranslateException e) {
   final msg = e.message;
   if (msg.startsWith('not-configured')) return s.translateNeedConfig;
   // 免费接口被限流/被墙时，最有用的信息是「可以换接口」，而不是原始报文
   if (msg.startsWith('free-unavailable')) return s.translateFreeFailed(msg);
+  // 自动模式下全部候选失败：告诉用户还能怎么办（换密钥/自建），
+  // 否则「试了三个都失败」对用户等于没有信息
+  if (msg.startsWith('auto-all-failed')) return s.translateAutoAllFailed(msg);
+  if (msg.startsWith('mymemory-needs-source')) {
+    return s.translateProviderMyMemoryDesc;
+  }
+  if (msg.startsWith('libre-unsupported-lang')) {
+    return s.translateProviderLibreDesc;
+  }
+  // 语种不支持：这是各接口最实际的差异，必须给出「换接口」的可行动建议
+  if (msg.startsWith('lang-unsupported')) {
+    return s.translateLangUnsupported;
+  }
   return s.translateFailed(msg);
 }
 
@@ -210,7 +326,8 @@ Future<void> showMessageActions({
   // 方向由「这条消息是谁发的」决定，而不是由用户选 —— 用户选
   // 「翻译成对方语言」时其实是想看自己发出去的那句在对面是什么样。
   final side = m.sent ? TransSide.outgoing : TransSide.incoming;
-  final targetLabel = TransLang.labelOf(
+  final targetLabel = langName(
+    context,
     side == TransSide.incoming
         ? TransDirection.targetForIncoming(pref, fallback)
         : TransDirection.targetForOutgoing(pref, fallback),
@@ -219,7 +336,7 @@ Future<void> showMessageActions({
   final showingOriginal = st.showingOriginal.contains(key);
   final peerLabel = pref.peerLang.isEmpty
       ? s.translateLangAuto
-      : TransLang.labelOf(pref.peerLang);
+      : langName(context, pref.peerLang);
   // 接口未配置时，翻译必然失败。与其让用户点一下只得到一句报错，
   // 不如在面板上就给出「去配置」的入口。
   final configured = svc.config.ready;
@@ -307,6 +424,8 @@ Future<void> showMessageActions({
                   st: st,
                   convKey: convKey,
                   onPeerLangLearned: onChanged,
+                  // 用户主动点的：无需翻译时要有提示，不能没反应
+                  explicit: true,
                 ));
               },
             ),
@@ -713,10 +832,30 @@ Widget translationBlock({
       ]),
     );
   }
+  // 无需翻译：整块不显示（数字/符号/呼号本来就没有可翻的内容）
+  if (st.notNeeded.contains(key)) return const SizedBox.shrink();
   final t = st.translations[key];
   if (t == null) return const SizedBox.shrink();
   if (!pref.contrast || st.showingOriginal.contains(key)) {
     return const SizedBox.shrink();
+  }
+  // 译文与原文相同：显示一句如实说明，而不是把原文再抄一遍 ——
+  // 抄一遍会让人以为「翻译坏了」，而实际上往往根本无需翻译。
+  if (st.sameAsSource.contains(key)) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 11, color: C.grey),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(s.translateSameLang,
+                style: ts(10, c: C.grey, h: 1.35)),
+          ),
+        ],
+      ),
+    );
   }
   final target = st.targets[key] ?? '';
   return Padding(
@@ -731,7 +870,7 @@ Widget translationBlock({
           if (target.isNotEmpty)
             Text(
               '${m.sent ? s.translateToPeerTag : s.translateToMeTag}'
-              ' · ${TransLang.labelOf(target)}',
+              ' · ${langName(context, target)}',
               style: ts(9, c: C.grey),
             ),
         ]),

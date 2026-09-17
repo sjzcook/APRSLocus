@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,6 +56,27 @@ class TncConfig {
   /// 链路断开后自动重连
   bool autoReconnect;
 
+  /// TNC 初始化串（多行，逐行发送，行尾补 CRLF）。
+  ///
+  /// 对应 APRSdroid 的 `kiss.init`（见其 KotlinProto/KissProto.scala：
+  /// 逐行 write + `\r\n` + sleep(initdelay)）。为什么需要它：
+  /// 不少蓝牙/串口 TNC 模块上电后停在**命令模式**，必须先收
+  /// `KISS ON` / `RESTART` 之类指令才会进入 KISS 转发状态。
+  /// 这类模块的典型症状正是「能收不能发」——收是因为芯片仍在把解调结果
+  /// 吐出来，发是因为它根本没在 KISS 模式下监听主机下行。
+  String initString;
+
+  /// 初始化串每行之间的等待（ms）。模块处理命令需要时间，太短会丢命令。
+  int initDelayMs;
+
+  /// 连接后是否主动下发 KISS 参数（TxDelay/P/SlotTime/TxTail/FullDuplex）。
+  ///
+  /// **默认关闭**，与 APRSdroid 的行为一致（它默认一个参数帧都不发）。
+  /// 原因：这些参数会覆盖 TNC 自己的配置，而每个 TNC 的
+  /// TxDelay/Persistence 合理值不同 —— 推错了可能让它在共享信道上
+  /// 一直退避而不发射。需要时可在设备页显式打开或手动下发一次。
+  bool pushKissParams;
+
   TncConfig({
     this.txDelayMs = 300,
     this.txTailMs = 50,
@@ -69,6 +91,9 @@ class TncConfig {
     this.hardwareCmd = -1,
     this.hardwareVal = 0,
     this.autoReconnect = true,
+    this.initString = '',
+    this.initDelayMs = 300,
+    this.pushKissParams = false,
   });
 
   /// ms → KISS 值（10ms 单位，封顶 255）
@@ -91,6 +116,9 @@ class TncConfig {
         'hardwareCmd': hardwareCmd,
         'hardwareVal': hardwareVal,
         'autoReconnect': autoReconnect,
+        'initString': initString,
+        'initDelayMs': initDelayMs,
+        'pushKissParams': pushKissParams,
       };
 
   static TncConfig fromJson(Object? j) {
@@ -113,6 +141,9 @@ class TncConfig {
       hardwareCmd: i('hardwareCmd', -1),
       hardwareVal: i('hardwareVal', 0).clamp(0, 255),
       autoReconnect: b('autoReconnect', c.autoReconnect),
+      initString: s('initString', ''),
+      initDelayMs: i('initDelayMs', c.initDelayMs).clamp(0, 5000),
+      pushKissParams: b('pushKissParams', c.pushKissParams),
     );
   }
 }
@@ -131,15 +162,32 @@ class TncStatus {
 }
 
 class TncLink {
-  TncLink() {
+  /// [transport] 仅测试注入用；生产环境走条件导入的平台实现。
+  TncLink({TncTransport? transport})
+      : _t = transport ?? createTncTransport() {
     _t.onBytes = _onBytes;
     _t.onClosed = _onClosed;
     _t.onStatus = (s) {
       lastDetail = s;
     };
+    _t.onTxFailed = (reason) {
+      txErrors++;
+      lastTxError = reason;
+      // 进链路日志：这是排查「发不出去」最关键的一条，必须留痕
+      _log('发送失败：$reason');
+      _txWait?.complete(-1);
+      _txWait = null;
+      onStateChanged?.call();
+    };
+    _t.onTxAck = (size) {
+      txAckedBytes += size;
+      lastTxAckAt = DateTime.now();
+      _txWait?.complete(size);
+      _txWait = null;
+    };
   }
 
-  final TncTransport _t = createTncTransport();
+  final TncTransport _t;
   final KissDecoder _dec = KissDecoder();
 
   final TncConfig config = TncConfig();
@@ -168,6 +216,21 @@ class TncLink {
 
   /// 最近一次失败原因（'frame-too-long' / 'not-connected' 等）
   String lastError = '';
+
+  /// 链路层写入失败次数（原生拒收 / 串口异常）。
+  ///
+  /// 与 [lastError] 的区别：lastError 是**调用前**的校验失败（格式、长度、
+  /// 未连接），而这个是「已经交给链路、但字节没送出去」——两者混在一起
+  /// 会让「发射不出去」无从定位。
+  int txErrors = 0;
+  String lastTxError = '';
+
+  /// 已被链路层**确认写出**的字节数（与 [txBytes] 的区别：txBytes 是入队量）
+  int txAckedBytes = 0;
+  DateTime? lastTxAckAt;
+
+  /// 发射自检用的「等链路层回话」句柄：写出成功给 size，失败给 -1
+  Completer<int>? _txWait;
 
   /// 链路日志（环形，最多 100 条；供「设备」页排查用）
   final List<String> log = [];
@@ -216,6 +279,16 @@ class TncLink {
 
   Future<bool> connect([TncDevice? d]) async {
     final target = d ?? device;
+    // 并发保护：两次 connect 同时跑时，后一次会关掉前一次刚建好的 socket，
+    // 表现就是「刚连上又断」。已在连接中直接拒绝，让调用方稍后重试。
+    if (connecting) {
+      lastError = 'busy';
+      _log('已在连接中，忽略本次连接请求');
+      return false;
+    }
+    if (connected && target != null && device?.id == target.id) {
+      return true; // 幂等：同设备已连上，不必重连
+    }
     if (target == null) {
       status = TncStatus.noDevice;
       lastError = 'no-device';
@@ -252,26 +325,41 @@ class TncLink {
     status = TncStatus.connected;
     lastError = '';
     _log('已连接 ${target.label}');
-    // 连上即下发一次 KISS 参数（TNC 断电后会丢参数，必须每次重建）
-    applyKiss();
+    // ① 初始化串必须在最前面：不少模块上电停在命令模式，要先收到
+    //    `KISS ON`/`RESTART` 之类指令才会进入 KISS 转发（否则能收不能发）。
+    await sendInitString();
+    // ② KISS 参数**默认不下发**（与 APRSdroid 一致）：这些参数会覆盖
+    //    TNC 自己的配置，推错值可能让它在共享信道上一直退避而不发射。
+    //    需要统一管理时可由用户在设备页显式打开。
+    if (config.pushKissParams) {
+      applyKiss();
+    } else {
+      _log('跳过 KISS 参数下发（可在设备页打开「连接后下发 KISS 参数」）');
+    }
     onStateChanged?.call();
     return true;
   }
 
   Future<void> disconnect({bool manual = true}) async {
-    await _t.disconnect();
+    // **先**把 connected 置 false，再拆传输层：
+    // 传输层拆卸过程中会（异步）抛出 closed 事件，若那时 connected 仍为
+    // true，就会被当成「链路意外丢失」→ 上层自动重连 ——「用户点了断开，
+    // 8 秒后自己又连上」正是这么来的。
     connected = false;
     connecting = false;
     status = TncStatus.idle;
+    await _t.disconnect();
     if (manual) _log('已断开');
     onStateChanged?.call();
   }
 
   void _onClosed() {
-    final was = connected;
+    // 已经在断开流程里（connected 已为 false）→ 这是预期内的事件，不上报。
+    // 只有「我们以为还连着」时到达的 closed 才是真的链路丢失。
+    if (!connected) return;
     connected = false;
     status = TncStatus.closed;
-    if (was) _log('链路断开');
+    _log('链路断开');
     onStateChanged?.call();
     onClosed?.call();
   }
@@ -325,6 +413,88 @@ class TncLink {
     lastTxAt = DateTime.now();
     lastError = '';
     onStateChanged?.call();
+    return null;
+  }
+
+  /// 发送 TNC 初始化串（多行，逐行 + CRLF + 行间延时）。
+  ///
+  /// 对齐 APRSdroid 的 `kiss.init` 行为（KissProto.scala：逐行
+  /// `write(line)` + `write('\r')` + `write('\n')` + `Thread.sleep(initdelay)`）。
+  /// 返回实际发出的行数（0 = 未配置）。
+  Future<int> sendInitString() async {
+    if (!connected) {
+      lastError = 'not-connected';
+      return 0;
+    }
+    final raw = config.initString.trim();
+    if (raw.isEmpty) return 0;
+    final lines = raw
+        .split(RegExp(r'\r?\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+    for (final line in lines) {
+      // 初始化串是**明文命令**（不进 KISS 转义），TNC 只在命令模式下认它。
+      // 同样必须是 Uint8List，理由见 Kiss.escape 的注释。
+      _t.send(Uint8List.fromList(<int>[...utf8.encode(line), 0x0D, 0x0A]));
+      _log('初始化：$line');
+      final d = config.initDelayMs;
+      if (d > 0) await Future.delayed(Duration(milliseconds: d));
+    }
+    _log('已发送 ${lines.length} 行 TNC 初始化串');
+    onStateChanged?.call();
+    return lines.length;
+  }
+
+  /// 发射自检：发一帧测试包，报告「链路层到底有没有把字节送出去」。
+  ///
+  /// 为什么需要：用户报「能收不能发」时，症状无法区分下面几种原因，
+  /// 这个自检把它们分开：
+  ///   * 没连上 / 帧长超限 / 报文格式错 → 立刻返回错误码；
+  ///   * **字节没送出去**（原生拒收，例如 Dart 传的字节类型不对使
+  ///     Kotlin 取不到 ByteArray）→ 等 [settle] 纳秒内捕获到
+  ///     `onTxFailed`，返回 'send-failed'；
+  ///   * 写成功但电台不发射 → 自检通过，说明问题在 TNC 侧（未进 KISS
+  ///     模式 / 参数不对 / 模块问题），据此提示配置初始化串。
+  ///
+  /// ⚠️ 必须等这一拍：写入是异步的。此前直接看 `txFrames++`
+  /// （发送后无条件自增）会**误报成功** —— 明明一个字节都没出去。
+  ///
+  /// 用的是**状态包**（不含坐标），不会把台站挪到某个位置。
+  Future<String?> txSelfTest(
+    String fullCall,
+    String path, {
+    Duration settle = const Duration(milliseconds: 800),
+  }) async {
+    if (!connected) return 'not-connected';
+    final raw = '$fullCall>$path:>APRSlocus TXTEST';
+    // 挂上等待器后再发，避免写出太快导致错过确认
+    final wait = Completer<int>();
+    _txWait = wait;
+    final err = sendTnc2(raw);
+    if (err != null) {
+      _txWait = null;
+      return err;
+    }
+    // -1 = 链路层报错；>=0 = 确认写出 N 字节；-2 = 超时未见回话
+    final r = await Future.any<int>([
+      wait.future,
+      Future<int>.delayed(settle, () => -2),
+    ]);
+    _txWait = null;
+    if (r == -1) {
+      _log('发射自检失败：链路层报错（$lastTxError）');
+      return 'send-failed: $lastTxError';
+    }
+    if (r == -2) {
+      // 队列里还没轮到（writer 正忙）或者链路层没回报。不算失败，
+      // 但要把这个区别写进日志，避免又变成「看起来成功了」。
+      _log('发射自检：已入队但 ${settle.inMilliseconds}ms 内未收到写出确认'
+          '（排队 ${txBytes - txAckedBytes} 字节未确认）');
+      return null;
+    }
+    _log('发射自检：链路层确认写出 $r 字节'
+        '（累计发 ${txFrames} 帧 / 确认 ${txAckedBytes} 字节 / 写失败 $txErrors 次）');
     return null;
   }
 
@@ -421,7 +591,10 @@ class TncLink {
       ..rfBeacon = from.rfBeacon
       ..hardwareCmd = from.hardwareCmd
       ..hardwareVal = from.hardwareVal
-      ..autoReconnect = from.autoReconnect;
+      ..autoReconnect = from.autoReconnect
+      ..initString = from.initString
+      ..initDelayMs = from.initDelayMs
+      ..pushKissParams = from.pushKissParams;
   }
 
   Future<void> persistConfig() async {

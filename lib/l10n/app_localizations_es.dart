@@ -1052,6 +1052,659 @@ class AppLocalizationsEs extends AppLocalizations {
   String get codeContributionTranslation => 'Traducción';
 
   @override
+  String get dataSourceTxHint =>
+      'Puedes activar varios enlaces para recibir, pero **solo uno transmite** (el punto a la derecha). Enviar el mismo indicativo por dos enlaces duplicaría paquetes.';
+
+  @override
+  String get dataSourceTxBadge => 'TX';
+
+  @override
+  String get dataSourceIgateHint =>
+      'Para actuar como pasarela (reenviar paquetes de RF a internet), activa APRS-IS y TNC/audio, y luego enciende «Pasarela» abajo.';
+
+  @override
+  String get igateTitle => 'Pasarela (iGate)';
+
+  @override
+  String get igateSubtitle => 'Reenvía a APRS-IS los paquetes oídos por RF';
+
+  @override
+  String get igateEnable => 'Activar pasarela';
+
+  @override
+  String get igateHint =>
+      'Los paquetes oídos por RF se reenvían a APRS-IS, marcados con qAr/qAR y tu indicativo. Requiere APRS-IS y una fuente de RF (TNC/audio) activas.';
+
+  @override
+  String get igateNeedRf =>
+      'Falta una fuente de RF: marca TNC o audio en «Fuente de datos» arriba.';
+
+  @override
+  String get igateNeedIs => 'APRS-IS no está activo: márcalo arriba.';
+
+  @override
+  String get igateTwoWay => 'Pasarela bidireccional (reenviar mensajes a RF)';
+
+  @override
+  String get igateTwoWayHint =>
+      'Si está activo, **transmite por RF**: solo mensajes punto a punto destinados a una estación oída recientemente por RF. Si está desactivado, solo RF→IS.';
+
+  @override
+  String get igateStatToIs => 'Reenviados → APRS-IS';
+
+  @override
+  String get igateStatToRf => 'Reenviados → RF';
+
+  @override
+  String get igateStatDup => 'Duplicados descartados';
+
+  @override
+  String get igateResetStats => 'Reiniciar contadores';
+
+  @override
+  String grpSysJoined(String call) {
+    return '$call se unió al grupo';
+  }
+
+  @override
+  String grpSysLeft(String call) {
+    return '$call salió del grupo';
+  }
+
+  @override
+  String grpSysJoinReq(String call) {
+    return '$call pidió unirse';
+  }
+
+  @override
+  String grpSysDeclined(String call) {
+    return '$call rechazó la invitación';
+  }
+
+  @override
+  String get grpInviteTitle => 'Invitación a grupo';
+
+  @override
+  String grpInviteBody(String from, String name) {
+    return '$from te invitó a «$name»';
+  }
+
+  @override
+  String get grpNameInvalid =>
+      'El nombre del grupo no puede estar vacío ni contener dos puntos o saltos de línea';
+
+  @override
+  String grpNameTooLong(int max) {
+    return 'El nombre del grupo se limita a $max caracteres (más largo hace que la invitación supere el límite de APRS)';
+  }
+
+  @override
+  String grpInviteSent(int n) {
+    return 'Invitación enviada a $n miembro(s)';
+  }
+
+  @override
+  String get grpSelfPending => 'Esperando al propietario';
+
+  @override
+  String get deviceOverviewTitle => 'Dispositivos';
+
+  @override
+  String get deviceOverviewSubtitle =>
+      'Fuente de datos, estado del enlace y autodiagnóstico';
+
+  @override
+  String get deviceCurrentLink => 'Enlace actual';
+
+  @override
+  String get deviceCurrentLinkDesc =>
+      'Resumen de solo lectura: edita los parámetros en las subpáginas';
+
+  @override
+  String get deviceEntries => 'Dispositivos y parámetros';
+
+  @override
+  String get deviceEntriesDesc =>
+      'Una subpágina por enlace, cada una con sus ajustes';
+
+  @override
+  String get tncDeviceTitle => 'Dispositivo y parámetros TNC';
+
+  @override
+  String get tncDeviceDesc =>
+      'Emparejamiento Bluetooth/serie, cadena de inicio, parámetros KISS y autoprueba de TX';
+
+  @override
+  String get deviceLogTitle => 'Registro del enlace';
+
+  @override
+  String get deviceLogDesc =>
+      'Muestra el registro de la fuente actual (TNC/audio cambia solo)';
+
+  @override
+  String get tncInitTitle => 'Cadena de inicio del TNC';
+
+  @override
+  String get tncInitSubtitle =>
+      'Se envía línea a línea tras conectar (equivalente al kiss.init de APRSdroid)';
+
+  @override
+  String get tncInitTip =>
+      'Si el TNC recibe pero no transmite, prueba aquí primero: muchos módulos TNC Bluetooth/serie arrancan en modo comando y necesitan KISS ON / RESTART para reenviar en KISS. Un comando por línea (se añade CRLF automáticamente).';
+
+  @override
+  String get tncInitDelay => 'Retardo por línea (ms)';
+
+  @override
+  String get tncInitDelayTip =>
+      'Espera entre líneas. El módulo necesita tiempo; si es muy corto se pierden comandos';
+
+  @override
+  String get tncInitSendAction => 'Enviar cadena de inicio ahora';
+
+  @override
+  String tncInitSent(int n) {
+    return '$n línea(s) de inicio enviadas';
+  }
+
+  @override
+  String get tncInitEmpty => 'No hay cadena de inicio';
+
+  @override
+  String get tncPushParams => 'Enviar parámetros KISS al conectar';
+
+  @override
+  String get tncPushParamsTip =>
+      'Desactivado por defecto (igual que APRSdroid). Si se activa, los valores de arriba se envían al TNC al conectar y sobrescriben su configuración; valores inadecuados pueden hacer que nunca transmita, así que actívalo solo si quieres gestionarlo de forma centralizada.';
+
+  @override
+  String get tncTxTestTitle => 'Autoprueba de TX';
+
+  @override
+  String get tncTxTestSubtitle =>
+      'Escribe una trama de prueba al TNC para distinguir problemas de enlace o del TNC';
+
+  @override
+  String get tncTxTestHint =>
+      'Envía una trama de estado (sin coordenadas), así que no moverá tu estación en aprs.fi. Si indica \"escrito\" pero no se transmite, el problema está en el TNC: prueba primero la cadena de inicio (KISS ON / RESTART) y luego revisa TxDelay y la ocupación del canal.';
+
+  @override
+  String get tncTxTestAction => 'Escribir trama de prueba';
+
+  @override
+  String get tncTxTestOkPrefix => 'Escrito';
+
+  @override
+  String tncTxTestOk(String n) {
+    return 'Escrito en el TNC ($n tramas en total). Si la radio sigue sin transmitir, el problema está en el TNC: prueba la cadena de inicio o revisa TxDelay.';
+  }
+
+  @override
+  String tncTxTestFail(String err) {
+    return 'No escrito: $err';
+  }
+
+  @override
+  String get tncNeedConnected => 'Conecta primero el TNC';
+
+  @override
+  String msgLenCounter(int chars, int bytes) {
+    return '$chars/67 caracteres · $bytes/512 bytes en total';
+  }
+
+  @override
+  String msgOverSpecAsk(int chars) {
+    return 'Este mensaje tiene $chars caracteres y supera el límite de 67 de la especificación APRS. La mayoría de los clientes aún lo mostrará, pero algunos clientes/pasarelas lo truncan o rechazan, así que la otra estación podría no poder interpretarlo. ¿Enviar igualmente?';
+  }
+
+  @override
+  String msgOverServerLimit(int bytes, int over) {
+    return 'El paquete tiene $bytes bytes y supera el límite de 512 bytes por línea de APRS-IS. El servidor podría descartarlo por completo (ni siquiera llegaría la cabecera). Acorta unos $over bytes.';
+  }
+
+  @override
+  String get msgSendAnyway => 'Enviar igualmente';
+
+  @override
+  String get msgSpecLimitHint =>
+      'La especificación APRS recomienda mensajes de menos de 67 caracteres: el texto más largo puede truncarse o no interpretarse en algunos clientes.';
+
+  @override
+  String get msgBlockedTooLong =>
+      'Envío bloqueado: el paquete supera el límite de APRS-IS';
+
+  @override
+  String get beaconRfBeaconOff => 'Baliza RF desactivada';
+
+  @override
+  String get beaconRfEnableHint =>
+      'La transmisión automática en una fuente de RF requiere activar «Baliza RF». Hasta entonces no se transmite la posición automáticamente (ni corre la cuenta atrás).';
+
+  @override
+  String get beaconRfEnableAction => 'Activar baliza RF';
+
+  @override
+  String get beaconRfEnabled =>
+      'Baliza RF activada: transmitirá según el intervalo';
+
+  @override
+  String get beaconRfEnableWarn =>
+      'La transmisión usa tu indicativo: opera dentro de tu licencia';
+
+  @override
+  String get diagTitle => 'Autodiagnóstico del enlace';
+
+  @override
+  String get diagSubtitle =>
+      'Comprueba protocolo, permisos y dispositivos capa por capa';
+
+  @override
+  String get diagRun => 'Ejecutar prueba';
+
+  @override
+  String get diagRunning => 'Probando…';
+
+  @override
+  String diagPassed(int n) {
+    return '$n correctas';
+  }
+
+  @override
+  String diagFailed(int n) {
+    return '$n fallidas';
+  }
+
+  @override
+  String get diagHint =>
+      'Los bucles de protocolo funcionan sin radio: descarta el software y luego revisa dispositivos y cableado';
+
+  @override
+  String get diagTncSection => 'TNC (KISS / AX.25)';
+
+  @override
+  String get diagAudioSection => 'Audio (AFSK 1200)';
+
+  @override
+  String get diagKissEscape => 'Escape KISS';
+
+  @override
+  String get diagKissEscapeFail =>
+      'Fallo al deshacer el escape KISS (problema de software: cambiar el dispositivo no ayuda)';
+
+  @override
+  String get diagAx25 => 'Tramado AX.25';
+
+  @override
+  String get diagAx25Fail =>
+      'Fallo de codificación AX.25 (paquete mal formado)';
+
+  @override
+  String diagAx25Mismatch(String got) {
+    return 'El ida y vuelta AX.25 no coincide: $got';
+  }
+
+  @override
+  String get diagFcs => 'Comprobación FCS';
+
+  @override
+  String get diagFcsFail =>
+      'La comprobación FCS es incorrecta (un cambio de un byte debe rechazarse)';
+
+  @override
+  String get diagTncLoopback => 'Bucle de protocolo TNC';
+
+  @override
+  String diagTncLoopbackOk(int len) {
+    return 'Ida y vuelta KISS/AX.25 idéntico ($len bytes)';
+  }
+
+  @override
+  String get diagAfskLoopback => 'Bucle de módem AFSK';
+
+  @override
+  String diagAfskLoopbackOk(int samples, int rate) {
+    return 'Modular → demodular idéntico ($samples muestras @${rate}Hz)';
+  }
+
+  @override
+  String diagAfskLoopbackFail(int n) {
+    return '$n trama(s) decodificada(s): se esperaba 1';
+  }
+
+  @override
+  String get diagAfskLevelFail =>
+      'Nivel de onda demasiado bajo (casi silencio)';
+
+  @override
+  String get diagPlatform => 'Compatibilidad de plataforma';
+
+  @override
+  String diagPlatformOk(String name) {
+    return 'Disponible · motor $name';
+  }
+
+  @override
+  String get diagTncPlatformNo => 'Este sistema no admite enlaces TNC';
+
+  @override
+  String get diagAudioPlatformWarn =>
+      'Sin audio en tiempo real: el modo WAV sigue disponible';
+
+  @override
+  String get diagNoRealtime => 'no en tiempo real';
+
+  @override
+  String get diagPermission => 'Permiso de micrófono';
+
+  @override
+  String get diagPermissionOk => 'Concedido';
+
+  @override
+  String get diagSkipped => 'Omitido (plataforma no compatible)';
+
+  @override
+  String get diagCapture => 'Captura de audio';
+
+  @override
+  String diagCaptureOk(int bytes, int rate) {
+    return 'Recibidos $bytes bytes @${rate}Hz';
+  }
+
+  @override
+  String get diagCaptureNoData =>
+      'No se recibieron datos de audio: revisa el dispositivo de entrada y los permisos';
+
+  @override
+  String diagCaptureFailed(String err) {
+    return 'No se pudo iniciar la captura: $err';
+  }
+
+  @override
+  String get diagSpeaker => 'Salida de altavoz';
+
+  @override
+  String get diagSpeakerOk => 'Tono de prueba reproducido';
+
+  @override
+  String diagSpeakerFail(String err) {
+    return 'Fallo de reproducción: $err';
+  }
+
+  @override
+  String get diagFileIo => 'E/S de archivo WAV';
+
+  @override
+  String diagFileIoOk(int rate) {
+    return 'Escritura → lectura → decodificación idénticas @${rate}Hz';
+  }
+
+  @override
+  String diagFileWriteFail(String err) {
+    return 'Fallo de escritura: $err';
+  }
+
+  @override
+  String get diagFileReadFail => 'Fallo de lectura del archivo';
+
+  @override
+  String get diagFileDecodeFail =>
+      'No se decodificó ningún paquete del archivo (¿no es una grabación AFSK 1200?)';
+
+  @override
+  String get connAudioSourceHint =>
+      'El modo de audio no usa servidor, filtros ni ajustes KISS';
+
+  @override
+  String get testTxTitle => 'Transmisión de prueba';
+
+  @override
+  String get testTxDesc =>
+      'Envía un paquete de estado para comprobar que el enlace llega al aire';
+
+  @override
+  String get testTxAction => 'Transmitir trama de prueba';
+
+  @override
+  String get testTxSent => 'Trama de prueba entregada al enlace';
+
+  @override
+  String testTxFail(String err) {
+    return 'Fallo de la trama de prueba: $err';
+  }
+
+  @override
+  String get testTxNeedsConnect => 'Conecta primero el enlace';
+
+  @override
+  String get testTxHint =>
+      'Esto **transmite de verdad** (paquete de estado, sin coordenadas). Asegúrate de operar dentro de tu licencia e indicativo';
+
+  @override
+  String get audioStatsTitle => 'Estadísticas de audio';
+
+  @override
+  String audioStatRx(int n) {
+    return '$n tramas recibidas';
+  }
+
+  @override
+  String audioStatTx(int n) {
+    return '$n tramas enviadas';
+  }
+
+  @override
+  String audioStatDrop(int n) {
+    return '$n bytes descartados durante la transmisión';
+  }
+
+  @override
+  String get audioRestart => 'Reiniciar enlace de audio';
+
+  @override
+  String get audioTxDisabled =>
+      '\"Permitir transmisión\" desactivado: solo recepción';
+
+  @override
+  String get audioLoopbackHint =>
+      'La prueba modula y demodula de verdad; \"descartados durante la transmisión\" es normal en semidúplex';
+
+  @override
+  String get notifAudioConnected => 'Enlace de audio en línea';
+
+  @override
+  String get notifAudioDisconnected => 'Enlace de audio desconectado';
+
+  @override
+  String connConnectingAudio(String name) {
+    return 'Abriendo audio ($name)…';
+  }
+
+  @override
+  String connAudioConnected(String rate) {
+    return 'Enlace de audio en línea · $rate';
+  }
+
+  @override
+  String connRetryAudio(int seconds) {
+    return 'No se pudo abrir el audio · reintentando en ${seconds}s…';
+  }
+
+  @override
+  String connRetryAudioDetail(String detail, int seconds) {
+    return 'Fallo de audio ($detail) · reintentando en ${seconds}s…';
+  }
+
+  @override
+  String connAudioLinkLost(int seconds) {
+    return 'Enlace de audio perdido · reconectando en ${seconds}s…';
+  }
+
+  @override
+  String connAudioPositionSent(String call) {
+    return 'Enviado por audio · posición transmitida ($call)';
+  }
+
+  @override
+  String get dataSourceAudio => 'Audio (tarjeta de sonido)';
+
+  @override
+  String get dataSourceAudioDesc =>
+      'AFSK 1200 hacia/desde una radio por micrófono/altavoz o cable de sonido';
+
+  @override
+  String get audioSettings => 'Audio (TNC de tarjeta de sonido)';
+
+  @override
+  String get audioSettingsSubtitle =>
+      'Envía y recibe paquetes AFSK 1200 con la tarjeta de sonido';
+
+  @override
+  String get audioBackend => 'Motor de audio';
+
+  @override
+  String get audioUnsupported =>
+      'Este sistema no admite audio en tiempo real (el modo WAV sí está disponible)';
+
+  @override
+  String get audioNeedPermission =>
+      'Se requiere permiso de micrófono (RECORD_AUDIO): concédelo e inténtalo de nuevo';
+
+  @override
+  String get audioCaptureTitle => 'Captura de audio';
+
+  @override
+  String get audioCaptureDesc =>
+      'Demodula AFSK 1200 desde la entrada de micrófono/línea';
+
+  @override
+  String get audioCaptureStart => 'Iniciar captura';
+
+  @override
+  String get audioCaptureStop => 'Detener captura';
+
+  @override
+  String get audioSampleRate => 'Frecuencia de muestreo';
+
+  @override
+  String get audioSampleRateTip =>
+      '22050 Hz es lo habitual en TNC de tarjeta de sonido; usa 44100/48000 si no se admite. Cambiarlo reinicia la captura';
+
+  @override
+  String get audioLevel => 'Nivel de entrada';
+
+  @override
+  String get audioLevelTip =>
+      'El medidor sube con señal; \"Demodulación sincronizada\" se ilumina al detectar AFSK';
+
+  @override
+  String get audioSynced => 'Demodulación sincronizada';
+
+  @override
+  String get audioUnlocked => 'Sin sincronizar';
+
+  @override
+  String audioBadFrames(int n) {
+    return '$n decodificaciones abortadas (ruido/desincronización)';
+  }
+
+  @override
+  String get audioBaud => 'Velocidad en baudios';
+
+  @override
+  String get audioTones => 'Tonos (mark/space)';
+
+  @override
+  String get audioTxTitle => 'Transmisión de audio';
+
+  @override
+  String get audioTxDesc =>
+      'Escucha antes de transmitir para evitar colisiones';
+
+  @override
+  String get audioTxEnabled => 'Permitir transmisión';
+
+  @override
+  String get audioTxEnabledTip =>
+      'Si está desactivado, solo recepción: útil si solo quieres escuchar balizas';
+
+  @override
+  String get audioTxDelayTip =>
+      'Duración del preámbulo: da tiempo al demodulador remoto y al PTT';
+
+  @override
+  String get audioToneMark => 'Tono mark (Hz)';
+
+  @override
+  String get audioToneSpace => 'Tono space (Hz)';
+
+  @override
+  String get audioMarkTip =>
+      'Bell 202 define mark 1200 Hz y space 2200 Hz; la tolerancia es de unos pocos Hz';
+
+  @override
+  String get audioSpaceTip =>
+      'Tono space. Junto con mark define el desplazamiento FSK (1000 Hz nominal)';
+
+  @override
+  String get audioBaudTip =>
+      'APRS en VHF es siempre 1200 bd (Bell 202); 300 bd es para HF';
+
+  @override
+  String get audioTxDelayLabel => 'Preámbulo Tx (ms)';
+
+  @override
+  String get audioTnc2Tip =>
+      'Formato SRC>DEST,PATH:info, p. ej. BG7LZQ-9>APALOC:>TEST';
+
+  @override
+  String get audioCsmaWait => 'Esperar canal libre (ms)';
+
+  @override
+  String get audioCsmaWaitTip =>
+      'Cuánto esperar si el canal está ocupado; 0 = transmitir de inmediato';
+
+  @override
+  String get audioStopTx => 'Detener transmisión';
+
+  @override
+  String get audioWavTitle => 'Modo de archivo WAV';
+
+  @override
+  String get audioWavDesc =>
+      'Decodifica una grabación sin conexión o exporta un paquete como audio';
+
+  @override
+  String get audioWavPath => 'Ruta del archivo';
+
+  @override
+  String get audioWavDecodeAction => 'Decodificar este WAV';
+
+  @override
+  String get audioWavExportAction => 'Exportar este paquete';
+
+  @override
+  String get audioWavTnC2 => 'Paquete a exportar (TNC2)';
+
+  @override
+  String get audioWavNone =>
+      'No se decodificó ningún paquete (¿no es una grabación AFSK 1200?)';
+
+  @override
+  String audioWavFound(int n) {
+    return '$n paquete(s) decodificado(s)';
+  }
+
+  @override
+  String audioWavWritten(String path) {
+    return 'Guardado en $path';
+  }
+
+  @override
+  String audioWavFailed(String err) {
+    return 'Fallo de E/S: $err';
+  }
+
+  @override
   String connTncConnected(String arg) {
     return 'TNC conectado · $arg';
   }
@@ -1152,6 +1805,107 @@ class AppLocalizationsEs extends AppLocalizations {
   String translateFreeFailed(String e) {
     return 'El endpoint gratuito no está disponible ($e) · cambia a Google / Baidu / personalizado en los ajustes';
   }
+
+  @override
+  String get translateProviderAuto => 'Automático (recomendado)';
+
+  @override
+  String get translateProviderAutoDesc =>
+      'Prueba varios endpoints sin clave y usa la primera traducción válida';
+
+  @override
+  String get translateProviderGooglePublic =>
+      'Endpoint público de Google (sin clave)';
+
+  @override
+  String get translateProviderGooglePublicDesc =>
+      'Buena calidad, pero puede limitarse (se observó 429)';
+
+  @override
+  String get translateProviderMyMemory => 'MyMemory (sin clave)';
+
+  @override
+  String get translateProviderMyMemoryDesc =>
+      'API gratuita oficial, pero es una memoria de traducción: devuelve el original si no hay coincidencia';
+
+  @override
+  String get translateProviderLibre => 'LibreTranslate (autoalojable)';
+
+  @override
+  String get translateProviderLibreDesc =>
+      'Código abierto; lo más fiable es autoalojarlo. Las instancias públicas ya piden clave y a menudo no tienen chino';
+
+  @override
+  String get translateLibreUrl => 'URL de la instancia';
+
+  @override
+  String get translateLibreKey =>
+      'Clave de API de la instancia (necesaria en públicas; vacía si es propia)';
+
+  @override
+  String get translateUsedProvider => 'Usado realmente';
+
+  @override
+  String get translateUntranslated =>
+      'El endpoint no tradujo realmente (devolvió el original); se probó el siguiente';
+
+  @override
+  String translateAutoAllFailed(String e) {
+    return 'Fallaron todos los endpoints sin clave ($e) · usa una clave de Google/Baidu o tu propia instancia en los ajustes';
+  }
+
+  @override
+  String get translateLangUnsupported =>
+      'Este proveedor no puede traducir a ese idioma · prueba «Automático» u otro proveedor';
+
+  @override
+  String get translateLangScopeNote =>
+      'Cada proveedor cubre idiomas distintos (p. ej. Baidu estándar admite indonesio «id», pero no todas las direcciones) — si no se admite, la app sugiere Automático u otro proveedor';
+
+  @override
+  String get langNameZh => 'chino simplificado';
+
+  @override
+  String get langNameZhTw => 'chino tradicional';
+
+  @override
+  String get langNameEn => 'inglés';
+
+  @override
+  String get langNameJa => 'japonés';
+
+  @override
+  String get langNameKo => 'coreano';
+
+  @override
+  String get langNameEs => 'español';
+
+  @override
+  String get langNameFr => 'francés';
+
+  @override
+  String get langNameDe => 'alemán';
+
+  @override
+  String get langNameRu => 'ruso';
+
+  @override
+  String get langNamePt => 'portugués';
+
+  @override
+  String get langNameIt => 'italiano';
+
+  @override
+  String get langNameId => 'indonesio';
+
+  @override
+  String get langNameTh => 'tailandés';
+
+  @override
+  String get langNameVi => 'vietnamita';
+
+  @override
+  String get langNameAr => 'árabe';
 
   @override
   String get translateOutgoing => 'Traducir a su idioma antes de enviar';
@@ -1334,7 +2088,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get translateLangAuto => 'Detectar automáticamente';
 
   @override
-  String get translateSameLang => 'Ya está en el idioma de destino';
+  String get translateSameLang =>
+      'La traducción es idéntica al original · puede que no necesite traducción o que el proveedor fallara';
+
+  @override
+  String get translateNotNeeded =>
+      'Aquí no hay nada que traducir (números / símbolos / indicativos)';
 
   @override
   String translateBubbleCount(int n) {
@@ -1373,6 +2132,105 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get dataSourceSwitchHint =>
       'Cambiar la fuente de datos desconecta el enlace actual';
+
+  @override
+  String get dataSourcePkwdwpl => 'PKWDWPL (puntos de ruta Kenwood)';
+
+  @override
+  String get dataSourcePkwdwplDesc =>
+      'Lee las sentencias Kenwood \$PKWDWPL que emite el equipo por Bluetooth o serie (solo recepción)';
+
+  @override
+  String get dataSourcePkwdwplHint =>
+      'PKWDWPL es un enlace de **solo recepción**: recibe estaciones pero nunca transmite (para transmitir usa APRS-IS / TNC / audio)';
+
+  @override
+  String connConnectingPkwdwpl(String arg) {
+    return 'Conectando a PKWDWPL ($arg)…';
+  }
+
+  @override
+  String connPkwdwplConnected(String arg) {
+    return 'PKWDWPL conectado · $arg';
+  }
+
+  @override
+  String get pkwdwplDeviceTitle => 'Dispositivo PKWDWPL';
+
+  @override
+  String get pkwdwplDeviceDesc =>
+      'Vincula el puerto del equipo y revisa la recepción de puntos de ruta';
+
+  @override
+  String get pkwdwplBindTitle => 'Vinculación y estado';
+
+  @override
+  String get pkwdwplBindSubtitle =>
+      'Elige el puerto serie o Bluetooth que emite sentencias \$PKWDWPL';
+
+  @override
+  String get pkwdwplRxOnly => 'Solo recepción';
+
+  @override
+  String get pkwdwplReadOnly =>
+      'Solo recepción · este equipo no transmite nada';
+
+  @override
+  String get deviceConflictTitle =>
+      'Dos enlaces están vinculados al mismo dispositivo';
+
+  @override
+  String get deviceConflictDesc =>
+      'Cuando TNC y PKWDWPL apuntan al mismo dispositivo, los datos recibidos se reparten entre ambos — el síntoma es «transmite bien pero no recibe». Asigne otro dispositivo a uno de ellos. TNC tiene prioridad: PKWDWPL se negará a conectar.';
+
+  @override
+  String get deviceInUseByTnc =>
+      'En uso por TNC — no se puede vincular de nuevo';
+
+  @override
+  String get deviceInUseByPkwdwpl =>
+      'En uso por PKWDWPL — no se puede vincular de nuevo';
+
+  @override
+  String rxOnlyBanner(String arg) {
+    return '$arg conectado · solo recepción (la fuente de transmisión está desconectada)';
+  }
+
+  @override
+  String get pkwdwplTip =>
+      'Configura el formato de salida del puerto PC / GPS del equipo como \"\$PKWDWPL\" (normalmente 4800 8N1). Este enlace es de solo lectura y no transmite nada.';
+
+  @override
+  String get pkwdwplStrictChecksum =>
+      'Suma de comprobación estricta (descarta si no coincide)';
+
+  @override
+  String get pkwdwplStrictChecksumTip =>
+      'Desactivado por defecto: una discrepancia se marca y se registra en lugar de descartarse, porque en un cable local suele significar que el formato del firmware difiere del manual. Descartar todo dejaría la pantalla vacía y dificultaría mucho el diagnóstico.';
+
+  @override
+  String get pkwdwplErrReadOnly =>
+      'el enlace de solo recepción no puede transmitir';
+
+  @override
+  String get pkwdwplStatTitle => 'Recepción de puntos de ruta';
+
+  @override
+  String pkwdwplStats(String rx) {
+    return '$rx puntos de ruta recibidos';
+  }
+
+  @override
+  String get pkwdwplStatRejected => 'Sentencias descartadas o inválidas';
+
+  @override
+  String get pkwdwplStatMismatch => 'Discrepancias de suma';
+
+  @override
+  String get pkwdwplStatIgnored => 'Otras sentencias NMEA (ignoradas)';
+
+  @override
+  String get pkwdwplLogEmpty => 'Aún no hay registro de PKWDWPL';
 
   @override
   String get tncBindTitle => 'TNC Bluetooth';
