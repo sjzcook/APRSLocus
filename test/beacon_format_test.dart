@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:aprslocus/aprs_parse.dart';
 import 'package:aprslocus/services.dart';
 import 'package:aprslocus/state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 发送侧报文格式的回归测试。
 ///
@@ -22,6 +23,12 @@ import 'package:aprslocus/state.dart';
 /// `'APRS,TCPIP*'` —— 于是位置包/消息的 tocall 变成 `APRS`，
 /// 第三方统计站按 `u/APALOC` 订阅时只能收到状态包、收不到位置包。
 void main() {
+  // 本文件多处分组要构造 AppState（读设置 / persist），所以 binding 与
+  // SharedPreferences 的 mock 在这里统一备好 —— 与 beacon_coarse_force_test
+  // 同一写法。分组内再设一遍无妨（幂等）。
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('信标报文格式（第三方兼容性）', () {
     test('注释必须紧跟符号，中间不得有空格', () {
       final raw = AprsFmt.position(
@@ -198,4 +205,315 @@ void main() {
           startsWith('BG7LZG-9>APALOC,TCPIP*:'));
     });
   });
+
+  /// ─── PHG 数据扩展的格式（对齐用户给的标准报文）───
+  ///
+  /// 标准报文（用户提供，终端侧抓包）：
+  ///   BI7KZM-13>APAVT7,WIDE1-1,qAS,BI7KZM-10:!2216.45N/11113.90ErPHG5950
+  ///
+  /// 两个要害，都用测试钉死：
+  ///   1. `PHGphgd` **紧跟符号**（备注的最前面），前面不能有 `/A=` 或备注文字
+  ///      —— 第三方解析器按「注释开头的数据扩展」识别 PHG，插在前面就读不出来；
+  ///   2. 码位量化照规范：p=5 → 25 W、h=9 → 5120 ft、g=5 → 5 dB、d=0 → 全向。
+  group('PHG 数据扩展格式（对齐标准报文）', () {
+    // 下面两条要构造 AppState（读设置 / persist），所以自己把 binding 与
+    // SharedPreferences 的 mock 备好 —— 不依赖本文件 main() 里有没有初始化。
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('码位量化：25 W / 5120 ft / 5 dB / 全向 → PHG5950', () {
+      expect(AprsPhg.encode(watts: 25, heightFeet: 5120, gainDb: 5), 'PHG5950');
+    });
+
+    test('功率取「不超过实际值的最大档」（30 W 只能报 25 W）', () {
+      expect(AprsPhg.encode(watts: 30, heightFeet: 5120, gainDb: 5),
+          startsWith('PHG5'));
+      expect(AprsPhg.encode(watts: 36, heightFeet: 5120, gainDb: 5),
+          startsWith('PHG6'));
+    });
+
+    test('标准报文逐字节一致（PHG 紧贴符号，中间无空格）', () {
+      final raw = AprsFmt.position(
+        'BI7KZM-13',
+        22 + 16.45 / 60,
+        111 + 13.90 / 60,
+        'r',
+        comment: AprsPhg.encode(watts: 25, heightFeet: 5120, gainDb: 5),
+        path: 'APAVT7,WIDE1-1,qAS,BI7KZM-10',
+      );
+      expect(raw,
+          'BI7KZM-13>APAVT7,WIDE1-1,qAS,BI7KZM-10:!2216.45N/11113.90ErPHG5950');
+    });
+
+    test('只填功率 / 天线高度 / 增益里的任一项，都要带 PHG', () {
+      final st = AppState();
+      expect(st.hasPhg, isFalse);
+      st.beaconAntennaHeightFt = 5120; // 只填天线高度
+      expect(st.hasPhg, isTrue,
+          reason: '说明里写的是「填任一项即附上固定 7 字节的 PHGphgd」');
+      expect(st.phgPreview, startsWith('PHG'));
+
+      st.dispose();
+    });
+
+    test('实际发出的位置报文：PHG 紧跟符号，且排在 /A= 之前', () {
+      final st = AppState()
+        ..smartBeaconEnabled = false
+        ..myCall = 'BI7KZM'
+        ..mySsid = 13
+        ..mySymbol = 'r'
+        ..myLat = 22 + 16.45 / 60
+        ..myLng = 111 + 13.90 / 60
+        ..myHasFix = true
+        ..beaconPowerW = 25
+        ..beaconAntennaHeightFt = 5120
+        ..beaconGainDb = 5
+        ..beaconAltOverrideM = 12; // 让 /A= 也出现，验证两者的先后
+      st.sendBeacon();
+      final raw = st.packets.map((p) => p.raw).firstWhere(
+            (r) => r.contains('PHG'),
+            orElse: () => '',
+          );
+      expect(raw, isNotEmpty, reason: '填了 PHG 却没带 PHG');
+      expect(
+        raw,
+        'BI7KZM-13>APALOC,TCPIP*:!2216.45N/11113.90ErPHG5950/A=000039',
+        reason: 'PHG 必须在符号之后、/A= 之前（标准报文就是这样）',
+      );
+
+      st.dispose();
+    });
+  });
+
+  /// ─── 「发射」按钮的两条回执口径 ───
+  ///
+  /// 两个真实问题（都在 PR #11 的「发射」按钮上）：
+  ///   1. 填了 PHG 却没有定位时，位置包被 `!myHasFix` 挡回，只发出状态帧 ——
+  ///      界面原来一声不吭，用户以为 PHG 上天了；
+  ///   2. `sendStatus()` 复用「位置已上报」那三档连接状态文案，于是只发状态帧
+  ///      时主横幅写着「位置已上报」。状态帧与位置帧是两种报文，文案必须分开。
+  group('发射回执：状态帧不能写成「位置已上报」', () {
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('发状态报文 → 文案说「状态报文」，不再说「位置已上报」', () {
+      final st = AppState()
+        ..setLocale('zh')
+        ..myCall = 'BG7LZG'
+        ..debugSetLinkUp(AppState.srcAprsIs, true);
+      st.sendStatus();
+      expect(st.connInfo, contains('状态报文'));
+      expect(st.connInfo, isNot(contains('位置已上报')),
+          reason: '状态帧不含坐标，不能显示成位置已上报');
+
+      st.dispose();
+    });
+
+    test('发位置报文 → 仍然说「位置已上报」（两档没混）', () {
+      final st = AppState()
+        ..setLocale('zh')
+        ..myCall = 'BG7LZG'
+        ..mySymbol = '>'
+        ..myLat = 39.1
+        ..myLng = 116.4
+        ..myHasFix = true
+        ..debugSetLinkUp(AppState.srcAprsIs, true);
+      st.sendBeacon();
+      expect(st.connInfo, contains('位置'));
+      expect(st.connInfo, isNot(contains('状态报文')));
+
+      st.dispose();
+    });
+
+    test('TNC 发射时状态文案也分档（TNC + 状态报文）', () {
+      final st = AppState()
+        ..setLocale('zh')
+        ..myCall = 'BG7LZG'
+        ..debugSetLinkUp(AppState.srcAprsIs, false)
+        ..dataSource = AppState.srcTnc
+        ..debugSetLinkUp(AppState.srcTnc, true);
+      st.sendStatus();
+      expect(st.connInfo, contains('TNC'));
+      expect(st.connInfo, contains('状态报文'));
+
+      st.dispose();
+    });
+
+    test('填了 PHG 但没定位：位置包不发，状态帧照发（这就是界面要提示的情形）', () {
+      final st = AppState()
+        ..myCall = 'BG7LZG'
+        ..beaconPowerW = 25; // 有 PHG，但 myHasFix 仍为 false
+      st.sendBeacon(); // 内部被 !myHasFix 挡回
+      st.sendStatus();
+      expect(st.packets.where((p) => p.type == 'position'), isEmpty,
+          reason: '没有定位不能发位置包');
+      expect(st.packets.where((p) => p.type == 'status'), isNotEmpty,
+          reason: '状态帧不含坐标，无定位也能发');
+
+      st.dispose();
+    });
+  });
+
+  /// ─── 数据扩展必须**整块紧贴**（第三方解析器的前提）───
+  ///
+  /// 实测事故：v2.0.4 发出的备注是
+  ///   `000/000 PHG2130 /A=000033 Bat:22% E4[中国人能飞]`
+  /// —— 扩展之间被空格分隔。用参考实现 aprslib 解这条报文，结果是
+  /// `phg` **完全缺失**、`PHG2130` 落进 comment 当普通文字：
+  ///
+  ///   aprslib.parse(… 'b000/000 PHG2130 /A=000033 …')
+  ///   → {'altitude': 10.0584}   comment='PHG2130  Bat:22% …'
+  ///
+  /// 而 APRS101 第 9 章把这些字段定义为**固定长度的数据扩展**，直接拼在符号
+  /// 之后、彼此之间**不用空格分隔**。6 万余条现网报文里「扩展内部带空格」的
+  /// 样本是 **0 条**；真实台站长这样：
+  ///   `!3155.21N/12016.69ErPHG1460/A=000071`
+  ///   `!2155.17N/11052.40Eb000/000/A=000033`
+  ///
+  /// 所以这一组把「整块紧贴」钉死：**注释的第一段只能是 CsT / PHG / `/A=`
+  /// 的紧贴拼接**，不允许出现空格。
+  group('数据扩展必须整块紧贴（否则第三方读不出 PHG）', () {
+    /// 用户实测那份配置的复现：4 W / 20 ft / 3 dB（→ `PHG2130`）、
+    /// 手填海拔 10.0584 m（→ `/A=000033`）。
+    AppState userSetup() => AppState()
+      ..myCall = 'BG7LZQ'
+      ..mySsid = 2
+      ..mySymbol = 'b'
+      ..myLat = 21 + 55.17 / 60
+      ..myLng = 110 + 52.40 / 60
+      ..myHasFix = true
+      ..beaconPowerW = 4
+      ..beaconAntennaHeightFt = 20
+      ..beaconGainDb = 3
+      ..beaconAltOverrideM = 10.0584
+      ..beaconIncludeBattery = false
+      ..myComment = 'E4[中国人能飞]';
+
+    String sentRaw(AppState st) => st.packets
+        .map((p) => p.raw)
+        .firstWhere((r) => r.contains('PHG'), orElse: () => '');
+
+    /// 位置包的原文（**与「有没有 PHG」无关**）。
+    ///
+    /// 为什么不能复用 [sentRaw]：它按「含 PHG」筛，于是 phg=false 的组合一律
+    /// 拿到空串 —— 断言要么空转、要么直接失败。这正是本组「不变量」用例上一次
+    /// CI 报红的原因（`cse=true phg=false` 时首段是空串）。
+    String posRaw(AppState st) {
+      final hits = st.packets.where((p) => p.type == 'position');
+      return hits.isEmpty ? '' : hits.first.raw;
+    }
+
+    /// ⚠ 这一条说的是**第二个**独立的坑：就算整块紧贴了，只要 CsT 排在 PHG
+    /// 前面，PHG 一样读不出来 —— 参考实现 aprslib 的 `parse_data_extentions()`
+    /// 先匹配 `^\d{3}/\d{3}`，命中后**只**再看 DF report，根本不再找 PHG。
+    /// 实测（0.7.2）：`…Eb000/000PHG2130/A=000033` → `phg` 缺失、
+    /// `PHG2130` 落进 comment；`…EbPHG2130/A=000033` → `phg=2130` ✓
+    /// 所以**扩展块的首位让给 PHG，CsT 不发**（取舍见 state.dart 的注释）。
+    test('速度/方位角开着 + 有 PHG：PHG 仍占首位，CsT 让位', () {
+      final st = userSetup()
+        ..beaconIncludeSpeed = true
+        ..beaconIncludeCourse = true
+        ..myCourse = 0
+        ..mySpeed = 0;
+      st.sendBeacon();
+      final raw = sentRaw(st);
+      expect(
+        raw,
+        'BG7LZQ-2>APALOC,TCPIP*:!2155.17N/11052.40EbPHG2130/A=000033 '
+        'E4[中国人能飞]',
+        reason: 'CsT 排在 PHG 前面时第三方读不出 PHG（两个都要求「最前」）',
+      );
+      expect(raw.contains('000/000'), isFalse,
+          reason: 'PHG 在场时 CsT 必须整段不发，而不是挪到后面当备注文字');
+      expect(raw.contains(' PHG'), isFalse, reason: '扩展之间不能有空格');
+      expect(raw.contains('/A=000033 '), isTrue, reason: '空格应在扩展块与备注之间');
+
+      st.dispose();
+    });
+
+    test('没有 PHG 时：CsT 照旧占首位（既有行为不变）', () {
+      final st = userSetup()
+        ..beaconPowerW = null
+        ..beaconAntennaHeightFt = null
+        ..beaconGainDb = null
+        ..beaconIncludeSpeed = true
+        ..beaconIncludeCourse = true
+        ..myCourse = 0
+        ..mySpeed = 0;
+      st.sendBeacon();
+      final raw = st.packets
+          .map((p) => p.raw)
+          .firstWhere((r) => r.contains('/A='), orElse: () => '');
+      expect(
+        raw,
+        'BG7LZQ-2>APALOC,TCPIP*:!2155.17N/11052.40Eb000/000/A=000033 '
+        'E4[中国人能飞]',
+        reason: '没开 PHG 的台站，CsT//A= 的紧贴顺序与 v2.0.4 之前完全一致',
+      );
+
+      st.dispose();
+    });
+
+    test('关掉速度/方位角时：PHG 紧跟符号（= 标准报文形状）', () {
+      final st = userSetup()
+        ..beaconIncludeSpeed = false
+        ..beaconIncludeCourse = false;
+      st.sendBeacon();
+      final raw = sentRaw(st);
+      expect(
+        raw,
+        'BG7LZQ-2>APALOC,TCPIP*:!2155.17N/11052.40EbPHG2130/A=000033 '
+        'E4[中国人能飞]',
+        reason: '这是标准报文的形状（PHG 紧贴符号、/A= 紧贴 PHG）',
+      );
+
+      st.dispose();
+    });
+
+    test('不变量：扩展整块紧贴，且不得漏进备注', () {
+      // 注释的第一段 = `!坐标+符号` 紧贴 `CsT? PHG? /A=?`（三者都可缺席）
+      final posExt = RegExp(r'^![0-9]{4}\.[0-9]{2}[NS]/[0-9]{5}\.[0-9]{2}[EW].'
+          r'(?:\d{3}/\d{3})?(?:PHG\d{4})?(?:/A=\d{6})?$');
+      // 任何一个数据扩展**单独出现**在后面的备注里，就说明扩展之间被空格拆开了
+      final leaked = RegExp(r'^(?:PHG\d{4}|/A=\d{6}|\d{3}/\d{3})$');
+
+      // 只取「至少带一个扩展」的组合：没有任何扩展时注释紧跟符号（本来就无空格），
+      // 那种形状由上一组「空/纯空白注释不产生多余分隔」覆盖。
+      for (final (cse, phg, alt) in [
+        (true, true, true),
+        (false, true, true),
+        (true, false, true),
+        (false, false, true),
+        (true, false, false),
+      ]) {
+        final st = userSetup()
+          ..beaconIncludeSpeed = cse
+          ..beaconIncludeCourse = cse
+          ..myCourse = cse ? 123.0 : null
+          ..mySpeed = cse ? 20.0 : null
+          ..beaconPowerW = phg ? 25 : null
+          ..beaconAntennaHeightFt = phg ? 5120 : null
+          ..beaconGainDb = phg ? 5 : null
+          ..beaconAltOverrideM = alt ? 10.0584 : null;
+        st.sendBeacon();
+        final raw = posRaw(st);
+        final body = raw.substring(raw.indexOf(':') + 1);
+        final head = body.split(' ').first;
+        expect(posExt.hasMatch(head), isTrue,
+            reason: 'cse=$cse phg=$phg alt=$alt：首段是「$head」，'
+                '只能是「!坐标+符号」紧贴 CsT/PHG//A=（中间不得有空格）');
+        for (final tok in body.split(' ').skip(1)) {
+          expect(leaked.hasMatch(tok), isFalse,
+              reason: 'cse=$cse phg=$phg alt=$alt：数据扩展「$tok」跑进了备注 —— '
+                  '说明扩展之间被空格拆开了（这正是 v2.0.4 的 bug）');
+        }
+        st.dispose();
+      }
+    });
+  });
 }
+

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'audio_page.dart';
+import 'garmin_page.dart';
+import 'hr_page.dart';
 import 'link_test_card.dart';
 import 'pkwdwpl_device_page.dart';
+import 'platform_caps.dart';
 import 'settings_widgets.dart';
 import 'state.dart';
 import 'theme.dart';
@@ -44,6 +47,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) => SettingsPageShell(
+        guideId: 'device',
         title: s.deviceOverviewTitle,
         subtitle: s.deviceOverviewSubtitle,
         icon: Icons.devices_other_rounded,
@@ -73,11 +77,14 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             open: _testOpen,
             onToggle: () => setState(() => _testOpen = !_testOpen),
             children: [
+              // showHeader: false —— 外层 SettingsFold 已经画过「链路自检」
+              // 的标题与副标题，卡片再画一遍就会出现两遍相同元素。
               LinkTestCard(
                 state: state,
                 source: state.audioOn && !state.tncOn
                     ? LinkTestSource.audio
                     : LinkTestSource.tnc,
+                showHeader: false,
               ),
             ],
           ),
@@ -98,6 +105,22 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
     );
   }
 
+  /// 网关「为什么没在转递」的界面文案（空串 = 条件齐了）
+  String _igateIdleText(S s) {
+    switch (state.igateIdleReason) {
+      case 'no-rf-source':
+        return s.igateNeedRf;
+      case 'rf-down':
+        return s.igateRfDown;
+      case 'is-down':
+        return s.igateIsDown;
+      case 'all-rejected':
+        return s.igateAllRejected;
+      default:
+        return '';
+    }
+  }
+
   /// ② 网关（iGate）
   Widget _igateCard(BuildContext context, S s) {
     return SettingsSectionCard(
@@ -113,11 +136,11 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           onChanged: state.setIgateEnabled,
         ),
         SettingsHint(s.igateHint),
-        // 启用前置条件没满足时**明确说缺什么**，而不是静默不工作
-        if (state.igateEnabled && !state.igateReady)
-          SettingsHint(s.igateNeedRf, color: C.orange),
-        if (state.igateEnabled && !state.aprsIsOn)
-          SettingsHint(s.igateNeedIs, color: C.orange),
+        // 启用前置条件没满足时**明确说缺什么**，而不是静默不工作。
+        // 四种情形由 AppState.igateIdleReason 统一判定（勾没勾、连没连、
+        // 是不是全被环路防护拒收），这里只负责把它翻成人话。
+        if (_igateIdleText(s).isNotEmpty)
+          SettingsHint(_igateIdleText(s), color: C.orange),
         if (state.igateEnabled) ...[
           SettingsSwitch(
             s.igateTwoWay,
@@ -126,6 +149,18 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             onChanged: state.setIgateTwoWay,
           ),
           SettingsHint(s.igateTwoWayHint, color: C.orange),
+          // 条件全齐、射频却一条都没收到 —— 这最容易被当成「网关坏了」，
+          // 而它其实与网关无关：报文根本没进到应用里。先把责任划清，
+          // 用户才不会在网关的开关上反复折腾。
+          if (state.igateActive && state.igateRfSeen == 0)
+            SettingsHint(s.igateNoRfTraffic, color: C.orange),
+          // 先给「射频到底收到了没有」。统计全是 0 时，这一行立刻把
+          // 「射频没流量」与「收到了但没转递」分开 —— 否则只有一串 0。
+          SettingsRow2(
+            s.igateStatRfSeen,
+            '${state.igateRfSeen}',
+            valueColor: state.igateRfSeen > 0 ? C.green : C.grey,
+          ),
           SettingsRow2(s.igateStatToIs, '${state.igateGated}',
               valueColor: state.igateGated > 0 ? C.green : C.grey),
           SettingsRow2(
@@ -134,6 +169,9 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             valueColor: state.igateToRf > 0 ? C.green : C.grey,
           ),
           SettingsRow2(s.igateStatDup, '${state.igateDupDropped}'),
+          // 环路防护拒收的数原先只在日志里（还得按节流才看得见），
+          // 如果它一直在涨，那「已转递 = 0」是有原因的，得让人看见
+          SettingsRow2(s.igateStatBlocked, '${state.igateBlocked}'),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
             child: Row(children: [
@@ -226,6 +264,8 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           title: s.tncDeviceTitle,
           desc: s.tncDeviceDesc,
           page: TncDevicePage(state: state),
+          disabled: !tncPlatformSupported,
+          disabledReason: s.iosFeatureUnsupported,
         ),
         _entry(
           context,
@@ -242,6 +282,30 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           title: s.pkwdwplDeviceTitle,
           desc: s.pkwdwplDeviceDesc,
           page: PkwdwplDevicePage(state: state),
+          disabled: !tncPlatformSupported,
+          disabledReason: s.iosFeatureUnsupported,
+        ),
+        // 心率带与佳明 LiveTrack：它们**不是报文链路**（不参与收发报文），
+        // 而是「自己位置/心率的来源」，所以放在「设备」这一页的子页入口里，
+        // 与上面三条链路并列 —— 而不是塞进信标设置页（用户原话：
+        // 「应该把这些链接放在设置设备列表里面，而不是…信标」）。
+        _entry(
+          context,
+          icon: Icons.favorite_rounded,
+          color: C.red,
+          title: s.hrCardTitle,
+          desc: s.hrCardSubtitle,
+          page: HrDevicePage(state: state),
+          disabled: !bleHrPlatformSupported,
+          disabledReason: s.hrNotSupported,
+        ),
+        _entry(
+          context,
+          icon: Icons.watch_rounded,
+          color: C.green,
+          title: s.garminCardTitle,
+          desc: s.garminCardSubtitle,
+          page: GarminTrackPage(state: state),
         ),
       ],
     );
@@ -254,10 +318,17 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
     required String title,
     required String desc,
     required Widget page,
+    bool disabled = false,
+    String? disabledReason,
   }) {
+    // 平台不支持（如 iOS 没有 TNC/音频/心率原生通道）：置灰、不可进，
+    // 副标题改为「为什么不可用」，而不是点进去才发现是空的。
+    final sub = disabled ? (disabledReason ?? desc) : desc;
     return InkWell(
-      onTap: () =>
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => page)),
+      onTap: disabled
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => page)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
@@ -268,23 +339,37 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: disabled
+                  ? C.greyBg
+                  : color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 17, color: color),
+            child: Icon(icon,
+                size: 17, color: disabled ? C.greyLight : color),
           ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: ts(13, w: FontWeight.w700, c: C.ink)),
+                Text(title,
+                    style: ts(13,
+                        w: FontWeight.w700,
+                        c: disabled ? C.greyLight : C.ink)),
                 const SizedBox(height: 2),
-                Text(desc, style: ts(11, c: C.grey)),
+                Text(sub,
+                    style: ts(11, c: disabled ? C.orange : C.grey),
+                    maxLines: disabled ? 2 : 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, size: 18, color: C.greyLight),
+          Icon(
+              disabled
+                  ? Icons.lock_outline
+                  : Icons.chevron_right_rounded,
+              size: 18,
+              color: C.greyLight),
         ]),
       ),
     );

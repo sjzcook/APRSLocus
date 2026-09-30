@@ -1,6 +1,6 @@
 {
-  "version": 47,
-  "updated": "2026-09-16",
+  "version": 55,
+  "updated": "2026-09-28",
   "developers": [
     {
       "call": "BG7LZQ",
@@ -253,6 +253,54 @@
         "developer"
       ],
       "primary": "developer"
+    },
+    {
+      "call": "BH7GZB",
+      "who": {
+        "zh": "BH7GZB",
+        "zh-TW": "BH7GZB",
+        "en": "BH7GZB"
+      },
+      "role": {
+        "zh": "贡献代码",
+        "zh-TW": "貢獻程式碼",
+        "en": "Code contribution"
+      },
+      "brief": {
+        "zh": "让每一帧报文都说清自己",
+        "zh-TW": "讓每一幀報文都說清自己",
+        "en": "Made every packet speak for itself"
+      },
+      "contrib": {
+        "zh": "提交位置报文数据扩展与独立状态报文的 PR：`/A=` 高度、PHG 功率 / 天线高度 / 增益，以及状态报文的收发与在台站详情、地图信息窗里的显示。",
+        "zh-TW": "提交位置報文資料擴充與獨立狀態報文的 PR：`/A=` 高度、PHG 功率 / 天線高度 / 增益，以及狀態報文的收發與在臺站詳情、地圖資訊窗裡的顯示。",
+        "en": "Contributed the pull request for position-packet data extensions and standalone status packets: the `/A=` altitude, the PHG power / antenna height / gain fields, and status packets being received, sent, and surfaced on station details and the map info window."
+      },
+      "quote": {
+        "zh": "报文短，能把话说全就好。",
+        "zh-TW": "報文短，能把話說全就好。",
+        "en": "Packets are short; saying it fully is what counts."
+      },
+      "tags": {
+        "zh": [
+          "APRS 协议",
+          "报文解析"
+        ],
+        "zh-TW": [
+          "APRS 協定",
+          "報文解析"
+        ],
+        "en": [
+          "APRS protocol",
+          "Packet parsing"
+        ]
+      },
+      "c": "#1D6FF2",
+      "grp": "core",
+      "honors": [
+        "developer"
+      ],
+      "primary": "developer"
     }
   ],
   "earlyMembers": [
@@ -402,7 +450,8 @@
       "grp": "test",
       "honors": [
         "kaishan",
-        "earlyMember"
+        "earlyMember",
+        "jadeGift"
       ],
       "primary": "kaishan"
     },
@@ -643,7 +692,8 @@
         "en": "Kept watch in the faintest signals, growing with it from a whisper to a clear call."
       },
       "honors": [
-        "earlyMember"
+        "earlyMember",
+        "jadeGift"
       ],
       "primary": "earlyMember",
       "grp": "test",
@@ -1521,6 +1571,102 @@
       "primary": "earlyMember",
       "grp": "test",
       "c": "#B08A34"
+    },
+    {
+      "call": "BG6TA",
+      "who": {
+        "zh": "BG6TA",
+        "zh-TW": "BG6TA",
+        "en": "BG6TA"
+      },
+      "role": {
+        "zh": "早期成员",
+        "zh-TW": "早期成員",
+        "en": "Early member"
+      },
+      "brief": {
+        "zh": "一声呼号从最开始响起，此后每一次上频，都是同行的约定。",
+        "zh-TW": "一聲呼號從最開始響起，此後每一次上頻，都是同行的約定。",
+        "en": "A callsign sounded from the very beginning — every check-in since has been a pact to travel together."
+      },
+      "honors": [
+        "earlyMember"
+      ],
+      "primary": "earlyMember",
+      "grp": "test",
+      "c": "#B08A34"
+    },
+    {
+      "call": "BG2EFX",
+      "who": {
+        "zh": "BG2EFX",
+        "zh-TW": "BG2EFX",
+        "en": "BG2EFX"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以一份心意相赠，让这盏灯火照得更远。",
+        "zh-TW": "以一份心意相贈，讓這盞燈火照得更遠。",
+        "en": "A gift from the heart, so this beacon can shine farther."
+      },
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift",
+      "grp": "support",
+      "c": "#0EA5B7"
+    },
+    {
+      "call": "BA7NFI",
+      "who": {
+        "zh": "BA7NFI",
+        "zh-TW": "BA7NFI",
+        "en": "BA7NFI"
+      },
+      "role": {
+        "zh": "分享传播",
+        "zh-TW": "分享傳播",
+        "en": "Community sharing"
+      },
+      "brief": {
+        "zh": "把这份热爱讲给更多人听，让电波的种子随风散开。",
+        "zh-TW": "把這份熱愛講給更多人聽，讓電波的種子隨風散開。",
+        "en": "Sharing this passion far and wide, letting seeds of radio drift on the wind."
+      },
+      "contrib": {
+        "zh": "在社交媒体上持续分享 APRSlocus —— 把电波里的乐趣讲给更多人听，也让新的同好循着这束信号找过来。",
+        "zh-TW": "在社群媒體上持續分享 APRSlocus —— 把電波裡的樂趣講給更多人聽，也讓新的同好循著這束訊號找過來。",
+        "en": "Keeps sharing APRSlocus on social media — spreading the fun of radio and helping new hams follow the signal in."
+      },
+      "quote": {
+        "zh": "把热爱播出去，总有人循声而来。",
+        "zh-TW": "把熱愛播出去，總有人循聲而來。",
+        "en": "Sow the passion — someone will follow the call."
+      },
+      "tags": {
+        "zh": [
+          "社交分享",
+          "社区传播"
+        ],
+        "zh-TW": [
+          "社群分享",
+          "社群傳播"
+        ],
+        "en": [
+          "Social sharing",
+          "Community reach"
+        ]
+      },
+      "c": "#2E9E5B",
+      "grp": "support",
+      "honors": [
+        "sower"
+      ],
+      "primary": "sower"
     }
   ],
   "groups": [
@@ -1541,6 +1687,29 @@
         "en": "Thanks to the group for financial support that keeps APRSlocus building."
       },
       "c": "#7c5cff"
+    },
+    {
+      "name": {
+        "zh": "APRS.TV",
+        "zh-TW": "APRS.TV",
+        "en": "APRS.TV"
+      },
+      "role": {
+        "zh": "中文 APRS 实时地图 · 同行团体",
+        "zh-TW": "中文 APRS 即時地圖 · 同行團體",
+        "en": "Chinese-language APRS live map · peer community"
+      },
+      "note": {
+        "zh": "实时信标、轨迹回放、在线报文解码。",
+        "zh-TW": "即時信標、軌跡回放、線上報文解碼。",
+        "en": "Live beacons, track replay, packet decoding."
+      },
+      "tag": {
+        "zh": "同行团体",
+        "zh-TW": "同行團體",
+        "en": "Peer community"
+      },
+      "c": "#0891b2"
     },
     {
       "name": {

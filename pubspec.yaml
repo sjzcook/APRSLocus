@@ -1,7 +1,7 @@
 name: aprslocus
 description: "APRSlocus - APRS Tracking & Mapping"
 publish_to: 'none'
-version: 1.6.113+10713
+version: 2.0.9+20009
 
 environment:
   sdk: ^3.13.1
@@ -21,6 +21,14 @@ dependencies:
   path_provider_android: 2.2.15
   flutter_map: ^8.3.1
   vector_map_tiles: ^9.0.0-beta.11
+  flutter_svg: ^2.3.0
+  # 公告横幅要渲染 Markdown（标题/列表/表格/链接）。只用**解析器**，
+  # 渲染由 lib/markdown_view.dart 自己拼 Flutter widget —— 理由见该文件顶部：
+  # flutter_markdown 已停止维护，而 markdown_widget 会多带一串依赖；
+  # 只加解析器（纯 Dart，依赖仅 args/meta）风险最小，链接也由我们自己交给
+  # url_launcher（应用内打开外链的既有做法）。
+  markdown: ^7.3.0
+  webview_flutter: ^4.14.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -33,7 +41,7 @@ flutter:
     - assets/aprs_syms/
     - assets/aprs_device/
     - assets/osl.png
-    - assets/logobg.jfif
+    - assets/about_hero.jpg
     - assets/WechatPay.jpg
     - assets/bg2hcb.jpg
     - assets/terms_zh.txt

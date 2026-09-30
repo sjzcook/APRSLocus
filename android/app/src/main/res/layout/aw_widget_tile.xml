@@ -1,0 +1,475 @@
+<!--
+  桌面小组件 · 主档（3~4×2）
+
+  排布对齐 App 内天气面板的「顶部区」：
+    顶栏    ：[城市点+城市] [AQI 胶囊] …… [观测 HH:mm] [logo + APRSlocus]
+    主区    ：天气图标 + 大温度 + 天气现象 / 高低温
+    指标    ：3 格单行「label 左 / value 右」（面板 _kvPair 的复刻，无底框）
+    底部    ：3 条**单行**建议（圆点 + 级别图标 + 级别 + 正文同行）
+  
+  **这一档的每个取舍都是被 140dp 逼出来的**（都经过 tool/preview_app_widget.py
+  的量化核对，不是拍脑袋）：
+    · 顶栏只留一行：两行要多吃 13.4dp，而一行里 城市+AQI+观测+品牌 ≈ 260dp
+      在 272dp 内放得下；
+    · 指标 3 格而不是 4 格：4 格要两行，而主档高度由天气主区决定，
+      多一行指标并不省主区的高度，只白占 14dp；
+    · 建议「级别与正文同行」：级别单独一行时每条要 28.6dp，两条 57dp 放不下；
+      同行后每条 15.3dp。正文用 Dart 侧切好的完整短句（shortText），
+      所以缩短的是措辞而不是把句子从中间截断。
+  
+  ⚠ 硬约束：只用 RemoteViews 白名单控件（不用原生 <View>）、不用
+  <selector>、不用 styles.xml 主题样式（字号颜色就地写死）。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/aw_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/aw_bg_cloudy">
+    <LinearLayout
+        android:id="@+id/aw_pad"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+    <LinearLayout
+        android:id="@+id/aw_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_city_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_place" />
+    <TextView
+        android:id="@+id/aw_city"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="3dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <LinearLayout
+        android:id="@+id/aw_aqi_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:background="@drawable/aw_pill"
+        android:paddingStart="7dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+    <ImageView
+        android:id="@+id/aw_aqi_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <TextView
+        android:id="@+id/aw_aqi_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/aw_spacer"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:textColor="@color/aw_ink"
+        android:textSize="1sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_observed"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/aw_logo"
+        android:layout_width="17dp"
+        android:layout_height="17dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_logo" />
+    <TextView
+        android:id="@+id/aw_app_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="11sp"
+        android:text="APRSlocus"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_rule1_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical">
+    <TextView
+        android:id="@+id/aw_rule1"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1AFFFFFF" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical">
+    <LinearLayout
+        android:id="@+id/aw_hero"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_hero_icon"
+        android:layout_width="25dp"
+        android:layout_height="25dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_big_thunderstorm" />
+    <TextView
+        android:id="@+id/aw_temp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        android:letterSpacing="-0.02"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_hero_spacer"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:textColor="@color/aw_ink"
+        android:textSize="1sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <LinearLayout
+        android:id="@+id/aw_cond_box"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="vertical"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_cond"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/aw_ink"
+        android:textSize="9.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_range"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:gravity="end"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_metrics_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <LinearLayout
+        android:id="@+id/aw_metrics"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <LinearLayout
+        android:id="@+id/aw_m0"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginEnd="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_m0_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_m0_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="end"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_m1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginEnd="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_m1_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_m1_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="end"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_m2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_m2_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_m2_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:gravity="end"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    </LinearLayout>
+    </LinearLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_rule2_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical">
+    <TextView
+        android:id="@+id/aw_rule2"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1AFFFFFF" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_tips"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="vertical">
+    <LinearLayout
+        android:id="@+id/aw_tip0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_tip0_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <ImageView
+        android:id="@+id/aw_tip0_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginStart="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_rss_feed" />
+    <TextView
+        android:id="@+id/aw_tip0_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_tip0_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="9.5sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_tip1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_tip1_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <ImageView
+        android:id="@+id/aw_tip1_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginStart="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_rss_feed" />
+    <TextView
+        android:id="@+id/aw_tip1_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_tip1_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="9.5sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_tip2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_tip2_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <ImageView
+        android:id="@+id/aw_tip2_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginStart="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_rss_feed" />
+    <TextView
+        android:id="@+id/aw_tip2_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_tip2_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="9.5sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    </LinearLayout>
+    </LinearLayout>
+    <TextView
+        android:id="@+id/aw_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.35"
+        android:visibility="gone"
+        android:includeFontPadding="false" />
+</FrameLayout>

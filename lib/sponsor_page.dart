@@ -8,6 +8,7 @@ import 'theme.dart';
 import 'widgets.dart';
 // honorLangOf：荣誉/成就/赞助共用同一套语言回落（ja/id → 英文）
 import 'early_member.dart';
+import 'material.dart';
 
 /// 赞助与鸣谢页面（赞助名单从官网 sponsors.json 在线更新，离线用内置兜底）
 const String kSponsorsUrl = 'https://aprslocus.theez.top/sponsors.json';
@@ -124,6 +125,36 @@ class _SponsorPageState extends State<SponsorPage> {
       },
     ),
     (
+      kind: 'jade',
+      name: 'BG2EFX',
+      names: const {},
+      desc: '赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音',
+        'en': 'Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work.',
+      },
+    ),
+    (
+      kind: 'api',
+      name: 'BH7NOR',
+      names: const {},
+      desc: '协议接口支持',
+      descs: const {
+        'zh-TW': '協定介面支援',
+        'en': 'Protocol interface support',
+      },
+    ),
+    (
+      kind: 'api',
+      name: 'APRS.TV',
+      names: const {},
+      desc: 'APRS.TV 接口支持',
+      descs: const {
+        'zh-TW': 'APRS.TV 介面支援',
+        'en': 'APRS.TV interface support',
+      },
+    ),
+    (
       kind: 'everyone',
       name: '每一位支持者',
       names: const {
@@ -193,22 +224,28 @@ class _SponsorPageState extends State<SponsorPage> {
         'coffee' => Icons.local_cafe_rounded,
         'jade' => Icons.card_giftcard_rounded,
         'school' => Icons.school_rounded,
+        'api' => Icons.api_rounded,
         _ => Icons.favorite_rounded,
       };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: C.bg,
-      appBar: AppBar(
-        backgroundColor: C.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: C.ink, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
+      backgroundColor: C.pageFill,
+      appBar: MaterialAppBar(
+        AppBar(
+          backgroundColor: C.surfaceFillStrong,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: C.ink, size: 20),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            S.of(context).sponsors,
+            style: ts(16, w: FontWeight.w700),
+          ),
+          centerTitle: true,
         ),
-        title: Text(S.of(context).sponsors, style: ts(16, w: FontWeight.w700)),
-        centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
@@ -218,7 +255,7 @@ class _SponsorPageState extends State<SponsorPage> {
           Center(
             child: Text(
               S.of(context).sponsorsThanks,
-              style: ts(18, w: FontWeight.w800),
+              style: ts(16, w: FontWeight.w800),
             ),
           ),
           const SizedBox(height: 4),
@@ -304,7 +341,7 @@ class _SponsorPageState extends State<SponsorPage> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF07C160)
                                 .withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
                             Icons.wechat_rounded,
@@ -369,7 +406,7 @@ class _SponsorPageState extends State<SponsorPage> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF1677FF)
                               .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
                           Icons.account_balance_wallet_rounded,
@@ -473,43 +510,46 @@ class _SponsorPageState extends State<SponsorPage> {
         backgroundColor: Colors.transparent,
         child: GestureDetector(
           onTap: () => Navigator.pop(ctx),
-          child: Container(
-            decoration: BoxDecoration(
-              color: C.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  S.of(context).qrCodeTitle(title),
-                  style: ts(15, w: FontWeight.w800),
-                ),
-                const SizedBox(height: 14),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    asset,
-                    width: 260,
-                    height: 260,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+          child: MaterialSurface(
+            radius: 24,
+            child: Container(
+              decoration: BoxDecoration(
+                color: C.sheetFill,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    S.of(context).qrCodeTitle(title),
+                    style: ts(16, w: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 14),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      asset,
                       width: 260,
                       height: 260,
-                      color: C.greyBg,
-                      child: Center(child: Text(S.of(context).qrLoadFailed)),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 260,
+                        height: 260,
+                        color: C.greyBg,
+                        child: Center(child: Text(S.of(context).qrLoadFailed)),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Text(S.of(context).qrSaveWechat, style: ts(11, c: C.grey)),
-                const SizedBox(height: 4),
-                Text(
-                  S.of(context).tapAnywhereClose,
-                  style: ts(10, c: C.greyLight),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  Text(S.of(context).qrSaveWechat, style: ts(11, c: C.grey)),
+                  const SizedBox(height: 4),
+                  Text(
+                    S.of(context).tapAnywhereClose,
+                    style: ts(10, c: C.greyLight),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

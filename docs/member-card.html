@@ -224,7 +224,31 @@ let PEOPLE=[
            en:"Provided AI compute for development and testing, accelerating prototypes, debugging and multilingual content."},
   quote:{zh:"算力无形，善意有迹。","zh-TW":"算力無形，善意有跡。",en:"Compute is invisible; kindness leaves a trace."},
   tags:{zh:["AI 算力","开发支持"],"zh-TW":["AI 算力","開發支持"],en:["AI compute","Dev support"]},
-  c:"#df7a36",grp:"support"}
+  c:"#df7a36",grp:"support"},
+ /* BG2EFX：赠我以琼琚（与 members.json v52 对齐；本名单是「取不到 JSON」时的兜底，
+    因此只列精选成员，不是全量）。
+    ⚠️ `honors` 必须显式写出 —— 只给 grp:"support" 会被上面 honorDefsOf 的
+    兜底映射成 [earlyMember, mostBrain]（那是 BA3RZL 的组合），离线时徽章就错了。 */
+ {call:"BG2EFX",who:{zh:"BG2EFX","zh-TW":"BG2EFX",en:"BG2EFX"},
+  role:{zh:"赞助支持","zh-TW":"贊助支持",en:"Sponsorship support"},
+  brief:{zh:"以一份心意相赠，让这盏灯火照得更远。","zh-TW":"以一份心意相贈，讓這盞燈火照得更遠。",en:"A gift from the heart, so this beacon can shine farther."},
+  honors:["jadeGift"],primary:"jadeGift",c:"#0EA5B7",grp:"support"},
+ /* BH7GZB：开发人员（与 members.json v53 对齐；本名单是「取不到 JSON」时的兜底，
+    因此只列精选成员，不是全量）。
+    ⚠️ `honors` 必须显式写出 —— 只给 grp:"core" 会被上面 honorDefsOf 的兜底映射成
+    [kaishan, developer, earlyMember]（那是创始团队那几位的组合），离线时徽章就多出来了。 */
+ {call:"BH7GZB",who:{zh:"BH7GZB","zh-TW":"BH7GZB",en:"BH7GZB"},
+  role:{zh:"贡献代码","zh-TW":"貢獻程式碼",en:"Code contribution"},
+  brief:{zh:"让每一帧报文都说清自己","zh-TW":"讓每一幀報文都說清自己",en:"Made every packet speak for itself"},
+  honors:["developer"],primary:"developer",c:"#1D6FF2",grp:"core"},
+ /* BA7NFI：播种（与 members.json v55 对齐；本名单是「取不到 JSON」时的兜底，
+    因此只列精选成员，不是全量）。
+    ⚠️ `honors` 必须显式写出 —— 只给 grp:"support" 会被上面 honorDefsOf 的
+    兜底映射成 [earlyMember, mostBrain]（那是 BA3RZL 的组合），离线时徽章就错了。 */
+ {call:"BA7NFI",who:{zh:"BA7NFI","zh-TW":"BA7NFI",en:"BA7NFI"},
+  role:{zh:"分享传播","zh-TW":"分享傳播",en:"Community sharing"},
+  brief:{zh:"把这份热爱讲给更多人听，让电波的种子随风散开。","zh-TW":"把這份熱愛講給更多人聽，讓電波的種子隨風散開。",en:"Sharing this passion far and wide, letting seeds of radio drift on the wind."},
+  honors:["sower"],primary:"sower",c:"#2E9E5B",grp:"support"}
 ];
 /* 团体/赞助项（无呼号） */
 let GROUPS=[
@@ -232,6 +256,11 @@ let GROUPS=[
   role:{zh:"学生火腿群体 · 资金赞助","zh-TW":"學生火腿群體 · 資金贊助",en:"Student hams · financial support"},
   note:{zh:"感谢群组的资金赞助，支持 APRSlocus 持续开发与运营。","zh-TW":"感謝群組的資金贊助，支持 APRSlocus 持續開發與營運。",en:"Thanks to the group for financial support that keeps APRSlocus building."},
   c:"#7c5cff",heart:"true"},
+ {name:{zh:"APRS.TV","zh-TW":"APRS.TV",en:"APRS.TV"},
+  role:{zh:"中文 APRS 实时地图 · 同行团体","zh-TW":"中文 APRS 即時地圖 · 同行團體",en:"Chinese-language APRS live map · peer community"},
+  note:{zh:"实时信标、轨迹回放、在线报文解码。","zh-TW":"即時信標、軌跡回放、線上報文解碼。",en:"Live beacons, track replay, packet decoding."},
+  tag:{zh:"同行团体","zh-TW":"同行團體",en:"Peer community"},
+  c:"#0891b2"},
  {name:{zh:"每一位支持者","zh-TW":"每一位支持者",en:"Every supporter"},
   role:{zh:"匿名赞助 · 陪伴与鼓励","zh-TW":"匿名贊助 · 陪伴與鼓勵",en:"Anonymous · encouragement"},
   note:{zh:"你们的每一份支持，都是 APRSlocus 继续发光的动力。","zh-TW":"你們的每一份支持，都是 APRSlocus 繼續發光的動力。",en:"Every bit of support keeps APRSlocus glowing."},
@@ -268,7 +297,11 @@ function labelOf(c){return c.kind==="p"?c.p.call:T(c.g.name);}
 function detect(){const q=new URLSearchParams(location.search);if(q.get("lang"))return q.get("lang");
  const n=(navigator.language||"zh-CN").toLowerCase();return n.startsWith("zh-tw")||n.startsWith("zh-hk")?"zh-TW":n.startsWith("en")?"en":"zh";}
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
-function T(obj){return obj?(obj[lang]||obj.zh):"";}
+function T(obj){return obj?(obj[lang]||obj.zh||""):"";}
+/* 数组型字段（如 tags）用这个取：取不到就回 []。
+   ⚠️ 不能直接 `T(m.tags).map(...)` —— 兜底名单里没写 tags 的成员会返回 ""，
+   而字符串没有 .map，点到那个人的卡片就会 TypeError（离线/首帧时整页卡住）。 */
+function TArr(o){const v=T(o);return Array.isArray(v)?v:[];}
 /* 称号：members.json honors 定义 + 每人 honors 推导（内置兜底，联网后覆盖） */
 let HONOR_DEFS={
  kaishan:{zh:"开山","zh-TW":"開山",en:"Founding pioneer",color:"#E67E22"},
@@ -340,7 +373,7 @@ function walls(){
          <div class="av" style="background:linear-gradient(140deg,${g.c},${g.c})">${T(g.name).trim().charAt(0).toUpperCase()}</div>
          <div class="call">${T(g.name)}</div>
          <div class="who">${T(g.role)}</div>
-         <div class="tag2">${TX[lang].sponsor}</div>
+         <div class="tag2">${g.tag?T(g.tag):TX[lang].sponsor}</div>
        </div>`).join("")}
      </div></div>`;
  }
@@ -409,7 +442,7 @@ function profile(){
  const c=cur(),g=cardColor(c);const box=document.getElementById("profile");
  if(c.kind==="p"){
   const m=c.p;const who=m.who?(m.who[lang]||m.who.zh):"";
-  const contrib=T(m.contrib),quote=T(m.quote),tags=T(m.tags),role=T(m.role);
+  const contrib=T(m.contrib),quote=T(m.quote),tags=TArr(m.tags),role=T(m.role);
   box.innerHTML=`<div class="p-top">
    <div class="p-av" style="background:linear-gradient(140deg,${g},${g})">${(m.call[0]||"A").toUpperCase()}</div>
    <div class="p-id">
@@ -429,13 +462,13 @@ function profile(){
    <div class="p-id">
      <div class="p-call">${T(m.name)}</div>
      <div class="p-who">${T(m.role)}</div>
-     <div class="p-honors"><span class="honor" style="color:${g};border-color:${g}"><span class="hd" style="background:${g}"></span>${TX[lang].sponsor}</span></div>
+     <div class="p-honors"><span class="honor" style="color:${g};border-color:${g}"><span class="hd" style="background:${g}"></span>${m.tag?T(m.tag):TX[lang].sponsor}</span></div>
    </div>
   </div>
   <div class="p-hr"></div>
   <div class="p-sec"><h4>${TX[lang].contribution}</h4><p>${T(m.note)}</p></div>
   <div class="p-quote" style="border-color:${g}"><span class="qm">“</span><p>${TX[lang].t2}</p></div>
-  <div class="p-tags"><span class="tag">${TX[lang].sponsor}</span></div>`;
+  <div class="p-tags"><span class="tag">${m.tag?T(m.tag):TX[lang].sponsor}</span></div>`;
  }
 }
 let logoImg=undefined;{const t=new Image();t.onload=()=>{logoImg=t;draw();};t.src=LOGO;}
@@ -475,7 +508,7 @@ function applyRemote(d){
  const merged=dev.concat(early);
  if(merged.length>0) PEOPLE=merged;
  if(Array.isArray(d.groups)&&d.groups.length>0){
-   GROUPS=d.groups.map(g=>({name:g.name,role:g.role,note:g.note,c:g.c||"#7c5cff"}));
+   GROUPS=d.groups.map(g=>({name:g.name,role:g.role,note:g.note,tag:g.tag||null,c:g.c||"#7c5cff"}));
  }
  rebuildCards();
  // 尽量保留当前 ?call 选中

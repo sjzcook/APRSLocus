@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'theme.dart';
+import 'guide.dart';
 import 'models.dart';
 import 'state.dart';
 import 'widgets.dart';
@@ -87,6 +90,13 @@ class _PacketsPageState extends State<PacketsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 功能引导（首次进入显示；看过后不占位置）
+              GuideTipCard(
+                guideId: 'packets',
+                state: widget.state,
+                margin: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 12),
               // 头部（Wrap 自动换行，避免窄屏溢出）
               Wrap(
                 spacing: 8,
@@ -109,7 +119,7 @@ class _PacketsPageState extends State<PacketsPage> {
                         SizedBox(width: 8),
                         Text(
                           S.of(context).packetConsole,
-                          style: ts(14, c: C.blue, w: FontWeight.w700),
+                          style: ts(13, c: C.blue, w: FontWeight.w700),
                         ),
                       ],
                     ),
@@ -121,7 +131,7 @@ class _PacketsPageState extends State<PacketsPage> {
                     ),
                     decoration: BoxDecoration(
                       color: st.connected ? C.greenBg : C.yellowBg,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -155,7 +165,7 @@ class _PacketsPageState extends State<PacketsPage> {
                     ),
                     decoration: BoxDecoration(
                       color: C.blueBg,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       S
@@ -277,7 +287,7 @@ class _PacketsPageState extends State<PacketsPage> {
                           _filter != 'all' || _search.text.isNotEmpty
                               ? S.of(context).noMatchingPackets
                               : S.of(context).noPackets,
-                          style: ts(14, c: C.grey),
+                          style: ts(13, c: C.grey),
                         ),
                       )
                     : _raw
@@ -307,6 +317,7 @@ class _PacketsPageState extends State<PacketsPage> {
                           vertical: 10,
                         ),
                       ),
+                      onChanged: (_) => setState(() {}),
                       onSubmitted: (_) => _sendRaw(),
                     ),
                   ),
@@ -319,6 +330,11 @@ class _PacketsPageState extends State<PacketsPage> {
                   ),
                 ],
               ),
+              SizedBox(height: 6),
+              // 发送前就把「会走哪条链路、限长多少」写出来：手写报文最常踩的
+              // 两个坑就是「格式不合法」与「拿到 APRS-IS 的报文直接往射频发」，
+              // 这两件事在点发送之前就能提醒到。
+              _injectHint(st, S.of(context)),
             ],
           ),
         );
@@ -326,10 +342,51 @@ class _PacketsPageState extends State<PacketsPage> {
     );
   }
 
-  void _sendRaw() {
-    if (_tx.text.trim().isEmpty) return;
-    widget.state.sendPacket(_tx.text.trim());
-    _tx.clear();
+  /// 手动注入的上下文提示：当前链路 + 长度 + 格式
+  Widget _injectHint(AppState st, S l) {
+    final bytes = utf8.encode(_tx.text.trim()).length;
+    final parts = <String>[
+      st.usingRf
+          ? l.packetLimitRf(bytes, st.rfMaxFrame)
+          : l.packetLimitIs(bytes),
+      '${l.kissRfPath}: ${st.txPath}',
+    ];
+    // 射频下带 TCPIP* 几乎总是「从 APRS-IS 复制的报文」——发出去前先提醒
+    if (st.usingRf && _tx.text.toUpperCase().contains('TCPIP')) {
+      parts.add(l.packetTcpipWarning);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        parts.join(' · '),
+        style: ts(10, c: st.usingRf ? C.orange : C.greyLight, h: 1.4),
+      ),
+    );
+  }
+
+  /// 手动注入并发送：把结果如实反馈给用户（旧实现无论成败都毫无提示）
+  Future<void> _sendRaw() async {
+    final line = _tx.text.trim();
+    if (line.isEmpty) return;
+    final l = S.of(context);
+    final err = widget.state.sendPacket(line);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          err == null ? l.packetSent(line) : l.packetSendFailed(linkErrorText(l, err)),
+          style: ts(12),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: err == null ? C.green : C.red,
+        duration: Duration(seconds: err == null ? 2 : 5),
+      ),
+    );
+    // 失败时保留输入：用户改一个字符就能重发，不用重新敲一遍
+    if (err == null) {
+      _tx.clear();
+      setState(() {});
+    }
   }
 
   Widget _parsedList(List<Packet> list) {
@@ -444,8 +501,8 @@ class _PacketsPageState extends State<PacketsPage> {
             margin: const EdgeInsets.only(bottom: 5),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: C.white,
-              borderRadius: BorderRadius.circular(10),
+              color: C.surfaceFill,
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: C.border),
             ),
             child: Row(

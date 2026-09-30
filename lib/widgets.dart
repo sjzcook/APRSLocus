@@ -1,11 +1,32 @@
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
+import 'material.dart';
 import 'models.dart';
 import 'l10n/app_localizations.dart';
 
 /// 界面本地化便捷别名
 typedef S = AppLocalizations;
+
+/// 系统导航栏（三大金刚键 / 手势条）占的高度。
+///
+/// 取值是 `max(padding.bottom, viewPadding.bottom)`，但**键盘弹出时只用
+/// padding.bottom**：那时 window 被键盘顶起，而 viewPadding 依旧是「键盘不可见
+/// 时会有的内边距」（也就是导航栏高度），拿它算会让弹层凭空浮在键盘上方一段。
+///
+/// 为什么不能只信 `padding.bottom`：有些 ROM 在 edge-to-edge 下只报
+/// `viewPadding`，`padding` 给 0 —— 于是自绘的底部按钮正好压在三大金刚键底下
+/// （用户报过两次：#12 的页面底按钮、#25 的「速度档」编辑弹层保存按钮）。
+///
+/// 为什么不是 `SafeArea`：SafeArea 读的是 `padding`，在这些 ROM 上同样是 0。
+/// 需要精确控制的场合（底部弹层的内边距）用它更直接。
+double sysBottomInset(BuildContext context) {
+  final mq = MediaQuery.of(context);
+  final pad = mq.padding.bottom;
+  if (mq.viewInsets.bottom > 0) return pad;
+  final vp = mq.viewPadding.bottom;
+  return vp > pad ? vp : pad;
+}
 
 String _aprsSymbolKey(String symbol) => switch (symbol) {
   '>' => 'car',
@@ -117,8 +138,26 @@ String localizedLocationStatus(BuildContext context, String value) {
   if (value == '定位失败') return s.locationFailed;
   if (value == '定位已停止') return s.locationStopped;
   if (value == '已定位') return s.locationFixed;
+  // 静止防抖判定为静止（见 lib/pos_quality.dart 的 SelfFixFilter）。
+  // 这里是**白名单**：新增一个状态串却忘在这里登记，界面就会直接漏出中文
+  // —— 这个坑踩过（`模拟位置 · 后台保活`），所以 tool/check_pos_quality.py
+  // 会把「所有 locStatus 字面量都已登记」当成断言在 CI 里查。
+  if (value == '静止') return s.locationStill;
+  // 粗定位：来源是基站/Wi-Fi（或被动定位），误差常在几百米量级。
+  // 必须和「已定位」在界面上可区分 —— 否则用户会以为 GPS 明明很准却画歪了。
+  if (value == '网络定位（粗）') return s.locationCoarse;
+  // 佳明 LiveTrack（见 lib/garmin.dart）：与「GPS / 粗定位」并列的第三种来源。
+  // 这里是**白名单**，新增一个状态串不登记就会在非中文界面漏出中文
+  // （tool/check_pos_quality.py 会把「所有 locStatus 字面量都已登记」当断言查）。
+  if (value == '佳明 LiveTrack') return s.locationGarmin;
   if (value == '请授予定位权限…') return s.locationPermission;
   if (value == 'GPS 定位中…') return s.gpsLocating;
+  // 外置 GPS（佳明）与手机 GPS 的交接（issue #21-4）：三档都要登记 ——
+  // 这一段的判据是**白名单**，不登记就会在非中文界面漏出中文
+  // （tool/check_pos_quality.py 会把「所有 locStatus 字面量都已登记」当断言查）。
+  if (value == '外置 GPS 供位 · 手机 GPS 已待机') return s.locExtGpsActive;
+  if (value == '外置 GPS 已失效 · 改用手机 GPS') return s.locExtGpsLost;
+  if (value == '手机 GPS 已接管') return s.locPhoneGpsActive;
   if (value == 'Web 平台暂不支持自动定位，请手动输入坐标') {
     return s.webLocationUnsupported;
   }
@@ -237,7 +276,7 @@ class StatBox extends StatelessWidget {
             height: 34,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 17),
           ),
@@ -248,7 +287,7 @@ class StatBox extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: ts(18, c: color, w: FontWeight.w800),
+                  style: ts(16, c: color, w: FontWeight.w800),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -289,7 +328,7 @@ class FilterChip2 extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.12) : C.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: selected ? color.withValues(alpha: 0.4) : C.border,
           ),
@@ -368,19 +407,19 @@ class KV extends StatelessWidget {
   const KV(this.label, this.value, {super.key, this.icon, this.valueColor});
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 14, color: C.grey),
-          SizedBox(width: 6),
-        ],
-        Text(label, style: ts(12, c: C.slate)),
-        Spacer(),
-        Text(
-          value,
-          style: ts(12, c: valueColor ?? C.ink, w: FontWeight.w600),
-        ),
-      ],
+    // 走 LabelValueRow：值常常是用户数据（呼号、设备名、距离、时间），
+    // 而原来的 `Text + Spacer + Text` 两端都是自然宽 —— 值一长就整行溢出。
+    return LabelValueRow(
+      label,
+      value,
+      labelStyle: ts(12, c: C.slate),
+      valueStyle: ts(12, c: valueColor ?? C.ink, w: FontWeight.w600),
+      leading: icon == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(icon, size: 14, color: C.grey),
+            ),
     );
   }
 }
@@ -418,7 +457,7 @@ class SectionCard extends StatelessWidget {
                   height: 34,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 17),
                 ),
@@ -454,6 +493,87 @@ class SectionCard extends StatelessWidget {
   }
 }
 
+/// 「标签 …… 值」的行式布局：标签最多占 [maxLabelFactor] 的比例（超出省略号），
+/// 值吃掉剩余全部宽度并右对齐，**两端都不会溢出**。
+///
+/// 为什么不用 `Flexible(标签) + Expanded(值)` 这个常见写法：Row 的弹性空间是
+/// **按 flex 权重一次分配**的（`RenderFlex._computeSizes` 里 `spacePerFlex` 只算
+/// 一次，宽松子项没用完的那份不会再分给兄弟）—— 于是标签短的时候，值只拿到自己
+/// 那一份（约一半），右边留一截空隙，看起来「值没贴右」。这里让标签走**限宽的自然
+/// 宽**、值走 `Expanded`：只有一个弹性子项时，它拿到的就是全部剩余，行为确定。
+///
+/// 为什么要 Tooltip：省略号一旦出现，用户总得有个办法看到全文。这两端本来就不
+/// 可点（设置项只读），加 Tooltip 不会和点击手势打架。
+class LabelValueRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final TextStyle? labelStyle;
+  final TextStyle? valueStyle;
+
+  /// 标签前的小图标（不参与弹性分配）
+  final Widget? leading;
+
+  /// 标签最多占的宽度比例。0.42 能容下现有各语言里最长的几个标签
+  /// （「射频信标」/「Bound device」），又把大头留给值 —— 而**值**才是长的
+  /// 那个（设备名、呼号、服务器地址）。
+  final double maxLabelFactor;
+  final double gap;
+
+  const LabelValueRow(
+    this.label,
+    this.value, {
+    super.key,
+    this.labelStyle,
+    this.valueStyle,
+    this.leading,
+    this.maxLabelFactor = 0.42,
+    this.gap = 10,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final maxLabel = (c.maxWidth * maxLabelFactor).clamp(0.0, c.maxWidth);
+        return Row(
+          children: [
+            if (leading != null) leading!,
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxLabel),
+              child: _tip(
+                label,
+                Text(
+                  label,
+                  style: labelStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            SizedBox(width: gap),
+            Expanded(
+              child: _tip(
+                value,
+                Text(
+                  value,
+                  style: valueStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 空串不加 Tooltip：否则会弹出一个空白提示框，比不加更难理解
+  Widget _tip(String msg, Widget child) =>
+      msg.trim().isEmpty ? child : Tooltip(message: msg, child: child);
+}
+
 /// Row in settings
 class SettingRow extends StatelessWidget {
   final String label, value;
@@ -465,15 +585,33 @@ class SettingRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: C.border, width: 0.4)),
       ),
-      child: Row(
-        children: [
-          Text(label, style: ts(12, c: C.slate)),
-          const Spacer(),
-          Text(value, style: ts(12, w: FontWeight.w500)),
-        ],
+      child: LabelValueRow(
+        label,
+        value,
+        labelStyle: ts(12, c: C.slate),
+        valueStyle: ts(12, w: FontWeight.w500),
       ),
     );
   }
+}
+
+/// 给**自绘**的可点区域一个桌面端手型指针。
+///
+/// 为什么需要它：`GestureDetector` **没有** `mouseCursor` 参数（那是 `InkWell` /
+/// `MouseRegion` 的），而这些自绘按钮（导航项、地图工具钮、立即上报…）又不是
+/// `InkWell` —— 于是 Windows 上把鼠标移到它们上面时指针还是普通箭头，看不出
+/// 哪些东西能点（触屏无影响）。
+///
+/// 包一层 `MouseRegion` 是最小的做法，而且它只改指针、**不抢手势**：
+/// 命中测试先走子节点，`GestureDetector` 仍然在命中路径上。
+class ClickCursor extends StatelessWidget {
+  final Widget child;
+  const ClickCursor({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: child,
+      );
 }
 
 /// Round small button
@@ -491,18 +629,31 @@ class RoundIconBtn extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    final btn = GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: C.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: softShadow(blur: 12, y: 3, alpha: 0.08),
-          border: Border.all(color: C.border),
+    // 圆形按钮基本都是**压在地图/列表上**的浮层：材质开启时给它真模糊，
+    // 但用更小的半径 —— 38px 的按钮上套全屏级别的模糊，边缘会糊成一团灰，
+    // 看起来像按钮没画好，而不是像磨砂。
+    final btn = ClickCursor(
+      child: GestureDetector(
+        onTap: onTap,
+        // ⚠ 显式 opaque，与 `_toolBtn` 同一个坑：底色是 `BoxDecoration`，而
+        // `DecoratedBox` 不吸收点击 —— 默认 `deferToChild` 会把 38px 按钮的
+        // 可点区域缩到中心那个 20px 图标上（详见 map_page._toolBtn 的注释）。
+        behavior: HitTestBehavior.opaque,
+        child: MaterialSurface(
+          radius: 12,
+          blurSigma: C.chipBlur,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: chipTint(C.white),
+              borderRadius: BorderRadius.circular(12),
+              // 同上：投影负责分层，描边去掉（圆形工具钮常年压在地图上）
+              boxShadow: elev1(),
+            ),
+            child: Icon(icon, color: color ?? C.slate, size: 20),
+          ),
         ),
-        child: Icon(icon, color: color ?? C.slate, size: 20),
       ),
     );
     if (tooltip == null) return btn;

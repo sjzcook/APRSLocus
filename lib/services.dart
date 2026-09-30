@@ -15,10 +15,31 @@ class LocService {
   static const _eventChannel = EventChannel('com.aprslocus/location_events');
   StreamSubscription? _sub;
   Duration interval = const Duration(seconds: 10);
-  /// 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助
+  /// 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助；
+  /// 'network' = 纯网络（只用基站 / Wi-Fi，不注册 GPS）
   String mode = 'gps_network';
-  void Function(double lat, double lng, double alt, double speed, double bearing)?
-      onFix;
+  /// 定位回调。
+  ///
+  /// [lastKnown] 为真表示这**不是**实时定位，而是系统缓存的「上次已知位置」
+  /// （Android 侧用于启动时快速出图）。它可以更新地图上的「我」，但**不能**写进
+  /// 轨迹 —— 缓存点可能几小时前、甚至在另一个城市，写进轨迹就是「线跳回起点再画
+  /// 一次、反复横画」。
+  /// 定位回调。最后几个参数：
+  ///   * [lastKnown] —— 见上（缓存位置标记）；
+  ///   * [accuracyM] —— 水平精度（米，`1σ`）；**<= 0 表示平台没给**；
+  ///   * [source] —— 定位来源（`'gps'` / `'network'` / `'passive'` / `''`）。
+  ///
+  /// 精度这个值原生两边一直在算并发出来（Android `LocationService.kt` 的
+  /// `"accuracy"`、iOS `LocationPlugin.swift` 的 `horizontalAccuracy`），
+  /// 但这里解析事件时**从来没读过**，于是上层既无法按精度加权、也无法告诉你
+  /// 「这个点其实 ±40m」—— 白白算了一个最关键的字段。
+  ///
+  /// [source] 同理：Android 侧一直在事件里发 `"provider"`，这里**从来没读过**。
+  /// 代价是「基站/Wi-Fi 粗定位」与「GPS」在上层长得一模一样 —— 而前者会一次偏
+  /// 几百米到几公里，这就是用户报的「网络让定位飞来飞去」。空串表示平台没给
+  /// （iOS/桌面），按「未知」处理，不当作粗定位（保持旧行为，不制造回归）。
+  void Function(double lat, double lng, double alt, double speed, double bearing,
+      bool lastKnown, double accuracyM, String source)? onFix;
   void Function(String status)? onStatus;
   /// 通知栏"连接/断开"按钮点击回调
   void Function()? onToggleConnect;
@@ -67,6 +88,14 @@ class LocService {
             (event['alt'] as num?)?.toDouble() ?? 0,
             (event['speed'] as num?)?.toDouble() ?? 0,
             (event['bearing'] as num?)?.toDouble() ?? -1,
+            // 缓存位置标记：原生在「快速出图」时置真，上层据此不写轨迹
+            event['lastKnown'] == true,
+            // 水平精度（米）；原生没给或为 NaN 时按 0（未知）传给上层
+            (event['accuracy'] as num?)?.toDouble() ?? 0,
+            // 定位来源：原生发 "provider"（gps/network/passive）。上层据此
+            // 区分「GPS 实测」与「基站/Wi-Fi 粗定位」—— 后者精度字段常常
+            // 报得很乐观（20~40m）却实际偏几百米，只看 accuracy 拦不住。
+            (event['provider'] as String?) ?? '',
           );
         }
       }
@@ -128,7 +157,7 @@ class LocService {
 
   /// 动态切换定位模式（服务运行中立即生效）
   Future<void> setMode(String m) async {
-    if (m != 'gps' && m != 'gps_network') return;
+    if (m != 'gps' && m != 'gps_network' && m != 'network') return;
     mode = m;
     try {
       await _channel.invokeMethod('setLocationMode', {'mode': m});
@@ -172,7 +201,15 @@ class LocService {
           final place =
               [region, city].where((s) => s.isNotEmpty).join(' · ');
           onStatus?.call(place.isEmpty ? '已定位' : '已定位 · $place');
-          onFix?.call(lat, lng, 0, 0, -1);
+          // IP 网络定位：一次性的粗略位置，不是轨迹点。
+          //
+          // 精度按**城市级**如实上报（50km）：以前这个值是「未知」，于是它和
+          // 手机 GPS 点在界面上长得一模一样 —— 用户无从知道眼前这个点差了多远。
+          // 这个数字参与判断：非 lastKnown 的抖动判定、轨迹写入门限，
+          // 而 50km 远超过那些门限，所以 IP 点天然不会写轨迹、也不会被当成
+          // 「静止」的可靠依据。
+          // source 传 'network'：IP 定位是城市级粗点，与 Wi-Fi 粗定位同类。
+          onFix?.call(lat, lng, 0, 0, -1, true, 50000, 'network');
           return true;
         } finally {
           client.close(force: true);
@@ -317,4 +354,102 @@ class AprsFmt {
     final r = DateTime.now().millisecondsSinceEpoch;
     return '${r % 10000}'.padLeft(4, '0');
   }
+}
+
+/// ─── PHG 数据扩展编码（APRS101 第 9 章）───
+///
+/// `PHGphgd` 是**固定 7 字节**的数据扩展，四个码位各有自己的量化表：
+///
+/// | 码位 | 含义 | 取值 |
+/// |---|---|---|
+/// | p | 发射功率 | 0/1/4/9/16/25/36/49/64/81 W（10 档，**必须取不超过实际值的最大档**）|
+/// | h | 天线有效高度（高于当地平均地面）| 10/20/40/…/5120 英尺（10×2ⁿ）|
+/// | g | 天线增益 | 0–9 dB（整数）|
+/// | d | 天线方向性 | 0=全向，1=东北…8=北 |
+///
+/// 两个必须照规范做、做错就静默出错的地方：
+///
+///  1. **功率只能取「不超过实际值的最大档」**。规范说 25 W 的台站写 5 —— 因为
+///     写大了会让 aprs.fi 上的通信范围圈画得比实际更远，是在虚报覆盖能力。
+///     所以 30 W 只能报 25 W（取 5），不能四舍五入到 36 W。
+///  2. **高度是「高于当地平均地面」而不是海拔**。它回答的是「天线在地面上多高」，
+///     与 `/A=` 那个海拔是两个完全不同的量，不能互相替代 —— 规范原文特意强调
+///     "not above ground or sea level"。
+class AprsPhg {
+  AprsPhg._();
+
+  /// 功率档（瓦）→ 码位就是下标
+  static const List<int> powerSteps = [0, 1, 4, 9, 16, 25, 36, 49, 64, 81];
+
+  /// 天线高度：档位 n（0–9）= 10 × 2ⁿ 英尺
+  static int heightStepFeet(int code) => 10 * (1 << code);
+
+  /// 功率（瓦）→ 码位字符。取**不超过**实际值的最大档（见类注释）。
+  static int powerCode(num watts) {
+    final w = watts.toDouble();
+    if (!w.isFinite || w <= 0) return 0;
+    var best = 0;
+    for (var i = 0; i < powerSteps.length; i++) {
+      if (powerSteps[i] <= w) best = i;
+    }
+    return best;
+  }
+
+  /// 天线高度（英尺，高于当地平均地面）→ 码位字符。同样取不超过实际值的最大档。
+  static int heightCode(num feet) {
+    final f = feet.toDouble();
+    if (!f.isFinite || f <= 0) return 0;
+    var best = 0;
+    for (var i = 0; i < 10; i++) {
+      if (heightStepFeet(i) <= f) best = i;
+    }
+    return best;
+  }
+
+  /// 天线增益（dB）→ 码位字符：规范只定义 0–9 的整数档，超出封顶。
+  static int gainCode(num db) {
+    final d = db.toDouble();
+    if (!d.isFinite || d <= 0) return 0;
+    final r = d.round();
+    return r > 9 ? 9 : r;
+  }
+
+  /// 方向性（度）→ 码位字符；[isOmni] 或 0 度表示全向。
+  static int directivityCode(int deg, {bool isOmni = true}) {
+    if (isOmni) return 0;
+    const table = [0, 45, 90, 135, 180, 225, 270, 315, 360];
+    var best = 0;
+    var bestDiff = 1 << 30;
+    for (var i = 1; i < table.length; i++) {
+      final diff = (table[i] - deg).abs();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /// 组装 `PHGphgd`。四个码位一次给全 —— 规范里它就是**一个** 7 字节字段，
+  /// 不存在「只报功率不报高度」的写法。
+  static String encode({
+    required num watts,
+    required num heightFeet,
+    required num gainDb,
+    int directivityDeg = 0,
+    bool isOmni = true,
+  }) {
+    return 'PHG'
+        '${powerCode(watts)}'
+        '${heightCode(heightFeet)}'
+        '${gainCode(gainDb)}'
+        '${directivityCode(directivityDeg, isOmni: isOmni)}';
+  }
+
+  /// 高度码位 → 展示用米数（设置页回显「这一档实际是多高」）
+  static int heightStepMeters(int code) =>
+      (heightStepFeet(code) * 0.3048).round();
+
+  /// 功率码位 → 展示用瓦数
+  static int powerStepWatts(int code) => powerSteps[code.clamp(0, 9)];
 }

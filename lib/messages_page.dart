@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'theme.dart';
+import 'guide.dart';
 import 'models.dart';
+import 'back_router.dart';
 import 'state.dart';
 import 'chat_dates.dart';
 import 'chat_translate_ui.dart';
@@ -56,7 +57,7 @@ class _MessagesPageState extends State<MessagesPage> {
   /// 必须退出再进才能消掉的红点（用户反馈的「小红点有时候不消」之一）。
   /// 页面不在前台（isActive=false）或停在列表上时传 null。
   void _syncActiveConversation() {
-    if (!widget.isActive || _showList || _feedMode) {
+    if (!widget.isActive || _showList) {
       widget.state.setActiveConversation();
       return;
     }
@@ -90,14 +91,30 @@ class _MessagesPageState extends State<MessagesPage> {
   ConvTranslatePref get _pref => TranslateService.instance.prefFor(_convKey);
 
   String _selected = '';
+  /// 本次布局里「消息区」的实际可用宽度（见下方 LayoutBuilder 里的赋值）。
+  ///
+  /// 气泡最大宽度必须按**它**算，不能按屏幕宽度算：2.0 横屏把消息页装进左侧
+  /// 面板（宽 ≤560，手机上常 200~280），而面板外面套着 ClipRect —— 用屏幕宽度
+  /// （桌面 1920 × 0.55 = 1056）会算出远超面板的宽度，超出的部分被默默裁掉，
+  /// 长消息读不全且不报任何错。
+  double _availW = 0;
+
+  /// 容器窄到需要**行内降级**（不是换栏：换栏由上面的 narrow 管）。
+  ///
+  /// 单聊标题行挂着一串固定宽度的东西（返回 24 + 头像 34 + 译发钮 + 星标 22 +
+  /// 网格 6 位），群聊那行更是 5 个操作胶囊 —— 宽度不够时它们会**撑爆 Row**
+  /// （debug 下溢出条纹、release 下直接被裁，不报任何错），这就是「面板显示
+  /// 不全」的现场。这里按可用宽度把它们逐个降级。
+  bool _compactPane = false;
   bool _showList = true;
-  bool _feedMode = true; // 瀑布流模式（默认）
+
+  /// 本次进入会话是否已经请求过「把外壳面板展开到最高档」（见下）。
+  bool _askedSheetExpand = false;
   String? _selectedGroupId; // 当前打开的群聊ID
   final Set<String> _groupRecipients = {}; // 临时群发目标（创建群聊用）
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
   final _scroll = ScrollController();
-  final _scrollFeed = ScrollController();
   final _scrollGroup = ScrollController();
   final _scrollChat = ScrollController();
   final _manualAddCtrl = TextEditingController(); // 手动添加呼号
@@ -138,17 +155,6 @@ class _MessagesPageState extends State<MessagesPage> {
   @override
   void initState() {
     super.initState();
-    _loadFeedMode();
-  }
-
-  Future<void> _loadFeedMode() async {
-    final p = await SharedPreferences.getInstance();
-    setState(() => _feedMode = p.getBool('msg_feed_mode') ?? true);
-  }
-
-  Future<void> _saveFeedMode(bool v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool('msg_feed_mode', v);
   }
 
   @override
@@ -156,7 +162,6 @@ class _MessagesPageState extends State<MessagesPage> {
     _input.dispose();
     _inputFocus.dispose();
     _scroll.dispose();
-    _scrollFeed.dispose();
     _scrollGroup.dispose();
     _scrollChat.dispose();
     _manualAddCtrl.dispose();
@@ -294,312 +299,120 @@ class _MessagesPageState extends State<MessagesPage> {
         if (_selected.isEmpty && partners.isNotEmpty)
           _selected = partners.first;
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final landscape =
-                MediaQuery.of(context).orientation == Orientation.landscape;
-            final narrow = !landscape && constraints.maxWidth < 720;
-            // 是否处于"聊天详情"（窄屏下非列表页）
-            final inChatDetail = !_feedMode && narrow && !_showList;
-            // 非活动 tab（IndexedStack 隐藏时）不拦截返回键
-            final interceptBack = widget.isActive && inChatDetail;
-            return PopScope(
-              canPop: !interceptBack,
-              onPopInvokedWithResult: (didPop, _) {
-                // 系统返回键：从聊天详情回到会话列表
-                if (!didPop && interceptBack) {
-                  setState(() {
-                    _selectedGroupId = null;
-                    _showList = true;
-                  });
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 页面标题 + 瀑布流/会话切换
-                    Row(
-                      children: [
-                        // 英文下 "Messages" + "Feed/Chats" 同占一行会挤爆窄屏：
-                        // 标题改为 Expanded + ellipsis，把剩余宽度让给切换器
-                        Expanded(
-                          child: Text(S.of(context).messages,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 功能引导（首次进入显示；看过后不占位置）
+            GuideTipCard(
+              guideId: 'messages',
+              state: widget.state,
+              margin: EdgeInsets.zero,
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 记录下来给 _bubble 用（同帧内先父后子，安全；与 map_page 的
+                  // `_lastSize = size` 同一做法）。
+                  _availW = constraints.maxWidth;
+                  // 单栏还是「列表 + 会话」双栏，**只看可用宽度，不看朝向**。
+                  //
+                  // 原来写成 `!landscape && maxWidth < 720` —— 等价于「只要是横屏就走
+                  // 双栏」。而 2.0 横屏把消息页装进**左侧面板**（宽 ≤560，手机上常
+                  // 200~280），双栏里那个**固定 280** 的列表栏直接把会话区挤成负宽度：
+                  // 两栏一起溢出、右侧被裁掉 —— 用户报的「手机的消息面板显示不全」
+                  // 就是这个。朝向不决定有多少宽度可用，可用宽度才决定。
+                  //
+                  // 640 的依据：双栏要 240~280 的列表 + 16 间隙 + 会话区还得好用
+                  // （气泡按 55% 取宽，会话区窄于 ~350 时气泡只剩一百来像素）。
+                  final narrow = constraints.maxWidth < 640;
+                  // 「窄容器」：个别**行内**元素要降级（见 _compactPane）。
+                  _compactPane = constraints.maxWidth < 520;
+                  // 是否处于"聊天详情"（窄屏下非列表页）
+                  final inChatDetail = narrow && !_showList;
+                  // ── 进了会话 → 请求外壳把内容面板展开到最高档 ──
+                  //
+                  // 为什么必须有这一步：2.0 的面板**按最高档高度布局、只裁出可视区**
+                  // （治「拖动卡 + 一拖就变白」的设计，见 shell2），于是半屏档下页面
+                  // 只露出上半部分。而输入框在页面最底部 —— 正好落在裁切线之下，
+                  // 用户看不到、也点不到，必须先手动把面板拉到最高才能打字
+                  // （用户反馈「那个输入控件很容易藏在底下」）。
+                  //
+                  // 放在这里（按 `_showList` 判）而不是每个「点开会话」的入口：
+                  // 会话有七八个入口（会话列表、搜索、群组、通知跳转、站内链接…），
+                  // 逐个加必然漏一个。用一个标志位保证每次进入只请求一次，
+                  // 退回列表时复位。
+                  if (!_showList) {
+                    if (!_askedSheetExpand) {
+                      _askedSheetExpand = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) widget.state.requestSheetExpand();
+                      });
+                    }
+                  } else {
+                    _askedSheetExpand = false;
+                  }
+                  // 非活动 tab（IndexedStack 隐藏时）不拦截返回键
+                  final interceptBack = widget.isActive && inChatDetail;
+                  // 登记「这次返回由我接手」：外壳也有一个 PopScope，同一个 route 上
+                  // 两个回调会全部触发 —— 不登记的话，从会话详情按返回会同时
+                  // 「回到会话列表」和「跳到地图」（后者把前者盖掉）。
+                  // 这里只**声明**会接手，真正的状态切换仍由下面的 PopScope 做，
+                  // 免得两处各 setState 一次。
+                  BackRouter.instance.setInner(interceptBack ? (() => true) : null);
+                  return PopScope(
+                    canPop: !interceptBack,
+                    onPopInvokedWithResult: (didPop, _) {
+                      // 系统返回键：从聊天详情回到会话列表
+                      if (!didPop && interceptBack) {
+                        setState(() {
+                          _selectedGroupId = null;
+                          _showList = true;
+                        });
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 页面标题。（原来这里还有「瀑布流 / 会话」切换器；瀑布流已按需求移除，
+                          // 只剩会话模式，切换器随之删掉 —— 一个只有一边的开关比没有更让人困惑。）
+                          Text(S.of(context).messages,
                               style: T.h1,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(width: 8),
-                        _modeToggle(),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Expanded(
-                      child: _feedMode
-                          ? _feedPane(st)
-                          : narrow
-                          ? (_showList
-                                ? _listPane(st, partners)
-                                : _chatPane(st))
-                          : Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                SizedBox(
-                                  width: 280,
-                                  child: _listPane(st, partners),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(child: _chatPane(st)),
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ─── 瀑布流 / 会话 切换 ───
-  Widget _modeToggle() {
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: C.bgSoft,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _modePill(true, S.of(context).feedMode),
-          _modePill(false, S.of(context).conversationMode),
-        ],
-      ),
-    );
-  }
-
-  Widget _modePill(bool feed, String label) {
-    final sel = _feedMode == feed;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _feedMode = feed);
-        _saveFeedMode(feed);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        // 英文标签较长时收紧横向内边距，避免两个 pill 把标题挤下去
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: sel ? C.blue : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: ts(12, c: sel ? Colors.white : C.slate, w: FontWeight.w600),
-        ),
-      ),
-    );
-  }
-
-  // ─── 瀑布流：全部消息连续滚动 ───
-  Widget _feedPane(AppState st) {
-    return SoftCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: C.border)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.waves_rounded, size: 16, color: C.blue),
-                SizedBox(width: 6),
-                Text(
-                  S.of(context).messageFeed,
-                  style: ts(12, c: C.blue, w: FontWeight.w700),
-                ),
-                Spacer(),
-                Text(
-                  S.of(context).messageTotal(st.messages.length),
-                  style: ts(11, c: C.grey),
-                ),
-              ],
-            ),
-          ),
-          // 列表：reverse=true，新消息在最底部，自动跟随
-          Expanded(
-            child: st.messages.isEmpty
-                ? Center(
-                    child: Text(
-                      S.of(context).noMessages,
-                      style: TextStyle(color: C.grey, fontSize: 13),
-                    ),
-                  )
-                : Builder(builder: (context) {
-                    // 瀑布流跨会话，日期分界线同样必要（否则翻历史不知道跨度）
-                    final rows = buildChatRows<AprsMsg>(
-                      st.messages,
-                      (m) => m.time,
-                    );
-                    return ListView.builder(
-                      controller: _scrollFeed,
-                      reverse: true,
-                      padding: const EdgeInsets.all(12),
-                      itemCount: rows.length,
-                      itemBuilder: (_, i) {
-                      final row = rows[i];
-                      if (row.isDivider) {
-                        return ChatDateDivider.build(context, row.divider!);
-                      }
-                      final m = row.item!;
-                      return GestureDetector(
-                        onTap: () {
-                          // 群聊消息 → 打开对应群聊；私聊 → 打开对应联系人
-                          // 同时退出瀑布流模式进入会话模式
-                          if (m.groupId != null) {
-                            setState(() {
-                              _feedMode = false;
-                              _saveFeedMode(false);
-                              _selectedGroupId = m.groupId;
-                              _selected = '';
-                              _showList = false;
-                            });
-                          } else {
-                            setState(() {
-                              _feedMode = false;
-                              _saveFeedMode(false);
-                              _selectedGroupId = null;
-                              _selected = m.sent ? m.to : m.from;
-                              _showList = false;
-                            });
-                          }
-                        },
-                        child: _feedBubble(m),
-                      );
-                    },
-                    );
-                  }),
-          ),
-          _inputBar(st),
-        ],
-      ),
-    );
-  }
-
-  Widget _feedBubble(AprsMsg m) {
-    final mine = m.sent;
-    // 群聊名称
-    String? groupName;
-    if (m.groupId != null) {
-      for (final g in widget.state.chatGroups) {
-        if (g.id == m.groupId) {
-          groupName = g.name;
-          break;
-        }
-      }
-    }
-    // 瀑布流里每条消息属于各自会话，翻译偏好也应按**该消息所属会话**取，
-    // 而不是当前打开的那个会话（瀑布流里可能同时显示多个会话）。
-    final mConv = convKeyOf(
-      groupId: m.groupId,
-      call: m.sent ? m.to : m.from,
-    );
-    return GestureDetector(
-      onLongPress: () => showMessageActions(
-        context: context,
-        m: m,
-        pref: TranslateService.instance.prefFor(mConv),
-        st: ConvTransRegistry.instance.of(mConv),
-        convKey: mConv,
-        onChanged: () {
-          if (mounted) setState(() {});
-        },
-        onOpenSettings: _openTranslateSettings,
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: mine ? C.blueBg : C.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: mine ? C.blue.withValues(alpha: 0.2) : C.border,
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${m.time.hour.toString().padLeft(2, '0')}:'
-              '${m.time.minute.toString().padLeft(2, '0')}:'
-              '${m.time.second.toString().padLeft(2, '0')}',
-              style: mono(9, c: C.grey),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (m.groupId != null)
-                        Container(
-                          margin: const EdgeInsets.only(right: 4),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1,
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: narrow
+                                ? (_showList
+                                      ? _listPane(st, partners)
+                                      : _chatPane(st))
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // 列表栏宽度**跟着容器走**（不再是写死的 280）：
+                                      // 2.0 横屏的面板最宽 560，而 1.0 平板/桌面可以很宽，
+                                      // 固定 280 在窄容器里会把会话区挤到看不见。
+                                      SizedBox(
+                                        width: (constraints.maxWidth * 0.34)
+                                            .clamp(240.0, 280.0),
+                                        child: _listPane(st, partners),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(child: _chatPane(st)),
+                                    ],
+                                  ),
                           ),
-                          decoration: BoxDecoration(
-                            color: C.orangeBg,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            groupName ?? S.of(context).groupShortLabel,
-                            style: ts(8, c: C.orange, w: FontWeight.w700),
-                          ),
-                        ),
-                      Text(
-                        mine ? '→ ${m.to}' : '← ${m.from}',
-                        style: ts(
-                          10,
-                          c: mine ? C.blue : C.green,
-                          w: FontWeight.w700,
-                        ),
+                        ],
                       ),
-                      if (mine && m.groupId == null) ...[
-                        SizedBox(width: 4),
-                        Icon(
-                          m.acked ? Icons.done_all_rounded : Icons.done_rounded,
-                          size: 11,
-                          color: m.acked ? C.blue : C.greyLight,
-                        ),
-                      ],
-                    ],
-                  ),
-                  SizedBox(height: 2),
-                  _urlRichText(m.text, ts(12, c: C.ink)),
-                  // 「已译发」与译文块：见 _bubble 处的同款说明（两个气泡都要有）
-                  sentAsBlock(context: context, m: m),
-                  translationBlock(
-                    context: context,
-                    m: m,
-                    st: ConvTransRegistry.instance.of(mConv),
-                    pref: TranslateService.instance.prefFor(mConv),
-                  ),
-                ],
+                    ),
+                  );
+                },
               ),
             ),
           ],
-        ),
-      ),
+        );;
+      },
     );
   }
 
@@ -657,10 +470,10 @@ class _MessagesPageState extends State<MessagesPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
                   color: C.cyan,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text('$n',
-                    style: ts(8, c: Colors.white, w: FontWeight.w700)),
+                    style: ts(9, c: Colors.white, w: FontWeight.w700)),
               ),
             ),
         ],
@@ -710,7 +523,7 @@ class _MessagesPageState extends State<MessagesPage> {
           height: 44,
           decoration: BoxDecoration(
             color: _outPreview != null ? C.cyanBg : C.bgSoft,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: _outPreview != null
                   ? C.cyan.withValues(alpha: 0.5)
@@ -889,7 +702,7 @@ class _MessagesPageState extends State<MessagesPage> {
         const SizedBox(width: 5),
         Text(
           S.of(context).msgLenCounter(fit.textChars, fit.packetBytes),
-          style: ts(9.5,
+          style: ts(9,
               c: fit.fit == MsgFit.ok ? C.grey
                   : fit.fit == MsgFit.overSpec ? C.orange : C.red),
         ),
@@ -954,11 +767,11 @@ class _MessagesPageState extends State<MessagesPage> {
                     filled: true,
                     fillColor: C.bgSoft,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(color: C.border, width: 0.6),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(color: C.border, width: 0.6),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
@@ -987,8 +800,8 @@ class _MessagesPageState extends State<MessagesPage> {
                   height: 44,
                   decoration: BoxDecoration(
                     color: C.blue,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: softShadow(blur: 12, alpha: 0.2),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: elev2(),
                   ),
                   child: const Icon(
                     Icons.send_rounded,
@@ -1164,7 +977,7 @@ class _MessagesPageState extends State<MessagesPage> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
@@ -1396,7 +1209,7 @@ class _MessagesPageState extends State<MessagesPage> {
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
@@ -1452,7 +1265,7 @@ class _MessagesPageState extends State<MessagesPage> {
               height: 38,
               decoration: BoxDecoration(
                 color: C.orangeBg,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.group_rounded, color: C.orange, size: 20),
             ),
@@ -1482,11 +1295,11 @@ class _MessagesPageState extends State<MessagesPage> {
                         ),
                         decoration: BoxDecoration(
                           color: C.orangeBg,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           S.of(context).groupShortLabel,
-                          style: ts(8, c: C.orange, w: FontWeight.w700),
+                          style: ts(9, c: C.orange, w: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -1508,7 +1321,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: C.orange,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '$unread',
@@ -1570,7 +1383,7 @@ class _MessagesPageState extends State<MessagesPage> {
               height: 38,
               decoration: BoxDecoration(
                 color: C.blueBg,
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
                 child: Text(
@@ -1584,7 +1397,12 @@ class _MessagesPageState extends State<MessagesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(p, style: ts(13, w: FontWeight.w600)),
+                  Text(
+                    p,
+                    style: ts(13, w: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   SizedBox(height: 2),
                   Text(
                     last?.text ?? '',
@@ -1600,7 +1418,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: C.blue,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '$unread',
@@ -1643,59 +1461,239 @@ class _MessagesPageState extends State<MessagesPage> {
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: C.border)),
               ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => setState(() {
-                      _selectedGroupId = null;
-                      _showList = true;
-                    }),
-                    child: Icon(Icons.arrow_back_rounded, color: C.grey),
-                  ),
-                  SizedBox(width: 10),
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: C.orangeBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.group_rounded, color: C.orange, size: 18),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _showGroupMembersSheet(st, group),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(group.name, style: ts(14, w: FontWeight.w700)),
-                          SizedBox(height: 1),
-                          Text(
-                            S.of(context).groupCallsignLine(group.groupCall),
-                            style: ts(10, c: C.orange, w: FontWeight.w600),
+              // 窄面板下**拆两行**：标题一行，操作胶囊换行排（一个都不藏）。
+              // 原先是**一整行 Row**：标题 + 5 个固定宽度的操作胶囊；2.0 横屏
+              // 把消息页装进 ≤560 的面板（手机常 200~280）时这一行必然撑爆 ——
+              // 右边的胶囊被裁掉，用户看到的就是「面板显示不全」（release 下
+              // 不报错，只是默默少东西）。
+              child: _compactPane
+                ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() {
+                              _selectedGroupId = null;
+                              _showList = true;
+                            }),
+                          child: Icon(Icons.arrow_back_rounded, color: C.grey),
+                        ),
+                        SizedBox(width: 10),
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: C.orangeBg,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          SizedBox(height: 1),
-                          Text(
-                            S
-                                .of(context)
-                                .memberCountTap(group.confirmedMembers.length),
-                            style: ts(10, c: C.grey),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Icon(Icons.group_rounded, color: C.orange, size: 18),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _showGroupMembersSheet(st, group),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(group.name, style: ts(13, w: FontWeight.w700)),
+                                SizedBox(height: 1),
+                                Text(
+                                  S.of(context).groupCallsignLine(group.groupCall),
+                                  style: ts(10, c: C.orange, w: FontWeight.w600),
+                                ),
+                                SizedBox(height: 1),
+                                Text(
+                                  S
+                                  .of(context)
+                                  .memberCountTap(group.confirmedMembers.length),
+                                  style: ts(10, c: C.grey),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      // Wrap 自己的宽度只等于内容宽，所以要靠 Align 靠右
+                      alignment: Alignment.centerRight,
+                      child: Wrap(
+                        // spacing 交给胶囊之间原有的 6px 间隔（含
+                        // 「非群主才有的那一个」条件间隔）
+                        runSpacing: 6,
+                        alignment: WrapAlignment.end,
+                        children: [
+                          _transBtn(
+                            onTap: () => _openTransSheet(
+                              title: group.name,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // 邀请按钮（仅群主可见）
+                          if (group.isOwner(st.myCall))
+                          GestureDetector(
+                            onTap: () => _showInviteMemberDialog(st, group),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: C.greenBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.person_add_rounded,
+                                    size: 12,
+                                    color: C.green,
+                                  ),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    S.of(context).invite,
+                                    style: ts(10, c: C.green, w: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          // 非群主显示退出按钮
+                          if (!group.isOwner(st.myCall))
+                          GestureDetector(
+                            onTap: () => _showLeaveGroupConfirm(st, group),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: C.redBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                S.of(context).leaveAction,
+                                style: ts(10, c: C.red, w: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          if (!group.isOwner(st.myCall)) SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _showEditGroupDialog(st, group),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: C.blueBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                S.of(context).manage,
+                                style: ts(10, c: C.blue, w: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          // 群跟踪：把该群成员放到地图持续跟踪
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                  TrackerPage(state: st, group: group),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: C.cyanBg,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.gps_fixed_rounded,
+                                    size: 12, color: C.cyan),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    S.of(context).groupTracking,
+                                    style: ts(10, c: C.cyan, w: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  _transBtn(
-                    onTap: () => _openTransSheet(
-                      title: group.name,
+                  ],
+                )
+                : Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() {
+                          _selectedGroupId = null;
+                          _showList = true;
+                        }),
+                      child: Icon(Icons.arrow_back_rounded, color: C.grey),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  // 邀请按钮（仅群主可见）
-                  if (group.isOwner(st.myCall))
+                    SizedBox(width: 10),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: C.orangeBg,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.group_rounded, color: C.orange, size: 18),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _showGroupMembersSheet(st, group),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(group.name, style: ts(13, w: FontWeight.w700)),
+                            SizedBox(height: 1),
+                            Text(
+                              S.of(context).groupCallsignLine(group.groupCall),
+                              style: ts(10, c: C.orange, w: FontWeight.w600),
+                            ),
+                            SizedBox(height: 1),
+                            Text(
+                              S
+                              .of(context)
+                              .memberCountTap(group.confirmedMembers.length),
+                              style: ts(10, c: C.grey),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _transBtn(
+                      onTap: () => _openTransSheet(
+                        title: group.name,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // 邀请按钮（仅群主可见）
+                    if (group.isOwner(st.myCall))
                     GestureDetector(
                       onTap: () => _showInviteMemberDialog(st, group),
                       child: Container(
@@ -1724,9 +1722,9 @@ class _MessagesPageState extends State<MessagesPage> {
                         ),
                       ),
                     ),
-                  SizedBox(width: 6),
-                  // 非群主显示退出按钮
-                  if (!group.isOwner(st.myCall))
+                    SizedBox(width: 6),
+                    // 非群主显示退出按钮
+                    if (!group.isOwner(st.myCall))
                     GestureDetector(
                       onTap: () => _showLeaveGroupConfirm(st, group),
                       child: Container(
@@ -1744,61 +1742,61 @@ class _MessagesPageState extends State<MessagesPage> {
                         ),
                       ),
                     ),
-                  if (!group.isOwner(st.myCall)) SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => _showEditGroupDialog(st, group),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: C.blueBg,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        S.of(context).manage,
-                        style: ts(10, c: C.blue, w: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  // 群跟踪：把该群成员放到地图持续跟踪
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              TrackerPage(state: st, group: group),
+                    if (!group.isOwner(st.myCall)) SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => _showEditGroupDialog(st, group),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: C.cyanBg,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.gps_fixed_rounded,
-                              size: 12, color: C.cyan),
-                          SizedBox(width: 3),
-                          Text(
-                            S.of(context).groupTracking,
-                            style: ts(10, c: C.cyan, w: FontWeight.w600),
-                          ),
-                        ],
+                        decoration: BoxDecoration(
+                          color: C.blueBg,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          S.of(context).manage,
+                          style: ts(10, c: C.blue, w: FontWeight.w600),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    SizedBox(width: 6),
+                    // 群跟踪：把该群成员放到地图持续跟踪
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                            TrackerPage(state: st, group: group),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: C.cyanBg,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.gps_fixed_rounded,
+                              size: 12, color: C.cyan),
+                            SizedBox(width: 3),
+                            Text(
+                              S.of(context).groupTracking,
+                              style: ts(10, c: C.cyan, w: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             ),
             Expanded(
               child: msgs.isEmpty
@@ -1860,7 +1858,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 SizedBox(height: 12),
                 Text(
                   S.of(context).selectConversation,
-                  style: ts(14, c: C.grey),
+                  style: ts(13, c: C.grey),
                 ),
               ],
             ),
@@ -1881,34 +1879,46 @@ class _MessagesPageState extends State<MessagesPage> {
                         child: Icon(Icons.arrow_back_rounded, color: C.grey),
                       ),
                       SizedBox(width: 10),
-                      GestureDetector(
-                        onTap: () => _openStation(st, _selected),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: C.blueBg,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  _selected.length >= 2
-                                      ? _selected.substring(
-                                          _selected.length - 2,
-                                        )
-                                      : _selected,
-                                  style: ts(10, c: C.blue, w: FontWeight.w700),
+                      // 必须用 Expanded（不要 Flexible + Spacer）：Flexible 与
+                      // Spacer 的 flex 都是 1，会各分走一半空白，呼号明明放得下
+                      // 也会被压窄、提前省略号（用户反馈的「呼号缩在一起」）。
+                      // Expanded 吃掉全部剩余宽度，右侧按钮照样被顶到边上。
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _openStation(st, _selected),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: C.blueBg,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _selected.length >= 2
+                                        ? _selected.substring(
+                                            _selected.length - 2,
+                                          )
+                                        : _selected,
+                                    style: ts(10, c: C.blue, w: FontWeight.w700),
+                                  ),
                                 ),
                               ),
-                            ),
-                            SizedBox(width: 10),
-                            Text(_selected, style: ts(15, w: FontWeight.w700)),
-                          ],
+                              SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  _selected,
+                                  style: ts(16, w: FontWeight.w700),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      Spacer(),
                       _transBtn(
                         onTap: () => _openTransSheet(title: _selected),
                       ),
@@ -1924,10 +1934,12 @@ class _MessagesPageState extends State<MessagesPage> {
                         ),
                       ),
                       SizedBox(width: 12),
-                      Text(
-                        _partnerGrid(st, _selected),
-                        style: mono(10, c: C.grey),
-                      ),
+                      // 网格那段最先让位：信息量最小，却要占 6 个字符位
+                      if (!_compactPane)
+                        Text(
+                          _partnerGrid(st, _selected),
+                          style: mono(10, c: C.grey),
+                        ),
                     ],
                   ),
                 ),
@@ -1971,7 +1983,7 @@ class _MessagesPageState extends State<MessagesPage> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             color: C.greyLight.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             localizedSystemMessage(context, m.text),
@@ -2001,13 +2013,18 @@ class _MessagesPageState extends State<MessagesPage> {
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.55,
+            // 按消息区的实际宽度取 55%（不是屏幕宽度）—— 见字段 [_availW]。
+            // 退化兜底：万一 _bubble 在没有 LayoutBuilder 的场合被复用。
+            maxWidth: (_availW > 0
+                    ? _availW
+                    : MediaQuery.of(context).size.width) *
+                0.55,
           ),
           decoration: BoxDecoration(
             color: mine ? C.blueBg : C.bgSoft,
             borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(14),
-              topRight: const Radius.circular(14),
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
               bottomLeft: Radius.circular(mine ? 14 : 4),
               bottomRight: Radius.circular(mine ? 4 : 14),
             ),
@@ -2194,7 +2211,7 @@ class _MessagesPageState extends State<MessagesPage> {
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
@@ -2213,7 +2230,7 @@ class _MessagesPageState extends State<MessagesPage> {
           padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Row(
@@ -2279,7 +2296,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     controller: ctrl,
                     autofocus: true,
                     textCapitalization: TextCapitalization.characters,
-                    style: ts(14),
+                    style: ts(13),
                     onChanged: (_) => setDialogState(() {}),
                     onSubmitted: (_) => _startConversation(st, ctrl.text),
                     decoration: InputDecoration(
@@ -2288,7 +2305,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       filled: true,
                       fillColor: C.bgSoft,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -2298,7 +2315,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     Container(
                       decoration: BoxDecoration(
                         color: C.bgSoft,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
                         children: suggestions.map((s) {
@@ -2357,7 +2374,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 style: FilledButton.styleFrom(
                   backgroundColor: C.blue,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Text(
@@ -2380,8 +2397,6 @@ class _MessagesPageState extends State<MessagesPage> {
     st.addManualStation(call);
     Navigator.pop(context);
     setState(() {
-      _feedMode = false;
-      _saveFeedMode(false);
       _selectedGroupId = null;
       _selected = call;
       _showList = false;
@@ -2483,7 +2498,7 @@ class _MessagesPageState extends State<MessagesPage> {
                         filled: true,
                         fillColor: C.bgSoft,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                       ),
@@ -2668,7 +2683,7 @@ class _MessagesPageState extends State<MessagesPage> {
                         filled: true,
                         fillColor: C.bgSoft,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                       ),
@@ -2845,7 +2860,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     TextField(
                       controller: nameCtrl,
                       autofocus: true,
-                      style: ts(14),
+                      style: ts(13),
                       onChanged: (_) => setDialogState(() {}),
                       onSubmitted: (_) {
                         if (nameCtrl.text.trim().isNotEmpty) {
@@ -2873,7 +2888,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: C.orangeBg,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2918,7 +2933,7 @@ class _MessagesPageState extends State<MessagesPage> {
                         filled: true,
                         fillColor: C.bgSoft,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                       ),
@@ -3166,7 +3181,7 @@ class _MessagesPageState extends State<MessagesPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.75,
@@ -3355,7 +3370,7 @@ class _MessagesPageState extends State<MessagesPage> {
                                       children: [
                                         Text(
                                           call,
-                                          style: ts(14, w: FontWeight.w600),
+                                          style: ts(13, w: FontWeight.w600),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -3504,7 +3519,7 @@ class _MessagesPageState extends State<MessagesPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
@@ -3639,7 +3654,7 @@ class _MessagesPageState extends State<MessagesPage> {
                                       ),
                                       decoration: BoxDecoration(
                                         color: C.orangeBg,
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
                                         S.of(context).groupOwner,
@@ -3749,7 +3764,7 @@ class _MessagesPageState extends State<MessagesPage> {
             backgroundColor: Colors.white,
             title: Text(
               S.of(context).inviteMembersTo(group.name),
-              style: ts(15, w: FontWeight.w700),
+              style: ts(16, w: FontWeight.w700),
             ),
             content: SizedBox(
               width: double.maxFinite,
@@ -3778,7 +3793,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       filled: true,
                       fillColor: C.bgSoft,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -3799,7 +3814,7 @@ class _MessagesPageState extends State<MessagesPage> {
                             filled: true,
                             fillColor: C.bgSoft,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
                             ),
                           ),
@@ -3991,7 +4006,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     controller: ctrl,
                     autofocus: true,
                     textCapitalization: TextCapitalization.characters,
-                    style: ts(14),
+                    style: ts(13),
                     onChanged: (_) => setDialogState(() {}),
                     decoration: InputDecoration(
                       hintText: S.of(context).callsignExample,
@@ -4004,7 +4019,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       filled: true,
                       fillColor: C.bgSoft,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
@@ -4020,7 +4035,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       constraints: const BoxConstraints(maxHeight: 200),
                       decoration: BoxDecoration(
                         color: C.bgSoft,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: ListView.builder(
                         shrinkWrap: true,
@@ -4089,7 +4104,7 @@ class _MessagesPageState extends State<MessagesPage> {
                 style: FilledButton.styleFrom(
                   backgroundColor: C.blue,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Text(

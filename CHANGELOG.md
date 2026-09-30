@@ -1,5 +1,7520 @@
 # 更新日志
 
+## [2.0.9] - 2026-09-28
+
+### 🆘 新：生命守护增加「碰撞与摔倒检测」（测试）
+
+用手机加速度判断，检测到就弹提醒（与心率告警同一套动作：**我没事 / 拨打急救 /
+向附近台站求助**），通知栏也会提示。
+
+判据是**两段式**的：① 加速度出现一个很陡的尖峰（车祸与摔倒都会有）；
+② 之后连续 12 秒几乎没有运动。两段都要满足才提醒。
+
+为什么要第二段：只看尖峰的话，**过减速带、手机掉在桌上、甩一甩**全都算，
+一天响好几次就没人再看了。代价写清楚：**轻微碰撞（人还能动）不会提醒** ——
+这个功能的定位是「人已经动不了了」，不是「发生过撞击」。
+
+**它会误报**（过减速带之后正好等红灯停了 12 秒），所以提醒里第一个按钮就是
+「我没事」；页面上也写明这是**启发式判断**，不是工程级碰撞检测。
+设置项在**设置 → 生命守护**，旁边还有「检测到冲击，正在观察」的实时状态。
+
+### 🐛 修：步数一直显示「请授权」，但其实已经授权了
+
+读数是 `-1` 时有**三种**完全不同的原因 —— 没有计步传感器、没有活动识别权限、
+以及**还没收到第一个硬件事件**（没权限时系统只是不派发事件，不报错）。
+之前把它们混为一谈，于是「刚授权、还没走过路」被显示成「请授权」，点授权按钮
+也永远是「已授权」，怎么看都不对。
+
+现在原生单独上报权限状态，App 里把步数收成**四态**（不支持 / 需授权 /
+**等待数据** / 正常），两个页面共用同一份判定 —— 以前两处各写一遍，都漏了
+「等待数据」这一档。顺带修掉两个相关问题：**计步不再依赖「传感器辅助」开关**
+（关掉它也会继续计步，那个开关只管加速度计与指南针）；只有真的没授权时才显示
+授权按钮。
+
+### 🐛 修：生命守护页的开关点了没反应
+
+这一页的开关（启用异常告警、阈值、紧急号码）写回状态后界面不刷新 ——
+`SettingsPageShell` 的 `state` 参数只服务于页首的引导卡，并不会让页面跟随状态刷新
+（它的注释以前写着「传入后自动监听刷新」，把人带沟里了，已经订正）。
+
+### 🐛 修：速度档编辑弹层的「保存」被三大金刚键压住
+
+那个底部弹层只让出了键盘高度，键盘收起时「保存」正好压在导航栏底下，点不到而且
+看不出来是被挡住了。现在底部同时让出键盘与**系统导航栏**；顺带把另一处同类弹层
+一起修了。取值取 `padding` 与 `viewPadding` 的较大者 —— 有些 ROM 在全面屏下
+`padding.bottom` 给 0（`SafeArea` 同样是 0，所以不能只靠它）。
+
+## [2.0.9] - 2026-09-28 (English)
+
+### 🆘 New: crash and fall detection in Life guard (beta)
+
+Judged from the phone accelerometer, it raises an alert when detected (same actions as the heart-rate alarm: **I am fine / call emergency services / ask nearby stations**), and it also shows up in the notification.
+
+The test is **two-stage**: (1) a sharp spike in acceleration (both crashes and falls produce one); (2) then almost no movement for 12 seconds. Both must hold.
+
+Why the second stage: with the spike alone, **speed bumps, a phone dropped on a desk and a good shake** all qualify, and an alert that fires several times a day gets ignored. The trade-off is stated plainly: **a minor impact (where you can still move) will not alert** — this is about "I cannot move", not "a collision happened".
+
+**It can false-alarm** (a speed bump followed by a 12-second stop at a red light), so the first button in the alert is "I am fine", and the page states that this is a **heuristic, not engineering-grade crash detection**. The switch lives in **Settings → Life guard**, next to a live "impact detected — watching" indicator.
+
+### 🐛 Fix: steps always showed "permission needed" even after granting it
+
+A reading of `-1` has **three** completely different causes — no step sensor, no activity-recognition permission, and **no hardware event received yet** (without permission the system simply does not dispatch events and reports no error). They were being treated as one, so "granted, but has not walked yet" read as "permission needed", and pressing the grant button kept saying "granted" — nothing made sense.
+
+The native side now reports the permission state separately, and steps are modelled as **four states** (unsupported / needs permission / **waiting for data** / ok) with a single shared decision — the two pages used to each have their own copy and both missed "waiting for data". Two related fixes came along: **step counting no longer depends on the "sensor assist" switch** (turning it off only disables the accelerometer and compass, not the pedometer), and the grant button now only appears when permission is genuinely missing.
+
+### 🐛 Fix: switches on the Life guard page did nothing
+
+Toggles there (enable the alarm, thresholds, emergency number) wrote back to the state but the UI never refreshed: `SettingsPageShell`'s `state` parameter only serves the guide card at the top, it does not make the page follow state changes (its comment claimed otherwise — it has been corrected).
+
+### 🐛 Fix: the speed-tier editor's "Save" was covered by the navigation bar
+
+That bottom sheet only reserved space for the keyboard, so once the keyboard was hidden "Save" sat under the navigation bar — unreachable, and nothing indicated it was covered. It now reserves both the keyboard and the **system navigation bar**, and another sheet of the same kind was fixed too. The inset takes the larger of `padding` and `viewPadding`: on some ROMs `padding.bottom` is 0 in edge-to-edge mode (and `SafeArea` reads the same value, so it cannot be relied on alone).
+
+## [2.0.8] - 2026-09-28
+
+### 🐛 修：心率异常告警的上/下限改不动
+
+三个输入框原来只在 `onEditingComplete` 里提交，而 Flutter 的这个回调**只在按键盘「完成/回车」时触发，失焦不触发** ——
+改完随手点别处，什么都没保存，表现就是「数值无法更改」。现在输入即保存（解析不出来的中间态不写），
+失焦/回车再做一次范围校正与回显；卡片里新增一行**「当前生效 40 ~ 150 bpm」**，
+改没改、改成多少一眼可见（用户说的「按钮更新并不及时」正是缺这个反馈）。
+
+### ❤️ 新：「生命守护」页（设置页底部）
+
+心率异常告警从「设备 → 心率」搬进独立的**生命守护**页 —— 那个页面讲的是「心率带怎么连」，
+与「安全策略」不是一类东西。新页面把三件事说清：
+**这是什么**（越界弹警告 + 通知栏，可拨急救或向附近台站求助）、
+**开启条件**（开关打开 / 外置心率设备在正常推数据 / 越界 / 距上次告警超 3 分钟）、
+以及**向附近台站求助的口径**（手动触发、100 公里内最近 5 个、发送前再确认一次）。
+并明确标注**这是测试功能** —— 判定只基于心率数值，没有任何医学依据。
+原位置留了一行入口，老用户不至于找不到。
+
+### 🚶 新：运动步数与信标上传
+
+- 新增**计步**：读手机的硬件计步传感器（比用加速度计估算准、也更省电），
+  设置页可以看到「今日步数」。跨天自动归零；手机重启（硬件计数回到 0）也不会让今日步数回退。
+- **信标里可以附带 `STEPS=`**（非标准字段，与 `TRV:`/`ODO:` 同类），默认关闭 ——
+  分享自己的数据应当由你决定。
+- 读不到步数时会**分清**是「这台设备没有计步传感器」还是「有传感器但没授权」，
+  后者给一个授权按钮 —— 两者要给的动作完全不同，混成一句「无数据」等于没法处理。
+
+### 🏆 新：运动排行榜（设置页，荣誉墙上方）
+
+今日步数排行榜，点一行进台站详情。
+**它是什么要说清**：这里没有服务器，数据只能来自**本机收到的报文**里那个 `STEPS=`，
+所以榜单的语义是「你听得到的、且开了步数上报的 APRSlocus 邻居」，不是全网排行 ——
+这一条写在页面最上面。没带步数的 APRSlocus 台站单独列一段（不参与排序），
+免得看着像「附近只有这几个人在用」。
+
+**并且：自己不开上传就看不到榜单。** 榜上每个数字都是别人主动发出来的，
+只收不发的人拿得到别人的步数却不贡献自己那份。未开启时页面只给一张「门票」卡：
+说清为什么、写明开启后我会发出什么（`STEPS=<今日步数>`）、一键开启，开完立刻放行。
+
+### ⬇️ 新：更新包支持后台下载
+
+原来下载写在更新页里：用户一离开页面，进度就没人更新；而且**下完之后会拿已经失效的页面
+去弹安装对话框**——轻则毫无提示，重则踩到「用了已卸载的 context」。
+现在下载任务归一个独立单例所有，页面只是订阅者：
+
+- 离开页面 / 切到后台，下载继续；回到页面从当前进度接着显示；
+- **通知栏里能看到进度**（「正在下载更新 vX · 45%」），完成/失败各有提示；
+- 先写 `.part` 再原子改名：中途断掉留下的是半截文件，不会被「已下载」当成可用安装包；
+- 同一时刻只跑一条流，进度卡上可以**取消下载**。
+
+边界也写在界面上：进程被系统结束时会中断（几百 MB 的包不做断点续传）。
+
+## [2.0.8] - 2026-09-28 (English)
+
+### 🐛 Fix: the heart-rate alarm limits could not be changed
+
+The three fields only committed in `onEditingComplete`, and Flutter fires that **only when you press the keyboard's done/enter key — not on focus loss**. So editing a value and tapping elsewhere silently saved nothing. Input now saves as you type (unparseable intermediate states are skipped), and blur/enter does a range correction plus write-back. A new line shows **"Currently active 40 ~ 150 bpm"**, so what actually took effect is visible — which is exactly the missing feedback behind "the button doesn't update in time".
+
+### ❤️ New: a "Life guard" page at the bottom of Settings
+
+The heart-rate alarm moved out of Devices → Heart rate into its own page, because that page is about *how to connect a strap*, which is a different subject from *a safety policy*. The new page spells out three things: **what it is** (out-of-range warning plus notification, offering an emergency call or a help message to nearby stations), **the exact conditions** (switch on / external device actually streaming / reading out of range / more than 3 minutes since the last alarm), and **what "ask nearby stations" does** (manual trigger, 5 closest within 100 km, one more confirmation). It is also clearly marked as a **beta** feature — the judgement is based on the heart-rate number alone, with no medical basis. A pointer row remains in the old location so existing users can find it.
+
+### 🚶 New: step counting and steps in the beacon
+
+- **Step counting** from the phone's hardware step counter (more accurate and cheaper than estimating from the accelerometer), with today's steps shown in Settings. It resets across midnight, and a device reboot (the hardware counter returning to 0) no longer makes today's count go backwards.
+- The beacon can include **`STEPS=`** (a non-standard field, same family as `TRV:`/`ODO:`), off by default — sharing your data should be your decision.
+- When steps are unavailable, it distinguishes "this device has no step sensor" from "there is one but permission was not granted", the latter offering a grant button — the two need completely different actions, and merging them into "no data" leaves the user stuck.
+
+### 🏆 New: activity leaderboard (in Settings, above the honour wall)
+
+Today's steps ranking; tapping a row opens the station detail. **What it is must be stated**: there is no server, so the data can only come from `STEPS=` in **packets this device has received** — the ranking therefore means "the APRSlocus neighbours you can hear who enabled steps upload", not a network-wide ranking, and that is written at the top of the page. APRSlocus stations without steps are listed separately (not ranked), so it does not look like nobody nearby is using it.
+
+**And you cannot see the board without contributing**: every number on it was sent by someone else, and someone who only receives gets everyone's steps without contributing their own. When upload is off, the page shows a single "ticket" card explaining why, stating what will be sent (`STEPS=<today's steps>`), and offering a one-tap enable — which immediately unlocks the list.
+
+### ⬇️ New: background downloads for the update package
+
+The download used to live in the update page: leaving it meant nobody updated the progress, and when the download finished it would **pop an install dialog from an already-dead page** — at best no notice at all, at worst a disposed `context`. The job now belongs to a standalone singleton and the page is merely a subscriber:
+
+- leave the page or background the app — the download continues, and returning shows the current progress;
+- **progress is visible in the notification** ("Downloading update vX · 45%"), with completion/failure notices;
+- it writes a `.part` file and renames atomically, so an interrupted download can never be mistaken for a usable installer;
+- only one stream runs at a time, and the progress card offers **cancel**.
+
+The boundary is stated in the UI too: killing the process aborts it (no resume for a few hundred MB).
+
+## [2.0.7] - 2026-09-28
+
+### 🐛 修：沉浸地图一拖就跳回北京
+
+沉浸式导航页跟着你走时，视野是**按你的位置实时算**出来的；一旦开始手动拖动，
+那个「跟随时用的偏移量」从来没有交给手动模式 —— 于是拖动的那一瞬间地图平移到了
+投影基准点（代码里写的是北京天安门），也就是「一拖就跑到北京」。现在拖动会先从
+当前视野接手，再切手动。顺带把**旋转**算进去：横屏导航时航向朝上，屏幕上的位移要
+先换算回画布方向再累加，否则「往哪拖就往斜里跑」。
+
+### 📊 新：地图页上报状态栏可以切成「详细」
+
+详细档多一行**当前触发条件**：现在是哪一档（智能档按速度区间 / 固定间隔 / 纯网络固定）、
+还有多少秒、距离打点还差多少米、转弯还差多少度。转弯那两个「闸」也如实摆出来 ——
+速度不到 5 km/h 或距上次上报不到 20 秒时它根本不参与判断，不写出来会让人以为功能失灵。
+
+刷新频次只给那一行（秒级 tick），面板和地图不跟着每秒重建。
+不想要的人在**电台设置 → 信标**里切回「经典」即可。
+
+### 🆘 新：心率异常告警
+
+连了外置心率设备时，读数越过你设的上/下限会弹警告，并出现在系统通知栏。警告里给两条路：
+**拨打紧急电话**（号码可改，默认 120）与**向附近台站求助**（取 100 公里内最近的 5 个台站
+各发一条消息，正文简到 `SOS HR=… 坐标`，避免撞上 67 字符上限）。
+
+两条刻意的约束：**它只提醒，不代替你行动** —— 拨号与发求助都必须你亲手按；
+**读数过期时不报警**。误报的代价是不对称的：静默不动只是错过一次提醒，
+而自动发出去的 SOS 会让一群人真的出动。
+
+阈值、号码、开关都在**设置 → 设备 → 心率**。
+
+### 🛰 新：外置 GPS 优先时手机 GPS 待机
+
+外置 GPS（佳明 LiveTrack）在推数据时，停掉手机定位以省电；外置失效时自动切回手机 GPS，
+并在状态栏、日志与通知里**明说现在是谁在供位**（写清「外置 GPS 已失效」，
+而不是让用户看到位置突然换了一批点却不知道发生了什么）。
+关掉它也不会让位置变错 —— 位置优先级本来就是「外置优先」。
+
+### 🔄 修与改：公告、网络定位符号、未连接提示、赞助入口
+
+- **公告更新后横幅会重新出现**。以前关掉横幅 = 关掉一个开关，将来真出了新公告也永远
+  看不到；现在「关掉的是哪一条」也记着（公告正文指纹），内容变了就重新显示一次。
+- **纯网络定位可以单独选台站图标**：网络点可能偏几百米到几公里，换个图标让旁人一眼
+  看出「这是网络标的位」。默认跟随「我的符号」。
+- **2.0 主页的未连接提示会说清缺什么**：服务器地址或验证码没填时直接写出来 ——
+  这种情况点多少次「连接」都不会成功，只写「未连接」等于让用户白查设置。
+- **赞助与鸣谢入口挪到设置页「关于」上方**，并带上说明（以前藏在关于页第二屏）。
+
+### 🔧 修：更新页三处
+
+- 渠道文案跟着当前渠道走（默认已是 GitHub，而这里一直写死「GitCode」）。
+- **长更新日志默认折叠**（只露前 8 行，可展开）：几十行整段铺开会把「立即下载」挤出屏幕。
+- **下载完成后按钮变成「安装 / 运行安装程序」**，而不是消失让用户去下面找入口。
+
+### 🔧 修：浮动面板与退出动画（上一版的追加反馈）
+
+- **三大金刚键压住浮动面板**：面板可用高度与底部胶囊的位置改用「系统 UI 内边距」
+  （取 `padding` 与 `viewPadding` 的较大值，但键盘弹出时只用前者），
+  某些只报 `viewPadding` 的 ROM 上以前会算成 0。
+- **退出设置子页「没有动画、一片纯色然后消失」**：上一版给转场加的那份「底」画在了
+  动画之外，整段退出期间都把底下的地图盖着。现在它画在**页面自己的子树里**，
+  跟着页面一起动 —— 退出时地图是被逐渐露出的，退回动画也就回来了。
+  （对应的静态检查器也重写了断言，并用回归样本验证过会报红。）
+
+## [2.0.7] - 2026-09-28 (English)
+
+### 🐛 Fix: dragging the immersive map jumped to Beijing
+
+The immersive navigation page derives its viewport from your live position. That follow-mode offset was never handed over to manual mode, so the instant you dragged, the map pitched to the projection's base point (Beijing — hence "drag and it jumps to Beijing"). Dragging now picks up the current viewport first, and the map's rotation is handled too: with the heading pointing up, a screen-space drag has to be converted back into canvas space, otherwise it goes off at an angle.
+
+### 📊 New: the beacon status bar can be switched to "Detailed"
+
+Detailed mode adds a line showing what will actually trigger the next report: the active tier (smart tier by speed range / fixed interval / network-only interval), the seconds left, how many metres the distance trigger still needs, and how many degrees the turn trigger still needs. The turn trigger's two gates are spelled out as well — it is ignored below 5 km/h and within 20 s of the last report, and hiding that makes the feature look broken. Only that one line refreshes each second; the panel and the map are not rebuilt with it. Switch back to "Classic" under **Station settings → Beacon**.
+
+### 🆘 New: heart-rate alarm
+
+With an external heart-rate device connected, a reading outside your upper/lower limits raises a warning dialog and a notification. It offers two paths: **call emergency services** (number configurable, 120 by default) and **ask nearby stations** (the 5 closest within 100 km, each getting a short `SOS HR=… position` message to stay under the 67-character limit).
+
+Two deliberate constraints: it only warns — **it never acts for you**, since calling and asking for help both require your own tap; and it never fires on a stale reading. The cost of a false alarm is asymmetric: staying silent merely misses one reminder, while an automatically transmitted SOS sends people out. Thresholds, number and the switch live in **Settings → Devices → Heart rate**.
+
+### 🛰 New: idle the phone GPS while an external GPS is feeding data
+
+While an external GPS (Garmin LiveTrack) is supplying position, the phone location is stopped to save power; when it goes stale the phone GPS takes over and the status line, log and notification **say so explicitly** ("external GPS lost") instead of the position quietly changing source. Turning this off cannot make the position wrong — the external source is already preferred.
+
+### 🔄 Fixes and changes: notice banner, network symbol, connection hint, sponsors
+
+- **The notice banner comes back when the notice changes.** Dismissing it used to just turn off a switch, so a future notice would never be seen. The banner now also remembers *which* notice was dismissed (a fingerprint of the body) and reappears once the content changes.
+- **A separate station icon for network-only positioning**: network fixes can be off by hundreds of metres to kilometres, and a distinct icon makes that obvious to others. Defaults to following your own symbol.
+- **The 2.0 home connection banner now says what is missing** (server address or passcode) instead of only repeating "not connected" — in that state tapping connect can never succeed.
+- **The sponsors entry moved above "About"** in Settings, with a description (it used to be buried on the second screen of the About page).
+
+### 🔧 Fixes on the update page
+
+- The channel text follows the current channel (GitHub is the default now, but the line still said "GitCode").
+- **Long release notes are collapsed by default** (first 8 lines, expandable): dozens of lines push the download button off screen.
+- **After downloading, the button becomes "Install / Run installer"** instead of disappearing and sending you hunting for the entry below.
+
+### 🔧 Fixes: floating panels and the exit animation (follow-up feedback)
+
+- **The navigation bar covered floating panels.** Panel height and the bottom pill now use the system-UI inset, taking the larger of `padding` and `viewPadding` (falling back to `padding` while the keyboard is up) — some ROMs only report `viewPadding`, where this used to compute as 0.
+- **Leaving a settings sub-page showed "no animation, just a flat colour, then gone".** The backdrop added in the last version was painted outside the animation, covering the map for the whole exit. It now lives inside the page's own subtree and moves with the page, so the map underneath is progressively revealed. (The static checker for that backdrop was rewritten too, and verified against regression samples.)
+
+## [2.0.6] - 2026-09-28
+
+### 📈 新：历史轨迹折线图 + 心率记录
+
+**一、轨迹点开始记心率。** 来源与信标备注里的 `HR=` 完全一致（蓝牙心率带 / 佳明 LiveTrack）。
+只记「有读数」的时刻 —— 没有读数就不记，而不是记 0（记 0 会在图上画出一条扑到地上的线，
+也会把平均心率算错）。
+
+**二、历史轨迹详情页新增折线图面板**，三条曲线：**心率 / 速度 / 里程**。
+可以逐条开关，也可以整块隐藏（隐藏后控制条上留一个按钮，随时再打开）。
+播放时有一条竖直指示线对着当前位置，心率那一栏还会显示当天的最低–最高值。
+
+关于性能：一天最多 4 万个点，每帧重画三条 4 万点的折线会明显掉帧。所以曲线在进页时
+**一次性分桶**到 240 个点（心率取桶内**有读数点**的平均、速度取最大值、里程取最后一个点的累计值），
+播放期间每帧只画 240 个点。心率没有读数的时段曲线会**断开**，不会连成直线骗人。
+
+### 🎧 新：Windows 可选音频设备与发射串口
+
+**一、音频页可以选择播放设备与采集设备。** 此前 Windows 只能用系统默认设备；现在可以选具体声卡，
+直接决定接到电台的是哪一路信号。选完提示「重新连接音频链路后生效」。
+（Android / iOS 不显示这个选择器 —— 音频路由由系统决定，摆一个假开关只会误导人。）
+
+**二、TNC 设备页可以选择「发射串口」。** 默认仍与接收共用一个口；分成两个口可以避开
+Windows 上同一个 COM 口开读、写两个句柄互相打架的问题（也可以实现「一个口收、一个口发」的接法）。
+
+### 🐛 修：一轮用户反馈（#12 / #13 / #15 / #16 / #18 / #19）
+
+**一、#19 电台身份卡片里的「更多附加」设过就删不掉。** 海拔 / 功率 / 天线高度 / 增益这四项
+留空时的语义是「不发送」，而保存时只是**跳过写入** —— 上一次的值永久留在本地，重启又被读回来。
+现在留空会真的把该项清掉。
+
+**二、#18 自定义状态被心跳包顶掉。** 链路保活帧（每 15 秒一帧的 `APRSlocus CONNECT v…`）会把
+aprs.fi 上的「台站状态」改写成内置文本，于是用户自己填的状态每 15 秒被覆盖一次。
+现在填了自定义状态就紧跟着**补发一帧**（不走会弹提示的那条路径，避免每 15 秒打扰一次）。
+
+**三、#12 三大金刚键压住页面底部的按钮。** Android 15 起强制 edge-to-edge，窗口不再自动让出
+导航栏的高度，设置子页与检查更新页最底下那个按钮会被导航栏盖住、点不到。
+现在滚动内容底部额外让出导航栏高度（非 edge-to-edge 的系统上该值为 0，不会多留白）。
+
+**四、#16 设置详情页面板的展开/收起会闪一下、或者突然填充。** 原因是只有外框在做动画，
+内容本身是瞬间出现、瞬间消失的。现在高度与透明度**一起**动，裁切也不再溢出卡片。
+
+**五、#13 下载完成后「立即下载」按钮还在。** 「已下载」的判断拿文件名里的版本号（`2.0.5`）
+去比 API 给的 tag（`v2.0.5`），永远不相等。现在比较时忽略 `v` 前缀，已下过最新版就不再显示那个按钮
+（下面那张「已下载」卡片里本来就有安装 / 重新下载 / 删除）。
+
+**六、#15 更新渠道默认改为 GitHub**（仍可在更新页一键切回镜像）。
+
+## [2.0.6] - 2026-09-28 (English)
+
+### 📈 New: history charts and heart-rate logging
+
+The history track detail page now has a chart panel with three series — **heart rate / speed / distance**. Each series can be toggled, and the whole panel can be hidden (a button on the control bar brings it back). A vertical cursor tracks the playback position, and the heart-rate row shows the day's min–max.
+
+Track points now record heart rate, from exactly the same source as `HR=` in the beacon comment (BLE chest strap or Garmin LiveTrack). Only readings that actually exist are stored — a missing reading is stored as absent, not as 0 (0 would draw a line pinned to the floor and skew the average).
+
+On performance: a day can hold 40,000 points, and redrawing three 40k-point polylines every frame visibly drops frames. So the curves are bucketed **once** when the page opens, down to 240 points (heart rate = mean of the readings in the bucket, speed = maximum, distance = last cumulative value). Heart-rate gaps are drawn as **breaks**, not interpolated lines. A day with no heart-rate data at all simply doesn't show that row.
+
+### 🎧 New: selectable audio devices and a TX serial port on Windows
+
+- The audio page now lets you pick the **playback and capture device**, instead of being stuck with the system default. This decides which sound card actually feeds the radio. Android/iOS don't show the picker — audio routing there is the OS's job, and a fake switch would only mislead.
+- The TNC device page now lets you pick a **separate TX serial port**. The default is still one port for both directions; splitting them avoids two handles fighting over the same COM port on Windows (and supports the "one port in, one port out" wiring).
+
+### 🐛 Fixes (GitHub issues #12, #13, #15, #16, #18, #19)
+
+- **#19 — "Advanced" extras could not be cleared.** Altitude override, power, antenna height and gain all mean "don't send" when empty, but saving only *skipped* the write, so the previous value stayed on disk and came back after a restart. Clearing a field now removes the stored key.
+- **#18 — a custom status was overwritten by the keep-alive frame.** The 15-second keep-alive (`APRSlocus CONNECT v…`) rewrites the station status shown on aprs.fi, so a user's own status lasted at most 15 seconds. A custom status is now re-sent right after the keep-alive frame (through a path that doesn't touch connection state or spam notifications).
+- **#12 — the navigation bar covered buttons at the bottom of a page.** Android 15 forces edge-to-edge, so the window no longer reserves space for the navigation bar, and the last button on settings sub-pages and the update page became unreachable. Scrollable content now adds the navigation-bar inset at the bottom (which is 0 on systems that still reserve it, so nothing is double-padded).
+- **#16 — expand/collapse flashed or snapped.** Only the outer frame was animating while the content appeared and disappeared instantly. Height and opacity now animate together, and the clip no longer overflows the card.
+- **#13 — the download button stayed after the download finished.** The "already downloaded" check compared a version parsed from the file name (`2.0.5`) with the API tag (`v2.0.5`), which can never match. The comparison now ignores the `v` prefix, so the button disappears once the latest version is on disk (the "already downloaded" card already offers install / re-download / delete).
+- **#15 — the update channel now defaults to GitHub** (the mirror is still one tap away on the update page).
+
+## [2.0.5] - 2026-09-27
+
+### 📡 修：PHG 在第三方侧其实没生效（2.0.4 的问题）
+
+**一、2.0.4 的 PHG 读不出来 —— 这一版修好它。**
+
+2.0.4 里填了「功率 / 天线高度 / 增益」之后，报文长这样：
+
+```
+BG7LZQ-2>APALOC,TCPIP*,qAC,T2FZ:!2155.17N/11052.40Eb000/000 PHG2130 /A=000033 Bat:22%
+                                                         ↑ 扩展之间被空格分隔
+```
+
+用参考实现（aprslib）解这条报文，`phg` **完全缺失**、`PHG2130` 被当成普通备注文字 ——
+也就是说第三方地图上看不到覆盖范围，这个功能等于没做。原因是**两个独立的坑**，只修一个都不够：
+
+1. **数据扩展之间不能有空格**。APRS101 把 PHG、`/A=`、CsT 这些定义为**固定长度的数据扩展**，
+   直接拼在符号之后、彼此不用空格分隔。真实台站都长这样：
+   `!3155.21N/12016.69ErPHG1460/A=000071`。一旦在中间插空格，解析器只认得出最前面那一段。
+2. **CsT 与 PHG 争同一个「注释开头」**。解析器（aprslib 的 `parse_data_extentions()`）先匹配
+   `^\d{3}/\d{3}`，**一旦命中就只再看 DF 测向报文，根本不再去找 PHG**。所以哪怕紧贴，
+   只要 `000/000` 排在 PHG 前面，PHG 照样读不出来。
+
+修法：扩展块**整块紧贴**，且**位置让给 PHG** —— 填了 PHG 时 CsT 不再随位置报文发送。
+修好后同一条报文：
+
+```
+BG7LZQ-2>APALOC,TCPIP*,qAC,T2FZ:!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%
+                                    ↑ 坐标+符号 紧贴 PHG，再紧贴 /A=，空格只在扩展块与备注之间
+```
+
+**二、一个要说明的取舍**：同时填了 PHG 的**移动台**，aprs.fi 上就没有速度/方位角了 ——
+两者都要「注释开头」这一个位置，无法共存。PHG 描述的是固定天线安装，与移动台本不是一类台站；
+想让速度/方位角被解析，只能不填 PHG。**没有填 PHG 的台站一切照旧**（已加回归测试钉住）。
+
+**三、顺手把这类问题挡在发版之前**：信标报文的第三方兼容性测试已纳入 CI（Analyze 作业）——
+它编译得过、analyze 也全绿，只有第三方解析器读不出来，所以只能靠测试守住。
+
+> 如果你装了 2.0.4，**建议升级到 2.0.5**：2.0.4 的 PHG 在第三方侧不生效。
+
+- [下载最新版](https://github.com/dariondong/APRSLocus/releases)
+- [查看完整更新日志](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [反馈与建议](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.5] - 2026-09-27 (English)
+
+### 📡 Fix: PHG never actually took effect for third parties (a 2.0.4 bug)
+
+**1 · PHG was unreadable in 2.0.4 — this build fixes it.**
+
+In 2.0.4, once power / antenna height / gain were filled in, the packet looked like this:
+
+```
+BG7LZQ-2>APALOC,TCPIP*,qAC,T2FZ:!2155.17N/11052.40Eb000/000 PHG2130 /A=000033 Bat:22%
+                                                         ↑ the extensions are space-separated
+```
+
+Parsed with the reference implementation (aprslib), `phg` is **missing entirely** and `PHG2130` ends up
+as ordinary comment text — which means third-party maps showed no coverage at all and the feature did
+nothing. The cause was **two independent traps**, and fixing only one is not enough:
+
+1. **Data extensions must not contain spaces.** APRS101 defines PHG, `/A=` and CsT as **fixed-length
+   data extensions**, appended directly after the symbol with no separators between them. Real stations
+   look like `!3155.21N/12016.69ErPHG1460/A=000071`. Insert a space in the middle and a parser only
+   recognises the piece before it.
+2. **CsT and PHG compete for the same "start of comment" slot.** Parsers (aprslib's
+   `parse_data_extentions()`) match `^\d{3}/\d{3}` first and, **once it hits, only look for a DF report
+   and never search for PHG at all**. So even when everything is glued together, PHG is still unreadable
+   if `000/000` comes before it.
+
+The fix: keep the extension block **glued together**, and **give the first slot to PHG** — when PHG is
+present, CsT is no longer sent with the position packet. The same packet afterwards:
+
+```
+BG7LZQ-2>APALOC,TCPIP*,qAC,T2FZ:!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%
+                                    ↑ lat/lon+symbol glued to PHG, then /A=; spaces only between the block and the comment
+```
+
+**2 · One trade-off to be aware of**: a **mobile** station that also fills in PHG will no longer show
+speed/bearing on aprs.fi — both need the single "start of comment" slot and cannot coexist. PHG
+describes a fixed antenna installation, which is not the same kind of station as a mobile one; to have
+speed/bearing parsed, PHG has to be left empty. **Stations that do not fill in PHG are unaffected**
+(a regression test now pins this down).
+
+**3 · Stopping this class of bug before release**: the beacon packet's third-party compatibility test
+now runs in CI (the Analyze job) — the code compiles and analyze is green, and only a third-party parser
+can tell that something is unreadable, so a test is the only guard.
+
+> If you have 2.0.4 installed, **upgrading to 2.0.5 is recommended**: 2.0.4's PHG does not take effect
+> for third parties.
+
+- [Download the latest version](https://github.com/dariondong/APRSLocus/releases)
+- [Full changelog](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [Feedback & suggestions](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.4] - 2026-09-27
+
+### 📡 位置报文数据扩展（高度 / PHG）· 独立状态报文 · 若干修正
+
+本版把此前因**版本号变更**被撤回的那批功能，去掉版本号变更后按正常流程重新合并，正式发布。
+
+**一、位置报文数据扩展（PHG · APRS101 第 9 章）**：电台设置 → 台站备注 →「高级设置」里新增
+功率（瓦）/ 天线高度（英尺）/ 增益（dB）。填任一项即附上固定 7 字节的 `PHGphgd`，留空即不发送。
+量化编码照规范做了两件容易做错的事：功率**只取不超过实际值的最大档**（25 W 报 25、30 W 也只报
+25 —— 报大了等于虚报覆盖范围），天线高度按 10×2ⁿ 英尺取档。设置页把**实际会被编进去的结果回显**
+出来：量化过程用户看不见，不摆出来就无从知道到底发了什么。
+报文里的位置照规范来：`PHGphgd` **紧跟符号**（`!坐标/符号` 之后，排在 `/A=` 海拔与其它备注文字之前），
+与标准报文 `…:!2216.45N/11113.90ErPHG5950` 形状一致 —— 第三方解析器按「注释开头的数据扩展」识别
+PHG，插在后面就读不出来了。
+
+**二、高度（`/A=`）**：新增手填海拔，**留空跟随定位**（默认行为与之前完全一致）。
+定位给的海拔在不少机型上不可用（无气压计、室内、只有网络定位），而台站的实际海拔是用户查得到
+的确定值。设置页显示当前将发出的 `/A=aaaaaa` 片段；发送与回显走**同一个出口**，不会出现
+「显示一个值、发出去的是另一个」。注意「天线高度」是 PHG 里**高于当地平均地面**的高度，
+与这个**海拔**是两个量，不能互相替代。
+
+**三、独立状态报文**：高级设置里可填状态文本，与位置报文共用一个「发射」按钮 ——
+两者哪个有内容就发哪个，状态文本留空时发内置的 `APRSlocus CONNECT vX.Y.Z 平台` 在线帧。
+状态报文是**独立一帧**（`>` 开头、不含坐标、不会移动你在 aprs.fi 上的位置），所以没有定位也能发。
+发送时**一律直接读输入框的当前内容**，不依赖输入事件的时序 —— 中文输入法组合输入时曾出现
+「明明填了，却发出默认帧」。收下来的状态报文（如中继台的 `Powered by …`）现在会落进台站。
+
+**四、台站详情与地图信息窗**：台站详情新增一行**独立状态报文**（紫色 + 播报图标），
+与「位置备注」分开显示 —— 两者来源不同（频点常写在位置备注里、设备来源常写在状态报文里），
+混成一行就分不出哪个是哪个。此前这类文本只进数据包页的原文，台站详情里彻底看不到；
+若台站只有状态包、位置包还没到，则不建台站（没有坐标的台站会被画到 (0,0)，比不显示更糟）。
+地图标记信息窗新增**高度**、**位置备注**、**状态文本**三行，且**按需出现**而不是常驻占位 ——
+绝大多数台站没有这些字段，常驻只会给出两行 `--`，把「没有」和「没收到」显示成同一个样子。
+
+**五、其他修正**：
+
+- **发射按钮会先查链路**：未连接时直接提示「请先连接链路」，不再静默只做本地记录、让人以为信号已发出；
+- **填了 PHG 却没有定位时如实说明**：没坐标不能发位置包，回执会写明「带 PHG 的位置报文没能发出」；
+- **状态报文用自己的连接文案**：此前只发状态帧时，界面却写着「位置已上报」；
+- **地图页「距下次上报」的秒数每秒刷新**：此前只在有台站刷新时才动，没有流量时秒数会停住；
+- **设备页「链路自检」不再出现两遍标题与副标题**；
+- **手机电量开关保持在信标页「信标上报内容」**，默认值不变（上一版曾把它挪进「高级设置」，现已回原位）；
+- 手填的这几项（功率 / 天线高度 / 增益 / 手填海拔 / 状态文本）都会进备份，换机不必重新照电台手打。
+
+**六、致谢**：授予 **BH7GZB「开发人员」** —— 贡献代码：位置报文数据扩展（`/A=` 高度、
+PHG 功率 / 天线高度 / 增益）与独立状态报文（收发、台站详情与地图信息窗显示）。
+关于页「代码贡献」新增这一行，官网三语首页贡献者区与荣誉墙同步。
+
+- [下载最新版](https://github.com/dariondong/APRSLocus/releases)
+- [查看完整更新日志](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [反馈与建议](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.4] - 2026-09-27 (English)
+
+### 📡 Position data extensions (altitude / PHG) · standalone status packets · fixes
+
+This release ships the changes that had been withdrawn because of the **version-number change**:
+with that change removed, they went back through the normal process and are released here.
+
+**1 · Position packet data extension (PHG, APRS101 chapter 9)**: Radio settings → Station comment →
+"Advanced" now takes power (W) / antenna height (ft) / gain (dB). Filling in any one of them appends
+the fixed 7-byte `PHGphgd`; leaving them empty sends nothing. The encoding follows the two rules that
+are easy to get wrong: power uses the **largest step that does not exceed the real value** (25 W
+reports 25, and 30 W still reports 25 — over-reporting claims coverage you do not have), and antenna
+height snaps to 10×2ⁿ feet. The settings page **echoes back what will actually be encoded**, because
+quantisation is invisible and there would otherwise be no way to know what went out. In the packet the
+extension sits where the spec puts it: `PHGphgd` comes **immediately after the symbol** (right after
+`!lat/lon/symbol`, ahead of the `/A=` altitude and any other comment text), matching the standard
+packet `…:!2216.45N/11113.90ErPHG5950` — third-party parsers look for PHG as a data extension at the
+start of the comment, and reading it after other fields fails.
+
+**2 · Altitude (`/A=`)**: a manually entered altitude overrides the fix, and **empty means "follow the
+fix"**, so the default behaviour is exactly as before. The altitude a fix reports is unusable on plenty
+of devices (no barometer, indoors, network-only positioning), while a station's actual altitude is a
+known value the user can look up. The settings page shows the `/A=aaaaaa` fragment that will be sent,
+and sending and the preview share **one source**, so what is displayed is what goes out. Note that the
+antenna height above is the PHG height above **local average terrain** — a different quantity from this
+**altitude**, and the two cannot stand in for each other.
+
+**3 · Standalone status packets**: a status text can be entered in Advanced, sharing one "Transmit"
+button with the position packet — whichever of the two has content is sent, and an empty status text
+sends the built-in `APRSlocus CONNECT vX.Y.Z` online frame. A status packet is a **frame of its own**
+(`>`-prefixed, carrying no coordinates, and it does not move you on aprs.fi), so it can be sent even
+without a fix. Transmitting reads **the current contents of the field directly** instead of relying on
+input-event timing — with an IME composing text the app used to send the default frame even though the
+user had typed something. Received status text (a repeater's `Powered by …`) now lands on the station.
+
+**4 · Station details and the map info window**: station details gained a line for the **standalone
+status packet** (purple, with a megaphone icon), shown separately from the position comment — the two
+come from different packets (frequencies usually live in the position comment, device provenance in the
+status packet), and merging them makes it impossible to tell which is which. That text used to appear
+only in the raw packet console and never on the station; and if only a status packet has arrived for a
+station whose position packet has not, no station is created (a station without coordinates would be
+drawn at (0,0), which is worse than not showing it). The map marker info window gained **altitude**,
+**position comment** and **status text** lines, each appearing **only when present** rather than as a
+permanent placeholder — few stations carry these fields, and placeholders would print two rows of `--`,
+making "absent" and "not received" look identical.
+
+**5 · Fixes in this build**:
+
+- **The Transmit button checks the link first**: with no link it says "connect the link first" instead
+  of silently recording locally and letting you think a signal went out;
+- **PHG without a fix is reported honestly**: no coordinates means no position packet, and the receipt
+  now says the position packet with PHG was not sent;
+- **Status packets use their own connection text**: previously the banner claimed "position beacon
+  sent" when only a status frame had gone out;
+- **The map page's "next report in …" countdown ticks every second**: it used to move only when a
+  station update arrived, so it froze whenever there was no traffic;
+- **The device page's link self-test no longer shows its title and subtitle twice**;
+- **The phone-battery switch stays on the beacon page** ("Beacon contents") with unchanged defaults
+  (the previous build moved it into Advanced; it is back where it was);
+- The manually entered values (power / antenna height / gain / altitude override / status text) are
+  included in backups, so a new device does not mean retyping them from the radio.
+
+**6 · Credits**: **BH7GZB** is awarded the **Developer** badge for contributing the position-packet
+data extensions (the `/A=` altitude and the PHG power / antenna height / gain fields) and standalone
+status packets (receiving, sending, and showing them on station details and the map info window). The
+About page gains a matching line under "Code contributions", and the website's contributor section (all
+three languages) and honor wall are updated too.
+
+- [Download the latest version](https://github.com/dariondong/APRSLocus/releases)
+- [Full changelog](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [Feedback & suggestions](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.2] - 2026-09-26
+
+### 🗺️ 百度图源 · 纯网络定位 · 公告内嵌视频
+
+**一、地图 · 新增百度图源**：加入「百度地图 / 百度卫星」。
+百度不是 Web Mercator —— 它用 BD-09 坐标 + 自有多项式投影，且瓦片 y 轴朝北、
+每级瓦片数不是 2^z。为此引入「按图源切换投影」：渲染、标记 / 轨迹、沉浸地图、
+跟踪、历史回放、离线下载全部走同一套投影，标记与瓦片不再错开。
+
+**二、定位 · 新增「纯网络」模式**：只用基站 / Wi-Fi（不注册 GPS），
+适合没有 GPS 的设备，也用于极端省电。该模式下自动上报视为用户显式选择：
+不必再开「强制接受网络定位自动上报」，并使用**专用固定间隔**（默认 300 秒、
+可调）—— 网络没有可靠速度，智能信标的按速度 / 距离 / 转弯都不适用。
+其余粗定位行为不变：GPS + 网络 的兜底点仍不写轨迹、默认不自动上报。
+
+**三、公告**：应用内公告改为手写 Markdown（简中 / 繁中 / 英文），
+新增 `@video` 内嵌视频（Android / iOS / macOS 内嵌播放；Windows / Linux / Web
+回退为「在浏览器打开」）。旧版本读到 `@video` 那行只会当普通文字（仍是可点链接）。
+
+**四、更新提醒**：启动后检查一次新版本，有新版弹提醒（每版本只提醒一次、可稍后）。
+
+**五、修复**：
+- 修 2.0.1 地图信息窗仍显示「点击查看」—— 之前只改了生成的 l10n 产物、漏改 ARB 源，构建时被覆盖；现已改到位（六语言）。
+- Windows 构建：移除与当前工具链不兼容的 webview_windows，Windows 走外部浏览器打开。
+
+- [下载最新版](https://github.com/dariondong/APRSLocus/releases)
+- [查看完整更新日志](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [反馈与建议](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.2] - 2026-09-26 (English)
+
+### 🗺️ Baidu map sources · network-only positioning · embedded video in notices
+
+**1 · Map · new Baidu sources**: "Baidu Map" and "Baidu Satellite" are now available.
+Baidu is not Web Mercator — it uses BD-09 coordinates plus its own polynomial
+projection, its tile y-axis points north, and the tile count per level is not 2^z.
+So a per-source projection was introduced: rendering, markers / tracks, the immersive
+map, the tracker, track replay and offline downloads all use the same projection, and
+markers no longer drift against the tiles.
+
+**2 · Location · new "Network only" mode**: cell / Wi-Fi only (GPS is not registered);
+for devices without GPS and for extreme battery saving. In this mode auto-beaconing is
+treated as the user's explicit choice — there is no need to enable "force auto-beacon on
+coarse fixes" — and it uses a **dedicated fixed interval** (default 300 s, configurable).
+Network fixes have no reliable speed, so smart beaconing (speed / distance / turn) does
+not apply. Other coarse-fix behaviour is unchanged: GPS + Network fallback fixes are
+still never written to the track and do not auto-beacon by default.
+
+**3 · Notices**: the in-app notice is now hand-written Markdown (Simplified Chinese /
+Traditional Chinese / English) with an `@video` embed (in-app playback on Android /
+iOS / macOS; Windows / Linux / Web fall back to "open in browser"). Older app versions
+simply show that line as plain text (still a clickable link).
+
+**4 · Update reminder**: on launch the app checks once for a new version and shows a
+reminder dialog when one exists (once per version, dismissible).
+
+**5 · Fixes**:
+- The map info window no longer shows "Tap to view" (2.0.1 had only changed the
+  generated l10n output and missed the ARB source, so the build reverted it); fixed in
+  all six languages.
+- Windows build: removed the webview_windows plugin, which is incompatible with the
+  current toolchain; Windows opens such links in the external browser.
+
+- [Download the latest version](https://github.com/dariondong/APRSLocus/releases)
+- [Full changelog](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [Feedback & suggestions](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.1] - 2026-09-26
+
+### 🔧 iOS 原生能力补齐 · 信标里程 · 交互打磨
+
+**一、iOS 原生能力**：补上运动传感器（CoreMotion）—— 加速度计判断「真的在动」、指南针补正低速航向；
+蓝牙心率带（CoreBluetooth，标准心率服务 0x180D，自动写 CCCD）与电量读取（UIDevice）；
+声卡 TNC 的实时音频（AVAudioEngine，AFSK 采集 / 播放，发射时半双工暂停采集）。
+心率 / 传感器 / 音频因此在 iOS 上真正可用。TNC / PKWDWPL 由于 iOS 不向第三方开放
+经典蓝牙 SPP / USB 串口（仅 MFi 配件），保持置灰并给出原因，可改用 APRS-IS。
+
+**二、信标与里程**：信标备注可选附带**本次里程**（`TRV:`，信标本次开启起）与
+**累计总里程**（`ODO:`，跨重启累计、进备份），两个独立开关默认关。
+
+**三、消息页**：修「单聊会话头部呼号被压窄、提前省略号」—— 原为 Flexible + Spacer 各分走一半宽度；
+会话列表呼号改单行省略。
+
+**四、地图**：台站信息窗提示由「点击查看」改为「双击信标查看更多」（六语言）。
+
+**五、更新页**：主「立即下载」按钮上移到顶部版本卡（不用再滚到底部找）；
+去掉顶部会被误当成下载按钮的向下箭头；新增扫光与线性进度动画。
+
+**六、数据页**：新增「清除台站列表」独立选项 —— 只清收到的台站及其轨迹，
+不动消息 / 日志 / 数据包，也不动「我的轨迹」。
+
+- [下载最新版](https://github.com/dariondong/APRSLocus/releases)
+- [查看完整更新日志](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [反馈与建议](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.1] - 2026-09-26 (English)
+
+### 🔧 iOS native features · beacon mileage · interaction polish
+
+**1 · iOS native features**: motion sensors (CoreMotion — accelerometer for "really moving", compass for
+low-speed heading), Bluetooth heart-rate strap (CoreBluetooth, standard Heart Rate Service 0x180D with
+an automatic CCCD write) and battery level (UIDevice), and real-time sound-card audio (AVAudioEngine,
+AFSK capture/playback with a half-duplex pause while transmitting). Heart rate / sensors / audio are now
+actually usable on iOS. TNC / PKWDWPL stay greyed out with an explanation because iOS does not expose
+classic Bluetooth SPP / USB serial to third-party apps (MFi only); use APRS-IS instead.
+
+**2 · Beacon & mileage**: the beacon comment can optionally carry **trip distance** (`TRV:`, since the
+beacon was turned on this time) and **cumulative total distance** (`ODO:`, persisted across restarts and
+included in backups) — two independent switches, off by default.
+
+**3 · Messages**: fixed the single-chat header callsign being squeezed and ellipsized early (it used
+Flexible + Spacer, which split the free space in half); the conversation-list callsign now truncates on
+a single line.
+
+**4 · Map**: the station info window hint changed from "Tap to view" to "Double-tap beacon for more"
+(6 languages).
+
+**5 · Update page**: the primary "Download now" button moved up into the top version card (no more
+scrolling to the bottom to find it); the top arrow icon that looked like a download button is gone;
+added a sheen sweep and linear progress animations.
+
+**6 · Data page**: a separate "Clear station list" option — clears only the received stations and their
+tracks, leaving messages / logs / packets and your own track untouched.
+
+- [Download the latest version](https://github.com/dariondong/APRSLocus/releases)
+- [Full changelog](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [Feedback & suggestions](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.0] - 2026-09-25
+
+### 🚀 TOUCH SKY · 2.0 正式版：从纯网络到射频，从「看见」到「抵达」
+
+**1.5.8 → 2.0，322 次更新。** 逐版细节在下方 v1.6.x 各条目里（v1.5.8 之后一路到
+v1.6.177）；这里给出这一整段的总览 —— 也就是 2.0 这一路的全部脚印。
+
+**一、界面 · 全新 UI 2.0**：以地图为基底的布局 —— 地图常驻整屏、其余内容装进可拖拽面板，
+显示设置里可切回 1.0；底部悬浮胶囊导航（滑动指示胶囊）＋右上悬浮胶囊（天气 / 连接 / 定位）；
+把手加大到 44px 且整页可拖；横屏在手机 / 平板 / 桌面三端统一为左栏 + 地图；
+去掉顶部搜索框、返回键回到地图、补回天气与一键连接；16 个页面新增「首次进入小提示卡」。
+
+**二、材质与主题**：新增磨砂玻璃（Acrylic）与云母（Mica）材质，另有「满血磨砂」档；
+主题的颜色 / 图标 / 文字可自定义，支持背景图与导出 JSON（可带图）；
+更多令牌、界面松紧与字体、分页签强调色；备份与恢复把设置与数据导出成一个 JSON。
+
+**三、地图 · 沉浸地图**：多图源（高德 / 卫星 / 矢量免 Key / Carto / OSM / OpenTopo / Esri）；
+新增沉浸地图页（导航风格，左侧附近台站）；台站筛选可应用到地图；离线地图按区域下载；
+去掉聚合；历史轨迹回放（点进某天，动画重播）。
+
+**四、台站与识别**：接入 aprs.org 官方设备库，自动识别厂商 / 型号 / 类别；
+内置 37 个符号表、3571 个标准图标；台站操作菜单（收藏 / 复制呼号 / 删除）与 APRS.tv 查询；
+APRSlocus 平台识别（不再一律归为手机 App）；
+打点算法重做（旧帧、重复帧、错包与模糊位置都不再骗人）。
+
+**五、消息与翻译**：单聊群聊统一会话 + ACK 确认；群聊重构（建群 / 邀请 / 成员 / 离开，no-ack 广播）；
+聊天翻译接口从 4 家扩到 7 家，默认自动、默认走免费免密钥接口；
+支持双向翻译、对照显示、发送前翻译、语言自动识别与记忆。
+
+**六、连接与射频**：新增蓝牙 TNC（完整 KISS，真正修好「能收不能发」）与
+音频声卡 TNC（AFSK 1200，手机 + 一根音频线即 TNC）；新增 PKWDWPL（Kenwood 航点，只收不发）与网关（iGate）；
+多数据来源可同时接收、发射来源单独指定；配套链路自检；
+修「TNC 与 PKWDWPL 同设备瓜分数据」与「音频发射对方解不出」。
+
+**七、定位与信标**：iOS 原生定位、macOS 改原生定位；网络粗定位不再自动上报；自身定位静止防抖；
+智能信标支持「按转弯」（先分清真拐弯与 GPS 抖动）与「按距离」打点；
+轨迹采样细化并标出信标点；轨迹与数据包上限可配置。
+
+**八、天气 · 传播 · 建议**：天气面板（实时 + 高低温 + 体感 + 湿度 / 气压 / 露点 / 风向 / 能见度 / 云量）；
+业余无线电建议按「安全警示 > 注意 > 通联机会 > 操作提示」分级，含灰线、雨衰、结冰驻波、大气波导等结论；
+短波 / 电离层传播逐波段日 / 夜条件，6m 单独预测。
+
+**九、桌面小组件（Android）**：天气 + 业余无线电提示（4 档尺寸自适应）、短波传播组件、系统状态组件；
+真实图标与图形 logo；支持缩放与暗黑模式；新增设计预览工具。
+
+**十、数据 · 导出 · 备份**：ADIF 导出（频率可自定义、导出选项可选）；修导出路径与文件名；
+数据包控制台（原始 / 解析、手动注入、分类筛选）；新增台站面板内的统计视图。
+
+**十一、设备集成**：佳明 App 分享短链（gar.mn）与 LiveTrack；蓝牙心率带（BLE 0x180D）心率随信标上报；
+设备页新增「其他数据来源」。
+
+**十二、多语言与本地化**：界面语言增至 6 种（简体 / 繁體 / English / 日本語 / Indonesia / Español）；
+多批中文硬编码清理；荣誉墙与赞助名单多语言化。
+
+**十三、社区 · 荣誉 · 公告**：荣誉墙展示每枚徽章的获得条件，含「开发人员」「FIRST FIX · 至高荣誉」「早期成员」；
+赞助墙补齐遗漏；应用内公告横幅取自官网 Markdown。
+
+**十四、平台 · 性能 · 稳定**：iOS / macOS / 桌面三端支持与横屏打磨；
+修「越用越卡」的 APRS-IS 重建 + socket 泄漏；磨砂玻璃与动态背景性能优化；大量回归测试与静态检查。
+
+以及数不清的修复：关于页卡片贴住下个板块、底图切换面板弹不出来、图层面板点了没反应、
+会话输入框藏底下、「在地图查看」不回地图、天气面板点空白关不掉……
+它们共同构成了从 1.5.8 到 2.0 的 322 次更新。
+
+> FIRST FIX 是起点，TOUCH SKY 是致意。2.0，是下一次出发。
+> 天空很大，我们继续同行。
+
+> 电波无限，感谢同行！73！
+> APRSLocus 开发团队
+> 2026 年 9 月 25 日
+
+- [下载最新版](https://github.com/dariondong/APRSLocus/releases)
+- [查看完整更新日志](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [反馈与建议](https://github.com/dariondong/APRSLocus/issues)
+
+## [2.0.0] - 2026-09-25 (English)
+
+### 🚀 TOUCH SKY · 2.0 — from network-only to radio, from "seeing" to "reaching"
+
+**1.5.8 → 2.0, 322 updates.** The release-by-release detail lives in the v1.6.x entries
+below (everything after v1.5.8 through v1.6.177); this entry is the overview of that whole
+stretch — every step of the 2.0 journey.
+
+**1 · UI 2.0**: a map-first layout — the map stays full-screen and everything else lives in
+a draggable sheet, switchable back to 1.0 in Display settings; a floating bottom capsule nav
+(sliding indicator) plus a top-right capsule (weather / connection / locate); a 44px grab
+handle with full-page dragging; landscape unified across phone / tablet / desktop as a left
+rail + map; the top search bar removed, back returns to the map, weather and one-tap connect
+restored; 16 pages get a first-visit tip card.
+
+**2 · Materials & themes**: new frosted glass (Acrylic) and mica materials plus a "full glass"
+tier; theme colors / icons / text are editable, with background images and JSON export
+(images included); more tokens, density and font controls, per-tab accents; backup & restore
+exports settings and data as one JSON.
+
+**3 · Map & immersive map**: many sources (AMap / satellite / vector without an API key /
+Carto / OSM / OpenTopo / Esri); a new immersive map page (navigation style, nearby stations on
+the left); station filters apply to the map; offline map downloads by region; clustering
+removed; track replay (tap a day to replay it).
+
+**4 · Stations & identification**: the aprs.org device database identifies vendor / model /
+class; 37 symbol tables and 3571 icons built in; a station action menu (favorite / copy
+callsign / delete) and APRS.tv lookup; APRSlocus platform identification (no longer just
+"a phone app"); a rebuilt plotting algorithm so stale, duplicate, bad and fuzzy positions no
+longer fool you.
+
+**5 · Messaging & translation**: a unified chat and group list with ACK; group-chat refactor
+(create / invite / members / leave, no-ack broadcast); translation providers grew from 4 to 7,
+defaulting to auto and to a free keyless endpoint; two-way translation, side-by-side view,
+translate-before-send, automatic language detection and memory.
+
+**6 · Links & RF**: new Bluetooth TNC (full KISS — the real fix for "receives but will not
+transmit") and sound-card TNC (AFSK 1200 — a phone plus one audio cable); new PKWDWPL (Kenwood
+waypoints, receive-only) and iGate; several sources can receive at once with the transmit
+source picked separately; a built-in link self-test; fixes for "TNC and PKWDWPL splitting one
+device" and "on-air audio not decodable".
+
+**7 · Positioning & beaconing**: native iOS and macOS location; coarse network fixes no longer
+auto-beacon; stationary debounce for your own GPS; smart beaconing by turn (telling a real turn
+from a GPS glitch) and by distance; finer track sampling with beacon dots; configurable track
+and packet caps.
+
+**8 · Weather · propagation · advice**: a weather panel (now + high/low + feels-like + humidity /
+pressure / dew point / wind / visibility / cloud); ham advice ranked safety > caution >
+opportunity > tip, covering the gray line, rain fade, icing SWR and ducting; HF/ionospheric
+propagation with day/night per band and a separate 6m forecast.
+
+**9 · Home-screen widgets (Android)**: weather + ham tips (4 adaptive sizes), an HF propagation
+widget and a system-status widget; real icons and a graphic logo; scaling and dark mode; a
+design preview tool.
+
+**10 · Data · export · backup**: ADIF export (custom frequency, selectable options); export path
+and filename fixes; a packet console (raw / parsed, manual inject, type filters); a stats view
+inside the station panel.
+
+**11 · Device integrations**: Garmin app share links (gar.mn) and LiveTrack; BLE heart-rate
+straps (0x180D) with HR carried in the beacon; an "other data sources" entry on the device page.
+
+**12 · Languages & localization**: six UI languages (Simplified / Traditional Chinese / English /
+Japanese / Indonesian / Spanish); multiple rounds of hard-coded Chinese cleanup; the honor wall
+and sponsors localized.
+
+**13 · Community · honors · announcements**: the honor wall shows how to earn each badge,
+including "Developer", "FIRST FIX · highest honor" and "early member"; the sponsors list filled
+in; the in-app announcement banner comes straight from the website's Markdown.
+
+**14 · Platforms · performance · stability**: iOS / macOS / desktop support and landscape polish;
+a fix for the "slower the longer it runs" APRS-IS rebuild + socket leak; frosted-glass and
+dynamic-background performance; plenty of regression tests and static checks.
+
+Plus countless fixes: the About card spacing, the base-map panel not opening, the layer panel
+not responding, the chat input hidden below, "view on map" not returning, the weather panel not
+closing on an outside click… Together they make the 322 updates from 1.5.8 to 2.0.
+
+> FIRST FIX is where we started; TOUCH SKY is a salute. 2.0 is the next departure.
+> The sky is vast — let's keep going together.
+
+> Radio waves never end — thanks for traveling with us! 73!
+> The APRSLocus Team
+> September 25, 2026
+
+- [Download latest](https://github.com/dariondong/APRSLocus/releases)
+- [View full changelog](https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md)
+- [Feedback & Suggestions](https://github.com/dariondong/APRSLocus/issues)
+
+## [1.6.177] - 2026-09-25
+
+### 📡 信标上报页新增「强制接受网络定位自动上报」（默认关）
+
+用户要求：**在信标上报页面留一个按钮，可开启强制接受网络定位自动上报**。
+
+这条需求动到的是一条**既有约定**：v1.6.163 起粗定位（网络 / 基站 / 被动）
+**不自动上报** —— 粗点常偏几百米、还会原地漂，自动发出去等于向全网宣告一个错坐标，
+收端看到的是一条乱跳的轨迹。当时的理由是充分的，但它漏了一类用户：
+**手里这台设备根本没有 GPS**（平板、只有网络定位的机器、长期室内）。
+对他们来说可选的位置只剩网络定位，一律不发等于「自动上报」这个功能整个不存在，
+而界面上只写着「网络定位中 · 暂不自动上报」—— 他们没有任何办法把它打开。
+
+现在信标上报页多了一个开关（默认关，位置就在那条「为什么没在报」的提示旁边）：
+
+* **默认行为一个字没变**：关着时粗定位仍然不自动上报（老约定继续生效）；
+* 打开后粗定位也会自动发射 —— 开关旁边常驻一句取舍说明（粗点偏差、
+  什么场景才该开、以及**手动「立即上报」不受它影响**）；
+* 打开且当前确实是粗点时，状态不再是普通的绿色倒计时，而是**单独一档**
+  （`BeaconPhase.coarseForced`）：横杠、沉浸页、「我的位置」面板、设置页
+  四处都显示「网络定位（粗）」—— 否则界面与 GPS 正常时一模一样，
+  用户看不出「现在发出去的是个偏几百米的坐标」。
+
+**关键取舍：这个开关只放开「自动上报」这一道闸**，位置质量闸一道都没动
+（GPS 新鲜度、跳变上限、静止防抖滑窗、轨迹与历史台账、APRS-IS 过滤中心仍然把粗点
+当噪声，粗点也仍然不许覆盖佳明给的位置）。也就是说它**不会**让地图与轨迹重新
+「飞来飞去」—— 那正是 v1.6.163 修掉的东西。
+
+落盘与备份都补上了（丢了它，换机后自动上报会静默变回「一直不报」，
+而用户很可能正是因为设备没有 GPS 才需要它）。
+
+**顺带抓出并修掉一个已经躺了很久的 l10n 产物缺陷**：新加的 l10n 形态检查（第 6 条）
+第一次跑就报出 `beaconGarminNext` / `positionBeaconDetail` / `beaconAttachedHr` /
+`hrLineHr` / `posSourceUsing` 五个带占位符的键，在**每一个语言类**里都存在**两份**：
+gen-l10n 生成的那份是对的（`String x(String s) => "... $s"`），而被 `add_*_l10n.py`
+追加的那份是 `String get x => "... {s}"` —— 同一个类里两个同名成员，是 Dart 的
+duplicate_definition **编译错误**。它一直没被发现，因为 CI 的 `flutter pub get`
+会按 arb 重新生成产物，把错的版本盖掉；而本机手动改完不重生成就会撞上。
+五个键共 30 处重复成员已清掉（`lib/l10n/app_localizations*.dart`），生成脚本
+`tool/add_l10n_keys.py` 也修成「带占位符就写**带参数的方法**」，并新增
+`check_l10n_sync.py` 第 6 条把这个形态钉住（两个回归样本验过会报红）。
+
+检查器：`tool/check_pos_quality.py` 里「粗点不许自动上报」那两条**改了判据**
+（从「排除粗点」升级成「默认排除粗点，唯一例外是用户显式开关」——守的还是同一件事：
+不许**代码**替用户默认把粗点发出去），另新增 11 条（`coarseForced` 独立成档、
+开关不许顺手放宽三道位置质量闸、开关要落盘 + 进备份、以及**接线**三条：
+页面上真有这个控件 / `onChanged` 真接了 setter / 强制档在页面上真有如实提示）。
+11 个回归样本全部验过会报红。新增行为测试 `test/beacon_coarse_force_test.dart`
+并接进 CI（默认不发 / 打开后真的能发 / 独立成档 / GPS 回来后归位 / 关掉立刻生效）。
+
+## [1.6.177] - 2026-09-25 (English)
+
+### 📡 New switch on the beacon page: "beacon network (coarse) fixes anyway" (off by default)
+
+User request: **put a button on the beacon-reporting page that enables force-accepting
+network location for automatic reports**.
+
+This touches an **existing rule**: since v1.6.163, coarse fixes (network / cell / passive)
+are **not beaconed automatically** - they are often hundreds of metres off and drift in
+place, so beaconing one announces a wrong coordinate to everyone and the receiver sees a
+track that jumps around. That reasoning was sound, but it missed a class of users: **devices
+with no GPS at all** (tablets, network-only machines, long spells indoors). For them the
+only available position is the network one, so "never beacon it" means the auto-beacon
+feature simply does not exist - and the UI just said "Network fix - auto beacon paused",
+with no way to change it.
+
+The beacon page now has a switch for it (off by default, sitting right next to the
+explanation of why nothing is being sent):
+
+* **the default behaviour is unchanged** - with the switch off, coarse fixes are still not
+  beaconed (the old rule still applies);
+* with it on, coarse fixes do get beaconed - and a permanent note next to the switch
+  spells out the trade-off (how far off coarse fixes are, when it is worth enabling, and
+  that manual "beacon now" is unaffected);
+* when the switch is on *and the current fix really is coarse*, the status is no longer an
+  ordinary green countdown but a **separate phase** (`BeaconPhase.coarseForced`): the map
+  bar, immersive page, "my position" panel and settings page all say "network (coarse)"
+  - otherwise the UI looks exactly like a normal GPS beacon and the user cannot tell that
+  what is going out is a coordinate that may be hundreds of metres off.
+
+**The key trade-off: this switch only opens the auto-beacon gate.** Not one position-quality
+gate was touched (GPS freshness, jump limit, stationary smoothing window, own track and
+history log, APRS-IS filter centre all still treat coarse points as noise, and a coarse
+point still may not overwrite a Garmin position). So it does **not** bring back the
+"marker flying around" behaviour - that was what v1.6.163 fixed.
+
+Persistence and backup were updated too (lose the flag and, after switching devices, auto
+beaconing silently reverts to "never" - and the user quite likely needs it precisely
+because their device has no GPS).
+
+**A long-standing l10n product defect was found and fixed on the way**: the new l10n
+shape rule (no. 6) reported on its very first run that five placeholder keys -
+`beaconGarminNext`, `positionBeaconDetail`, `beaconAttachedHr`, `hrLineHr` and
+`posSourceUsing` - exist **twice** in **every language class**: the gen-l10n one is correct
+(`String x(String s) => "... $s"`), while the copy appended by `add_*_l10n.py` is
+`String get x => "... {s}"`. Two members with the same name in one class is Dart's
+duplicate_definition, i.e. a **compile error**. It went unnoticed because CI's
+`flutter pub get` regenerates the products from the arb files and overwrites the bad
+version; only a local build that does *not* regenerate hits it. All 30 duplicate members
+(5 keys x 6 language classes) were removed from `lib/l10n/app_localizations*.dart`, the
+generator `tool/add_l10n_keys.py` now emits a **method with parameters** whenever a key has
+placeholders, and rule 6 in `check_l10n_sync.py` pins that shape down (verified with two
+regression samples).
+
+Checker: the two "coarse points must not be auto-beaconed" rules in
+`tool/check_pos_quality.py` had their **criteria changed** (from "exclude coarse points" to
+"exclude coarse points by default, the only exception being the user's explicit switch" -
+guarding the same thing: the *code* must not decide on the user's behalf to send a coarse
+point out). Eleven more rules were added (`coarseForced` as its own phase, the switch must
+not relax any of the three position-quality gates, the flag must be persisted and backed
+up, plus three **wiring** rules: the control really is on the page / `onChanged` really is
+wired to the setter / the forced phase really produces an honest note there). All 11
+regression samples were verified to go red. A new behaviour test,
+`test/beacon_coarse_force_test.dart`, was added to CI (off by default / really beacons when
+on / separate phase / returns to normal once GPS is back / switching off takes effect
+immediately).
+
+## [1.6.176] - 2026-09-25
+
+### 📐 2.0 横屏重做：借 1.0 的骨架（用户：「2.0 横屏没有 1.0 横屏好看」）
+
+上一版 2.0 横屏是「地图整屏 + 左侧 70px 图标竖条 + 半透明内容面板」。按用户这句话
+复盘，翻出三条**结构**原因（都不是配色问题）：
+
+* **竖条只有 70px、只有图标**：没有 Logo、没有标题、没有「我的位置」，而 1.0 的侧栏
+  （120~232px）三样都有 —— 它单薄得不像导航，像一排临时按钮；
+* **竖条形态会变**：选「地图」时它是一小条**垂直居中飘着**的卡，展开后变通高。
+  导航是「永远在同一个地方」的东西，它却有两个位置；
+* **内容面板半透明、背后就是地图**：文字与瓦片叠在一起发灰发脏，而 1.0 的内容区是
+  实底；顶栏只剩右上角一簇胶囊，屏幕上沿整条空着 —— 没有骨架。
+
+这一版把 1.0 的三样东西借过来，同时**保留 2.0 的身份**（地图仍是铺满整屏的底，
+只是左侧被实底的工作区盖住）：
+
+* 左侧导航 **108 / 232 两档**（矮横屏 / 高窗口），**贴顶通高**，图标与文字**横排**
+  （与 1.0 侧栏同一形态）；高窗口下底部还带「我的位置」面板，而且它与 1.0 的侧栏
+  **共用同一份**（新文件 `lib/my_panel.dart`）—— 不是抄一份；
+* **顶栏横贯一条**：浅底 + 下沿分隔线，左端当前页标题、右端原来那簇胶囊；
+* 竖条与内容面板都是**实底**（与 1.0 的侧栏/顶栏同一个色），瓦片不再从字底下透出来。
+
+地图仍是 `Positioned.fill`：左侧被工作区盖住的部分看不见，但**图幅没有被压缩** ——
+平移/缩放不变形是 2.0 相对 1.0 的实质好处，这一版保住了。
+
+顺带把「同一个东西两处各写一份」的苗头收掉两处：`_navItem` 的两种形态（底部导航竖排 /
+横屏竖条横排）与未读角标都收敛成一份。
+
+检查器：`tool/check_landscape_layout.py` 第 4 条**换了意图** —— 老判据守的是「收起时
+竖条卡收缩得对」（`IntrinsicHeight`），而新设计的要求是「根本不该收缩」（贴顶通高），
+旧判据守的东西整个消失；文件头写清了为什么换，免得下一个人以为检查器不认识
+`IntrinsicHeight` 了、顺手加回去。另新增 6 条（竖条宽度档位 / 品牌行 / 横排导航 /
+共用角标 / 共用「我的位置」面板 / 顶栏横贯含标题与分隔线 / 内容面板实底），
+16 个回归样本全部验过会报红 —— **其中 3 条样本当场抓出我自己刚写的假通过**
+（子串匹配、`or` 短路、扫描窗口被另一个同类调用填满），已逐条修掉。
+
+## [1.6.176] - 2026-09-25 (English)
+
+### 📐 2.0 landscape rebuilt on 1.0's frame ("2.0 landscape doesn't look as good as 1.0")
+
+The previous 2.0 landscape was "full-screen map + a 70px icon rail on the left + a
+translucent content pane". Going back through the complaint turned up three **structural**
+causes - none of them about colour:
+
+* **The rail was 70px wide with icons only**: no logo, no title, no "my position" - while
+  1.0's sidebar (120-232px) has all three. It read as a row of temporary buttons, not as
+  navigation;
+* **The rail had two different shapes**: on the map tab it was a small card floating
+  **vertically centred**, and once expanded it became full height. Navigation is the one
+  thing that should always be in the same place;
+* **The pane was translucent over the map**: text and map tiles layered on top of each
+  other, going grey and muddy, where 1.0's content area is solid; and the top bar was just
+  a cluster of pills in the top-right corner, leaving the whole top edge empty - no frame.
+
+This version borrows 1.0's three pieces while keeping 2.0's identity (the map is still the
+base, filling the screen - the left side is simply covered by a solid workspace):
+
+* the left rail is now **two stops, 108 / 232** (short landscape / tall window), **pinned
+  to the top and full height**, with icon **beside** label (same shape as 1.0's sidebar);
+  tall windows also get the "my position" panel at the bottom - and it is the **same
+  widget** 1.0's sidebar uses (new file `lib/my_panel.dart`), not a copy;
+* **one full-width top bar**: light fill, a hairline along its bottom edge, the current
+  page title on the left and the existing pill cluster on the right;
+* the rail and the pane are both **solid** (the same colour 1.0's sidebar/top bar use), so
+  tiles no longer show through the text.
+
+The map is still `Positioned.fill`: the part under the workspace is hidden, but the **map
+itself is never squeezed** - pan/zoom stay undistorted, which is 2.0's real advantage over
+1.0, and this version keeps it.
+
+Two more "one thing written twice" risks were closed on the way: the nav item's two shapes
+(stacked for the bottom bar, side-by-side for the rail) and the unread badge are now a
+single implementation each.
+
+Checker: rule 4 in `tool/check_landscape_layout.py` had its **intent changed** - the old
+rule guarded "the collapsed rail card shrinks correctly" (`IntrinsicHeight`), but the new
+design requires that it never shrinks at all (pinned, full height), so what the old rule
+guarded no longer exists. The file header records why, so the next person doesn't just see
+"the checker no longer understands IntrinsicHeight" and put it back. Six more rules were
+added (rail width stops / brand row / horizontal nav items / shared unread badge / shared
+"my position" panel / full-width top bar with title and hairline / solid pane), and all 16
+regression samples were verified to go red - **three of those samples immediately caught
+false passes in the rules I had just written** (substring match, `or` short-circuit, and a
+scan window filled by another call of the same kind); each was fixed.
+
+## [1.6.175] - 2026-09-24
+
+### 📡 TNC/射频：第三方包（DTI `}`）没解包 —— 消息被当成「位置」，消息页一条也收不到 / Unwrapping third-party packets
+
+用户反馈（TNC 模式）：数据包列表里那几条**明明是消息**，却标着绿色的「位置」，
+消息页也一条收不到。原文长这样：
+
+    LX0WX-13>APMI06,TCPIP,LX0WX-13*:}BG7LZQ-2>APALOC,TCPIP,LX0WX-13*::LX6FB-15 :I received it.{5224
+    └──────── 外层：射频上是谁发的这条 ────────┘└────────── 内层：真正的报文 ──────────┘
+
+信息字段以 `}` 开头 = APRS 的**第三方包**（DTI `}`）：`}` 后面是**另一条完整的报文**
+（`SRC>DEST,PATH:info`）。iGate 把互联网上的报文转到射频、中继台之间互转时大量使用，
+所以射频上遇到的并不都是「一条报文明文」。截图里那句 `[via APMI06,` 正好断在信息栏
+80 字上限处，与这个读法逐字吻合（不解包时信息栏显示的是内层原文 + 外层路径）。
+
+以前不认内层，于是一整类报文被吃掉：
+
+* 内层是消息 → 落到默认类型「位置」：数据包页把消息标成位置，**消息页一条也收不到**
+  （也就不会回 ack，发信方以为没送到）；
+* 内层是位置包 → 更彻底：内层台站根本不上图（图标、轨迹、详情页都没有）。
+
+现在 `}` 解包后**整条流水线按内层走**（类型判定、发信台、消息与 ack、台站与轨迹全用
+内层），外层只把「谁转递的」写进信息栏（`· [转递 LX0WX-13]`）；「原始」模式与长按
+复制里仍是那条**真正收到**的外层报文。
+
+三件必须说清的事：
+
+1. **只按内层重算，不改外层**：射频上「听到过」的是外层发射台（双向网关据此判断一条
+   互联网消息值不值得占射频时隙），拿内层台去记会让网关把消息发在没人听的链路上，
+   所以 `_noteHeard` 仍用外层。
+2. **层数上限 3 层，且每层都要求内层确实是 TNC2**（缺 `>` 或 `:` 就原样保留外层）：
+   既不会把「正文里恰好以 `}` 开头」的正常报文吃掉，也不会为畸形套娃失控。
+3. **只入列表一条**（内层那条）：外层再单独入一条会凭空多算一个「收包数」。
+
+顺带修掉同一个坑的另一半：`;` 对象报告以前也落到默认的「位置」，于是数据包页的
+「对象」筛选**永远筛不出东西**（截图里第 4 条 `;145.5875D*131532z4939.25N/…` 就是）。
+
+同一批改动还收掉了一处**同类偏差**：数据包页的「手动注入」工具自己写了一份类型表，
+也不会把注入的消息放进会话列表 —— 同一个包注入时显示「未知」、真机显示「消息」。
+现在接收路径与注入工具共用同一个类型出口（`_packetType`），注入一条消息也会进消息页
+（这个工具本就是「手动模拟接收」）。**这是新加的 CI 测试当场抓出来的**：6 条断言里
+红了 4 条，全是「同一个东西两处各写一份」这个老毛病。
+
+回归测试 `test/third_party_packet_test.dart`（截图原文的分类、发给本机的消息进列表、
+内层位置包上台站、畸形内层原样保留、两层套娃）；`_splitTnc2Header` / `_unwrapThirdParty`
+另用真实代码文本跑了 13 条断言（本机 `dart run`，含 5 层套娃不失控、普通包不受影响）。
+
+## [1.6.175] - 2026-09-24 (English)
+
+### 📡 TNC/RF: third-party packets (DTI `}`) were never unwrapped — a message showed up as "position"
+
+User report (TNC mode): entries in the packet list that are plainly messages carried the green
+"position" tag, and none of them reached the message page. The line looks like this:
+
+    LX0WX-13>APMI06,TCPIP,LX0WX-13*:}BG7LZQ-2>APALOC,TCPIP,LX0WX-13*::LX6FB-15 :I received it.{5224
+    +------- outer: who transmitted it on RF -------++----------- inner: the real packet -----------+
+
+An info field starting with `}` is an APRS **third-party packet** (DTI `}`): everything after
+`}` is **another complete packet** (`SRC>DEST,PATH:info`). iGates use this whenever they put an
+internet packet on the air, and digipeaters use it when relaying, so what arrives on RF is not
+always "one plain packet". The `[via APMI06,` in the screenshot stops exactly at the info
+field's 80-character cap, which matches this reading character for character (without unwrapping
+the info field shows the inner text plus the outer path).
+
+The inner packet used to be ignored, and that swallowed a whole class of traffic:
+
+* inner is a message -> it fell through to the default type "position": the packet list tagged a
+  message as position and **nothing reached the message page** (so no ack was sent either, and
+  the sender assumed it never arrived);
+* inner is a position -> worse: the inner station never appeared on the map at all.
+
+Now the `}` is unwrapped and **the whole pipeline runs on the inner packet** (type, sender,
+messages and acks, stations and tracks), while the outer frame only contributes a note in the
+info field (`· [relayed by LX0WX-13]`). "Raw" mode and long-press copy still show the outer
+packet — the bytes actually received.
+
+Three things worth spelling out:
+
+1. **Only the inner packet is re-derived; the outer one is untouched.** What was "heard on RF" is
+   the outer transmitter (the two-way gateway uses that to decide whether an internet message is
+   worth a time slot), so `_noteHeard` still records the outer call.
+2. **Depth is capped at 3, and every level must actually be TNC2** (missing `>` or `:` means the
+   outer packet is kept as-is): a normal packet whose text merely starts with `}` is never
+   eaten, and malformed nesting can't run away.
+3. **Only one entry is pushed** (the inner one): adding the outer one as well would inflate the
+   received-packet counter out of thin air.
+
+While in there, the other half of the same hole: `;` object reports also used to fall through to
+"position", which made the packet page's "object" filter **match nothing, ever** (the 4th entry
+in the screenshot, `;145.5875D*131532z4939.25N/…`, is one of those).
+
+The same batch also closed one more instance of the same drift: the packet page's "manual inject"
+tool had its own copy of the type table and never put an injected message into the conversation
+list, so the very same packet read "unknown" when injected and "message" on the air. Both paths
+now share a single classifier (`_packetType`), and injecting a message reaches the message page
+too - which is what "simulate reception" was always supposed to mean. The brand-new CI test
+caught this on its first run: 4 of its 6 assertions went red, all of them the same "two copies
+of one thing" disease.
+
+Regression test `test/third_party_packet_test.dart` (classification of the screenshot's line, a
+message addressed to us reaching the message list, the inner position packet becoming a station,
+a malformed inner packet being preserved, two-level nesting). The `_splitTnc2Header` /
+`_unwrapThirdParty` code text itself was run against 13 assertions locally (`dart run`), including
+5-level nesting not running away and normal packets being unaffected.
+
+## [1.6.174] - 2026-09-24
+
+### 📡 转弯打点：先分清「真的拐了」和「GPS 胡说」 / Turn-based beaconing: tell a real turn from a GPS glitch
+
+智能信标里那条「航向变化超过 N 度就补一个点」的判据（v1.6.156 加的）有一个前提一直
+没人管：**「当前航向」是不是真的**。手机给的 course 在多径反射、低速、地库出口这些时候
+会一帧跳几十度，而判据把它当成一次真实转向。
+
+用 `tool/sim_turn_dot.py`（新增，已进 CI）把这件事量了一下 —— 城市档（60s · 400m · 45°）
+跑 16 分钟 1Hz 的仿真：
+
+* **城市直路：旧算法发了 19 个转弯补点**，而那条路是直的，补点让弦高改善**为 0** ——
+  19 次发射全是白发的（APRS 是共享信道）；
+* 更糟的是发完之后 `基准航向 ← 当前航向`，野值被钉成新基准，真实航向与它差 60°，
+  回正后还会再触发一次 —— 一次野值换两个点。
+
+现在多了一层 `lib/turn_dot.dart`：**只把物理上不可能的一帧航向丢掉**（一帧就转
+40°/秒以上 ≈ 20 m/s 下横向 14 m/s²，远超轮胎能给的附着），取替代、也不改判据本身。
+
+同一组仿真里：直路 19 个 → **0 个**；发卡弯平均弦高 14.0m → 9.9m（点数不变）；
+连续弯、高速匝道、S 弯的弦高都不退化，也没有多花信道。
+
+**没做**什么，以及为什么（都是仿真里被数据否掉的，不是没想到）：
+
+* **不做航向平滑**：3 点中位数会把一个 50° 的 S 弯峰值削到约 44° —— 恰好掉到用户设的
+  45° 之下，**整个弯一个点都不补**。「转过 45° 就补报」这句话得算数。
+* **不做连续确认**：30° 的出口匝道配 30° 阈值，超阈值的帧只有一帧，要求连续两帧就
+  再也补不上点。
+* **不做峰值锁存**：它把补点推到闸门打开那一刻，点落在弯**之后** —— 发卡弯平均弦高
+  从 8.0m 坏到 22.4m。
+* **不动 20 秒闸门**：5s/10s/20s 都试过，收紧它只在连续弯上多花信道，弦高没有改善。
+
+两件**必须**做对的小事，都写在代码里：
+
+1. **连续丢帧要有上限**（`maxDrops`）。一个持续超过 40°/秒的**真实**转向会让每一帧都
+   相对「上一个可信值」超限 —— 不设上限就会**永久失明**（仿真里发卡弯从 21 个点掉到
+   10 个、平均弦高翻倍）。
+2. **基准航向取「上一个可信航向」**，不是调用方手里的原始航向 —— 否则发送那一刻的
+   野值会被钉成新基准，与「丢帧」是同一件事的两面。
+
+门限是**按秒折算**的（40°/秒 × 距上一帧的秒数），所以佳明那种十几秒一个点的稀疏序列
+不会被误杀（也不会受它保护）；阈值 40 的两侧都有依据：25° 会把真实转向（发卡弯
+22.5°/秒 + σ=7° 噪声）一起丢掉，60° 会正好放行 60° 的野值。
+
+检查器：`tool/check_beacon_track.py` 增补 6 条（门**用在判断里**、丢帧上限、基准取可信
+航向、180° 环绕折算搬到了新文件、两条路径都要喂样本、发送后要复位），全部按
+「必须会报红」用回归样本验过。
+
+---
+
+## [1.6.174] - 2026-09-24 (English)
+
+### 📡 Turn-based beaconing: tell a real turn from a GPS glitch
+
+Smart beaconing has had a "beacon after turning more than N degrees" criterion since v1.6.156.
+It rests on an assumption nobody checked: **is "the current heading" real?** The heading the
+phone reports jumps by tens of degrees on multipath, at low speed, and at garage exits — and the
+criterion happily treats that as a genuine turn.
+
+A new simulation (`tool/sim_turn_dot.py`, now in CI) puts numbers on it. City tier
+(60 s · 400 m · 45°), 16 minutes at 1 Hz:
+
+* **A straight city road: the old criterion emitted 19 turn dots**, on a road where the sag
+  improvement was **exactly zero** — 19 transmissions that carried nothing (APRS is a shared
+  channel).
+* Worse, each send then did `reference heading ← current heading`, so the glitch got nailed down
+  as the new reference; when the heading snapped back it differed by 60° and triggered again.
+  One glitch, two dots.
+
+There is now a small layer, `lib/turn_dot.dart`, that **discards the frames that are physically
+impossible** (more than 40°/s in one frame ≈ 14 m/s² lateral at 20 m/s, well beyond tyre grip).
+It replaces nothing and changes no threshold.
+
+In the same simulation: straight road 19 → **0**; hairpin mean sag 14.0 m → 9.9 m (same dot
+count); the winding-road, motorway-ramp and S-curve cases neither regress nor spend more channel.
+
+**What was deliberately not done** (each rejected by data, not by taste):
+
+* **No smoothing**: a 3-point median flattens a 50° S-curve to about 44° — just under the user's
+  45° setting, so the whole curve gets **no dot at all**. "Beacon after turning 45°" has to mean
+  what it says.
+* **No run-length confirmation**: for a 30° ramp exit with a 30° threshold only one frame exceeds
+  the threshold, so requiring two consecutive frames loses the dot entirely.
+* **No peak latch**: it defers the dot to the moment the rate gate opens, which lands it *after*
+  the corner (hairpin mean sag 8.0 m → 22.4 m).
+* **The 20 s gate is unchanged**: 5/10/20 s were all tried; tightening it only spends more channel
+  on winding roads, with no accuracy gain.
+
+Two small things that **must** be right (both documented in the code):
+
+1. **Consecutive drops need a ceiling** (`maxDrops`). A *real* sustained turn above 40°/s makes
+   every frame exceed the limit against the last trusted value — without a ceiling the detector is
+   **blinded forever** (hairpin dots 21 → 10 in the simulation, mean sag doubled).
+2. **The reference heading is the last *trusted* heading**, not whatever the caller holds —
+   otherwise a glitch that happens to coincide with a send becomes the new reference. That is the
+   same failure the gate exists to prevent.
+
+The limit is scaled by elapsed time (40°/s × seconds since the previous frame), so Garmin's
+sparse points (one every 10–60 s) are neither rejected nor protected. The value 40 has evidence
+on both sides: 25° throws away real turns (hairpin 22.5°/s plus σ=7° of noise), while 60° lets
+60° glitches straight through.
+
+Checks: `tool/check_beacon_track.py` gained six assertions (the gate **used in the comparison**,
+the drop ceiling, the trusted-reference rule, the 180° wrap moved to the new file, both feed
+paths, and the reset after a send) — each verified to go red on a regression sample.
+
+---
+
+## [1.6.173] - 2026-09-24
+
+### 🐞 佳明页：不会自动填充、没有确定按钮、看不出生效了没有 / Garmin page: no auto-fill, no confirm button, no status
+
+用户实测反馈三条（原话：「它也不会自动填充」「我也不知道他生效了没有，都没有一个确定按钮，
+和状态显示」）。三条都属实，逐条改：
+
+1. **自动填充**：链接框原来只在 `initState` 读一次 `state.garminUrl` —— 分享进来时页面
+   **已经开着**（或顺序反过来）时，文本框永远停在旧内容。现在监听 state 同步进文本框
+   （正在手动编辑时不覆盖），并显示一行**「已自动填入分享链接」**让用户知道发生了。
+2. **确定按钮**：原来只有一个 `Switch`，标签还写着「追踪中」—— 那是**状态**不是**动作**，
+   用户根本不知道点了会不会生效。现在换成明确的 `[开始追踪]` 主按钮 + `[停止追踪]`。
+3. **状态显示**：新增状态卡 —— **未开启追踪** / **追踪中**（含已转发点数、最后更新时间）/
+   **抓取失败**（含原因）；链接框下面还会实时显示**链接有效**或格式不对。
+
+顺带：分享到达的提示从默认 4 秒延长到 **8 秒**（带「去设置」按钮）—— 那是一条
+「刚刚发生了什么 + 去哪儿看」的通知，4 秒常常还没读完就消失了。
+
+（另附核实：用户给的短链 `gar.mn/RKE070EQgn` 用抽取函数实测**能正确识别**，
+所以问题确实在页面本身，不在链接解析。）
+
+---
+
+## [1.6.173] - 2026-09-24 (English)
+
+### 🐞 Garmin page: no auto-fill, no confirm button, no status
+
+Three things reported from a real device — "it doesn't auto-fill either", "I can't tell whether it
+took effect; there's no confirm button and no status display". All three were true:
+
+1. **Auto-fill**: the URL field only read `state.garminUrl` once in `initState`, so when a share
+   arrived **while the page was already open** (or in the reverse order) the field stayed on stale
+   content. It now follows the state (without clobbering what you are typing) and shows a
+   **"Share link filled in automatically"** line so you can see that it happened.
+2. **A confirm button**: there used to be only a `Switch` labelled "Tracking" — a *state*, not an
+   *action*, so there was no way to tell whether tapping it did anything. It is now an explicit
+   **[Start tracking]** primary button plus **[Stop tracking]**.
+3. **A status display**: a new status card — **Not tracking** / **Tracking** (with forwarded-point
+   count and last update time) / **Fetch failed** (with the reason); the field also shows
+   **Link is valid** or the format error live as you type.
+
+Also: the "share received" toast now lasts **8 s** instead of the default 4 (it carries an "Open
+settings" action) — 4 s was often gone before it could be read.
+
+(For the record: the short link the user sent, `gar.mn/RKE070EQgn`, **does** parse correctly with
+the extractor — so the problem really was the page, not link parsing.)
+
+---
+
+
+## [1.6.172] - 2026-09-24
+
+### 🐞 关于页名片卡贴住下个板块 + 位置来源「听谁的」说清楚 / About card spacing + a single source-of-truth for the position source
+
+**关于页：名片卡与下面板块靠太近。** 名片卡下面**直接**就是「代码贡献」的节标题（间距 0），
+看着像黏在一起。现在留 22 —— 与其它节之间的间距一致（节间距本来就是 22）。
+
+**位置来源「不重复了吗？听谁的？」** 用户问得对，这是一个**真实的表述缺陷**：界面把来源
+拆成两半说 —— 定位上报页写「定位 / 模拟位置」、设备页写「手机 GPS / 佳明」—— 于是
+「定位」和「手机 GPS」看着像两件不同的事，而佳明只在一边出现。
+**代码里的优先级一直只有一处**（`_onFix` 开头那两道 return），现在把它做成单一出口并在
+两处都写明：
+
+1. `AppState.positionSourceNow`（新枚举 `PositionSourceNow`）是唯一判断：
+   **模拟/手动位置 › 佳明（手表有实时数据时）› 手机 GPS**；
+2. 定位上报页的那个选项**改名成「手机 GPS」**（与设备页同名，不再叫「定位」），
+   并在卡片里加一句优先级说明 + 一行「当前使用：…」（读同一个 getter）；
+3. 设备页的「位置来源」也显示同一句优先级 —— 两处文案同一份，不会各说一套。
+
+---
+
+## [1.6.172] - 2026-09-24 (English)
+
+### 🐞 About card was touching the next section; and the position source now has one source of truth
+
+**About page: the name card sat flush against the next section.** Right under the card came the
+"Code contributions" header with **zero** gap, so they read as one glued block. It is now 22 — the
+same gap the other sections already use.
+
+**"Isn't the position source duplicated? Which one wins?"** Fair question, and it exposed a real
+wording defect: the UI described the source in two halves — the beacon page said "Location /
+Simulated", the Devices page said "Phone GPS / Garmin" — so "Location" and "Phone GPS" looked like
+two different things, and Garmin only appeared on one side. **The actual priority has always lived
+in exactly one place** (`_onFix`'s two early returns). It is now a single exported getter, stated in
+both places:
+
+1. `AppState.positionSourceNow` (new `PositionSourceNow` enum) is the only decision:
+   **simulated/manual › Garmin (while the watch has live data) › phone GPS**;
+2. the beacon page's option is **renamed to "Phone GPS"** (same name as on the Devices page — it no
+   longer says "Location"), with the priority line plus an "In use now: …" row reading the same
+   getter;
+3. the Devices page's position-source card shows the same priority sentence — one string, two
+   places, so they cannot drift apart.
+
+---
+
+
+## [1.6.171] - 2026-09-24
+
+### 🐞 佳明分享「有时候行有时候不行」+ 冷启动毫无反馈 / Garmin share: flaky receive + no feedback on cold start
+
+用户报「佳明跟踪的识别还是不够强壮，有时候是这个（长链）有时候短的；跳转之后还是没有反馈」。
+先实测**链接抽取本身没问题**（长链 / 短链 / 整段分享文本 7/7 全对），真正的原因是三处：
+
+1. **取分享文本只读 `EXTRA_TEXT`** → 不少应用（部分佳明版本、浏览器、笔记类）把文本放在
+   `intent.clipData` 里，`extras` 读到 null 就**整条静默**（什么都不发生）。这正是
+   「有时候行、有时候不行」的机制 —— 取决于那一次分享走了哪条路径。
+   现加 `clipData` 兜底（`getItemAt(0)` + `coerceToText`）。
+2. **读不到文本时直接静默 return** → 用户点了分享既没有提示也没有日志可查。
+   现在照样推一次（空串），由 Dart 侧如实提示「没有找到佳明链接」。
+3. **冷启动竞态 → 完全没有反馈**（就是「跳转之后还是没有反馈」）：`AppState` 在
+   `_AppState` 的字段初始化时就构造（**早于**外壳 `initState`），而 `ensureInit()` 里那次
+   `takePendingSharedText` 的平台往返可能**更早**返回 —— 那一刻 `onGarminShared` 还是 null，
+   回调直接丢了。现在改成「有回调就调、没回调就**存进 state**」，两套外壳在 `initState`
+   里主动 `consumeShareNotice()` 取一次再提示。
+
+顺带把识别放宽：短链码**长度不限 + 大小写不敏感**（原来写死 `{4,32}`，佳明换码长或码里
+带大写就会静默失配）。
+
+---
+
+## [1.6.171] - 2026-09-24 (English)
+
+### 🐞 Garmin share: flaky receive + no feedback on cold start
+
+Reported as "Garmin tracking recognition still isn't robust — sometimes it's the long link,
+sometimes the short one; and after the hand-off there's still no feedback". Measured first: **link
+extraction itself is fine** (long form / short form / whole share text — 7/7 correct). The real
+causes were three:
+
+1. **Share text was only read from `EXTRA_TEXT`** → plenty of apps (some Garmin versions, browsers,
+   note apps) put it in `intent.clipData`; reading `extras` alone returned null and the whole share
+   went **silent** (nothing happened). That is exactly the "sometimes it works, sometimes it
+   doesn't" mechanism — it depends which path that particular share took. A `clipData` fallback
+   (`getItemAt(0)` + `coerceToText`) was added.
+2. **No text meant a silent `return`** → the user got neither a message nor a log line. It now
+   still emits once (with an empty string) so Dart can say "no Garmin link found".
+3. **A cold-start race meant no feedback at all** (the "still no feedback after the hand-off"):
+   `AppState` is constructed in `_AppState`'s field initialiser, i.e. **before** the shell's
+   `initState`, while the `takePendingSharedText` round trip inside `ensureInit()` can resolve
+   **earlier** — at that instant `onGarminShared` is still null and the callback is simply lost.
+   It is now "call the callback if present, otherwise **store it in state**", and both shells call
+   `consumeShareNotice()` once in `initState`.
+
+Link detection was also widened: the short code is now **unbounded in length and
+case-insensitive** (it used to be `{4,32}`, so a longer code or one containing capitals would
+silently fail to match).
+
+---
+
+
+## [1.6.170] - 2026-09-24
+
+**「数据来源」卡收敛到一处（用户反馈「感觉乱套了」）**：那张卡（APRS-IS / TNC /
+音频 / PKWDWPL 四条链路的勾选 + 发射来源）原来**同时挂在三个页面**（设备页 / 连接页 /
+音频页），三份一样的列表、改一处也不知道该看哪一处。现在：
+* **设备页是唯一的「来源选择」处**（勾选链路 + 发射来源 + 位置/心率来源）；
+* **连接页**专注「**这条链路**的参数」（下面每张卡只在该链路启用时出现），顶部留一句
+  「要启用 / 切换数据来源，请到设置 → 设备」；
+* **音频页**同理（它原来那张纯属重复）。
+删卡必须配指路文案，否则用户会以为「启用 TNC 的入口没了」—— 这条也钉进了检查器
+（两页都不许再挂 DataSourceCard，且必须有 `sourceMovedHint`）。
+
+### ❤️ 心率说明来源 + 关于页空隙 / Heart-rate source labelling + About page spacing
+
+**心率说明来源**（用户要求「如果链接了佳明就提示从佳明追踪获取」）：心率有两个来源
+（BLE 胸带 / 佳明点里的心率），现在**佳明在供数据时**心率卡与「数据来源」卡的心率行都会
+写明「心率来自佳明 LiveTrack（手表）· 128 bpm」，没插胸带也不会再显示成「未连接」，
+用户一眼知道这个数字从哪来。
+
+**关于页空隙**（用户反馈「一些组件空隙不够」）：节标题与卡片之间 8 → 12；致谢卡里
+「测试成员」标签到呼号胶囊 8 → 11、胶囊之间 8 → 10；`BA3RZL` 那组的标签到胶囊 6 → 8、
+与上方胶囊组之间留 6；卡片底部 12 → 14。
+
+---
+
+## [1.6.170] - 2026-09-24 (English)
+
+**The "Data sources" card now lives in exactly one place** (reported as "it feels like a mess").
+That card (the APRS-IS / TNC / audio / PKWDWPL tick list plus the transmit source) used to be
+mounted on **three pages at once** (Devices, Connection, Audio) — three identical lists, and no way
+to tell which one to look at. Now:
+* **Devices is the single place to choose sources** (link ticks, transmit source, position and
+  heart-rate sources);
+* the **Connection** page focuses on **that link's parameters** (each card only appears for an
+  enabled link) and carries a "to enable or switch data sources, go to Settings → Devices" line;
+* the **Audio** page likewise (its copy was pure duplication).
+Removing the card requires that pointer text, otherwise users assume the entry point is gone — the
+checker now enforces both (no `DataSourceCard` on those two pages, and `sourceMovedHint` present).
+
+### ❤️ Heart-rate source labelling + About page spacing
+
+**Heart rate now names its source** (on request: "if Garmin is linked, say the rate comes from
+Garmin tracking"). There are two sources (a BLE strap / the heart rate inside Garmin's points), so
+while Garmin is supplying data both the heart-rate card and the heart-rate row in the data-sources
+card now say "Heart rate from Garmin LiveTrack (watch) · 128 bpm" — no more "not connected" when no
+strap is worn, and it is obvious where the number comes from.
+
+**About page spacing** (reported as too tight): section header → card 8 → 12; inside the credits
+card the "test members" label → callsign chips 8 → 11 and chip gaps 8 → 10; the `BA3RZL` group's
+label → chip 6 → 8 with 6px of separation from the chips above; card bottom padding 12 → 14.
+
+---
+
+## [1.6.169] - 2026-09-24
+**关于页：BA3RZL 单独成行，并与上面的呼号同一套样式**（用户明确要求，原话「这很重要」，
+随后追问「跟上面呼号一样吗，这是个重要人物」）。原来那一行是 `AI 算力支持 · BA3RZL 养生`：
+扫过去只看到「标签」，提供算力的人在句子中间、一眼看不见。
+现在**标签一行、呼号胶囊一行**：`BA3RZL` 用与上面测试成员**同一个 `_memberChip`**
+（同一颗绿色胶囊 + 天线图标），「养生」作为胶囊后的小字备注 —— 既单独成行，样式也和
+被点名的那些呼号一致。
+### 🐞 1.0 布局下「佳明分享」仍然毫无反应（两个回调都只在 2.0 注册）/ Garmin share still silent in the 1.0 layout
+
+上一版把「分享过来的内容里没有链接」也做成**可见提示**（`onGarminShareNoLink`），但那个
+回调**只注册在 2.0 外壳**里 —— 用 **1.0 布局**的用户分享完依然是**毫无反应**，
+和「没识别」看起来一模一样（上一版刚给 `onGarminShared` 补过同一个缺口，这次是它的兄弟）。
+
+现在 1.0（`home_page.dart`）两个回调都注册：收到链接给「已收到佳明分享链接 + 去设置」，
+没找到链接给「没有识别到佳明链接」——**失败也看得见**。
+
+守卫也一起修了两处（都是我自己写松的）：
+* 原来的 `need(MainActivity, 'livetrack.garmin.com')` 是**假通过** —— 原生侧早已取消域名过滤，
+  文件里只剩注释提到这个词；改成**反向禁止**域名过滤（`TRACK_HOSTS` / `LIVETRACK_HOST`），
+  因为那道过滤拦不住任何东西，只会把「佳明换了域名」变成静默丢弃；
+* 「两套外壳都要注册」的判据漏了第二个回调，现在**两个回调 × 两套外壳**逐个点名。
+
+---
+
+---
+
+## [1.6.169] - 2026-09-24 (English)
+**About page: BA3RZL gets its own line, styled exactly like the callsigns above** (an explicit
+request — "this is important" — followed by "is it the same as the callsigns above? This is an
+important person"). The line used to read `AI compute support · BA3RZL`; scanning it you only saw
+the label, with the person who provided the compute buried mid-sentence. It is now **label on one
+line, callsign chip on the next**: `BA3RZL` uses the very same `_memberChip` as the test members
+above (same green pill, same antenna icon), with 养生 as a small note after it — so it is both on
+its own line and visually identical to the callsigns being named.
+### 🐞 Garmin share still silent in the 1.0 layout (both callbacks were registered in the 2.0 shell only)
+
+The previous release made "the shared content contains no link" **visible** too
+(`onGarminShareNoLink`), but that callback was **registered only in the 2.0 shell** — so anyone on
+the **1.0 layout** still saw *nothing at all* after sharing, which looks exactly like "not
+recognised". (The same gap had just been fixed for `onGarminShared`; this is its sibling.)
+
+The 1.0 shell (`home_page.dart`) now registers both: a shared link shows "Garmin share link
+received" plus an "Open settings" action, and a share without a link shows "no Garmin link
+recognised" — **failures are visible too**.
+
+Two guards were also fixed (both were mine, and both were too loose):
+* the old `need(MainActivity, 'livetrack.garmin.com')` was a **false pass** — the native side no
+  longer filters by host and only a comment still mentions that word; it is now a **forbidden**
+  host filter (`TRACK_HOSTS` / `LIVETRACK_HOST`), because that filter blocks nothing and merely
+  turns "Garmin changed the domain" into a silent drop;
+* the "both shells must register" check missed the second callback; it now names **both callbacks
+  across both shells**.
+
+---
+
+## [1.6.168] - 2026-09-24
+
+### 🐞 「位置来源」不再是二选一，改成如实的状态行 / Position source is an honest status row, not a two-way choice
+
+**「位置来源」不该是二选一（用户实测指出）**：没启动追踪时，那一栏里「手机 GPS」
+照样画着**实心选中圆点**（其实什么都没在跑），而「佳明」那行也可以被「选中」——
+只看 `garminOn`，**没看追踪到底有没有启动**。而且佳明与手机 GPS 本来**不是二选一**：
+手表在直播时优先用手表，超过 120s 没新点自动交回手机。现在改成**如实的状态行**
+（没有选中圆点）：未启动定位就写「未追踪（未启动定位）」；在跑时写
+「追踪中（手机 GPS 已让位）」；佳明链接配了但没新点则写「链接有效，但佳明没有新点」。
+心率那一行也顺带显示当前 bpm。
+
+**「佳明分享没被识别」：短链本身是好的，缺的是 1.0 布局的反馈。** 按用户给的链接实测：
+`gar.mn` → `301` → 长链 → `200`，我们自己的抓取代码也能正常跟随跳转并拿到页面；
+链接抽取对「用户复制的那段真实分享文本」也完全正确（长链/短链/不带 `https://` 都认）。
+真正的问题是 **`onGarminShared` 只注册在 2.0 外壳**（`shell2.dart`）里 —— 用 **1.0 布局**
+的用户分享完之后**界面上什么都不会发生**，看起来自然是「没被识别」。
+现在 1.0（`home_page.dart`）也注册同一条提示（含「去设置」按钮），并把这个缺口钉进检查器
+（两套外壳都必须注册）。顺带说明：抓取失败与「活动还没有数据」是两件事 —— 后者会如实显示
+「还没有取到点」。
+
+**佳明分享「没识别」的根因是两个静默丢弃**：
+
+* `_onSharedIncoming` 在解析失败时**直接 return** —— 用户分享完什么都没发生、也没有任何解释；
+* Android 侧按域名过滤（`TRACK_HOSTS`）只放行 `livetrack.garmin.com` / `gar.mn`，**理由本身是错的**：
+  应用是否出现在分享面板只由 manifest 的 intent-filter（`text/plain`）决定，那道理过滤不掉任何东西，
+  唯一的实际作用是把「佳明换了域名 / 分享的是别的形式」变成**连一次网络请求都没发出**的静默失败。
+
+改法：原生侧一律透传给 Dart；Dart 的链接识别放宽到「任何佳明域名的链接」（长链 → `gar.mn`
+短链 → `*.garmin.com` 兜底），识别不到就**写日志（含原文前 120 字）+ 弹提示**
+（新增 `garminShareNoLink`，6 语言）。顺带删掉 manifest 里重复的 SEND filter 与过期注释。
+---
+
+## [1.6.168] - 2026-09-24 (English)
+
+### 🐞 Position source is an honest status row, not a two-way choice
+
+**"Position source" must not be a two-way choice (pointed out from a real device).** With
+tracking not started, the "Phone GPS" row still showed a **filled selection dot** (nothing was
+running at all) and the "Garmin" row could be "selected" — the state only looked at `garminOn`
+and **never at whether tracking was actually running**. Worse, Garmin and the phone GPS are not a
+choice at all: while the watch is live it wins, and after 120 seconds without a fresh point the
+phone takes over automatically. It is now an **honest status row** (no selection dot): "Not
+tracking (location off)" when nothing runs, "Tracking (phone GPS stepped aside)" while live, and
+"Link set, but Garmin has no fresh points" when the link is configured but idle. The heart-rate
+row now shows the current bpm too.
+
+**"The Garmin share was not recognised": the short link is fine — what was missing is feedback
+in the 1.0 layout.** Measured with the link the user supplied: `gar.mn` → `301` → long link →
+`200`, and our own fetcher follows the redirect and gets the page just fine; link extraction also
+handles the exact shared text the user copied (long form, short form, and a bare `gar.mn/xxx`
+without a scheme all match). The real gap was that **`onGarminShared` was only registered in the
+2.0 shell** (`shell2.dart`) — so anyone on the **1.0 layout** saw *nothing at all* after sharing,
+which naturally reads as "not recognised". The 1.0 shell (`home_page.dart`) now registers the same
+notice (with an "Open settings" action), and the checker requires both shells to register it. Note
+also that a fetch failure and "the activity has no points yet" are different things — the latter
+honestly reports "no points yet".
+
+**Why Garmin sharing "wasn't recognised": two silent drops.**
+
+* `_onSharedIncoming` **just returned** when parsing failed — the user shared something and
+  nothing happened, with no explanation at all;
+* Android filtered by host (`TRACK_HOSTS`, allowing only `livetrack.garmin.com` / `gar.mn`), and
+  **the stated reason was simply wrong**: whether the app appears in the share sheet is decided
+  by the manifest's intent-filter (`text/plain`) alone, so that filter blocked nothing — its only
+  real effect was turning "Garmin changed the domain / shares something else" into a silent
+  failure where **not even one network request was made**.
+
+Now the native side always forwards the text to Dart; Dart's link detection was widened to "any
+Garmin-hosted link" (long form → `gar.mn` short link → a `*.garmin.com` fallback), and when it
+finds nothing it **logs the first 120 characters and shows a toast** (new `garminShareNoLink`,
+six locales). The duplicated SEND intent-filter and the stale comments in the manifest are gone
+too.
+---
+
+## [1.6.167] - 2026-09-24
+
+### 🐞 佳明接管时的上报 UI 说清来源；佳明/心率成为「数据来源」的选项 / Garmin beacon UI + Garmin·strap as data sources
+
+**入口位置改对了**：心率带与佳明 LiveTrack 都是**设备**（要搜、要连、会掉线），
+与「信标怎么发」是两件事 —— 所以入口统一放在**设置 → 设备**的子页入口列表里
+（与 TNC / 音频 / PKWDWPL 并列），**不再塞在信标设置页**。心率那页是新加的
+（`hr_page.dart`，正文复用原来那张卡，不重写一份）。
+
+**佳明接管时的「定位上报」UI 写清楚了**：位置来自手表时，上报横杠改为显示
+**来源 + 倒计时 + 心率**（`佳明上报 · 45s · ❤128`，红色），而不是一个看不出差别的普通
+倒计时 —— 两者可能差几十公里，只写倒计时用户会以为发的是手机定位。
+
+**顺带修了一个真隐患**：佳明**不再新鲜**（活动结束 / 链接过期）时手机 GPS 会接回来，
+但**粗定位点**不行 —— 它会拿一个偏几百米的基站质心去替换手表给的位置，而此刻横杠正
+显示着正常的倒计时（`counting`），**用户完全看不出正在发一个错坐标**。
+现在 `if (coarse && garmin.on) return;` 把粗点挡住，宁可保持上一个（手表的）位置，
+等真 GPS 接回来。
+
+**佳明/心率成为「数据来源」里的可选来源**（用户要求：佳明应当作为数据来源的一种选择）：
+数据来源卡里新增两组选择 —— **位置来源**（手机 GPS / 佳明 LiveTrack，单选）与
+**心率来源**（蓝牙心率带）。它们与上面那些**报文链路**分开列：那几条的语义是「报文从哪条
+链路收发」，而这两条是「**我自己的位置/心率**从哪来」，混成一组会让发射来源的判定变乱。
+
+**心率带连上了，主屏幕却不显示心率（用户实测报的）**：设置页那张卡直接读
+`bleHr.bpm`，而地图上的心率胶囊、上报横杠的 ❤、信标里的 `HR=` 读的都是 `myHr` ——
+而 `bleHr` 的变更回调只 `_notify()`、**从没把读数同步到 `myHr`**。于是「设置页显示已连接、
+有 128 bpm，主屏幕一直是空的、信标也不带 HR」。已修（并写进检查器：`bleHr.onChanged`
+里必须出现 `myHr =` —— 这类「两个来源各自同步漏一处」的缺陷只有真机能发现）。
+
+**手动上报的提示现在会说清「实际带了什么」**：有用户问「手动上报…没有附带心率？」——
+核实结果是**带的**（手动与自动上报走的是同一段组包代码，全仓库只有一处
+`AprsFmt.position(...)`，备注与 `HR=` 都在里面），但提示当时只说网格，看不出带了什么。
+现在提示为「位置信标 · 网格 FN20xx · 心率 128 bpm」或「… · 未附带心率」。
+
+---
+
+## [1.6.167] - 2026-09-24 (English)
+
+### 🐞 Garmin beacon UI; Garmin and the strap as data sources
+
+**Entry points moved to the right place.** The strap and Garmin LiveTrack are **devices** (you
+scan, you connect, they drop out) — a different concern from "how the beacon transmits" — so
+their entries now live in **Settings → Devices**, alongside TNC / audio / PKWDWPL, and are **no
+longer inside the beacon settings page**. The heart-rate page is new (`hr_page.dart`) and reuses
+the existing card rather than duplicating it.
+
+**The beacon UI now says where the position comes from.** While Garmin is live the beacon bar
+shows **source + countdown + heart rate** (`Garmin · 45s · ❤128`, in red) instead of an
+indistinguishable countdown — the two positions can be tens of kilometres apart, and a bare
+countdown would read as "this is my phone's location".
+
+**A real hazard fixed along the way.** When Garmin goes stale (activity ended, link expired) the
+phone GPS correctly takes over — but a **coarse (cell/Wi-Fi) fix** must not: it would replace the
+watch's position with a cell-tower centroid while the bar shows a perfectly normal countdown
+(`counting`), so **nothing on screen reveals that a wrong coordinate is being transmitted**. It is
+now blocked with `if (coarse && garmin.on) return;`, keeping the last (watch) position until real
+GPS returns.
+
+**Garmin and the strap are now selectable "data sources".** The Data sources card gained two
+groups — **position source** (phone GPS / Garmin LiveTrack, single choice) and **heart-rate
+source** (the BLE strap). They are listed separately from the packet links above: those mean
+"which link do packets arrive on", whereas these mean "where does *my own* position/heart rate
+come from"; merging them would muddy the transmit-source logic.
+
+**A connected strap showed nothing on the main screen (reported from a real device).** The
+settings card reads `bleHr.bpm` directly, but the map's heart-rate chip, the ❤ on the beacon bar
+and `HR=` in the beacon all read `myHr` — and the `bleHr` change callback only called `_notify()`,
+**never copying the reading into `myHr`**. So the settings page said "connected, 128 bpm" while the
+main screen stayed empty and the beacon carried no HR. Fixed, and pinned in the checker: the
+`bleHr.onChanged` body must contain `myHr =` — this class of "one of the two sources forgot to
+sync" bug is only visible on a real device.
+
+**The manual-beacon toast now says what was actually attached.** A user asked "does manual
+beaconing not include the heart rate?" — it **does** (manual and automatic beaconing share the
+same packet builder; there is exactly one `AprsFmt.position(...)` call site in the whole
+codebase, and the comment plus `HR=` are in it), but the toast only showed the grid square, so
+there was no way to tell. It now reads "Position beacon · Grid FN20xx · HR 128 bpm", or
+"· no heart rate".
+
+---
+
+## [1.6.166] - 2026-09-24
+### 🐞 佳明 App 分享的短链（`gar.mn/…`）之前根本进不来 / Garmin app share links (gar.mn) never got through
+**现状**：佳明 App 的「分享」按钮给的是**短链** `gar.mn/xxxx`，而我们的链接正则只认长链
+`livetrack.garmin.com/session/…/token/…`，Android 分享入口的域名闸门也只放行后者 ——
+于是用户「在佳明 App 里点分享 → 选 APRSlocus」，表现是**什么都没发生**。
+**为什么参考项目没有这个问题**：`garmin-livetrack-aprs-openwrt` 只从 **Gmail 邮件**里抠链接，
+而邮件里给的就是完整长链 —— 它的代码里压根没有短链分支。手机分享面板是**另一条路**，
+只能自己补。
+**实测**（2026-09-24）：`https://gar.mn/<code>` → `301` →
+`https://livetrack.garmin.com/session/<uuid>/token/<hex>` → `200`，页面与直接访问长链完全一致。
+所以**不需要自己解短链**，抓取时跟随跳转即可。
+**修了三处**：
+
+* `lib/garmin.dart` 同时识别长链与短链，并兼容「只复制到 `gar.mn/xxx`（没有 `https://`）」；
+* Android 分享入口的域名闸门放行 `livetrack.garmin.com` 与 `gar.mn` 两个域名；
+* 抓取时显式 `followRedirects` —— 顺带发现并修掉了「属性写错对象」的错误：
+  `followRedirects` / `maxRedirects` 是 **`HttpClientRequest`** 上的，不是 `HttpClient` 上的
+  （第一版写在 `HttpClient()..followRedirects` 上，本机 `dart` 编译直接报
+  `no setter named 'followRedirects'`——好在没推上去白等一轮 CI）。
+**另外**：写日志前把链接里的 token 打码（`maskLiveTrackUrl`）。分享链接本身就是**读取
+实时位置与心率的凭据**，原样落进日志或截图里等于把它公开出去（参考项目的文档也专门强调
+「token 只应存在于运行时」）。
+**说明**：页面解析逻辑（从公开分享页的 Next.js 流式数据块里取 `trackPoints`）**保持与参考
+项目一致**，本版没有改动它。（拿真实分享链接实测时页面里 `trackPoints` 是空数组、
+`position` 字段一个都没有 —— 那是**那个会话本身还没有数据**，不是解析器坏了；空会话会
+照常给出「还没有取到点」的提示。）
+
+---
+
+## [1.6.166] - 2026-09-24 (English)
+### 🐞 Garmin app share links (gar.mn) never got through
+**The problem.** The Garmin app's Share button produces a **short link**, `gar.mn/xxxx`, while
+our URL pattern only accepted the long form (`livetrack.garmin.com/session/…/token/…`), and the
+Android share target's host gate only allowed the same host — so "Share → APRSlocus" in the
+Garmin app **did nothing at all**.
+**Why the reference project never hit this.** `garmin-livetrack-aprs-openwrt` only scrapes links
+out of **Gmail messages**, and the mail contains the full long URL — there is no short-link branch
+in its code. The phone share sheet is a **different path**, which we had to add ourselves.
+**Measured** (2026-09-24): `https://gar.mn/<code>` → `301` →
+`https://livetrack.garmin.com/session/<uuid>/token/<hex>` → `200`, and the page is identical to
+opening the long link directly. So there is **no need to resolve the short link ourselves** —
+following redirects while fetching is enough.
+**Three fixes**: `lib/garmin.dart` now recognises both forms (and tolerates a bare `gar.mn/xxx`
+with no scheme); the Android share gate allows both hosts; and fetching sets `followRedirects`
+explicitly — which also surfaced a mistake of mine: `followRedirects` / `maxRedirects` live on
+**`HttpClientRequest`**, not `HttpClient` (the first attempt put them on `HttpClient()..` and the
+local `dart` compiler rejected it outright with `no setter named 'followRedirects'`, so no CI
+round was wasted).
+**Also**: the token is masked before anything is logged (`maskLiveTrackUrl`). A share link *is*
+the credential for reading someone's live position and heart rate — logging it verbatim publishes
+it (the reference project's docs stress the same point: "the token should only ever exist at
+runtime").
+**Note:** the page parser (pulling `trackPoints` out of the public share page's Next.js streamed
+data blocks) is **unchanged and matches the reference project**. (When testing with a real share
+link the page's `trackPoints` was an empty array with no `position` fields at all — that session
+simply **had no data yet**, it was not a broken parser; an empty session keeps showing the
+"no points yet" notice.)
+
+---
+## [1.6.165] - 2026-09-24
+
+### ❤️ 蓝牙心率带（信标附带心率）+ ⌚ 佳明 LiveTrack / BLE heart-rate straps (HR in the beacon) + Garmin LiveTrack
+
+### 一、蓝牙心率带（BLE 标准心率服务 0x180D）
+
+信标设置页新增「心率」一卡：搜索 / 连接 / 查看当前心率与电量 / 断开 / 忘记设备，并有一个
+**「信标附带心率」**开关（默认开）。开启后位置包的备注里会加 `HR=nn`（APRS 的通行写法，
+第三方地图当备注显示）。**没有读数时什么都不发** —— 发 `HR=0` 会被收端读成「心率 0」而不是
+「没测」。心率带与佳明 LiveTrack 共用这一个开关与同一个 `myHr`。
+
+**与 TNC 的蓝牙通道不冲突**（这是明确要求，也是实现里最花心思的一处）：
+
+* 两条链路是**两套栈** —— TNC/PKWDWPL 走经典蓝牙 SPP，心率走 BLE GATT，可以同时工作；
+* 真正的风险是**经典蓝牙发现 `startDiscovery()` 会打断正在工作的 SPP 连接**：原生侧只用
+  `BluetoothLeScanner`，绝不调用它（检查器把这条钉成了「必须没有」）；
+* 另一处风险是**同一台设备不能同时当两者**（双模设备的经典地址与 BLE 地址是同一个 MAC）：
+  `MainActivity` 把「正被 SPP 占用的地址」传给心率管理器，撞上就回 `ADDR_IN_USE` 并给出人话理由；
+* 前台服务的 `connectedDevice` 类型声明改成**统一汇总**（TNC / PKWDWPL / USB / BLE 四条里
+  还有活着的就保留）—— 原来各处各传一个布尔，先断开的那条会把仍在工作的那条的类型撤掉。
+
+### 二、佳明 LiveTrack（手表的活动位置直接进来）
+
+两条路都支持：
+
+* **分享入口**：注册了 `ACTION_SEND`（text/plain），佳明 Connect App 的分享面板里会出现
+  APRSlocus，点一下链接就落到应用里并直接开始追踪（附提示条 + 「去设置」按钮）；
+* **手贴链接**：信标设置页新增「佳明 LiveTrack」入口 → 新页面里可粘贴 / 从剪贴板取 /
+  开关追踪 / 看状态，并写清「怎么从佳明 App 拿到链接」。
+
+实现按参考项目（garmin-livetrack-aprs-openwrt）的公开分享页方案：抓
+`livetrack.garmin.com/session/…/token/…` 的页面，从 Next.js 的流式数据块里取
+`trackPoints`，读经纬度 / 海拔 / 速度 / 心率。节流策略同参考实现：**只接受 120 秒内的点、
+积压超过 60 秒就跳到最新点、两次转发至少隔 10 秒**（APRS 信道是共享资源）。
+佳明在跑且还新鲜时**手机 GPS 让位**（否则两路会互相把标记拉来拉去），超过 120 秒没新点
+就自动交还手机定位。
+
+页面入口、`locStatus`、l10n 六语言、备份分组都补齐；`HR=` 与 `locStatus` 的新状态串都在
+`widgets.dart` 的登记白名单里（漏登记会让非中文界面漏出中文）。
+
+### 三、心率上主屏幕；佳明接管期间补齐航向与历史台账；设备页加「其他数据来源」
+
+* **心率显示在主屏幕**：地图左上竖列**最上面**一个心率胶囊（❤ `128` bpm + 来源
+  BLE/Garmin）。**没有读数时整块不出现** —— 一屏浮层上摆一个永远空白的胶囊比不显示更糟。
+  原来只在信标设置页能看到。
+* **佳明接管期间的两个缺口**（「是否已完全替换 GPS 与其他来源」的答案是：方向对，但之前
+  不完整）：
+  * **航向 `myCourse` 之前根本没算**。佳明 LiveTrack 的点里没有航向字段，不自己算就会
+    **沿用手机 GPS 的旧值** —— 指南针停在上次的方向不动，比不显示更误导。现在用前后两点
+    算初始方位角（`garmin.dart` 的 `bearingDeg`，与参考项目同款公式）。
+  * **历史台账 `TrackLogStore` 之前没写**。而手机 GPS 又正被让位 —— 于是佳明接管期间在
+    历史记录里是**一段空白**，用户回头看会觉得那段路凭空消失。现在与 GPS 路径同一套落盘。
+  （位置 / 速度 / 海拔 / 心率都已是佳明优先；精度字段佳明页面不给 → 保持 0 = 未知，
+  不画精度圈；电量仍用手机，这是合理的。）
+* **设备页新增「其他数据来源」卡**：心率带与佳明 LiveTrack 都是「**自己位置**的来源」，
+  不是报文链路，所以没有混进那张勾选式的「数据来源」（那卡的语义是「报文从哪条链路来」，
+  混进去会让发射来源的判定变乱）。改为在它下面单独一张卡、两个入口，复用信标页里那两个
+  组件（不另写一套，免得两处漂移），并说明「与上面的链路互不影响，可以同时使用」。
+
+### 四、守卫
+
+新增 `tool/check_hr_garmin.py`（已接进 CI 的 Analyze job）：BLE 的服务 UUID / CCCD 写入 /
+`TRANSPORT_LE` / 主线程发事件 / 权限码不撞车，**禁止** `startDiscovery`、`adapter.disable`；
+分享入口的 intent-filter、`onNewIntent`、域名闸门、冷启动取文本；`trackPoints` 解析与三条
+节流常数；`HR=` 只在有读数时发；6 语言键齐。**首版检查器自己踩了「注释里提到就误报」的坑**
+（BleHrManager 的注释正写着「绝不调用 startDiscovery」），已改成先剥注释再判，并用 5 个
+回归样本验证会报红。此外 `check_hr_garmin.py` 又加了 8 条断言（心率必须挂在地图竖列、
+`_onGarminPoint` 里必须有 `bearingDeg` 与 `TrackLogStore`、设备页必须有「其他来源」卡）。
+其中「历史台账」那条**第一版不严**：全文件搜索会被 GPS 路径里的同名调用满足，于是
+「佳明不写台账」永远抓不到（回归样本当场证明），已改成**限定在函数体内**搜索。
+
+`check_l10n_sync.py` 新增第 5 条检查：**代码里 `s.xxx` / `S.of(context).xxx` 用到的键
+必须存在**。起因就是本版：重写键表时漏了 `garminUrlHint`，而 `arb ↔ 产物` 是「一致地缺」
+的，前 4 条检查全绿、只有 `flutter analyze` 报 `undefined_getter`（三个 job 全红）。
+写这条检查时自己也踩了两次假失败（注释里的示例 `s.xxx` 被当成用法；`s` 在某些文件里是
+台站对象），都已修掉：先剥注释与字符串，再**数绑定次数**判断同名歧义，并豁免
+`extension on AppLocalizations` 里的方法。
+
+---
+
+## [1.6.165] - 2026-09-24 (English)
+
+### ❤️ BLE heart-rate straps (HR in the beacon) + ⌚ Garmin LiveTrack
+
+**Bluetooth heart-rate straps (standard BLE service 0x180D).** The beacon settings page gained
+a Heart rate card: scan / connect / see the current BPM and battery / disconnect / forget,
+plus a **"Send heart rate in beacon"** switch (on by default). With it on, position comments
+carry `HR=nn` (the common APRS convention; third-party maps show it as a comment). **With no
+reading we send nothing at all** — `HR=0` would be read as "pulse 0" rather than "not measured".
+The strap and Garmin LiveTrack share this switch and the same `myHr`.
+
+**It does not fight with the TNC Bluetooth link** (an explicit requirement, and where most of
+the care went): the two links use different stacks (TNC/PKWDWPL are classic Bluetooth SPP;
+heart rate is BLE GATT) so they run side by side. The real hazards are (a) **classic discovery
+(`startDiscovery()`) tearing down a working SPP connection** — the native side only ever uses
+`BluetoothLeScanner`, and the checker pins the forbidden call; and (b) **one device cannot be
+both** (a dual-mode device has the same MAC for classic and BLE) — `MainActivity` passes the
+addresses currently held by SPP to the heart-rate manager, which rejects the clash with
+`ADDR_IN_USE` and a plain-language reason. The foreground service's `connectedDevice` type is
+now computed in **one place** across TNC / PKWDWPL / USB / BLE, so a link that disconnects
+first can no longer revoke the type still needed by a link that is working.
+
+**Garmin LiveTrack** — two ways in: an **Android share target** (`ACTION_SEND`, text/plain) so
+the Garmin Connect app lists APRSlocus and one tap lands the link in the app and starts
+tracking (with a toast and an "Open settings" action), and **manual paste** on a new page
+(also "paste from clipboard"), which explains how to get the link. The implementation follows
+the reference project's public-share-page approach: fetch
+`livetrack.garmin.com/session/…/token/…`, pull `trackPoints` out of the Next.js streamed data
+blocks, and read position, altitude, speed and heart rate. The throttling matches the
+reference: **accept only points up to 120s old, skip to the newest when the backlog exceeds
+60s, and forward at most one point every 10s** (the APRS channel is shared). While Garmin is
+running and fresh the **phone GPS steps aside** (otherwise the two sources would pull the
+marker back and forth), and hands back automatically after 120s without a new point.
+
+**Heart rate on the main screen.** The map's top-left column now starts with a heart-rate
+chip (❤ `128` bpm plus its source, BLE or Garmin). **It disappears entirely with no reading** —
+a permanently blank chip on an already busy overlay is worse than nothing. Previously the value
+was only visible on the beacon settings page.
+
+**Two gaps while Garmin is driving** (so the answer to "is Garmin fully replacing GPS and other
+sources?" was: the direction was right, but it was incomplete):
+
+* **Heading (`myCourse`) was not computed at all.** Garmin LiveTrack points carry no heading
+  field, so without computing one the app **kept the phone GPS's last value** — a compass frozen
+  in the old direction, which is worse than showing nothing. It is now derived from the previous
+  and current point (`bearingDeg` in `garmin.dart`, the same initial-bearing formula the
+  reference project uses).
+* **The daily history log (`TrackLogStore`) was not written.** Since the phone GPS is standing
+  down at the same time, that period was simply **missing from the history** — it looks like the
+  route vanished. It is now recorded exactly like the GPS path.
+  (Position, speed, altitude and heart rate already prefer Garmin; accuracy stays 0 = unknown
+  because the share page does not provide it, so no accuracy circle is drawn; battery still
+  comes from the phone, which is the sensible choice.)
+
+**A new "Other data sources" card on the device page.** The strap and Garmin LiveTrack supply
+**your own position**, they are not packet links, so they were deliberately *not* mixed into the
+tick-list "Data sources" card (whose semantics are "which link do packets arrive on"; mixing
+them in would muddy the transmit-source logic). They get their own card right below it, reusing
+the very same widgets as the beacon page (so the two can never drift apart), with a note that
+they are independent of the links above and can run at the same time.
+
+**Guards.** New `tool/check_hr_garmin.py` (wired into the CI Analyze job) covers the BLE service
+UUID / CCCD write / `TRANSPORT_LE` / main-thread events / distinct permission code, **forbids**
+`startDiscovery` and `adapter.disable`, checks the share intent-filter, `onNewIntent`, the
+domain gate and the cold-start path, the `trackPoints` parsing with its three throttling
+constants, that `HR=` is only sent with a reading, and that all six locales have the keys.
+**The first version of this checker produced false failures by reading its own explanatory
+comments** (the file literally says "never call startDiscovery") — it now strips comments
+before the forbidden-call checks, and five regression samples were verified to fail. Eight more
+assertions were added later (the heart-rate chip must be wired into the map column,
+`_onGarminPoint` must contain `bearingDeg` and `TrackLogStore`, the device page must carry the
+"other sources" card). The history-log one was **too weak at first**: a whole-file search is
+satisfied by the identical call in the GPS path, so "Garmin never writes the log" could never be
+caught (the regression sample proved it); it now searches **inside the function body only**.
+
+`check_l10n_sync.py` gained a fifth check: **every key used in code (`s.xxx` /
+`S.of(context).xxx`) must exist**. That is exactly what this release tripped over — while
+rewriting the key table I dropped `garminUrlHint`, and because `arb` and the generated output
+were "consistently missing" it, the first four checks stayed green and only `flutter analyze`
+reported `undefined_getter` (all three jobs red). Writing that check produced two false failures
+of its own (an `s.xxx` example inside a comment counted as usage; `s` is a station object in some
+files); both are fixed by stripping comments and string literals first, counting bindings to
+detect name collisions, and exempting methods defined in `extension ... on AppLocalizations`.
+
+---
+
+
+## [1.6.164] - 2026-09-24
+
+### 🐞 三处「挤 / 没填满 / 显示不全」/ Three layout fixes: the share sheet, the About cover, and the messages pane
+
+### 一、关于页 · 分享弹层：「APRSlocus 的下面太挤了」
+
+分享弹层头部的标题与副标题**直接贴在一起（0 间隙）**：「分享 APRSlocus」下面紧接着
+「APRSlocus · v1.6.x」，看着就是被挤成一团。现在：
+
+* 标题与副标题之间留 3px；
+* 头部与选项列表之间 14 → 18px；
+* 选项之间 8 → 10px，选项自身的上下内边距 11 → 12px。
+
+### 二、关于页 · 封面：「横屏 logo 背景没有完全填充」
+
+不是 Logo 自己的问题，而是**封面的底图没铺满**。封面原来在「超宽」时走
+`BoxFit.contain`（怕把火山裁掉），但判据是 `容器宽 / 卡高 > 1.62`，而卡片高度有
+**300 的上限**、容器宽到 600 ——「2.0 > 图片比例 1.5」在**任何 ≥600 宽**的屏幕上
+都成立，于是**每次**都走 contain：照片缩成中间一条，两侧各空 75px。横屏时最明显：
+Logo 那张玻璃卡正坐在左边的空白上（看起来就像「Logo 背景没填满」）。
+
+改成 `BoxFit.cover` + `Alignment.topCenter`：铺满整张卡，同时保住雪顶（在图片 27%
+高处）与天空；被裁掉的是最下面那一带近景岩石 —— 那张图里信息量最低的部分。
+
+### 三、消息页：「手机的消息面板显示不全」
+
+根因是**换栏按「朝向」判**：`narrow = !landscape && maxWidth < 720` —— 等价于
+「只要是横屏就走双栏」。而 2.0 横屏是把消息页装进**左侧面板**的（宽 ≤560，手机上常
+200~280），于是双栏里那个**固定 280** 的列表栏直接把会话区挤成负宽度：两栏一起溢出、
+右侧被裁。三处一起修：
+
+* **换栏只看可用宽度**（`constraints.maxWidth < 640`）：朝向不决定有多少宽度可用，
+  可用宽度才决定；
+* **列表栏宽度跟着容器走**（`maxWidth × 0.34`，夹在 240~280）—— 2.0 的面板最宽 560，
+  而 1.0 的平板/桌面可以很宽；
+* 新增 **`_compactPane`（<520）行内降级**：单聊标题行的呼号可省略、末尾的网格先让位；
+  群聊标题行那 5 个操作胶囊改成**换行排**（`Wrap`，一个都不藏）。
+
+单聊/群聊标题行原来是一整行固定宽度的控件，窄容器里同样会撑爆 —— debug 下是溢出
+条纹，**release 下不报错、只是默默少东西**，所以一并按可用宽度降级。
+
+### 四、守卫
+
+`check_landscape_layout.py` 增两组判据（共 10 条）：不许按朝向换栏/降级（并要求
+`_compactPane` 与群聊的 `Wrap`）、关于页封面必须 `cover` + `topCenter` 且不许再出现
+`tooWide` 分支、分享弹层标题与副标题之间必须有间隙。**9 个回归样本逐个验证过会报红。**
+
+---
+
+## [1.6.164] - 2026-09-24 (English)
+
+### 🐞 Three layout fixes: the share sheet, the About cover, and the messages pane
+
+**About → share sheet: the title and subtitle were touching (0 gap).** "Share APRSlocus"
+had "APRSlocus · v1.6.x" jammed right underneath it. Now: 3px between title and subtitle,
+14 → 18px between the header and the option list, 8 → 10px between options, and each
+option's vertical padding 11 → 12px.
+
+**About → cover: "the logo backdrop isn't filled" was really the cover photo not filling.**
+The hero used `BoxFit.contain` for "ultra-wide" boxes (to avoid cropping the volcano), but
+the test was `container width / card height > 1.62` while the card height is **capped at
+300** and the container goes to 600 — so "2.0 > the image's 1.5" holds on **every screen
+600 wide or more**, meaning `contain` always won: the photo shrank to a band in the middle
+with 75px of empty space on each side. Landscape made it obvious: the logo's glass card sat
+on that left-hand gap, which reads as "the logo backdrop isn't filled". Fixed with
+`BoxFit.cover` + `Alignment.topCenter`: the photo fills the whole card while keeping the
+snow-capped summit (at 27% of the image height) and the sky; what gets cropped is the
+bottom strip of foreground rocks — the least informative part of the shot.
+
+**Messages: "the panel isn't fully displayed" came from switching columns by orientation.**
+The rule was `narrow = !landscape && maxWidth < 720`, i.e. "any landscape screen gets two
+columns". But the 2.0 landscape shell puts the messages page inside the **left pane** (≤560,
+often 200–280 on a phone), where the **fixed 280** list column pushes the chat column to a
+negative width: both columns overflow and the right-hand side is clipped. Three changes:
+
+* **Column switching now looks only at the available width** (`constraints.maxWidth < 640`)
+  — orientation does not decide how much width you have, width does;
+* **the list column follows its container** (`maxWidth × 0.34`, clamped to 240–280), because
+  the 2.0 pane tops out at 560 while 1.0 tablets and desktops are far wider;
+* a new **`_compactPane` (<520) inline degradation**: the callsign in the one-to-one header
+  may ellipsise and the trailing grid square yields first; the group header's five action
+  chips now **wrap onto their own row** (`Wrap`, nothing hidden).
+
+Both chat headers are single rows of fixed-width widgets, so they overflowed in a narrow
+container too — an overflow stripe in debug, and in release **no error at all, just missing
+pieces**, which is why they now degrade by available width as well.
+
+**Guards.** `check_landscape_layout.py` gained two groups (ten invariants in total): no
+column switching or degradation by orientation (it also requires `_compactPane` and the
+group-header `Wrap`), the About cover must be `cover` + `topCenter` with no `tooWide` branch,
+and the share sheet must keep a gap between title and subtitle. **All nine regression samples
+were verified to fail as expected.**
+
+---
+
+## [1.6.163] - 2026-09-24
+
+### 🔧 网络定位降权：粗定位不再自动上报；关于页名片留白；横屏三端（手机/平板/桌面）打磨 / Network fixes de-emphasised (never auto-beacon), a roomier About card, and landscape polish for phone, tablet and desktop
+
+### 一、网络定位（粗定位）不再自动上报
+
+「自动上报」是**「我在这里」的公开宣告**，而网络/基站定位常年偏几百米、还会原地漂 ——
+报出去的是个错坐标，收端（igate 与其它台站）看到的是一条乱跳的轨迹。所以：
+
+* `canAutoBeacon` 新增条件 `!myFixCoarse`（**唯一出口**，与 `beaconPhase` 同源）；
+* `BeaconPhase` 新增 `coarseFix` 档：地图上报横杠 / 沉浸地图 / 首页 / 设置页都显示
+  「网络定位中 · 暂不自动上报」（而不是一个照走的倒计时），设置页另给一句解释；
+* **手动「立即上报」不受影响**：那是用户的显式动作，知情且即时；
+* GPS 一恢复就自动继续（倒计时按上次成功上报算，所以那一刻会立刻补报一次）。
+
+### 二、顺带把网络定位的权重整体压下来
+
+粗点现在**不产生任何对外影响**（信道 / 链路 / 轨迹 / 历史），剩下的作用只是「GPS 真的
+没了时，地图上还给个大概位置」。配套收紧了三个常数（`tool/check_pos_quality.py` 同步）：
+
+| 常数 | 旧 | 新 | 理由 |
+| --- | --- | --- | --- |
+| `_kCoarseHoldSec` | 120s | **300s** | 2 分钟的 GPS 缝隙（城市峡谷 / 高架 / 室内）太常见，粗点会顶上来 |
+| `_kCoarseJumpKm` | 8.0km | **3.0km** | 基站 / Wi-Fi 的单跳误差本来就在公里级，8km 等于不设防 |
+| `_kCoarseAccuracyFloorM` | 150m | **300m** | 基站质心常在几百米到公里级，150 仍然偏乐观 |
+
+另外**粗点不再推动 APRS-IS 过滤中心**：过滤串按 0.01°（约 1.1km）取整，粗点漂移越过一条
+边界就会触发一次整链路重连（见 `_refreshFilter`）—— 拿几百米精度的点换一次 reconnect，
+代价与收益完全不成比例。
+
+### 三、关于页名片卡：不再挤
+
+头部内边距 14/12/10 → 16/15/14/13、标题与副标题间距 2 → 4px、标题 13.5 → 14.5、
+分享行 14/11 → 16/13，官网图标 32 → 34 并加了 tooltip（桌面悬停能看出它指向哪）。
+
+### 四、横屏：手机 / 平板 / 电脑三端
+
+* **面板内的宽度不再按屏幕宽度算**。2.0 横屏把消息页装进左侧面板（≤560，手机上常
+  200~280），而消息气泡原来取「屏幕宽 × 0.55」：桌面 1920 时会算成 1056，超出的部分
+  被面板的 `ClipRect` 直接裁掉 —— 长消息读不全，而且不报任何错。现在按消息区
+  **实际宽度**（布局期记下的 `_availW`）取比例。
+* **左上统计条按可用宽度降级**。横屏 + 内容面板展开时，地图左上控件可能只剩 200 出头，
+  而三段计数（在线 / 移动 / 台站）都是定宽子项 —— 必然撑爆 `Row`。现在窄的时候只留
+  「在线 + 台站」，每段再用 `Flexible` + ellipsis 兜底（西语的 `en movimiento` 长一倍）。
+* **「矮横屏」改按顶栏之下的可用高度判断**。顶部让位量会被未连接 / 公告横幅各顶掉一行
+  （合计 +84），桌面上又常有「很宽但很矮」的窗口；按裸屏高判断会漏判，而漏判的表现就是
+  工具列最下面的「定位」被裁掉、点不到。阈值也与按钮尺寸挂钩（`_kToolbarColH`），不再
+  是一个没有来历的「520」。
+* **桌面端鼠标指针**：自绘按钮（导航项 / 地图工具钮 / 顶栏胶囊 / 立即上报…）统一包一层
+  `ClickCursor`（`MouseRegion` + `SystemMouseCursors.click`）—— `GestureDetector` **没有**
+  `mouseCursor` 参数（第一版就是这么写错的，CI 报 `undefined_named_parameter`）；没有 Material
+  水波的情况下，鼠标悬停至少要有「可点」的反馈。触屏无影响。
+
+### 五、检查器
+
+`check_landscape_layout.py` 增加 3 条（面板内宽度按局部约束 / 统计条可降级 / 矮横屏按可用
+高度判），`check_pos_quality.py` 更新 3 个常数并新增 3 条（粗点不自动上报 / 粗点不推过滤
+中心 / `BeaconPhase` 有 `coarseFix` 档）。8 个回归样本逐个验证过会报红。
+
+---
+
+## [1.6.163] - 2026-09-24 (English)
+
+### 🔧 Network fixes are de-emphasised (never auto-beacon), the About card gets room to breathe, and landscape is polished for phone, tablet and desktop
+
+**Coarse (network/cell) fixes are no longer transmitted automatically.** An automatic beacon
+is a public statement of "I am here"; a coarse fix is routinely hundreds of metres off and
+wanders in place — what goes out is simply a wrong coordinate, and receivers (igate and
+other stations) see a track that jumps around. So `canAutoBeacon` gained the condition
+`!myFixCoarse` (the **single place** that decides whether a beacon is really sent, sharing
+its source of truth with `beaconPhase`), and `BeaconPhase` gained a `coarseFix` state: the
+map beacon bar, the immersive map, the 1.0 home page and the settings page now all say
+"network fix · auto beacon paused" instead of running a countdown that never fires, with an
+explanation line in settings. **Manual "beacon now" is untouched** — that is an explicit,
+informed action. Automatic reporting resumes the moment GPS returns (the countdown is
+measured from the last successful report, so one goes out right away).
+
+**And the weight of network positioning is lowered overall.** A coarse fix now has *no*
+external effect at all (channel, link, track, history); its only remaining job is "show an
+approximate position on the map when GPS is really gone". Three constants were tightened
+accordingly (kept in sync by `tool/check_pos_quality.py`):
+
+| Constant | Before | After | Why |
+| --- | --- | --- | --- |
+| `_kCoarseHoldSec` | 120s | **300s** | two-minute GPS gaps (urban canyon, flyover, indoors) are far too common to hand over to a cell-tower centroid |
+| `_kCoarseJumpKm` | 8.0km | **3.0km** | single-hop cell/Wi-Fi error is already kilometre-scale; 8km was no guard at all |
+| `_kCoarseAccuracyFloorM` | 150m | **300m** | cell centroids are usually hundreds of metres to kilometres off; 150 was still optimistic |
+
+Coarse fixes also **no longer move the APRS-IS filter centre**: the filter string is rounded
+to 0.01° (≈1.1km), so a drifting coarse fix can cross a boundary and trigger a full link
+reconnect (see `_refreshFilter`) — trading a few-hundred-metre fix for a reconnect is a
+terrible deal.
+
+**About page: the name card is no longer cramped.** Header padding 14/12/10 → 16/15/14/13,
+title-to-subtitle gap 2 → 4px, title 13.5 → 14.5, share row 14/11 → 16/13, and the website
+icon went 32 → 34 with a tooltip (so a desktop hover tells you where it points).
+
+**Landscape, on all three form factors.**
+
+* **Widths inside the pane are no longer computed from the screen.** In the 2.0 landscape
+  shell the messages page lives in the left pane (≤560 wide, often 200–280 on a phone),
+  while bubbles used to take `screen width × 0.55`: on a 1920-wide desktop that is 1056px,
+  and everything past the pane edge was silently clipped by the pane's `ClipRect` — long
+  messages were cut off with no error anywhere. Bubbles now use the message area's **actual
+  width** (`_availW`, captured during layout).
+* **The top-left station chip degrades by available width.** With landscape plus an open
+  content pane the map's left overlay can be down to about 200px, and its three counters
+  (online / moving / stations) are all fixed-width children — they inevitably blew out the
+  `Row`. It now drops to "online + stations" when tight, with `Flexible` + ellipsis as a
+  backstop (Spanish's `en movimiento` is twice as long as the Chinese).
+* **"Short landscape" is now judged by the height actually available below the top bar,**
+  not by raw screen height: the top inset grows by a row for each of the disconnected and
+  notice banners (+84 total), and desktop windows are often wide and short. Judging by raw
+  height misses those cases — and what they produce is exactly the clipped, unreachable
+  "locate" button at the bottom of the tool column. The threshold is now tied to the real
+  button size (`_kToolbarColH`) instead of a magic "520".
+* **Desktop mouse cursors**: self-drawn buttons (nav items, map tool buttons, top-bar pills,
+  "beacon now"…) are now wrapped in `ClickCursor` (`MouseRegion` + `SystemMouseCursors.click`)
+  — `GestureDetector` has **no** `mouseCursor` parameter (the first attempt assumed it did and
+  CI caught the `undefined_named_parameter` error), and with no Material ink splash at least a
+  hover should tell you the thing is clickable. Touch is unaffected.
+
+**CI guards**: `check_landscape_layout.py` gained three invariants (pane-local widths,
+station-chip degradation, short-landscape by available height) and `check_pos_quality.py`
+was updated for the three constants plus three new ones (coarse never auto-beacons, coarse
+never moves the filter centre, `BeaconPhase` has the `coarseFix` state). All eight
+regression samples were verified to fail as expected.
+
+---
+
+## [1.6.162] - 2026-09-23
+
+### 🔧 功能引导收敛：地图/沉浸地图改用一次性弹层；卡片更小更安静 / Guides tidied up: the full-screen map views use a one-off sheet, and the tip card is smaller and quieter
+
+### 一、地图页「UI 重叠」的根因
+
+上一版给引导卡硬写了 `top: topBase + 46`，而**沉浸地图入口**正好在
+`top: topBase + 44` —— 卡片直接把那个按钮糊掉了。
+
+修法走了两步，第一步是错的，记在这里：
+
+1. 先把「统计条 + 沉浸入口」并成**同一个 `Column`** 顺序排布（结构上不可能再重叠）。
+   看着对了，但按**真实几何**量过之后发现：这个竖列的高度全看字体度量，而右上图例
+   是独立浮层 —— 卡片按列排下去，与图例下沿**只差 1px 就相交**。靠「差一点」压住的
+   布局，换个语言（西语那句更长）或换个缩放必然翻车。
+2. 最终：**地图页与沉浸地图都改用一次性底部弹层**（进入该页时弹一次，关掉即记为
+   已看）。全屏地图四周全是浮层（统计 / 图例 / 工具列 / 上报横杠 / 比例尺），浮卡片
+   找不到「一定不重叠」的位置 —— 弹层不参与那套定位，从根上绕开。
+
+弹层只在页面**真的在前台**时才弹：地图在 `IndexedStack` 里（1.0 布局五个 tab 一次
+全建），否则用户还在别的 tab 上时它就会抢着冒出来。
+
+其余 14 个页面仍是正文顶部的内联卡片（它们排在内容流里，不存在重叠）。
+
+### 二、卡片做得更小更安静
+
+* 底色 8% → 6%、描边 22% → 16%、圆角 16 → 14、图标底托 30 → 28、说明行高 1.5 → 1.45；
+* 右侧那个孤零零的 × 图标 → **「知道了」文字按钮**（更好按，也把「关掉 = 看过」说清了）；
+* 地图那条文案改短：这张卡在地图左侧列里只有约 300px 宽（右侧要让开工具列），
+  原来那句会折成四行；
+* 弹层里多一行「之后可在『设置 → 重新查看功能引导』里再看」—— 全屏页面没有顶栏，
+  这是唯一的去处提示。
+
+### 三、顺手修了一个「检查器自己会误伤重构」的问题
+
+`check_landscape_layout.py` 原来数 `14 + widget.leftInset` 的**出现次数**（要求 ≥4：
+信息条 / 沉浸入口 / 上报横杠 / 底部坐标条）。把信息条与沉浸入口合并成同一个竖列之后，
+入口自己不再需要 `leftInset`（它跟着列走），计数掉到 3 就报了个**假失败**。假失败比
+没有检查更坏 —— 修它的人通常会把规则放宽。判据改成按**结构**判：竖列本身要让开、
+**沉浸入口必须真的在那个竖列里**、上报横杠与底部条各自让开。新判据同样验证过会报红。
+
+---
+
+## [1.6.162] - 2026-09-23 (English)
+
+### 🔧 Guides tidied up: the full-screen map views now use a one-off sheet, and the tip card is smaller and quieter
+
+**Why the map page had overlapping UI.** The previous build hard-coded the guide card at
+`top: topBase + 46`, while the immersive-map entry sits at `top: topBase + 44` — the card
+covered that button outright.
+
+The fix took two attempts, and the first one is worth recording:
+
+1. Merging the station-count chip and the immersive entry into **one `Column`** so they
+   flow in order (structurally impossible to overlap). It *looked* right, but measuring the
+   real geometry showed the column's height depends entirely on font metrics while the
+   legend is a separate overlay — the card ended up **one pixel** away from intersecting
+   the legend. A layout held together by "it just barely fits" will break with a longer
+   language (Spanish) or a different text scale.
+2. Final approach: **both full-screen map views use a one-off bottom sheet** (shown once
+   when the page opens; closing it records the guide as seen). A full-screen map has
+   overlays on every side — count chip, legend, tool column, beacon bar, scale bar — so
+   there is no position where a floating card is guaranteed not to overlap. A sheet does
+   not participate in that positioning at all.
+
+The sheet only fires when the page is **actually in the foreground**: the map lives inside
+an `IndexedStack` (in the 1.0 layout all five tabs are built at once), so without that
+guard it would pop up while the user was still on another tab.
+
+The other fourteen pages keep their inline card at the top of the content — they sit in
+the scroll flow, where overlap is not possible.
+
+**Smaller, quieter card.** Background tint 8% → 6%, border 22% → 16%, radius 16 → 14,
+icon chip 30 → 28, body line height 1.5 → 1.45. The lone × icon became a **"Got it" text
+button** (easier to hit, and it makes "closing = seen" explicit). The map copy was
+shortened, because the card is only about 300px wide there (the tool column takes the rest)
+and the original sentence wrapped to four lines. The sheet gained a line pointing at
+Settings → "Show all feature guides again", since full-screen pages have no app bar to
+put a "show again" button in.
+
+**Also fixed a check that punished refactoring.** `check_landscape_layout.py` used to
+*count* occurrences of `14 + widget.leftInset` (requiring ≥4: info chip / immersive entry /
+beacon bar / scale bar). After merging the info chip and the immersive entry into one
+column, the entry no longer needs `leftInset` of its own — it inherits it — so the count
+dropped to 3 and the check reported a **false failure**. A false failure is worse than no
+check, because the person hitting it usually just loosens the rule. The criterion is now
+structural: the column itself must be inset, **the immersive entry must really live inside
+that column**, and the beacon bar and scale bar must each be inset. The new criterion was
+verified to fail as well.
+
+---
+
+## [1.6.161] - 2026-09-23
+
+### ✨ 功能引导：16 个页面各有「首次进入的小提示卡」/ In-app feature guides: 16 pages now show a one-off tip card on first visit
+
+### 一、为什么不是把首次启动向导（OOBE）做长
+
+OOBE 只解决「装完第一次怎么配」（语言 / 协议 / 呼号 / 符号 / 筛选 / 服务器）。而
+**设备链路、离线地图、日志、备份**这些页面是「用着用着才会遇到」的 —— 第一次打开
+时满屏控件，没人告诉你先点哪里。这版给这类页面各配一句话的提示。
+
+### 二、形态：正文顶部一张可关闭的小卡片
+
+* 首次进入该页时出现，**关掉即记为「已看」，不再打扰**；已看过时**不占任何位置**；
+* 卡片配色与页面语义一致（图标底托 + 淡色描边 + 一句话说明「从哪下手」）；
+* 设置类子页的顶栏多一个「重看本页引导」按钮，临时想再看一眼不必去设置里重置；
+* 地图与沉浸地图是 Stack，卡片**浮在上面**而不插进布局 —— 插进去会改变地图尺寸。
+
+覆盖 16 个页面：地图（主页）、台站列表、沉浸地图、消息、数据包、设备、设置、离线
+地图、日志、备份、轨迹回放、主题与界面、翻译、声卡 TNC、蓝牙 TNC、PKWDWPL。
+
+### 三、看过哪些，是可持久化、可重置的
+
+「已看」记录存进设置（`guideSeen`，与 `oobeDone` 同类）并**纳入备份** —— 换机后
+不该把已经看过的提示卡再弹一遍。设置里新增「重新查看功能引导」：确认后清空记录，
+各页的小提示卡会再出现一次（挨着「重新运行设置向导」）。
+
+### 四、引导文案是 6 语言的，且有三道静态检查兜底
+
+加一条引导要同时动**四处**：引导表、l10n 键（6 语言）、gen-l10n 产物、页面接入点。
+漏任何一处都**不会让编译或测试失败**，只会表现为「引导永远不出现」或「某个语言下
+运行时崩」。新增 `tool/check_guides.py` 把这四处一一对应钉住，两个方向都查
+（缺一步、以及页面里写了不存在的 id）。这条检查自己也被验证过会报红 —— 它在写完
+当次就抓出了三处真问题：`audio` / `backup` / `offlineMap` 三页只给了 `guideId`
+却没给 `state`，卡片会静默不出现。
+
+---
+
+## [1.6.161] - 2026-09-23 (English)
+
+### ✨ In-app feature guides: 16 pages now show a one-off tip card on first visit
+
+**Why not simply make the first-run wizard longer.** OOBE covers "how to configure the
+app once" (language, terms, callsign, symbol, filter, server). But device links,
+offline maps, the log and backup are pages users meet *later*, when the screen is
+already full of controls and nothing says where to start.
+
+**What it looks like.** A small dismissible card at the top of the page body, shown
+once: closing it records "seen" and it never takes up space again. The card uses the
+page's own accent colour and gives one line of "start here" advice. Sub-pages built on
+the settings shell also get a "show this guide again" button in the app bar, so
+re-reading one does not require resetting everything. On the map and immersive map the
+card **floats above** the stack instead of being inserted into the layout, which would
+change the map's size.
+
+Sixteen pages are covered: map (home), station list, immersive map, messages, packets,
+devices, settings, offline maps, log, backup, track replay, theme, translation,
+sound-card TNC, Bluetooth TNC and PKWDWPL.
+
+**Seen-state is persisted and resettable.** The record lives in settings (`guideSeen`,
+the same family as `oobeDone`) and is **included in backups**, so a restored device
+does not replay guides the user already read. Settings gained "show all feature guides
+again", which clears the record after a confirmation.
+
+**Guides are localised into six languages, with a static check behind them.** Adding a
+guide touches four places: the guide table, the l10n keys (6 locales), the generated
+l10n output, and the page that shows it. Missing any one of them breaks neither the
+build nor the tests — it just means the guide never appears, or crashes at runtime in
+one locale. The new `tool/check_guides.py` ties the four together in both directions.
+The check itself was validated to fail; it immediately caught three real problems while
+being written: `audio`, `backup` and `offlineMap` passed a `guideId` without `state`,
+so their cards would have silently never appeared.
+
+---
+
+## [1.6.160] - 2026-09-23
+
+### 🔧 名片卡不再压住封面：退回封面下方，中间留 12px / The business card no longer overlaps the hero — it sits below it with a 12px gap
+
+上一版让名片卡上骑 14px 压住照片下缘（想做出「卡片骑在图上」的层次）。实机看下来
+不合适：照片底部被挡掉一条，**圆角切在图上**，看着像没对齐而不是有意为之。
+
+现在名片卡退回封面下方，中间留 12px 间隙 —— 封面是完整的一张照片，名片卡是
+封面之下的第一张卡，层次由留白而不是重叠来表达。
+
+只改这一处间距，其余版式与上一版一致。
+
+---
+
+## [1.6.160] - 2026-09-23 (English)
+
+### 🔧 The business card no longer overlaps the hero — it sits below it with a 12px gap
+
+The previous build lifted the business card by 14px so that it rode the bottom edge
+of the photo. On a real device this reads wrong: a strip of the photo is hidden and
+the card's rounded corners cut into the image, which looks like a misalignment
+rather than a deliberate layer.
+
+The card now sits **below** the hero with a 12px gap — the hero is one complete
+photograph, and the card is simply the first card under it. Depth comes from the
+whitespace instead of the overlap.
+
+Only this spacing changed; the rest of the layout is identical to the previous
+version.
+
+---
+
+## [1.6.159] - 2026-09-23
+
+### 🎨 关于页重做：实景封面 + 玻璃质感排版，删掉「功能特性」一节 / About page redesigned with a photo hero cover and glass-styled layout; the Features section is removed
+
+## 一、封面从「Logo 底图」换成实景照片
+
+原来的封面是 `assets/logobg.jfif`（一张 Logo 底图）压在圆角卡片里，中央堆一个
+Logo + 标题，四边留一堆空。问题不在图本身，而在**信息全挤在正中**：上下各空出
+一大条，看着像占位符。
+
+现在换成泰德峰（Pico del Teide）实景照，内容按从左下角生长：
+
+* **版本号**挪进右上角的玻璃胶囊，不再在正文里单独占一行；
+* **Logo + APRSlocus + 副标题**落到左下角，压一层「顶部轻压暗 → 中部透明 →
+  底部深墨」的渐变，白字压在亮天空上也读得清；
+* 卡片内侧补一道 0.8px 半透明描边，图与卡片之间多一道光边。
+
+## 二、封面高度随宽度走，不再硬编码 252
+
+底图是 3:2（1280×853）。原来容器固定 252px，在桌面宽屏（卡片宽 700+）下
+`BoxFit.cover` 会把图裁成中间一条 —— 火山正好被切出去。
+
+现在高度由宽度推：`(宽 × 0.64).clamp(196, 300)`。手机竖屏约 232，平板/桌面给到
+300 封顶。宽度/高度比超过 1.62（比原图还扁的超宽屏）时改用 `BoxFit.contain`：
+宁可上下留一点边，也不能把主体裁掉。
+
+## 三、桌面宽屏限宽居中
+
+封面与正文套**同一个** `ConstrainedBox`（600）。之前 Windows 全屏时卡片会被
+拉成整屏宽，行宽过长很难读；限宽居中后视觉焦点回来了。一开始是封面 560、
+正文 640 两套宽度，宽屏下两者边缘对不齐、看着像错位，索性并成一个容器。
+
+## 四、删掉「功能特性」一节
+
+七行 `_feature`（实时地图 / GPS / 信标 / 消息 / 自动连接 / 图层过滤 / FMO）在
+App 里是用户已经看得见的功能，关于页重复列一遍只是把页面拉长。整节移除，
+`features` 系列 l10n 键保留（不删键，避免影响其它语言文件同步）。
+
+## 五、其它排版
+
+* 「分享」从一个孤零零的描边小胶囊改成**整行可点**的入口（图标 + 标题 + 箭头）；
+* 分节标题改成「淡色底托图标 + 标题 + 右侧细横线」，一页看下来有节奏；
+* 页脚加了分割线、放大了行高，并在最底部标出封面摄影署名
+  （Pixabay / frankpotters7）。
+
+## 六、版式改成「名片式」：分节 8 → 5
+
+- **名片卡压在封面下缘**（上骑 14px）。左上是「呼号 · 名字」，右上是一颗官网
+  图标按钮，下面一整行是分享入口。以前这三样拆成「作者」分节 + 一张独立的分享
+  卡，光这两块就占两个分节；并成一张卡后封面与身份连成一体，整页少一个分节。
+- **去掉作者个人站（theez.top）与「站长」字样**。官网按钮改为指向 App 官网
+  `aprslocus.theez.top`（底部「用户反馈」里本来就有这一项），关于页不再出现
+  作者个人站。
+- **「开源致谢」+「许可证声明」→ 一节「开源与许可」**：四个开源项排成 2×2 网格
+  （原来四行「图标 + 标题 + 说明」白占四行高度），下面接 GPL v3、用户协议与
+  许可声明正文。
+- **「测试成员」+「AI 算力支持」+「赞助与鸣谢」→ 一节「致谢名单」**：呼号改成
+  chip 后按 `Wrap` 自动折行，AI 算力支持收成一行小字，赞助入口降为卡内一行。
+- 分节标题文案随之新增两个 l10n 键（`ossLicenseSection`、`creditsSection`，
+  6 语言齐全）；旧键（`openSource`、`licenseSection`、`website` 等）保留不删，
+  避免影响其它语言文件的键同步。
+- 长按彩蛋全部保留：名片卡的呼号仍是 `BG7LZQ`，测试成员 chip 与「代码优化」
+  那行也都能长按。
+
+---
+
+## [1.6.159] - 2026-09-23 (English)
+
+### 🎨 About page redesigned with a photo hero cover and glass-styled layout; the Features section is removed
+
+**Hero cover.** The old hero used `assets/logobg.jfif` (a logo backdrop) with a
+logo and title stacked in the centre, leaving large empty bands above and below.
+It is replaced by a real photograph of Pico del Teide with the content anchored
+to the lower-left: the version moves into a frosted-glass pill in the top-right,
+and the logo, wordmark and subtitle sit on a dark gradient (light at the top,
+transparent in the middle, deep ink at the bottom) so white text stays readable
+against the bright sky. A 0.8px translucent inner border separates the photo from
+the card edge.
+
+**Adaptive hero height.** The photo is 3:2 (1280×853). With the old fixed 252px
+height, `BoxFit.cover` cropped it to a thin centre strip on wide desktop windows
+and cut the volcano out of frame. The height is now derived from the width —
+`(width × 0.64).clamp(196, 300)` — roughly 232 on a phone and capped at 300 on
+tablets/desktop. When the width/height ratio exceeds 1.62 (ultra-wide windows) it
+falls back to `BoxFit.contain`, preferring letterboxing over cropping the subject.
+
+**Constrained width on desktop.** The hero and the body now share **one**
+`ConstrainedBox` (600). Previously the cards stretched across a full-screen
+Windows window, producing unreadably long lines. An earlier pass capped them
+separately (hero 560, body 640), which left their edges misaligned on wide
+screens — hence the single container.
+
+**Features section removed.** The seven `_feature` rows (live map, GPS, beacon,
+messages, auto-connect, layer filter, FMO) duplicated functionality the user can
+already see in the app, and only made the page longer. The `features` l10n keys
+are kept so the other locale files stay in sync.
+
+**Business-card layout (sections 8 → 5).** A single card now rides the bottom edge
+of the hero (lifted 14px), carrying the callsign and name, a globe button on the
+right, and a full-width share row. Those three used to be an "Author" section plus
+a separate share card; merging them removes one section and ties the hero to the
+app's identity. The author's personal site (`theez.top`) and the "site owner"
+label are **removed** — the globe button now opens the app's own site
+(`aprslocus.theez.top`), which the Feedback section already listed. "Open source
+thanks" and "License" merged into "Open source & licence", with the four projects
+in a 2×2 grid (they previously occupied four full rows); "Test members", "AI
+compute support" and the sponsor entry merged into "Credits", with the callsigns
+as wrapping chips. Two new l10n keys were added (`ossLicenseSection`,
+`creditsSection`) across all six locales; older keys are kept so the locale files
+stay in sync. Every long-press easter egg still works.
+
+**Other polish.** The share entry became a full-width tappable row (icon, title,
+chevron); section headers gained a
+tinted icon chip and a trailing hairline rule; and the footer now has a divider,
+looser line height and a photo credit for the cover
+(Pixabay / frankpotters7).
+
+## [1.6.158] - 2026-09-23
+
+### 🐛 修「退出设置子页时公告横幅闪一下」；公告入口搬到设置主页最底下 / Fixing the flash when leaving a Settings sub-page, and moving the announcement entry to the bottom of the Settings home screen
+
+## 一、「公告横幅怎么显示在设置子页？退出动画会闪一下」
+
+这不是横幅的问题，而是**转场底**的判据在**弹出方向**漏了整整一帧。
+
+背景：应用只有一层底（`MaterialApp.builder` 里那层）。而 Flutter 在路由转场期间会把
+新路由的 OverlayEntry 设为**非 opaque**，于是动画期间**旧路由照常绘制**；
+本项目各页面底色是**透明**的（`C.pageFill`：有底时透明）—— v1.6.146 就是因此
+给转场期额外加了一份「底」，免得动画期间透出上一页。
+
+那份底的判据写的是 `v >= 1 ? 不画 : 画`：
+
+* **推入**时它是对的（推入第一帧值就是 0，底照画）；
+* **弹出**时正好反了 —— `AnimationController.reverse()` 只把 status 置为 reverse，
+  **值要等下一个 tick 才动**，而 ticker 的**首次回调 elapsed 恒为 0**：值仍然是 1.0。
+
+于是弹回后的第一帧里三件事同时发生：框架已按 `opaque = false` 把**底下那一页**画了；
+退出中的页面是透明的；这份「底」又被 `v >= 1` 判成「不用画」。三者叠加 =
+**底下那一页整整透出一帧**。2.0 布局下底下就是地图，而公告横幅正好浮在地图上、
+位置又与设置子页里那条横幅同高 —— 看起来就成了「横幅显示在设置子页上」。
+
+**修法**：判据从「值到没到 1」改成「**转场是否进行中**」（status），并挂
+`addStatusListener`。这里必须挂状态监听：`reverse()` **不通知值监听器**
+（`ValueListenableBuilder` / `AnimatedBuilder` 都收不到那一下），而弹出时
+**恰恰只有在值还没变的那一帧**需要把底画上。新的 `_TransitionBackdrop` 用
+**排除法**判断没停稳（`completed` / `dismissed` 之外都算转场中），不列举
+forward / reverse —— 将来状态只可能更多。停稳后照样不常驻，不会与 `builder` 那份底重复合成。
+
+⚠ 这也意味着：这个闪只在**开了磨砂玻璃/云母材质或设了背景图**时才会出现
+（那时页面底色才是透明的；材质关掉时页面是实色，透不出来）。
+
+## 二、公告：子页不再放横幅，入口搬到设置主页最底下
+
+* **设置子页（设置 → 显示）里不再放横幅**，只留「公告横幅」开关；
+* **设置主页最底部**新增「公告」入口（在备份之后、关于之前；退出应用那颗销毁性
+  按钮仍留在最底）。
+
+为什么是「按钮」而不是在设置主页也放一条横幅：横幅是**被动可见**的通知
+（主页/地图那条已经在做这件事），这里要的是「我想看时点一下」—— 两处都放横幅
+才是重复的。
+
+这个入口的几个取舍：
+
+* **点它才联网**（先网络、失败退缓存），不在进入设置页时预拉。横幅那个开关的承诺是
+  「关了就不在后台联网」，而**用户主动点这一下**不是后台行为 —— 所以开关关着时
+  这个入口**依旧可用**；否则「不想在主页看到横幅」的人就再也读不到公告了。
+* 取不到就如实弹一句「暂无公告」，不留白也不假装成功。
+* 全文仍是**底部弹层**（与横幅点开的是同一个），没有退回整页。
+* 加了一颗转圈与防连点：否则手抖两下会发两次请求、叠两层弹层。
+
+## 三、检查器：抓到一个真实的「假绿」
+
+`tool/check_notice.py` 原来有一条断言「设置子页必须有 `NoticeBanner(`」。
+而开关那一行写的是 `st.setNoticeBanner(v)` —— **它含有 `NoticeBanner(` 这个子串**，
+所以这条断言一直是假绿的（子页横幅删了也不会报）。这次删掉横幅才暴露出来。
+现在改成：先把 `setNoticeBanner(` 整个剔掉再搜（只加左括号是不够的）。
+
+同时补了两条正向断言（设置主页必须 `showNoticeSheet(` —— 点了要真的打开全文；
+必须 `NoticeStore.instance.load(` —— 得先取到内容才能弹层）和一条反向断言
+（设置子页不许再出现 `NoticeBanner(`）。三个回归样本都验过会报红。
+
+另新增 `tool/check_transition_backdrop.py`（已接进 CI）：钉住「转场底必须按 status 判断」
+（不许再出现 `value >= 1` 当转场结束）、必须挂/摘状态监听、底必须画在页面之下、
+底必须与 `builder` 同源，并顺带钉住这套机制的前提（`C.pageFill` 仍是「有底时透明」）。
+
+## 四、手册：显示那一节不再说「顶部有一条公告横幅」
+
+横幅现在在主页/地图顶部、不在显示子页里 —— 三语手册改成「另有公告横幅开关」
+并补上设置主页底部那个入口。三语 39 页已重新生成。
+
+---
+
+## [1.6.158] - 2026-09-23 (English)
+
+### Fixing the flash when leaving a Settings sub-page, and moving the announcement entry to the bottom of the Settings home screen
+
+## 1) “Why is the announcement banner showing inside a Settings sub-page? Leaving the page flashes”
+
+It was not the banner — the backdrop painted during route transitions was being skipped for
+**exactly one frame on the pop direction**.
+
+The app has a single backdrop layer (the one in `MaterialApp.builder`). During a route
+transition Flutter marks the incoming route's OverlayEntry **non-opaque**, so the **old route
+keeps painting**; and this project's pages are **transparent** by design (`C.pageFill` is
+transparent whenever a backdrop exists). That is why v1.6.146 added an extra copy of the
+backdrop for the duration of a transition.
+
+That copy decided what to do with `v >= 1 ? skip : paint`:
+
+* on **push** it was correct (the value starts at 0, so the backdrop was painted);
+* on **pop** it was backwards — `AnimationController.reverse()` only sets the status to
+  reverse; the **value moves on the next tick**, and a ticker's **first callback always
+  reports elapsed = 0** — so the value is still 1.0.
+
+On that first frame after a pop, three things happen at once: the framework already paints
+the **page underneath** (`opaque = false`); the outgoing page is transparent; and the
+backdrop is skipped because `v >= 1`. The result is **the page underneath showing through
+for a full frame**. In the 2.0 layout that page is the map, and the announcement banner
+floats on the map at exactly the height of the banner in the sub-page — so it reads as
+“the banner is displayed inside the Settings sub-page”.
+
+**The fix**: the criterion is now “**is a transition in progress**” (status) instead of “did
+the value reach 1”, driven by `addStatusListener`. A status listener is mandatory here
+because `reverse()` **does not notify value listeners** (`ValueListenableBuilder` /
+`AnimatedBuilder` never hear about it), yet on pop the backdrop is needed **precisely on
+the frame where the value has not changed yet**. The new `_TransitionBackdrop` decides by
+**elimination** (anything other than `completed` / `dismissed` counts as in-transition)
+rather than listing forward / reverse. Once settled it still does not persist, so it never
+double-composites with the builder's backdrop.
+
+⚠ This also means the flash could only appear with the **frosted-glass/mica material or a
+background image** enabled — that is when page backgrounds are transparent.
+
+## 2) Announcements: no banner in the sub-page, entry moved to the bottom of Settings
+
+* The **Settings sub-page (Settings → Display) no longer shows a banner**, only the
+  “Announcements” toggle;
+* The **bottom of the Settings home screen** gained an “Announcements” entry (after Backup,
+  before About; the destructive “Quit app” button stays last).
+
+Why a button rather than another banner on the Settings home screen: a banner is a
+**passively visible** notice (the home/map banner already does that job) — what was asked
+for here is “a tap when I want to read it”. Two banners would simply be duplication.
+
+A few deliberate choices in that entry:
+
+* **It only goes online when tapped** (network first, cached copy as fallback); nothing is
+  prefetched on entering Settings. The banner toggle promises “off means no background
+  network requests”, and **the user tapping this** is not a background request — so the
+  entry **stays available even when the toggle is off**. Otherwise anyone who hid the
+  banner on the home screen could never read announcements again.
+* If nothing can be fetched it says “No announcements yet” instead of showing a blank or
+  pretending to succeed.
+* The full text still opens in a **bottom sheet** (the very same one the banner opens) —
+  no regression to a full page.
+* A spinner and a double-tap guard were added; without them two quick taps fire two
+  requests and stack two sheets.
+
+## 3) Checkers: caught a real false green
+
+`tool/check_notice.py` had an assertion “the Settings sub-page must contain
+`NoticeBanner(`”. But the toggle line reads `st.setNoticeBanner(v)` — which **contains the
+substring `NoticeBanner(`** — so that assertion had been passing vacuously all along (it
+would not have reported the banner's removal either). It only surfaced when the banner was
+deleted. The check now strips `setNoticeBanner(` first (adding the opening parenthesis
+alone is not enough).
+
+Two positive assertions were added (the Settings home screen must call `showNoticeSheet(`
+— tapping has to actually open the full text — and must call
+`NoticeStore.instance.load(` — content is needed before a sheet can be shown) plus one
+negative assertion (no `NoticeBanner(` in the Settings sub-page). All three regression
+samples were verified to go red.
+
+A new `tool/check_transition_backdrop.py` (wired into CI) pins the fix: the backdrop must
+be judged by status (no `value >= 1` as “transition finished”), the status listener must be
+added **and removed**, the backdrop must sit **behind** the page, it must come from the same
+source as the builder's, and the mechanism's precondition (`C.pageFill` still transparent
+with a backdrop) is pinned too.
+
+## 4) Manual: the Display section no longer claims a banner “at the top”
+
+The banner now lives at the top of the home screen / map, not in the Display sub-page — the
+three-language manual says “an announcement toggle” and mentions the new entry at the bottom
+of the Settings home screen. All 39 pages were regenerated.
+
+## [1.6.157] - 2026-09-23
+
+### 🐛 修「底图切换面板弹不出来」（v1.6.151 起一直坏着）；顺手补同类守卫 / Fixing the base-map panel that would not open, plus a guard against the same class of bug
+
+## 一、底图按钮点不开
+
+反馈：「在主界面不能切换地图类型，无法弹出选择面板」。
+
+**根因非常小**：工具列第三颗按钮（底图）的回调写成了
+
+```dart
+onTap: () => _showMapTypeMenu,      // 漏了 ()
+```
+
+箭头函数体是一个**裸标识符** —— 它只是**返回这个函数本身**，从不调用它。
+点下去什么都不发生，面板自然弹不出来。
+
+**为什么编译、analyze、测试全都不会报**：`GestureDetector.onTap` 的类型是
+`VoidCallback`（返回 `void`），而 Dart 在**返回值位置**把 `void` 当作顶类型，
+于是 `void Function() Function()`（返回函数的函数）可以赋给 `void Function()`。
+没有任何内置 lint 会拦这种写法 —— 典型的「能编译、点了没反应」。
+
+这一处是 v1.6.151 重排工具列时手滑改坏的（改之前是正确的方法引用），
+所以 **v1.6.151 ~ v1.6.156 都点不开底图面板**。现在恢复成直接传方法引用，
+结构上不可能再犯。
+
+## 二、检查器：补一条同类守卫
+
+`tool/check_ui_wiring.py` 增加第 6 组：回调不能「只返回函数、不调用」。
+判据限定在 `onXxx: () => 名字` 这一形态上 —— 不限定作用域的话会误报
+`builder: (_, __) => icon`（builder 返回一个局部 widget 变量，完全合法），
+这一点是实测出来并写进注释的。已用回归样本验证：把括号去掉，CI 直接报红。
+
+## 三、顺手把两处「写死的判据」改成自洽判据
+
+本月被同一类问题咬了三次（v1.6.155 首页条数、v1.6.156 首页条数、这次手册设置页行数）：
+判据里写死数字，写死之后**加了内容就误报** ——「内容是对的、检查是旧的」。
+两处都改成自洽判据：
+
+* **首页更新日志**：不再数「有几条」，而是**逐条点名** —— 生成器里配置的每个版本
+  都必须在三页上出现（少一个版本就报红）。
+* **手册设置页表格**：不再比 196 行，而是要求**三语表格互相对齐** + 15 个分组 +
+  行数下限（某语言的表格漏行才是真问题，而那次正是加了一个设置项触发的）。
+
+## 四、公告横幅挪到主页，打开改成底部弹层，并且能关
+
+（这一条是 v1.6.156 之后、同一批改动里的调整）原先横幅只在**设置子页**里、
+点开是 **push 一个整页**。现在按反馈调成：
+
+* **主页也有横幅**：1.0 放在顶栏与内容之间；2.0 压在地图上、顶栏之下
+  （横屏同样有，且左边让开导航竖条/内容面板）。两处都跟设置页那条共用同一份内容。
+* **打开改成底部弹层**：从底部升起、可拖动关闭、长内容整层可滚 —— 读公告不必
+  离开地图、也不必按返回。
+* **横幅自带关闭按钮**：点它 = 把「公告横幅」这个**开关置为 off**（所以两处的
+  横幅一起收起，设置页的开关同步变成「关」）。刻意不另存一个「已忽略」标记：
+  那种状态用户看不见、也回不去，会出现「我明明关了它明天又回来」；置 off 之后
+  想再看，打开开关即可 —— 一个来源、两种入口。
+* 2.0 那边把横幅高度**算进地图的顶部让位量**（常量 34px），否则它会压住地图
+  自己的信息条 / 图例 / 工具列 —— 与未连接横幅同一套口径。
+
+## 五、手册补上 v1.6.156 的新东西（三语 39 页已重新生成）
+
+* **位置信标 → 速度分档**：补「航向变化」打点，含两道闸 —— **只在行驶中生效**
+  （停着不动时航向本身就是噪声）、**两次之间至少隔 20 秒**（发卡弯上会把信道刷满）；
+* **设置参考 → 显示**：补公告横幅的说明（内容取自官网公告区、改官网即可发通知、
+  断网用缓存、关掉后不再联网）。
+
+---
+
+## [1.6.157] - 2026-09-23 (English)
+
+### Fixing the base-map panel that would not open, plus a guard against the same class of bug
+
+## 1) The base-map button did nothing
+
+The report: “on the main screen I cannot switch map type — the selection panel will not open.”
+
+**The cause was tiny**: the third toolbar button (base map) had its callback written as
+
+```dart
+onTap: () => _showMapTypeMenu,      // the () is missing
+```
+
+The arrow body is a **bare identifier** — it merely **returns the function itself**
+and never calls it. Tapping does nothing, so the panel never opens.
+
+**Why neither the compiler, analyze, nor tests catch it**: `GestureDetector.onTap` takes
+a `VoidCallback` (returning `void`), and Dart treats `void` in **return position** as a
+top type — so `void Function() Function()` (a function returning a function) is
+assignable to `void Function()`. No built-in lint rejects that — the classic
+“compiles fine, does nothing when tapped”.
+
+This was broken by a slip while rearranging the toolbar in v1.6.151 (it had been a correct
+method reference before), which means **v1.6.151 through v1.6.156 could not open the base
+map panel at all**. It is back to passing the method reference directly, a form that
+cannot regress this way.
+
+## 2) A guard for the same class of bug
+
+`tool/check_ui_wiring.py` gained a sixth group: callbacks must not “return a function
+without calling it”. The check is scoped to the `onXxx: () => name` shape — without
+that scoping it false-positives on `builder: (_, __) => icon` (a builder returning a local
+widget variable, perfectly legal), a detail that was measured and is recorded in the code.
+Verified against a regression sample: remove the parentheses and CI goes red.
+
+## 3) Two hard-coded assertions replaced with self-consistent ones
+
+This month the same class of problem bit three times (homepage entry count in v1.6.155,
+again in v1.6.156, and the manual settings row count now): a hard-coded number means
+**adding content trips the check** — “the content is right, the check is stale”.
+Both are now self-consistent:
+
+* **Homepage changelog**: no longer counts entries; it **names every version** in the
+  generator's config and requires each to appear on all three language pages.
+* **Manual settings table**: no longer compares against 196 rows; it requires the three
+  languages to **agree with each other**, 15 groups, and a row-count floor (a missing row
+  in one language is the real problem — and that is exactly what adding a setting caused).
+
+## 4) The announcement banner moves to the home screen, opens in a bottom sheet, and can be closed
+
+(An adjustment made after v1.6.156, shipped in the same batch.) The banner used to live
+only inside the **Settings sub-page**, and tapping it **pushed a full page**. It now works
+as follows:
+
+* **The home screen has a banner too**: in 1.0 it sits between the top bar and the content;
+  in 2.0 it floats over the map, under the top bar (landscape included, shifted right to
+  clear the navigation rail and content pane). Both share the same content as the one in
+  Settings.
+* **Opening uses a bottom sheet**: it rises from the bottom, can be dragged away, and the
+  whole sheet scrolls for long notices — reading an announcement no longer takes you off
+  the map and no longer needs a Back press.
+* **The banner carries its own close button**: tapping it sets the **announcement switch to
+  off** (so both banners collapse together and the Settings switch follows). A separate
+  “dismissed” flag was deliberately avoided: that state is invisible and irreversible,
+  producing “I definitely turned it off and it came back tomorrow.” With the switch off,
+  just turn it back on — one source of truth, two entry points.
+* In 2.0 the banner’s height is **counted into the map’s top inset** (a 34 px constant);
+  otherwise it would sit on top of the map’s own info chip, legend and tool column — the
+  same convention as the offline banner.
+
+## 5) The manual now covers v1.6.156's additions (39 pages regenerated, three languages)
+
+* **Beacon → speed tiers**: the new **turn** trigger, including its two gates — **only
+  while moving** (heading is noise when parked) and **at least 20 s apart** (hairpins would
+  otherwise flood the channel);
+* **Settings reference → Display**: a note on the announcement banner (content comes from
+  the website's announcement section, publishing needs no app release, the cached copy is
+  used offline, and switching it off stops all network requests).
+
+---
+
+## [1.6.156] - 2026-09-23
+
+### 📢 公告横幅（官网 Markdown，应用内渲染）；智能信标支持「按转弯」打点；台站备注看得出能输入 / An announcement banner rendered from the website's Markdown; turn-based smart beaconing; an editable-looking comment field
+
+## 一、公告横幅：改官网就能发通知，不用等新版
+
+用户要的是「一个用户可以打开的公告横幅，内容从官网文件夹拉取，md 应用内支持渲染
+MD 和超链接」。现在设置 → 显示 里多了一条横幅，默认开启。
+
+**官网那侧**：`docs/notice/<语言>.md`（六份：简中 / 繁中 / 英 / 日 / 西 / 印尼）。
+**改文件 → 推 main → 官网部署（约一分钟）→ 用户下次打开设置就能看到**，
+不必发新版本 —— 这才是「公告」该有的时效性。
+
+**应用那侧三层**：
+
+* 拉取有**兜底链**：`notice/<当前语言>.md` → `notice/en.md` → **上次成功拉到的缓存**。
+  缓存的意义是「断网也看得见」：没有它，飞机上、地铁里打开设置就是一片空白。
+* **渲染用 `markdown` 解析器 + 自己拼 Flutter widget**（只引解析器，不引渲染库）：
+  样式跟随应用自己的排版令牌，链接行为也由我们决定。支持标题、粗斜体、列表、
+  引用、代码块、**表格**、图片、删除线、自动链接。
+* 全部拿不到时如实写「暂无公告」+ 重试按钮，**不留白** —— 留白会让人以为功能坏了。
+
+三个细节值得一提：
+
+1. **开关关掉时一次网络请求都不发**。用户关它多半就是不想让它联网，所以这不只是
+   「藏起来」。
+2. **打开时先用缓存立刻显示**，再后台刷新；刷新失败**保留**旧内容而不是清空。
+3. 缓存内容会标出「离线缓存 · 时间」，用户据此知道这不是最新的。
+
+## 二、智能信标新增「按转弯」打点（角度每档可自定义）
+
+原来的智能信标有「定时」和「按距离」两路判据。距离与定时都答不了
+**「这个弯该不该补一个点」**：盘山路上车速慢，距离门限很久才够，而连续发卡弯
+正是最该有轨迹的地方 —— 缺了这条，地图上那段就是一串被拉直的直线。
+
+现在上报判据是「定时到了，**或**走够了，**或**拐过去了」。角度**每一档单独设置**
+（10~180°，0 = 关闭），默认城市档 45°、高速档 30°；档位行显示成
+「每 60 秒 · 或移动 400 m · 或转 45°」。直路巡航时航向不变，它一次都不会触发。
+
+三个必须处理的细节（缺一个都会变成「每个点都发」，把共享信道刷满）：
+
+* **角度要环绕**：359° → 1° 是转了 2°，不是 358°。直接相减会把「几乎没转」判成
+  「转了大半圈」。
+* **只在行驶中生效**（≥5 km/h）：停着不动时航向本身就是噪声，指南针也会被身边
+  铁器带偏，抖动足以越过 45°。
+* **两次之间至少 20 秒**：发卡弯上 30° 阈值可能几秒就满足一次，各家智能信标都带
+  速率上限正是这个原因。
+
+## 三、台站备注：看得出来这里能输入
+
+反馈是「台站备注，用户都不知道那里是可以输入的」。根因很具体：输入框是
+**无边框、无底色、无占位提示**的，而「台站备注」默认就是空的（v1.6.80 起
+默认清空）—— 于是那一行右边**整片空白**，和旁边静态的「标签 + 值」行长得一模一样。
+
+现在做三件事：**空值显示占位提示**（通用的「点击输入」，台站备注那一行写
+「未填写 · 点这里输入」）、**输入区给一层浅底 + 圆角 + 淡描边**、**聚焦时描边变蓝**。
+全仓 42 处输入行一起受益。
+
+## 四、检查器
+
+新增 `tool/check_notice.py`（已接进 CI）：官网六个语言文件齐备、**开关关闭时不联网**、
+Markdown 走 GFM 扩展集、链接交给系统浏览器、相对地址补全、表格/代码块/图片分支都在、
+开关落盘并进备份。这几条都能正常编译、也能通过 analyze，只在真机上表现成
+「某些语言看不到公告」「关了还在请求」「链接点了没反应」。
+
+`check_beacon_track.py` 增补 8 条盯住转弯打点（环绕折算、两道闸**被用上**、
+记录上次航向、落盘读回、设置页字段与写回）。
+
+## 五、这一轮踩的坑（都记在代码里）
+
+* **检查器匹配到了文档注释里的字**：`markdown_view.dart` 的注释里写着「用
+  `ExtensionSet.gitHubFlavored` 是为了表格」，于是把代码换成 commonMark 仍然报绿。
+  已加 `code_only()`，只搜代码行。
+* **断言了名字、没断言实现**：只查 `_abs(` 出现过 —— 把**定义**改名后调用点仍在，
+  照样报绿；转弯打点的两道闸也只查了常量名。已改成断言真正起作用的那一行。
+* **`git checkout <file>` 会把未提交的改动一起还原**（本轮犯了两次），改用 `cp` 备份。
+* CI 报的 4 处编译错误：可空值未提升 ×3、l10n 占位符 `type: int` 却传了字符串 ×3、
+  `late` 字段初始化器里引用 `widget` ×2。
+
+---
+
+## [1.6.156] - 2026-09-23 (English)
+
+### An announcement banner rendered from the website's Markdown; turn-based smart beaconing; a comment field that looks editable
+
+## 1) The announcement banner: publish from the website, no new release needed
+
+The request: a banner the user can switch on, whose content is pulled from a folder on
+the website, with Markdown and hyperlinks rendered in-app. There is now a banner at the
+top of Settings → Display, on by default.
+
+**On the website**: `docs/notice/<language>.md` (Chinese, Traditional Chinese, English,
+Japanese, Spanish, Indonesian). **Edit the file → push to main → the site deploys
+(~a minute) → users see it the next time they open Settings** — no new version
+required, which is the whole point of an announcement.
+
+**In the app**, three layers:
+
+* Fetching has a **fallback chain**: `notice/<current language>.md` → `notice/en.md`
+  → **the last successfully fetched copy**. The cache exists so announcements remain
+  visible offline — without it, Settings on a plane is simply blank.
+* **Rendering uses the `markdown` parser plus our own Flutter widgets** (parser only, no
+  rendering library): styling follows the app's own type tokens and link behaviour stays
+  ours. Headings, bold/italic, lists, quotes, code blocks, **tables**, images,
+  strikethrough and autolinks are all supported.
+* When nothing can be obtained it says “No announcements yet” with a Retry button
+  rather than showing nothing — blank space reads as “the feature is broken”.
+
+Three details worth naming:
+
+1. **With the switch off, not a single network request is made.** People usually turn it
+   off because they do not want it online, so this is not just “hidden”.
+2. **Opening it shows the cached copy immediately**, then refreshes in the background;
+   a failed refresh **keeps** the old content instead of clearing it.
+3. Cached content is labelled “Offline copy · time” so users know it may be stale.
+
+## 2) Smart beaconing gains a third trigger: turning (angle configurable per tier)
+
+Smart beaconing had *timer* and *distance*. Neither answers **“should this corner add a
+point?”** — on mountain roads you are slow, so the distance threshold takes ages to
+reach, yet those hairpins are exactly where the track matters most. Without this trigger
+that stretch becomes a series of straightened lines.
+
+The trigger is now “the timer expired, **or** you moved far enough, **or** you turned far
+enough”. The angle is **per tier** (10–180°, 0 = off); defaults are 45° for the city
+tier and 30° for the highway tier, and each row reads “Every 60 s · or 400 m · or 45°”.
+Cruising straight, the heading does not change and it never fires.
+
+Three details that each turn this into “beacon on every fix” if missed — and flood a
+shared channel:
+
+* **Wrap the angle**: 359° → 1° is a 2° turn, not 358°. Subtracting directly makes
+  “almost no turn” read as “turned most of a circle”.
+* **Only while moving** (≥ 5 km/h): heading is pure noise when parked, and a compass near
+  iron drifts enough to cross 45° on its own.
+* **At least 20 s between turn-triggered beacons**: on a hairpin a 30° threshold can be
+  satisfied within seconds; rate limiting is why every smart beacon implementation has it.
+
+## 3) The station comment now looks editable
+
+The report: “nobody knows that the station comment can be typed into”. The cause was
+concrete: the field had **no border, no fill and no placeholder**, and the comment
+defaults to empty (since v1.6.80) — so the right-hand side of that row was **entirely
+blank**, indistinguishable from the static “label + value” rows beside it.
+
+Three changes: **an empty field shows a placeholder** (“Tap to type” generally; “Not
+set · tap to type” on the comment row), **the input area gets a soft fill, rounded
+corners and a hairline border**, and **the border turns accent blue on focus**. All 42
+input rows in the app benefit.
+
+## 4) Checkers
+
+New `tool/check_notice.py` (wired into CI): the six website files exist, **the switch
+being off means no network call**, Markdown uses the GFM extension set, links go to the
+system browser, relative URLs are completed, table/code/image branches exist, and the
+switch persists and is included in backups. All of these compile and pass analyze fine
+and only misbehave on a device (“some languages never see announcements”, “it still
+phones home after I turned it off”, “the link does nothing”).
+
+`check_beacon_track.py` gained eight assertions covering the turn trigger (angle wrap,
+both rate gates **actually used**, last heading recorded, persisted and restored, the
+settings field and its write-back).
+
+## 5) Things this round taught us (all recorded in the code)
+
+* **A check matched text inside a doc comment**: `markdown_view.dart` comments explain
+  why `ExtensionSet.gitHubFlavored` is used, so swapping the code to commonMark still
+  passed. `code_only()` now restricts checks to code lines.
+* **Asserting a name instead of the implementation**: checking that `_abs(` appears
+  passes even after the **definition** is renamed, since call sites remain; the two turn
+  gates only checked constant names. Both now assert the lines that actually do the work.
+* **`git checkout <file>` also discards uncommitted work** (twice this round) — switched
+  to `cp` for backup/restore.
+* Four compile errors reported by CI: nullable values not promoted × 3, l10n placeholders
+  declared `type: int` while strings were passed × 3, and `late` fields referencing
+  `widget` in initializers × 2.
+
+---
+
+## [1.6.155] - 2026-09-23
+
+### 🖱 四条界面反馈：图层面板「点了没反应」、会话输入框藏底下、未连接提示、在地图查看不回地图 / Four UI reports: unclickable layer panel, hidden chat input, weak offline notice, and “view on map” not switching back
+
+## 一、地图上的按钮「点了没反应」—— 只有图标那一小块能点
+
+反馈是「图层选择面板打不开」。真凶不在面板，在**按钮的命中区**：
+
+按钮的底色来自 `BoxDecoration`，而它对应的 `DecoratedBox`
+（`RenderDecoratedBox extends RenderProxyBox`）**没有重写 `hitTestSelf`** ——
+也就是**不吸收点击**，命中全交给子节点。于是默认的 `deferToChild` 把可点区域
+缩到中间那个 **20px 图标**上：38px 的按钮只有中心约 28% 能点，按到边缘、
+圆角**完全没反应**。
+
+对比很能说明问题：Flutter 自己的 `IconButton` / `InkWell` 全是 opaque；
+而本应用里，外壳（顶栏/导航）的按钮早就写了 opaque，**只有地图页的按钮漏了**
+—— 与「地图上的控件点了没反应」这句反馈完全吻合。
+
+已修：工具列（图层 / 轨迹分组 / 底图）与右列缩放工具（放大/缩小/轨迹/
+热力图/定位）共 13 颗按钮，一律 `HitTestBehavior.opaque` —— 整块都能点。
+
+## 二、会话页的输入框藏在面板底下 → 进会话自动展开
+
+2.0 的内容面板是**按最高档高度布局、只裁出可视区**的（这是 v1.6.148 治
+「拖动卡 + 一拖就变白」的设计）。于是半屏档下页面只露出上半部分，而输入框在
+页面最底部 —— 正好落在裁切线之下，**看不见也点不到**，必须先手动把面板拉到
+最高才能打字。
+
+现在一进入会话就请求外壳把面板展开到最高档（退回会话列表时复位），
+打字前不再需要先找把手。
+
+## 三、未连接提示强化
+
+2.0 里「未连接」只由右上角那一颗小胶囊表达，还和天气、连接按钮、定位按钮挤在
+一起 —— 未连接时整屏看起来「一切正常」，而实际上**发送、信标、消息全都发不
+出去**。（1.0 里有一条明显的横幅，重写 2.0 外壳时只留下了胶囊。）
+
+现在补回一条**未连接横幅**：橙边框、两行说明 +「连接」按钮，**整条都可点**
+（点一下即连）。三个细节：
+
+* **只读模式不显示** —— 只启用 PKWDWPL 这类只收来源时，没有发射链路本来就是
+  正常的，挂一条「未连接」只会让人白去点连接、白去查设置；
+* 它占用的高度**算进地图的顶部让位量**（与底部让位同一套口径），否则会压住
+  地图自己的信息条 / 图例 / 工具列；
+* 竖屏与横屏各一处。
+
+## 四、台站页「在地图查看」之后不回地图
+
+`focusOnMap` 只改了一个状态值，而**切回地图页这件事是外壳的职责**。
+1.0 里这段逻辑在 `HomePage._onStateChanged` 里，重写 2.0 外壳时整段漏掉了 ——
+结果是：地图在背后悄悄飞到了那个台站，用户却还停在台站面板上，看着就像
+「点了没反应」。
+
+现在外壳接住了这个请求（以及「在地图选点」）：切回地图页并把内容面板收起，
+与 1.0 的行为一致。
+
+⚠ 一个容易写错的地方：这类「页面请求外壳做事」的信号**不改变外壳自己显示的
+值**，所以必须放在外壳那行「显示值没变就直接返回」的**前面**，否则会被它
+提前返回吃掉（检查器专门盯这一条）。
+
+## 检查器
+
+新增 `tool/check_ui_wiring.py`（已接进 CI）：自绘按钮必须 opaque、外壳对三种
+跨页请求（在地图查看 / 在地图选点 / 展开面板）的处理位置、未连接横幅的两条
+约束。这几条**编译与 analyze 全绿**，只有手指按下去才知道不对。
+按惯例用回归样本验证过会报红（去掉 `_toolBtn` 的 opaque、把跨页请求挪到提前
+返回之后），验完 md5 确认源码完整还原。
+
+---
+
+## [1.6.155] - 2026-09-23 (English)
+
+### Four UI reports: unclickable layer panel, hidden chat input, weak offline notice, and charging back to the map
+
+## 1) Buttons on the map “did nothing” — only the icon was clickable
+
+The report was “the layer panel won't open”. The culprit was not the panel but the
+**button's hit area**:
+
+The button's fill comes from a `BoxDecoration`, and the `DecoratedBox` behind it
+(`RenderDecoratedBox extends RenderProxyBox`) **does not override `hitTestSelf`** —
+it **does not absorb hits**, passing them all to its child. The default
+`deferToChild` therefore shrinks the clickable area to the **20 px icon** in the
+middle: of a 38 px button only the central ~28 % responded, and taps on the edge
+or the rounded corners **did nothing at all**.
+
+The comparison is telling: Flutter's own `IconButton` / `InkWell` are opaque, and
+in this app the shell's buttons (top bar, navigation) already were — **only the
+map page's buttons were missed**, which matches “controls on the map don't
+respond” exactly.
+
+Fixed: the tool column (layers / track groups / base map) and the zoom tools
+(zoom in/out, tracks, heatmap, locate) — 13 buttons in all — now use
+`HitTestBehavior.opaque`, so the whole button responds.
+
+## 2) The chat input was hidden under the panel → auto-expand on entering a chat
+
+The UI 2.0 content panel is laid out at its **tallest height and only clipped to
+the visible area** (the v1.6.148 design that fixed “janky dragging and the white
+flash”). Half-open, the page shows only its upper part — and the input sits at
+the very bottom of the page, just below the clip line: **invisible and
+untappable** until you dragged the panel to full height by hand.
+
+Now entering a chat asks the shell to expand the panel to full height (reset when
+you go back to the conversation list), so you no longer have to hunt for the
+handle before typing.
+
+## 3) A stronger offline notice
+
+In UI 2.0 “not connected” was conveyed only by the small pill in the top-right
+corner, squeezed in with the weather, connect and locate buttons — so a
+disconnected app looked “fine” while **sending, beaconing and messages were all
+silently dead**. (1.0 had a prominent banner; only the pill survived the rewrite.)
+
+A **disconnected banner** is now back: orange border, two lines of explanation and
+a “Connect” button, with the **whole bar tappable** (one tap connects). Three
+details:
+
+* **Not shown in receive-only mode** — with only read-only sources such as
+  PKWDWPL enabled, having no transmit link is normal, and a “not connected”
+  banner would send people chasing a connection and digging through settings;
+* Its height is **counted into the map's top inset** (same convention as the
+  bottom inset), otherwise it would sit on top of the map's own info chip,
+  legend and tool column;
+* Present in both portrait and landscape.
+
+## 4) “View on map” from the station list didn't return to the map
+
+`focusOnMap` only changes a state value; **switching the shell back to the map is
+the shell's job**. That logic lived in `HomePage._onStateChanged` in 1.0 and was
+dropped entirely when the 2.0 shell was written — so the map quietly flew to that
+station in the background while the user stayed on the station panel, which looks
+exactly like “tapping did nothing”.
+
+The shell now handles that request (and “pick on map” too): it switches to the
+map tab and collapses the content panel, matching 1.0's behaviour.
+
+⚠ One easy mistake: these “page asks the shell to do something” signals **do not
+change any value the shell itself displays**, so they must be handled **before**
+the shell's “displayed values unchanged → return” line — otherwise the early
+return swallows them (a checker watches for exactly this).
+
+## Checkers
+
+New `tool/check_ui_wiring.py` (wired into CI): self-drawn buttons must be opaque,
+where the shell handles its three cross-page requests (view on map / pick on map /
+expand panel), and the two constraints on the offline banner. All of these
+**compile and pass analyze cleanly** and only misbehave once a finger touches
+them. As usual the checks were verified against regression samples (removing the
+opaque flag from `_toolBtn`, moving the cross-page request after the early return)
+and the source restored byte-identical (md5).
+
+---
+
+## [1.6.154] - 2026-09-23
+
+### 🛰 轨迹采样细化 + 标出信标点 + 智能信标「按距离打点」；四反馈修复 / Finer track sampling, beacon dots, distance-based smart beaconing, and four reported fixes
+
+这一版一半是四条反馈，一半是「轨迹与信标」这条主线。
+
+## 一、实时轨迹：采样从 10 秒细化到 1 秒
+
+反馈是「实时轨迹的采样率有点低」。根因在 Android 侧：定位注册用的是
+`requestLocationUpdates(GPS, 10000L, …)` —— 这是**省电优先**的取值，
+轨迹每 10 秒才落一个点。骑车、开车时一个拐弯正好落在两个点之间，
+画出来就是一条**切角的斜线**（明明是直角弯，看着像抄了近路）。
+
+现在 GPS 按 **1 秒**注册（导航类应用的常规取样率）。费用方面：最小位移仍是
+5 米，静止时 GPS 本身不给回调，所以待机和「坐下喝茶」时的功耗并不跟着涨；
+**网络定位保持 10 秒**——它只做 GPS 停更时的兜底，按 1 秒轮询基站不会更准，
+只会更费电。
+
+落点判据也从「只看距离」改成**两条任一**：
+
+* 位移超过门限（按速度自适应）→ 保证拐弯不被切角；
+* 距上一个点已过 5 秒、且确实挪动了 → 保证**慢速也有稳定密度**。
+
+只有前一条时，速度越低点越疏（步行 8 米才落一个点），而慢速恰恰是最想看清
+细节的时候。距离门限本身也改成按**固定 5 秒参考窗口**计算 —— 原来用的是
+真实回调间隔，1 秒采样下那个间隔≈1 秒，门限每次都被下限兜住，
+「按速度自适应」名存实亡。
+
+## 二、把「发到服务器的点」在地图上标出来
+
+地图上现在有一条轨迹线（我走过哪里），另外用**橙色小菱形**标出
+**信标点**（我报到哪里）—— 这是两件事，用户要能一眼分清「轨迹画得对不对」
+与「对方到底收到几个点、间隔合不合预期」。
+
+它们刻意分开存：轨迹点会被抽稀、封顶、位置跳变时整条清空 —— 那是
+「屏幕上这条线好看」的语义；而「这个点我确实发出去了」是个**事实**，
+不该被这些规则吃掉（对方已经收到了）。所以信标点单独记一份，
+且**只在真的发出去时**才记（未连接时只是本地记录，不算发出）。
+
+## 三、智能信标支持「按距离打点」
+
+原来的智能信标只有「按速度分档 → 每档一个时间间隔」。定时上报有个先天缺口：
+**两点之间走了多远，与「过了多久」无关**。堵车时 300 秒一个点完全够
+（根本没动），而 60 km/h 的国道上 60 秒能走 1 公里 —— 中间那段路在 aprs.fi
+上就是一条直线，拐弯全被抹平。
+
+现在每档多一个**距离**条件，触发改为「**定时到了，或者走够了**」：
+
+* 走得快 → 按距离补点，拐弯不再被拉直；
+* 停下来 → 距离不动，自然退回纯定时，不白发报文、不占信道。
+
+默认值按「该档速度在一个上报间隔内走的路程」给（静止 200 米 / 步行 250 米 /
+城市 400 米 / 高速 700 米），设置页里每一档都能单独改（0 = 关闭），
+档位列表上直接显示成「每 60 秒 **· 或移动 400 m**」。
+
+## 四、四条反馈
+
+**1）2.0 面板「抓不住：抓哪儿都变滚动」**
+
+面板本来就设计成「内容滚到边之后，继续拖就交给面板」—— 但只做了
+**到顶继续下拉**（收面板）这半边，缺了**到底继续上推**（展开面板）。
+于是想展开只能去抓那根 44px 的把手。现在两个方向都交棒。
+
+顺带收严了判据：只认**手指还在拖**的越界 —— 惯性撞墙、iOS 回弹也会发
+越界通知，那两种不该拽面板（否则松手后会被莫名吸一下）。
+
+**2）热力图不容易触发**
+
+自动显示热力图的阈值从「缩到省/区域级」（zoom ≤ 6.5）放宽到**城市级**
+（≤ 9.0），可见台站门槛从 20 降到 10 —— 台站开始挤成一团恰恰是在城市级，
+而原来那个级别根本触发不了。
+
+**3）进子页时背景色「先透明后出现，动画完才正常」**
+
+应用只有一层底（压在导航器之下），而 Flutter 在路由转场动画期间会把新页面
+标记为**非全屏不透明**、旧页面照常绘制 —— 新页面是透明底，于是动画期间
+透出来的是**上一页**的内容，动画一完底才「出现」。
+修法是转场期间让页面**自带一份底**（与全局那份同一个来源，逐像素一致），
+动画结束即停画，不常驻、不重复合成。
+
+**4）历史轨迹「退出就没了」—— 其实是被覆盖清空**
+
+这条最严重：台账是**整档覆盖写**，而内存里那一档在重启后是**空的** ——
+于是重启后第一次落盘，就把当天早些时候（上一个进程里）已经写好的点
+**全部抹掉**。用户看到的正是「退出就没了」。
+
+现在启动时先把当天已有的记录读回内存，新点在旧点之上继续追加，
+覆盖写写回的是两者之并集。另外「手动退出应用」走的是原生直接结束进程，
+`dispose()` 不会被调用，所以退出前补了一次落盘（台账的写盘节流是 8 秒，
+不补的话最后一段会丢）。
+
+## 五、检查器
+
+新增 `tool/check_beacon_track.py`（已接进 CI）：GPS 采样率、落点保底、
+信标点（只记已发送 / 可清空 / 地图有图层）、智能信标的「定时或距离」——
+这四组**全都能正常编译、也能通过 analyze**，只在真机上看得出差别
+（轨迹过疏、拐弯被拉直、清空后剩一串孤点），所以钉在 CI 里。
+按惯例用回归样本验证过会报红（把采样退回 10 秒、去掉距离触发），
+验完 md5 确认源码完整还原。
+
+---
+
+## [1.6.154] - 2026-09-23 (English)
+
+### Finer track sampling, beacon dots, distance-based smart beaconing, and four reported fixes
+
+Half of this release is four user reports; the other half is the track-and-beacon
+main line.
+
+## 1) Live track: sampling refined from 10 s to 1 s
+
+The report was that the live track felt sparsely sampled. The cause was on the
+Android side: location was registered with
+`requestLocationUpdates(GPS, 10000L, …)` — a **battery-first** choice that
+lands one track point every ten seconds. On a bike or in a car a corner falls
+between two points, and the line drawn is a **cut corner** — a right-angle turn
+looks like a shortcut.
+
+GPS is now registered at **1 s** (the usual rate for navigation apps). On cost:
+the minimum displacement is still 5 m and GPS itself delivers nothing while you
+stand still, so standby and “sitting over tea” power draw does not follow suit.
+**Network positioning stays at 10 s** — it only backstops a stalled GPS, and
+polling cell towers once a second is not more accurate, only more expensive.
+
+The point-acceptance rule also changed from “distance only” to **either of two**:
+
+* displacement past the threshold (speed-adaptive) — so corners are not cut;
+* five seconds since the last point **and** a real move — so **slow speeds keep a
+  steady density**.
+
+With only the first rule, the slower you go the sparser the track (a point every
+8 m on foot) — yet slow is exactly where detail matters most. The distance
+threshold itself is now computed over a **fixed 5 s reference window**: it used to
+use the real callback interval, and at 1 s sampling that interval is ~1 s, so the
+floor caught it every time and “speed-adaptive” was adaptive in name only.
+
+## 2) The points actually sent to the server are now drawn on the map
+
+The map shows a track line (where I have been) and now also marks the
+**beacon points** (where I have reported) as **small orange diamonds** — two
+different questions: “is the track drawn correctly” versus “how many points did the
+other side actually receive, and is the spacing what I expect”.
+
+They are deliberately stored separately: track points get thinned, capped, and
+wiped entirely when a position jump is confirmed — that is the “make the line on
+screen look right” contract. “I really transmitted this point” is a **fact** that
+should not be lost to those rules (the other side already has it). So beacon
+points are recorded on their own, and **only when the packet really went out**
+(while disconnected it is a local record, not a transmission).
+
+## 3) Smart beaconing gains “beacon by distance”
+
+Smart beaconing used to be “speed tiers → one time interval each”. Timed
+beaconing has an inherent gap: **how far you travelled between two points has
+nothing to do with how long it took**. In a traffic jam a point every 300 s is
+plenty (you are not moving), while on an open road at 60 km/h sixty seconds is a
+kilometre — that stretch becomes a straight line on aprs.fi and every corner is
+flattened.
+
+Each tier now carries a **distance** condition, and the trigger is
+“**the timer expired, or you have moved far enough**”:
+
+* moving fast → points are added by distance, corners are no longer straightened;
+* stopped → distance does not grow, so it falls back to pure timing — no wasted
+  packets, no wasted channel time.
+
+Defaults follow “the distance this tier's speed covers in one interval” (stationary
+200 m / walking 250 m / city 400 m / highway 700 m). Every tier is editable in
+settings (0 = off), and the tier list shows “Every 60 s **· or 400 m**”.
+
+## 4) The four reports
+
+**a) UI 2.0 sheet: “can't grab it — dragging anywhere just scrolls”**
+
+The sheet was designed so that once the content hits an edge, dragging further
+belongs to the sheet — but only the **top edge** half existed (pull down past the
+top to close). The **bottom edge** half was missing, so the only way to open the
+sheet was the 44 px handle. Both directions now hand off.
+
+The rule is also stricter: only overscroll **while a finger is still dragging**
+counts — fling-into-the-wall and the iOS bounce also emit overscroll, and those
+must not yank the sheet (otherwise it snaps oddly after you let go).
+
+**b) The heatmap was hard to trigger**
+
+The auto-heatmap threshold moved from “zoomed out to province/region level”
+(zoom ≤ 6.5) to **city level** (≤ 9.0), and the visible-station threshold from
+20 to 10 — stations start bunching up exactly at city level, which the old
+threshold could never reach.
+
+**c) Entering a sub-page: the background colour “appears only when the animation
+finishes”**
+
+The app has a single backdrop layer (beneath the navigator), and during a route
+transition Flutter marks the incoming page as **not fully opaque** while the old
+page keeps painting — so with a transparent page background, what shows through
+during the animation is **the previous page**, and the backdrop only “appears”
+once the animation ends. The fix has the transition carry **its own copy of the
+backdrop** (same source as the global one, pixel-identical), stopping once the
+animation completes — not resident, not composited twice.
+
+**d) Track history “disappears when I exit” — actually it was being overwritten**
+
+This one was the most serious: the log is written by **replacing the whole day**,
+and the in-memory day starts **empty** after a restart — so the first flush after
+restarting **erased every point recorded earlier that day** by the previous
+process. That is exactly what “it's gone after I exit” looked like.
+
+On startup the existing day is now read back into memory and new points are
+appended on top, so the rewrite writes the union of both. Separately, “quit the
+app” goes through the native path that kills the process outright — `dispose()`
+never runs — so a flush was added before exit (the log throttles writes to every
+8 s, so without it the last stretch was lost).
+
+## 5) Checkers
+
+New `tool/check_beacon_track.py` (wired into CI): GPS sampling rate, the
+point-acceptance fallback, beacon points (only-when-sent / cleared with data /
+has a map layer), and the smart beacon's “timer or distance”. All four **compile
+and pass analyze fine** and only differ on a real device (a sparse track,
+straightened corners, orphan dots after clearing) — hence in CI. As usual the
+guards were verified against regression samples (sampling back to 10 s, distance
+trigger removed) and the source restored byte-identical (md5).
+
+---
+
+## [1.6.153] - 2026-09-22
+
+### 🐛 修 2.0 面板「下面被切成直角」/ Fixing the 2.0 sheet's bottom being cut into right angles
+
+从底部导航弹出的卡片面板（信息页 / 设置页那种）半开时，下沿是一条**直角硬切口**。
+
+**根因**：面板为了治「拖动卡 + 一拖就变白」，几何固定为最高档高度、只靠外层裁口
+裁出可视区（v1.6.148 的设计）—— 而裁口用的是直角矩形 `ClipRect`。半开时裁口落在
+面板中途，面板自身的 24 圆角全在裁口底下，用户看到的「卡片下沿」就是这条直角边。
+
+**修法**：外层裁口改成 `ClipRRect`（底边圆角 24，与面板自身一致）：
+
+* 半开时：裁口伪装成卡片下沿，任意拖动高度都是完整圆角卡；
+* 全开时：裁口恰好落在面板自身的圆角上，两个圆角重合，不会「圆角套圆角」；
+* 模糊层的几何一点没动 —— v1.6.148 那套「拖动不卡、不变白」的机制不受影响。
+
+`tool/check_frame_cost.py` 加了第 11 条守卫（底边圆角参数不许丢）：改回直角裁口
+编译与测试都拦不住，只在真机半开面板时看得出来。按惯例用回归样本验证过会报红，
+验完 md5 确认源码完整还原。
+
+---
+
+## [1.6.153] - 2026-09-22 (English)
+
+### Fixing the 2.0 sheet's bottom being cut into right angles
+
+The card sheet popped from the bottom navigation (the one hosting the info / settings
+pages) showed a **hard right-angled cut** along its bottom edge when half open.
+
+**Cause**: to keep dragging smooth (and stop the white flash), the sheet’s geometry is
+pinned to its tallest height and the visible area is produced by an outer clip (the
+v1.6.148 design). That clip was a plain rectangular `ClipRect`. Half open, the clip line
+falls in the middle of the sheet, where the sheet’s own 24 px rounded corners are far
+below the fold — so the “card bottom” you see is that straight right-angled edge.
+
+**Fix**: the outer clip is now a `ClipRRect` with **rounded bottom corners (24, matching
+the sheet itself)**:
+
+* Half open: the clip edge now looks like a real card bottom at any drag height;
+* Fully open: the clip line lands exactly on the sheet’s own corners — the two
+  roundings coincide, no “corner-in-corner”;
+* The blur layer’s geometry is untouched — the v1.6.148 “no jank, no white flash”
+  machinery is unaffected.
+
+`tool/check_frame_cost.py` gained guard #11 (the rounded-bottom parameter must not be
+dropped): reverting to a square clip compiles and passes tests fine — it only shows up
+on a real device with the sheet half open. Verified to go red against a regression
+sample, then restored byte-identical (md5).
+
+---
+
+## [1.6.152] - 2026-09-22
+
+### ⚡ 磨砂玻璃再优化：列表滚动不再卡 / Frosted-glass performance, again: smooth list scrolling
+
+反馈是「开磨砂玻璃会卡顿」，最明显在**列表页滚动**（Android）。复查下来这次的问题不在
+模糊本身，而在**层数** —— 更准确地说：**每层模糊都要让引擎把当前画面收尾一次再重开**。
+
+**一、贵的不是模糊，是「收尾 → 采样 → 重开」的次数**
+
+每个 `BackdropFilter` 的输入是「当前已经画好的内容」，引擎必须先结束当前渲染通道
+（Android 上就是一次贴着屏幕大小的收尾 + 重开），采样，再继续画 —— 每层模糊都是一次
+**通道切换**，与面积、半径关系不大，**每个实例各付一次**。而地图页一屏有十来个 38px
+小浮层（工具钮 8 颗 + 图例 + 上报横杠 + 底部坐标条），背后都是同一张地图，却各付一次；
+列表一滚动（60fps）就是每秒上千次通道切换，顶栏那层更是每帧一次。
+
+现在 `MaterialSurface` 改用 `BackdropFilter.grouped`，并把地图页那一簇（连续绘制、
+互不重叠、背后同一张地图）包进一个 `BackdropGroup`：**只采一次底**；又因为各层模糊
+半径完全相同（都是 `C.chipBlur`），**模糊也只算一次**，再按各自的矩形贴上去 ——
+观感逐像素不变。其余调用点不用动：没有 `BackdropGroup` 祖先时 `.grouped` 与原来的
+写法完全等价。
+
+**二、只压在壁纸上的壳，不再插模糊层**
+
+1.0 的顶栏 / 侧栏 / 底栏、各子页的 AppBar —— 它们**不压在内容上**（正文排在它们下面），
+背后只有壁纸。而壁纸是**渐变**：模糊一层渐变 ≈ 渐变本身（材质壁纸当初就因此刻意不
+模糊），视觉上零收益，却每帧白付一次通道切换 —— 列表一滚动就是每帧一次，这正是列表页
+卡顿的直接来源。
+
+这些壳现在标注 `overWallpaper: true`，直接不插模糊层。两个例外都处理了：
+
+* 主题设了**背景图**的用户照旧模糊（照片有细节，该糊还得糊）；
+* `track_day_page` 写了 `extendBodyBehindAppBar: true`（顶栏背后是地图），显式传
+  `overWallpaper: false`，照旧真模糊。
+
+**三、检查器**
+
+`tool/check_frame_cost.py` 新增两条守卫：`.grouped` / `BackdropGroup` 被改回默认构造、
+以及写了 `extendBodyBehindAppBar` 的页面漏传 `overWallpaper: false` —— 这两种退化都
+只在真机上表现为「磨砂又卡了」「顶栏透字」，编译与测试都拦不住。
+
+开发途中还踩了一次「参数加错层」（`overWallpaper` 写进了 `AppBar(...)` 里，analyze
+报 `undefined_named_parameter`）：`MaterialAppBar(AppBar(...))` 是两层嵌套，参数要加给
+外层。这条已写进代码注释。
+
+---
+
+## [1.6.152] - 2026-09-22 (English)
+
+### Frosted-glass performance, again: smooth list scrolling
+
+The report: “turning on frosted glass feels janky”, worst when **scrolling lists**
+(Android). The cause this time is not the blur itself but the **number of layers** — more
+precisely, **every blur layer makes the engine wrap up the current frame once and reopen it**.
+
+**1) The cost is the “close → sample → reopen” count, not the blur**
+
+Each `BackdropFilter` samples “content already painted”, so the engine has to end the
+current render pass first (on Android: a screen-sized wrap-up + reopen), sample, then keep
+painting. Every frosted surface therefore pays one **pass switch** — barely related to its
+area or radius, and paid **per instance**. The map screen carries about a dozen 38 px widgets
+(8 tool buttons + legend + beacon bar + bottom coordinate strip), all blurring the same map,
+each paying its own; scrolling a list at 60 fps turns that into thousands of pass switches a
+second, and the top bar pays one every single frame.
+
+`MaterialSurface` now uses `BackdropFilter.grouped`, and the map’s cluster (painted
+consecutively, never overlapping, all blurring the same map) sits under one
+`BackdropGroup`: the backdrop is sampled **once**, and since every layer uses the same sigma
+(`C.chipBlur`) the blur is computed **once** too and pasted into each rectangle —
+**pixel-identical looks**. Other call sites need no changes: without a `BackdropGroup`
+ancestor, `.grouped` behaves exactly like the old constructor.
+
+**2) Surfaces that only sit on the wallpaper no longer blur**
+
+The 1.0 top bar / sidebar / bottom bar and the sub-page AppBars don’t sit **on content**
+(the body is laid out below them) — behind them there is only the wallpaper, which is a
+**gradient**. Blurring a gradient ≈ the same gradient (the material wallpaper is
+deliberately unblurred for the very same reason): zero visual gain, one pass switch per
+frame. Scrolling a list re-blurs the top bar every frame — the direct cause of the jank.
+
+These surfaces now declare `overWallpaper: true` and skip the blur layer entirely. Two
+exceptions are handled:
+
+* Themes with a **background photo** still blur (photos have detail worth blurring);
+* `track_day_page` sets `extendBodyBehindAppBar: true` (the bar sits over the map) and passes
+  `overWallpaper: false`, keeping its real blur.
+
+**3) Checkers**
+
+`tool/check_frame_cost.py` gained two guards: `.grouped` / `BackdropGroup` regressing to the
+default constructors, and `extendBodyBehindAppBar` pages missing `overWallpaper: false`.
+Both regressions only show up on a real device as “frosted glass is janky again” or
+“text bleeding through the bar” — compile and tests won’t catch them.
+
+One lesson from the development loop: `overWallpaper` first landed inside `AppBar(...)`
+instead of the enclosing `MaterialAppBar`, and analyze reported
+`undefined_named_parameter` — with `MaterialAppBar(AppBar(...))` the parameter must go to
+the outer call. It is now noted in the code.
+
+---
+
+## [1.6.151] - 2026-09-22
+
+### 🌟 2.0 横屏收拾一遍：五处「只有真机横屏才看得出来」的毛病 / UI 2.0 landscape, tidied: five defects that only show up on a real device
+
+横屏是**矮的那一维**，手机横放常常只剩 300px 出头的高度，所以这一类问题在竖屏下怎么试都不会露出来。
+这一版不动设计骨架，只把已经知道的五处缺陷修掉。
+
+**一、左侧竖条与内容面板压住了地图的控件**
+
+横屏下 2.0 把导航竖条（以及展开时的内容面板）摆在左边，而地图仍是**整屏铺满**的。
+地图自己的贴左控件 —— 信息条、沉浸入口、上报横杠、底部比例尺/坐标条 —— 原先都锚在
+`left: 14`，正好落在竖条底下。而且不是「被挡住」这么干脆：竖条是**58% 透明的磨砂卡**，
+所以控制条会在卡片背后若隐若现，看着像渲染坏了。
+
+修法是给地图加一个 `leftInset`（与 `bottomInset` 同一套口径：给「被占用的边界」），
+横屏时把**竖条 + 内容面板**的宽度一起传下去，贴左控件整体右移。面板展开时也要算进去
+—— 否则地图的左半边控件仍然在卡片背后。搜索提示条也从「整屏居中」改成
+「可见地图区居中」，不然它会偏向卡片那一侧。
+
+**二、右侧工具列在手机横屏被裁掉，「定位」点不到**
+
+单列是 8 个按钮 ≈ **346px**（3 个小工具钮 126 + 5 个缩放钮 214 + 间隙），而手机横放
+可用高度常只有 300px 出头。`Stack` 默认 `Clip.hardEdge`，于是最下面的**「定位」被剪掉
+且点不到** —— 偏偏那是横屏看地图时最常用的那一个。
+
+横屏横向空间宽裕，所以矮横屏（`shortWide`）改成**两列**：左列「图层 / 轨迹分组 / 底图」，
+右列「缩放 / 轨迹 / 热力图 / 定位」，两列都靠上对齐（否则高的那列会把矮的推居中、
+上沿就不齐了）。最高一列 214px，300px 的高度也放得下。
+
+**三、底部让位量把安全区算了两遍**
+
+`MapPage` 的口径是「相对底部安全区」—— 它自己会加一次 `MediaQuery.padding.bottom`。
+竖屏那边是**减掉** `pad.bottom` 再传的，横屏却直接传了 `_kGutter + pad.bottom`，
+于是横屏（尤其带手势条/挖孔的机器）底部控件会凭空抬高一个安全区的高度。
+这类错误的特点是「只是位置偏一点」，不会报错、也不会崩，所以最容易被留下。
+
+**四、收起时的竖条卡被撑成通高空框**
+
+设计要求是「选地图页时只剩一张竖条卡并**垂直居中**，贴顶会显得像掉在上面」。
+但没生效：竖条内容为极矮横屏套了 `SingleChildScrollView`，而它**没有 `shrinkWrap`**
+—— 在高度有界的父约束下会直接**填满**可用高度。于是卡片变成一条通高的空框、
+5 个导航项全挤在上沿，正是注释里说要避免的那个样子；外层 `Align` 居中的是一个
+已经满高的盒子，所以「居中」等于没做。
+
+修法是包一层 `IntrinsicHeight`：它取内容高度并按父约束夹住，两个目的一次达成 ——
+内容矮就收缩（居中才真正生效），内容高（极矮横屏）则被夹在可用高度内、照旧可滚，
+不会溢出成黄条纹。
+
+**五、横屏两个轴的刘海安全区没让**
+
+手机的挖孔/刘海在横屏时跑到**左、右两侧**（不在顶部）。竖条与顶栏原先只用裸的
+`_kGutter`，带刘海的机器会把竖条最上面那颗图标吃掉一半。现在统一用
+`safeL = pad.left + _kGutter` / `safeR = pad.right + _kGutter`。
+（竖屏下 pad.left/right 通常是 0，所以这两项只在横屏生效。）
+
+**六、把上面的判据钉进 CI**
+
+这五条**全都能正常编译、也能通过 analyze**，只在真机横屏才看得出来。新增
+`tool/check_landscape_layout.py`（已接进 CI 的 Analyze job），断言：贴左控件确实让开了
+`leftInset`、工具列走 `_rightToolbar(shortWide)` 且两列靠上对齐、横屏 `bottomInset`
+不含安全区、`_railCard()` 里有 `IntrinsicHeight`、左右安全区都让。
+按惯例**每条都先用回归样本验证会报红**（去掉传参、漏一个贴左控件、工具列退回单列、
+`bottomInset` 改回含安全区、去掉 `IntrinsicHeight` —— 五个样本都报了红），验完 md5 确认
+源码完整还原。
+
+---
+
+## [1.6.151] - 2026-09-22 (English)
+
+### UI 2.0 landscape, tidied: five defects that only show up on a real device
+
+Landscape is the **short** dimension: a phone on its side often has barely 300 px of height,
+which is why none of these show up when you only test in portrait. The design skeleton is
+unchanged; this release fixes five known defects.
+
+**1) The rail and the content pane were sitting on top of the map's controls.** In landscape,
+UI 2.0 puts the navigation rail (and the content pane when open) on the left while the map is
+still **full-bleed**. The map's left-anchored controls — info chip, immersive entry, beacon
+bar, bottom scale/coordinate strip — were pinned to `left: 14`, exactly under the rail. And
+not cleanly "covered": the rail is a **58 %-transparent frosted card**, so those controls
+showed through it and looked like a rendering glitch.
+
+Fixed by giving the map a `leftInset` (same convention as `bottomInset`: the **occupied
+boundary**), passing the combined width of **rail + content pane** so left-anchored controls
+shift right. The pane has to be included — otherwise the map's left half stays behind the card
+when the pane is open. The search hint also changed from "centred on screen" to "centred over
+the visible map area", so it no longer leans towards the card.
+
+**2) The right toolbar was clipped in phone landscape and "locate me" was unreachable.** A
+single column is 8 buttons ≈ **346 px** (3 tool buttons = 126, 5 zoom buttons = 214, plus gaps),
+while a phone on its side often has barely 300 px of height. `Stack` defaults to
+`Clip.hardEdge`, so the bottom-most button — **"locate me"**, the one you actually use most
+while looking at a map in landscape — was cut off and unclickable.
+
+Landscape has width to spare, so in short landscape (`shortWide`) the toolbar becomes **two
+columns**: layer/track-group/basemap on the left, zoom/tracks/heatmap/locate on the right, both
+top-aligned (otherwise the shorter column gets pushed to centre and the tops no longer line up).
+The tallest column is 214 px, which fits even in 300 px.
+
+**3) The bottom inset counted the safe area twice.** `MapPage` measures from the **bottom
+safe area** — it adds `MediaQuery.padding.bottom` itself. Portrait **subtracted** `pad.bottom`
+before passing it; landscape passed `_kGutter + pad.bottom` directly, so in landscape (especially
+with a gesture bar or a cutout) the bottom controls floated a whole safe area too high. This
+kind of bug only looks "slightly off", never errors and never crashes — which is exactly why it
+survives.
+
+**4) The collapsed rail card was stretched into a full-height empty frame.** The design says
+"on the map tab only a rail card remains, **vertically centred** — top-aligned looks like it
+fell from above". That never actually happened: the rail items use a `SingleChildScrollView`
+(for very short landscape), and it has **no `shrinkWrap`** — under a height-bounded parent it
+simply **fills** the available height. So the card became a full-height empty frame with all
+five items pushed to the top, exactly the look the comment wanted to avoid; the outer `Align`
+was centring an already full-height box, so "centred" meant nothing.
+
+Fixed with an `IntrinsicHeight` wrapper: it takes the content height and clamps it to the parent
+constraints, achieving both goals at once — short content shrinks (so centring really works),
+tall content (very short landscape) is clamped and still scrolls instead of overflowing into
+yellow stripes.
+
+**5) Cutout safe areas on the two side axes were ignored.** A phone's cutout moves to the
+**left and right** sides in landscape (not the top). The rail and top bar used the bare
+`_kGutter`, so on a notched device the notches ate half of the rail's top icon. Now both use
+`safeL = pad.left + _kGutter` / `safeR = pad.right + _kGutter`. (In portrait `pad.left/right`
+are usually 0, so this only takes effect in landscape.)
+
+**6) The invariants above are now pinned in CI.** All five **compile and analyse cleanly** and
+only show up on a real device in landscape, so `tool/check_landscape_layout.py` was added
+(wired into the CI Analyze job). It asserts that left-anchored controls really respect
+`leftInset`, that the toolbar goes through `_rightToolbar(shortWide)` with both columns
+top-aligned, that the landscape `bottomInset` excludes the safe area, that `_railCard()`
+contains `IntrinsicHeight`, and that both side safe areas are respected. As usual **each check
+was first verified to go red with a regression sample** (dropping the argument, missing one
+left-anchored control, reverting the toolbar to one column, putting the safe area back into
+`bottomInset`, removing `IntrinsicHeight` — all five went red), and md5 confirmed the sources
+were restored byte-for-byte.
+
+## [1.6.150] - 2026-09-22
+
+### 🌟 历史轨迹可点进去看 + 回放动画 + 治「网络定位让位置飞来飞去」 / Tap into a day and replay it, plus a fix for jittery network fixes
+
+**一、历史轨迹：点进某一天看地图与回放**
+
+上一版只给了一张极简的点列预览 —— 只能看出「形状对不对」，看不出「怎么走的」。
+现在**点按某一天**进入详情页：
+
+* 底图用与主地图**同一套** `TileMapView`（同缓存、同离线规则、同坐标纠偏），
+  所以 GCJ 图源下轨迹不会整体偏 500m；
+* 轨迹线随播放**生长**：已走过的实线、未走的淡线，终点是当前点并带**航向箭头**
+  —— 单向道、掉头这种一眼就分得出来；
+* 进度条可拖、可 ×0.5 / ×1 / ×2 / ×4 倍速、可「跟随」把视野钉在当前点上。
+
+**时间轴是压缩过的，这点必须说清**：直接按墙上时钟播没有意义（一天跨 10 小时、
+真正在动的可能只有 40 分钟，照实播就是盯着一个点不动两小时）。所以相邻点间隔
+照实计入，但**超过 45 秒的停顿只按 45 秒计** —— 长停顿被整体快进，而移动中的
+快慢差异完整保留，你仍能看出「这段骑得快、那段在走路」。进度条拖到任意位置都会
+按**时间轴二分**取那个时刻的点，不是「已播放的点」上插值。
+
+**二、网络定位不再让位置飞来飞去**
+
+这是「优化 GPS + 网络」那条反馈的落点。原生侧其实早就有保护（GPS 优先、网络仅在
+GPS 停更 20 秒后兜底、精度超 150m 丢弃），但**漏洞在两个地方**：
+
+1. 原生一直在事件里发 `provider`（gps/network/passive），而 **Dart 侧从来没读**
+   —— 于是「基站/Wi-Fi 粗定位」和「GPS 实测」在上层长得一模一样；
+2. **跳变守卫的阈值是 30km** —— 那是给「缓存点跨城市」调的，而网络粗定位的漂移
+   是 200m~3km，**整个落在阈值以下**，等于完全没被拦；再加上系统对 Wi-Fi/基站
+   点自报的 accuracy 经常过于乐观（报 20~40m，实际偏几百米），精度门控也拦不住。
+
+这一版按**来源**判，而不是只看精度：
+
+* **GPS 新鲜时，粗点一律丢弃** —— GPS 在城市峡谷里一闪一断，粗点就在缝里把标记
+  拉走再拉回，这才是「飞来飞去」的真正成因；
+* GPS 真的停更 **2 分钟**（不是 20 秒）以上，粗点才允许兜底 ——「宁可停两分钟
+  不动，也不要抖」；
+* 粗点自己一口气跳出去 **8km** 以上的，连兜底都不算，直接丢（那多半是换了个
+  Wi-Fi，不是我们移动了）；
+* 粗点**绝不**进静止防抖的滑窗、**绝不**推进跳变参照点、**绝不**写轨迹与历史台账、
+  **不更新速度与航向**（基站定位没有多普勒，speed/bearing 常是 0 或残值）；
+* 界面上如实标注 **「网络定位（粗）」**，并把精度显示的下限压到 150m —— 系统原值
+  会让精度圈画得和 GPS 一样小，比不画更骗人。
+
+「设置 → 定位 → 定位模式」里那句「网络辅助，定位更快」也改成了如实的
+「网络仅作兜底（GPS 停更时），粗定位不写轨迹」，并补了一条说明 —— 说不清楚，
+用户就会以为是应用坏了。
+
+**三、检查器**
+
+`tool/check_pos_quality.py` 新增了 11 条断言锁住上面的行为（粗定位的两道闸、
+不写轨迹、不进滑窗、不推参照点、精度下限、状态串登记……）。新检查按惯例**逐个用
+回归样本验证会报红**：拆掉闸门、让粗点能写轨迹、不解析 provider —— 三种都报了红，
+然后 md5 确认源码完整还原。
+
+---
+
+## [1.6.150] - 2026-09-22 (English)
+
+### Tap into a day and replay it, plus a fix for jittery network fixes
+
+**1) Track history: tap a day to see the map and a replay animation.**
+
+The previous release only had a minimal polyline preview — enough to tell whether the
+*shape* was right, not *how you actually moved*. Tapping a day now opens a detail
+page with a real base map, using the **same** `TileMapView` as the main map (same
+cache, same offline rules, same datum correction, so GCJ sources do not shift the
+track by ~500 m).
+
+The track **grows** as it plays: a solid line for the part already travelled, a faded
+line for the rest, and a current point carrying a **heading arrow** — so one-way
+streets and U-turns are obvious at a glance. The progress bar is draggable, with
+×0.5 / ×1 / ×2 / ×4 speeds and a "follow" button that pins the view to the current
+point.
+
+One thing must be stated plainly: **the timeline is compressed.** Replaying wall-clock
+time is pointless — a day often spans 10 hours of which only 40 minutes were spent
+moving, so an honest replay means staring at a motionless dot for two hours. Gaps
+between points are counted as they are, but **any pause longer than 45 s counts as
+45 s**, so long stops are fast-forwarded while the differences in speed *while moving*
+are preserved: you can still tell that you cycled on one stretch and walked on
+another. Dragging the bar anywhere takes the point at that moment via a **binary
+search on the timeline**, never an interpolation over "points played so far"
+(which would make dragging jump).
+
+**2) Network fixes no longer throw the position around.**
+
+The native side already had protection (GPS wins, network only as a fallback once GPS
+is 20 s stale, anything worse than 150 m discarded) — but there were **two holes**:
+
+1. Android had always been sending `provider` (gps/network/passive) in the event and
+   the **Dart side never read it**, so a cell/Wi-Fi fix and a real GPS fix looked
+   *identical* to the layer above;
+2. **the jump guard's threshold was 30 km** — tuned for "a cached fix in another
+   city", while network drift is 200 m – 3 km, i.e. **entirely below the threshold
+   and therefore never caught**. System-reported accuracy for Wi-Fi/cell fixes is
+   also routinely optimistic (20–40 m reported, hundreds of metres actual), so the
+   accuracy gate could not catch it either.
+
+This release judges by **source**, not by accuracy alone:
+
+* **while GPS is fresh, coarse fixes are dropped outright** — GPS flickers in and
+  out in urban canyons, and the coarse fix pulls the marker away and back in the
+  gap; that *is* the "jumping around";
+* a coarse fix is only allowed as a fallback once GPS has been stale for **2 minutes**
+  (not 20 s) — better to sit still for two minutes than to jitter;
+* a coarse fix that jumps more than **8 km** on its own is not even a fallback, it is
+  dropped (that is a new Wi-Fi hotspot, not you moving);
+* a coarse fix **never** enters the stationary-debounce window, **never** advances
+  the jump-guard reference, **never** reaches the track or the history ledger, and
+  does **not** update speed or course (cell positioning has no Doppler; speed and
+  bearing are 0 or stale);
+* the UI now honestly labels it **"Network fix (coarse)"**, and the accuracy display
+  has a 150 m floor — the raw system value would draw an accuracy circle as small as
+  a GPS one, which is more misleading than drawing none.
+
+"Settings → Location → Location mode" no longer claims "Network-assisted, faster
+fix"; it now says "Network is a fallback only (when GPS goes stale); coarse fixes are
+never written to the track", with an explanatory hint underneath — if it is not
+stated, users reasonably conclude that the app is broken.
+
+**3) Checker.**
+
+`tool/check_pos_quality.py` gained 11 assertions locking the behaviour above (both
+coarse gates, no track writes, no debounce window, no reference advance, the accuracy
+floor, status-string registration, …). As usual, each new check was **verified to go
+red with a regression sample**: removing the gates, allowing coarse fixes into the
+track, and not parsing `provider` — all three went red, and md5 confirmed the sources
+were restored byte-for-byte.
+
+## [1.6.149] - 2026-09-22
+
+### 🌟 四条反馈一次落地：去聚合、轨迹打点更准、去掉「无台站」提示、个人历史轨迹 / Four requests in one release: no clustering, better track points, no "no stations" pill, personal track history
+
+**一、去掉台站聚合**
+
+聚合（把屏幕距离接近的台站并成一颗「N」球）与热力图**本来就是同一件事的两种
+画法**，两个开关叠在一起，用户还得先猜「我现在看到的是球还是热力图」。按反馈
+**直接去掉聚合**：矢量地图与自绘地图都回到「一台站一个标记」，工具列少了那颗
+聚合按钮；低缩放时的密度信息交给热力图（它的开关保留）。代码层面把
+`map_page.dart` 的 `_buildClusteredMarkers` / `_clusterStations` / `_clusterMarker`
+与 `vector_map.dart` 的聚簇整段删掉 —— 不是藏起来，避免以后又被「顺手打开」。
+
+**二、轨迹打点更准：加入加速度计与指南针（Android）**
+
+这是「看看能不能做到精确打点」的答案：能，但要**各管各的短板**，而不是做一个
+「融合算法」把两个噪声源混在一起。
+
+* **指南针补航向**：GPS 在低速/静止时给的 course 是垃圾（多普勒解不出方向，
+  常为 0 或不更新）。步行、推车、慢骑时屏幕上的航向会乱指。现在速度低于
+  3 km/h 且**确实在动**时，用磁北航向补正；正常行驶仍用 GPS —— 磁力计在城里
+  靠近铁/电机时会被干扰，高速下反而是 GPS 更可靠。
+* **加速度计判「在不在动」**：GPS 静止时会飘，只看 GPS 速度容易把「站着不动」
+  判成移动。加速度计把重力低通滤掉后看线性加速度的 RMS，能直接回答「设备有没
+  有在动」。它只用来**提前退出静止**（GPS 速度偶尔为 0 时不被粘在旧点上），
+  绝不反过来把「传感器说静止」当成不进静止判定的理由 —— 坏传感器不该把防抖
+  整个废掉。
+
+实现上没有引第三方传感器插件：Android 侧加了一个 `MotionManager`（旋转矢量 +
+加速度计 + 磁力计），Dart 侧在每次定位回调里**拉取**一次采样，不做持续事件流，
+退出定位立刻注销监听。其它平台没有这套数据源，开关无效、行为与以前完全一致
+（接口按「没有传感器」返回）。默认开启，可在「设置 → 信标 → 定位」里关掉。
+
+**三、去掉「视野内无台站」提示**
+
+那条「该区域暂无台站 · 点击查看帮助」的浮条（以及点开的帮助面板）删掉了。
+地图上本来就有信息条、工具列与空地图本身，再挂一条提示只会挡住内容；真的没
+台站时，用户需要的是「换个地方看」而不是一段解释。
+
+**四、个人历史轨迹（按天保存，设置页查看）**
+
+设置页新增「历史轨迹」入口。它和地图上那条「我的轨迹」**刻意分开**：
+
+* 屏幕轨迹只服务这一次显示 —— 只留最近 N 个点、确认位置跳变时整条清空、退出
+  就没了；
+* 台账按**本地日期**落盘（`<应用支持目录>/tracklog/YYYY-MM-DD.json`），记录
+  每个点的经纬度、速度、航向、海拔、精度，退出重进还在。每天一屏：总里程、
+  平均速度、最高速度、移动时长、轨迹点，外加一张极简的点列预览。可按天删除、
+  可一键清空全部。
+
+落盘做了三件必要的事：**写盘节流**（攒着最多每 8 秒落一次，不给定位回调添
+存储抖动）、**跨天切分**（0 点后第一个点封存昨天并开新档）、**先写临时文件再
+改名**（原子替换，进程被杀不会留下半截 JSON 把整天读没）。读盘逐文件容错：
+一天的文件坏了只丢那一天。
+
+统计口径写在代码注释里：**移动时长**只累计「这一段确实在动」（段均速 >
+1.5 km/h）的间隔 —— 用「末点 − 首点」会把中途停下来吃饭的两小时算进去，平均
+速度就被稀释成没有意义的数字。
+
+---
+
+**1) Clustering is gone.** Clustering (merging nearby stations into an "N" bubble)
+and the heatmap were two drawings of the same idea, stacked behind two toggles —
+users had to guess which one they were looking at. Per feedback, **clustering is
+removed**: both the vector map and the self-drawn map are back to one marker per
+station, the cluster button is gone from the toolbar, and low-zoom density is the
+heatmap's job (its toggle stays). The clustering code in `map_page.dart` and
+`vector_map.dart` was **deleted**, not hidden, so it cannot quietly come back.
+
+**2) More accurate track points, with the accelerometer and compass (Android).**
+This is the answer to "can we make point plotting precise?": yes, but by letting
+each sensor cover the other's blind spot rather than blending both noise sources
+into one "fusion algorithm".
+
+* **Compass fixes the heading**: at low speed GPS course is garbage (Doppler cannot
+  resolve a direction, so it reports 0 or stops updating) and the on-screen heading
+  wanders while walking or pushing a bike. Below 3 km/h, and only while genuinely
+  moving, the magnetic-north heading is used; at normal speed GPS still wins —
+  magnetometers are disturbed near iron and motors in cities, and GPS is the more
+  reliable source at speed.
+* **Accelerometer decides "am I actually moving"**: GPS drifts when stationary, and
+  GPS speed alone misreads "standing still" as movement. After low-passing gravity
+  away, the RMS of linear acceleration answers the question directly. It is used
+  **only to leave the stationary state early** (so a brief GPS speed of 0 cannot
+  glue you to the old point); a sensor reporting "still" never blocks entering the
+  stationary state — a broken sensor must not disable the debounce entirely.
+
+No third-party sensor plugin was added: Android gets a `MotionManager` (rotation
+vector + accelerometer + magnetometer) and Dart **pulls** one sample per location
+callback instead of subscribing to a stream, unregistering the listeners the moment
+positioning stops. Other platforms have no such source; the switch is inert there
+and behaviour is exactly as before. It is on by default and can be turned off in
+Settings → Beacon → Location.
+
+**3) The "no stations in view" pill is gone.** The pill (and the help sheet it
+opened) was removed. The map already has an info chip, a toolbar and the empty map
+itself; one more overlay only covers content, and when there really are no stations
+the user needs to look elsewhere, not read an explanation.
+
+**4) Personal track history, saved per day and viewable in Settings.** A new
+"Track history" entry in Settings. It is **deliberately separate** from the "my
+track" line on the map: the on-screen track serves this one session (it keeps only
+the last N points, is cleared on a confirmed position jump, and is gone on exit),
+while this ledger is written to disk per **local day**
+(`<app support>/tracklog/YYYY-MM-DD.json`) with lat/lng, speed, course, altitude and
+accuracy for every point, and survives restarts. Each day shows total distance,
+average and max speed, moving time and point count, plus a minimal polyline preview;
+days can be deleted individually or all at once.
+
+Persistence does three necessary things: **write throttling** (at most one flush
+every 8 s, so location callbacks do not thrash storage), **day rollover** (the first
+point after midnight seals yesterday and opens a new file), and
+**write-temp-then-rename** (an atomic replace, so a killed process cannot leave a
+half-written JSON that blanks the whole day). Reading is per-file tolerant: one bad
+file loses only that day.
+
+The stats' definitions live in code comments: **moving time** only accumulates
+intervals that were genuinely moving (segment speed > 1.5 km/h). Using
+"last − first" would count a two-hour lunch stop as moving and dilute average speed
+into a meaningless number.
+
+## [1.6.148] - 2026-09-21
+
+### 🐛 修面板「拖动卡 + 一拖就变白」；连接按钮改成带动词文字 / Fixing sheet drag jank and the white flash; a clearer connect button
+
+两条用户反馈，而第一条是我上一版「治卡」的手法自己造出来的另一半问题。
+
+**一、拖动卡 + 莫名其妙变白：根因是「面板高度每帧在变」**
+
+`BackdropFilter` 的代价与它的**几何**直接相关。上一版为了让展开动画不卡，做法是
+动画/拖动期间**关掉模糊**——而关掉模糊就**必须**同时把填色换成不透明的白
+（半透明不糊会直接透出地图，比卡更难看）。于是每次拖动面板都会从
+「58% alpha 的磨砂」跳成「纯白」：用户看到的就是「一拖就变白」，而那两步其实是
+同一处设计的两个面 —— 它把「卡」换成了「白」。
+
+**正确的解法在几何，不在开关**：让面板**自身固定为最高档高度**，只裁出可视区。
+这样模糊层的几何在拖动/动画中**完全不变**，叠加地图那侧的冻结（底图不变 →
+模糊结果可复用），就能**一直开着模糊**：既不变白，也不再每帧重做整屏模糊。
+
+因此把 `MaterialSurface(blurWhen:)` 这个开关**删掉**了，并在它的位置留一段说明：
+**谁要用模糊，谁就得保证自己的几何是稳定的** —— 不留这个开关，就不会有人再走
+「关模糊 + 换实白」这条回头路。
+
+**二、连接按钮：状态与动作彻底分开**
+
+上一版把未连接做成**实心蓝**圆钮，本意是「看成主操作」。但它同时被读成了状态灯：
+**实心**在图形界面的惯例里意味着「已开启」，于是看到的正好相反（填满时反而是断开）；
+而连上之后同一位置又变成「断开」，来回换含义。
+
+现在：**状态只由左边的胶囊表达**（● 来源 · 已连接 / 未连接 / 只收不发）；
+**按钮只表达「点了会发生什么」** —— 一律带动词文字（连接 / 断开连接）、一律淡底。
+顺手把来源名改短（`APRS-IS` / `TNC` / `音频` / `PKWDWPL`）：设置页那套完整说法
+放进胶囊会把顶部那一行撑爆。
+
+---
+
+**Two reports from users — and the first one was the other half of a problem my own previous
+“fix for jank” created.**
+
+**1) Sheet dragging stuttered and flashed white. The root cause is that the sheet's height changed
+every frame.** A `BackdropFilter`'s cost is tied directly to its **geometry**. The previous release
+avoided animation jank by turning the blur **off** while animating/dragging — and turning a blur off
+*forces* you to switch the fill to opaque white (translucent-but-unblurred shows the map straight
+through, which looks worse than stutter). So every drag jumped from “58% alpha frosted” to “pure
+white”: that is the white flash, and the two reports are two faces of one design that traded jank
+for whiteness.
+
+**The fix belongs in the geometry, not in a switch**: the sheet now lays itself out at its **maximum
+height** and merely clips to the visible area. The blur layer's geometry therefore never changes
+while dragging, and combined with the frozen map behind it (unchanged backdrop ⇒ reusable blur
+result) the blur can simply **stay on** — no white flash, and no full-screen blur recomputed every
+frame.
+
+So `MaterialSurface(blurWhen:)` was **removed**, replaced by a note in its place: **whoever wants a
+blur owns keeping their geometry stable.** With no switch to reach for, nobody can take the
+“disable blur, swap in solid white” road again.
+
+**2) The connect button: state and action are now cleanly separated.** The previous release drew the
+disconnected state as a **solid blue** round button, intending it to read as “the primary action”.
+But it also read as a status light: in GUI convention **solid** means *on*, so it said the opposite
+(filled = disconnected). And once connected, the same spot turned into “disconnect”, changing
+meaning back and forth. Now **the pill on the left carries the state** (● source · connected /
+not connected / receive-only) and **the button carries only what tapping does** — always a verb
+(Connect / Disconnect), always a light fill. Source names were also shortened (`APRS-IS` / `TNC` /
+`Audio` / `PKWDWPL`), because the settings-page wording would burst that row on narrow screens.
+
+---
+
+## [1.6.147] - 2026-09-21
+
+### 🧹 按反馈撤掉接收侧那套「防抖」；修浮动面板展开卡顿；横屏改成一整块工作区 / Dropping the receiver-side debounce; fixing sheet-open jank; a single landscape workspace
+
+三条都来自使用反馈。第一条是**我上一版做错了方向**，先认这个。
+
+## 一、接收台站的「位置质量层」全部撤掉（v1.6.145 加的）
+
+原话是「不要给别人加防抖，浪费」—— 这个判断是对的，而且**浪费是能算出数的**。
+那一整套里真正占资源的不是"每包算一次"的判据，而是**绘制期**的东西：
+
+* 轨迹平滑（`smoothForDraw`）：**每次重绘都重新分配整条列表**，每个点还要算 1~2 次
+  haversine；地图一拖动/缩放就是每帧一次；
+* 推测位置（`coastOf`）：**每秒对每个可见台站**算 sin/cos/atan（上限 120 个），
+  而绝大多数台站是静止或离线 —— 算了完全用不上；
+* 那一层还**每秒强制重绘**，而它就叠在磨砂面板的离屏模糊之上（见第二条）。
+
+于是接收侧**整体回到朴素行为**：收到就更新，位移超过 20m 记一个轨迹点。
+一并删掉的：报文指纹去重、位置时间戳判旧帧、速度门控、模糊位置的不确定圈、
+自适应抽稀。`Station` 上的 `fixTime` / `ambiguity` 与它们的持久化也删了。
+
+**保留的是「自己」那一侧**（每天看得见的东西，且成本可忽略）：静止防抖（站着不动时
+标记不再原地哆嗦）、按速度自适应的轨迹抽稀、定位精度显示与精度圈。
+
+以后想给接收侧再加回来，`tool/check_pos_quality.py` 会拦住 ——
+它现在对接收侧那些调用是「**必须不存在**」的断言。要加，先回答「它能省下多少帧」。
+
+## 二、面板一动，地图就**冻住**（不再渲染新帧）
+
+按「触发其他面板之后地图不再渲染？固定？」这条建议做的 —— 它是这一轮里最有效的一条。
+
+关键是分清两种「不画」：
+
+* `isActive = false` → 整块地图换成 `SizedBox.shrink()`，**真的不画了**；
+* `frozen = true` → **继续画**，但不再产出新的帧。
+
+后者才是对的：面板开着做磨砂时，`BackdropFilter` 要把**背后已经画好的内容**
+离屏重绘一遍 —— 地图一旦不画，模糊背后只剩页面底色，那不叫优化，那叫把磨砂弄坏。
+
+冻结做了三件事：
+
+* 停掉脉冲动画（`_pulse.repeat()` 是地图这边**唯一的每帧**重绘来源，它驱动所有
+  移动台站的扩散圈逐帧重建）；
+* **数据**变化不再重建标记（面板开着期间收到的新台站/新位置先攒着）；
+* 传给地图的 `bottomInset` 改用**吸附目标值**而不是逐帧中间值 —— 否则每帧一个新
+  inset，地图就每帧重排重绘一次，正好把上面两条抵消掉。
+
+**视图变化仍然跟随**：拖地图、缩放、点台站都会立即重建标记。这条不能省 ——
+否则在那个状态下拖地图，标记会僵在原地，比卡更难接受。解冻时再补一次重建
+（`didUpdateWidget`），避免短暂显示冻结前的旧标记。
+
+效果：地图内容在面板开着期间不变 → 它自己那层 `RepaintBoundary` 的光栅化结果被
+Flutter 复用 → 面板的模糊从「每帧把整张地图重新光栅化」变成**采样一张缓存纹理**。
+
+## 三、浮动面板展开卡顿：另外三条一起改
+
+
+根因是**叠加**出来的，不是单一原因：
+
+1. **展开动画每帧都在做整屏离屏模糊。** 面板壳里的 `BackdropFilter` 每帧都要把
+   「背后已经画好的地图」离屏重绘一遍（`material.dart` 里早就写明了这笔账），而
+   展开动画 260ms 里外壳每帧 `setState`、面板高度每帧在变 —— 于是动画的十几帧
+   里每一帧都在对整张地图做一次全屏模糊。
+   → 新增 `MaterialSurface(blurWhen:)`：**动画/手拖期间不做模糊**，同时换成不透明
+   合成色（半透明但不糊会直接透出地图，比卡更难看）。动画结束再 `setState` 一次
+   把磨砂恢复 —— 少了这一下，面板会一直停在「没有磨砂」，用户会以为材质坏了。
+2. **展开动画每帧重建四个页面。** `_content()` 每次都新建 `IndexedStack` 与
+   台站/消息/数据包/设置四页 → 动画每帧把它们全重建一遍。改成**缓存 widget 实例**，
+   只有页签变化才失效；Flutter 见到同一实例会跳过这棵子树的 rebuild。
+3. **少一层模糊**：横屏原来「竖条 + 面板」是两张独立卡（两层 `BackdropFilter`），
+   见第三条 —— 现在是一张。
+
+## 四、横屏：一整块工作区
+
+原来横屏是两张**独立的**圆角卡：竖条是 `MainAxisSize.min`（只有内容高、贴顶），
+内容面板却占满整高 —— 两块并排**高度不齐**，上沿都从安全区起、下沿一个到屏幕底
+一个不到，看着就是「没收拾过」。
+
+现在合并成**一张卡**：左竖条 + 细分隔 + 右内容。高度天然一致、间距只有一处，
+而且少一层离屏模糊。选「地图」页（内容为空）时只留竖条卡并**垂直居中** ——
+贴顶会显得像掉在上面。竖条也套了 `SingleChildScrollView`：极矮横屏（手机横放常
+不足 400dp）下 5 个导航项会溢出成黄条纹。
+
+## 五、顺带修掉一个「检查器自己的 bug」
+
+`tool/check_material_coverage.py` 里 `return 1` 写在了打印**之前**，于是它一旦
+发现真问题就**报红但不说哪里红**（后面那段打印是死代码）。一个不告诉你问题在哪的
+检查比没有检查更费时间 —— 这轮它真报红时才发现，已修好并把顺序写进注释。
+
+---
+
+**All three items come from user feedback. The first one is me having gone the wrong way in
+the previous release, so that comes first.**
+
+**1) The receiver-side "position quality layer" (added in v1.6.145) is gone.** The feedback was
+"don't add debounce for other people, it's a waste" — and that judgement is right, with the waste
+being **quantifiable**. What actually cost resources was never the once-per-packet checks but the
+**per-frame** work: track smoothing (`smoothForDraw`) **reallocated the entire list on every
+repaint** and ran one or two haversines per point, i.e. once per frame while the map is being
+dragged or zoomed; estimated position (`coastOf`) computed sin/cos/atan **for every visible
+station every second** (up to 120), even though most stations are stationary or offline, so the
+result was almost never used; and that layer also **forced a repaint every second**, right on top
+of the sheet's backdrop blur (see item 2). The receiver side is therefore back to plain behaviour:
+update on receipt, append a track point when the station moved more than 20m. Also removed: packet
+fingerprint dedupe, position-timestamp staleness rejection, kinematic gating, ambiguity circles,
+and adaptive decimation — along with `Station.fixTime` / `Station.ambiguity` and their
+persistence. **What stays is the "my own position" side** (the part you see every day, at
+negligible cost): stationary debounce, speed-adaptive track decimation, and the accuracy display
+and accuracy ring. If anyone wants the receiver side back, `tool/check_pos_quality.py` will stop
+them — those calls are now asserted to be **absent**. To add them back, first answer "how many
+frames does it save".
+
+**2) While a panel is open the map is frozen — it keeps painting, but stops producing new
+frames.** This came from the suggestion "after triggering another panel, can the map stop
+rendering? fixed?" and it turned out to be the most effective change of the round. The key is
+telling two kinds of "not painting" apart: `isActive = false` replaces the whole map with
+`SizedBox.shrink()` — it really stops painting; `frozen = true` **keeps painting** but stops
+producing new frames. The latter is the correct one, because with frosted material the
+`BackdropFilter` re-renders everything already painted behind it — if the map stops painting, the
+blur has nothing but the page background behind it, which is not an optimisation, it is breaking
+the frosted effect. Freezing does three things: it stops the pulse animation (`_pulse.repeat()` is
+the map's **only** per-frame repaint source, driving the expanding rings on every moving station),
+it stops rebuilding markers on **data** changes (new stations and positions received while a panel
+is open simply accumulate), and it passes the map a `bottomInset` based on the **snap target**
+instead of the per-frame intermediate value — otherwise every frame brings a new inset, the map
+re-lays-out and repaints every frame, and the first two wins are cancelled out. **View changes are
+still followed**: panning, zooming and tapping a station rebuild markers immediately, and this
+cannot be dropped — without it, dragging the map in that state leaves the markers stuck, which is
+worse than jank. A final rebuild on unfreeze (`didUpdateWidget`) avoids briefly showing the
+pre-freeze markers. The effect: the map's content does not change while a panel is open, so the
+rasterised result of its own `RepaintBoundary` is reused by Flutter, and the panel's blur goes from
+"re-rasterise the whole map every frame" to **sampling a cached texture**.
+
+**3) Sheet-open jank: the other three fixes, at once.**
+ The root cause was additive. First, the open
+animation was doing a full-screen offscreen blur **every frame** — the `BackdropFilter` in the
+sheet shell re-renders everything already painted behind it each frame (`material.dart` has
+always documented that cost), while the open animation setState-s every frame with a changing
+height, so a dozen-plus frames each blurred the entire map. `MaterialSurface` now takes
+`blurWhen:`: **no blur during animation or finger-dragging**, with an opaque blended fill in the
+meantime (translucent-but-unblurred would show the map straight through, which looks worse than
+jank); a final `setState` when the animation completes restores the frosted look — without it the
+sheet would stay blur-less forever and users would think the material broke. Second, the animation
+rebuilt all four pages every frame: `_content()` built a fresh `IndexedStack` with the stations,
+messages, packets and settings pages on each call. The widget instance is now cached and only
+invalidated when the tab changes, so Flutter skips that subtree entirely. Third, one fewer blur
+layer: landscape used to be two separate cards (two `BackdropFilter`s), now one.
+
+**4) Landscape: a single workspace.** Previously landscape had two **independent** rounded cards —
+the rail was `MainAxisSize.min` (content-height only, pinned to the top) while the content pane
+filled the full height, so the two sat side by side with **mismatched heights** and different
+bottom edges. It is now **one card**: rail, hairline divider, content. Heights match by
+construction, spacing lives in one place, and there is one less offscreen blur. On the map tab
+(no content) only the rail card remains, **vertically centred** — pinned to the top it looked like
+it had fallen there. The rail is also wrapped in a `SingleChildScrollView`, because at very short
+landscape heights (phones rotated are often under 400dp) five nav items overflowed into the
+yellow-and-black stripes.
+
+**5) Also fixed a bug in one of the checkers themselves.** `tool/check_material_coverage.py` had
+its `return 1` **before** the printing block, so whenever it actually found a problem it went red
+**without saying where** (the reporting code was dead). A check that does not tell you where the
+problem is costs more time than no check at all; this round's first real failure exposed it.
+Fixed, with the ordering requirement written into the comment.
+
+## [1.6.146] - 2026-09-21
+
+### 📍 自己的定位加「静止防抖」：站着不动时，标记不再原地哆嗦 / Stationary debounce for your own GPS
+
+上一版治的是「接收到的台站」，自己这一侧其实只有**粗筛**：精度超过 150m 的点丢掉、
+网络点只在 GPS 停更 20 秒后才兜底、系统缓存位置只在还没定位时用。这些都是「不合格就
+扔掉」，而**「合格但抖」的点从来没管过** —— 静止时 GPS 在 ±30m 内飘是常态，于是轨迹被
+画成一小团毛线球，信标上报的坐标也跟着一起哆嗦（aprs.fi 上看自己的点会在原地跳）。
+
+## 一、精度这个值，原生算了却没人读
+
+Android 侧 `LocationService.kt` 一直在发 `"accuracy"`、iOS 侧 `LocationPlugin.swift`
+一直在发 `horizontalAccuracy` —— 但 Dart 侧解析事件时**从来没读过**，回调签名里也没这个
+参数，等于白算。现在接回并落库，这是三件事的前提：如实显示「±40 m」、太差的点不写轨迹、
+给自己画不确定圈。**IP 定位现在如实标 50km（城市级）** —— 以前它和手机 GPS 点在界面上
+长得一模一样，用户无从知道眼前这个点差了多远。
+
+## 二、静止防抖：滑动窗口中位数 + 四个关键决定
+
+算法是 `lib/pos_quality.dart` 里的 `SelfFixFilter`，参数**不是拍脑袋定的**，是用
+`tool/sim_selffix.py` 的场景仿真跑出来的（脚本已进仓库，注释里的数字都能复现）：
+
+| 场景 | 反向跳（稳态） | 跳变 >20m | 输出游走总长 |
+|---|---|---|---|
+| 静止 σ30m | 106 → **10** | 206 → **10** | 11691m → **2311m** |
+| 静止 σ60m（弱信号） | — | 233 → **11** | 23382m → ~4000m |
+| 静止 + 一次 200m 漂移 | 108 → **11** | 207 → **10** | 12103m → **2358m** |
+| 步行 4.5km/h | 75 → **75** | 156 → **156** | 不变 |
+| 开车 60km/h | 0 → **0** | 239 → **239** | 不变 |
+
+四个决定，每个都是先写错、被仿真打回来才改对的：
+
+* **判据用「窗口前后两半中位数之差」，不是「离当前点的最大距离」。** 第一版就是后者：
+  5 个 σ=30m 的噪声点离当前点最远常到 60~90m，于是「进入静止」**永远不成立** ——
+  仿真里静止场景 `still=0%`，两条曲线完全一样，**功能等于没上**。两半中位数之差才对
+  噪声不敏感（各半中位数各有 ≈0.7σ 误差）、对真实位移敏感。
+* **静止时取中位数，不是均值。** 均值会被一个漂出去很远的点拉偏，而「漂出去很远」恰好是
+  GPS 最常见的失效模式（隧道口、出地库、多路径反射）。仿真里那个 200m 单点漂移，
+  中位数完全不受影响。
+* **进出都要时间滞回**：进入要连续 3 次成立、退出要连续 3 次不成立，但速度达到 5km/h
+  （明显在动）**当帧退出**。只做阈值滞回不做时间滞回，阈值边缘就会反复切换，位置忽跳 ——
+  那正是「反复横跳」。
+* **输出死区 12m + 每帧限速 15m**：中位数没漂出 12m 就**完全不动**（挡住中位数自身的
+  ±10m 游走，实测把稳态反向跳从 30 次降到 10 次），要动也每帧最多 15m。于是「进静止」
+  「出静止」都不会有突兀一跳。
+
+**移动时不做任何平滑**：移动中 GPS 本身准，平滑只会引入滞后（轨迹甩到弯道外侧）。
+仿真里步行与开车场景的输出与未滤波**逐帧完全相同**，就是这条的证明 —— 这是「宁可不平滑，
+也不要让位置追不上车」的取舍。已知局限也如实写进了类的注释：若设备上报的**速度不可信**
+（在 0~4km/h 之间乱跳），滤波器基本不生效（still 仅 20%）—— 那种情况下输出与改动前一致，
+至少不会变差。
+
+## 三、自己的轨迹与展示
+
+* **静止不写轨迹点**、精度差于 100m 不写、抽稀门限按速度自适应（原来固定 20m）——
+  毛线球的三个来源逐个堵掉。
+* 定位状态多一个「**静止**」（6 语言 + 白名单登记，非中文界面不会漏出中文）。
+* 「我的位置」面板新增「位置精度 ±40 m」；地图上给自己画不确定圈（蓝虚线），
+  与台站的模糊圈同一种画法。
+* 修掉一个本版引入的 bug：`filterLng` 误写成原始经度，会让 APRS-IS 过滤中心拿
+  「平滑纬度 + 未平滑经度」去算，两轴不同步。
+
+## 四、还会不会「跳回初始点」？—— 又查出两条路，都封死了
+
+顺着「谁还能把标记拉回旧点」把整条链路重走了一遍，剩下两条：
+
+* **缓存位置（`getLastKnownLocation`）在原生服务重启后会再次放行。** 原生侧在服务
+  运行期间确实会挡缓存点（Android 的 `hasLiveFix`），但**前台服务被系统回收、切回
+  前台重连之后那个标记会归零**，于是它可能再放行一个几分钟前的缓存位置 —— 而上层
+  照收就会把标记拉回旧位置，症状正是用户报过的「轨迹跳回初始点」。现在 Dart 侧自己
+  记住「已经有过实时定位」，此后的缓存点**连标记都不再改**（只保证有东西可显示）。
+* **跳变守卫的参照点原本是「上一个轨迹点」——这条是我这版改动引入的回归。**
+  因为静止时不再写轨迹点了，`myTrack.last` 可能已经是几小时前的点，于是
+  `gapSec` 必然超窗、**守卫整个失效**；而 `myTrack` 为空时（刚启动、清空数据后、
+  刚确认过一次跳变）原本完全没有守卫。参照点改成「**上一次被接受的实时定位**」，
+  这两处一起解决 —— 顺带 `myTrack.clear()` 现在只在确认跳变时发生。
+
+顺手补上：`clearAllData()` 以前不清自己的轨迹（`myTrack` 不在 `stations` 里），
+点「清空数据」后地图上仍残留一条自己的线；现在一并清掉并复位定位状态。
+
+## 五、绘制开销：不确定圈改成「算一次、缩放复用」
+
+三层虚线圈都是新加的，顺手把它做便宜了。要点是**硬件加速不等于免费**：
+
+* Android（`hardwareAccelerated="true"`，Impeller/Skia 走 GPU）、iOS（Metal）、
+  Windows（ANGLE → D3D11）确实是 GPU 绘制 —— 但这只说明 `drawPath` 由 GPU 光栅化，
+  **虚线本身是 CPU 算的**：Skia / Impeller 都不在 GPU 上做路径虚线。
+* 原来的写法是「每个圈每帧跑 `Path.computeMetrics()` + `extractPath()` 逐段切」：
+  半径 100px 的圈 ≈ 57 段、500px ≈ 285 段，而圈数上限 120 → 最坏一帧约 **6800 次**
+  切段 + 绘制。而 `maxStations` 默认是**无上限**的，这个上限真的会被撞到。
+* 现在改成预先只构造一个「单位虚线圆」（半径 1、48 段），画的时候 `canvas.scale(r)`
+  复用（线宽除以 r 抵消缩放）—— 每个圈只剩 **1 次** `drawPath`，
+  **与半径无关**，也不再有任何逐帧路径计算。
+* 另外两条：接近整屏的圈（> 1.5 倍屏幕长边）直接不画（没有信息量却要光栅化一大片）；
+  这一层套 `RepaintBoundary` 隔离，它每秒重绘一次时不会连累瓦片与其它浮层。
+
+## 六、两条新增的 CI 检查（本机跑不了 analyze，只能靠它们）
+
+* `tool/sim_selffix.py --check`：既是仿真也是回归 —— 校验 Dart 常量与仿真**逐项一致**
+  （两处漂移就等于在验证另一个算法），并断言「静止不许反复横跳 / 单点漂移不许漏出去 /
+  **步行开车不许被平滑**」。
+* `tool/check_pos_quality.py` 增加五条断言：accuracy 是否真的从原生接回来、
+  `locStatus` 的每个状态串是否都在白名单里登记过（漏登记会让英文界面漏出中文）、
+  缓存位置闸门与「守卫参照点不是 myTrack.last」这两条不许回退、以及
+  `clearAllData()` 必须清 myTrack。
+
+回归样本都验证过**会报红**，其中两条正是上面这两条路径被改回去 ——
+另外一条是「keep 阈值落在步行区间 → 走路被粘住」。
+
+---
+
+**The previous release fixed received stations; your own position only had coarse filters
+(drop fixes worse than 150m, fall back to network only after GPS goes quiet for 20s, use the
+cached last-known fix only before the first fix). Those are all "throw it away if it is bad" —
+and a fix that is **good but noisy was never handled at all**. A stationary GPS wanders within
+±30m as a matter of course, so the track was drawn as a little ball of wool and the beacon
+coordinates jittered along with it (your own dot visibly hops around on aprs.fi).**
+
+**1) The accuracy value was computed and then never read.** Android's `LocationService.kt` has
+always sent `"accuracy"`, and iOS's `LocationPlugin.swift` has always sent `horizontalAccuracy`
+— but the Dart side never parsed it and the callback signature had no such parameter. It is now
+plumbed through and stored, which is the prerequisite for three things: showing "±40 m"
+truthfully, refusing to write very poor fixes into the track, and drawing an uncertainty circle
+around yourself. **IP geolocation is now honestly labelled 50km (city-level)** — previously it
+looked exactly like a phone GPS fix, leaving users no way to tell how far off the dot was.
+
+**2) Stationary debounce: a sliding-window median with four key decisions.** The algorithm is
+`SelfFixFilter` in `lib/pos_quality.dart`, and its parameters are **not guesses** — they come
+from scenario simulations in `tool/sim_selffix.py`, which is committed so every number in the
+comments is reproducible:
+
+| Scenario | Reversals (steady) | Jumps >20m | Output wandering |
+|---|---|---|---|
+| Stationary, σ30m | 106 → **10** | 206 → **10** | 11691m → **2311m** |
+| Stationary, σ60m (weak signal) | — | 233 → **11** | 23382m → ~4000m |
+| Stationary + one 200m outlier | 108 → **11** | 207 → **10** | 12103m → **2358m** |
+| Walking, 4.5 km/h | 75 → **75** | 156 → **156** | unchanged |
+| Driving, 60 km/h | 0 → **0** | 239 → **239** | unchanged |
+
+Four decisions, each of which was wrong first and corrected after the simulation pushed back:
+
+* **The criterion is the distance between the medians of the window's two halves, not the
+  maximum distance from the current point.** The first version used the latter: five samples at
+  σ=30m are routinely 60–90m from the current point, so "entering the stationary state" **never
+  happened at all** — the simulation showed `still=0%`, the two curves were identical, and the
+  feature was effectively not shipped. The half-to-half median distance is insensitive to noise
+  (each half's median carries ~0.7σ of error) yet sensitive to real movement.
+* **Stationary output is a median, not a mean.** A mean is dragged by one far-away sample, and
+  "far away" is exactly how GPS most often fails (tunnel mouths, leaving a garage, multipath).
+  In the simulation the single 200m outlier leaves the median completely undisturbed.
+* **Time hysteresis in both directions**: three consecutive good samples to enter, three
+  consecutive bad ones to leave — but a speed of 5 km/h (clearly moving) exits **on that frame**.
+  Threshold hysteresis without time hysteresis makes the state flap at the boundary, and each
+  flap moves the position; that *is* the "jumping back and forth" failure mode.
+* **A 12m output deadband plus a 15m-per-frame slew limit**: if the median has not drifted beyond
+  12m the output **does not move at all** (this suppresses the median's own ±10m wander and took
+  steady-state reversals from 30 down to 10); when it does move, it moves at most 15m per frame.
+  Neither entering nor leaving the stationary state produces a visible jump.
+
+**No smoothing whatsoever while moving.** GPS is accurate when you are moving; smoothing there
+only adds lag and swings the track onto the outside of corners. In the simulation the walking and
+driving outputs are **frame-for-frame identical** to the unfiltered ones, which is the proof. It
+is a deliberate trade: better to skip smoothing than to have the position unable to keep up with
+the car. The known limitation is written into the class documentation as well: if a device
+reports an **unreliable speed** (jumping around between 0 and 4 km/h), the filter largely does
+not engage (still only 20%) — and in that case the output is identical to before, so it is never
+worse.
+
+**3) Your own track and its presentation.** Stationary fixes, fixes worse than 100m, and the
+adaptive decimation threshold (formerly a fixed 20m) — the three sources of the ball of wool, each
+plugged. A new "**stationary**" location status (in all six languages and registered in the
+whitelist, so non-Chinese interfaces never leak Chinese). The "my location" panel now shows the
+accuracy as "±40 m", and an uncertainty circle is drawn around your own dot on the map, in the
+same style as the ambiguity circles for other stations. Also fixed a bug introduced in this
+release: `filterLng` was assigned the raw, unsmoothed longitude, which made the APRS-IS filter
+centre combine a smoothed latitude with an unsmoothed longitude.
+
+**4) Can it still jump back to the initial point? Two more paths were found, both now
+closed.** Walking the chain again asking "what can still drag the marker back to an old
+position" turned up two:
+
+* **The cached location (`getLastKnownLocation`) can be released again after a native service
+  restart.** The native side does suppress cached fixes while the service runs (Android's
+  `hasLiveFix`), but **that flag resets when the foreground service is reclaimed and reconnects**,
+  so a cached position from a few minutes ago can be emitted again — and accepting it drags the
+  marker back to the old position, which is exactly the "track jumps back to the initial point"
+  symptom users reported. The Dart side now remembers that it has already had a live fix, and
+  cached fixes after that **do not even move the marker** (they only guarantee something is
+  displayed).
+* **The jump guard's reference point used to be "the previous track point" — a regression
+  introduced by this very release.** Since stationary fixes are no longer written to the track,
+  `myTrack.last` can be hours old, so `gapSec` always exceeds the window and **the guard stops
+  working entirely**; and when `myTrack` is empty (just started, after clearing data, right after
+  a confirmed jump) there was no guard at all. The reference is now "**the last accepted live
+  fix**", which fixes both cases at once.
+
+Also fixed along the way: `clearAllData()` never cleared your own track (`myTrack` is not inside
+`stations`), so a line of your own survived "clear all data"; it is now cleared along with the
+location state.
+
+**5) Drawing cost: the uncertainty rings now compute once and scale.** All three dashed-ring
+overlays were new, so they were made cheap while we were there. The point is that **hardware
+acceleration does not mean free**: Android (`hardwareAccelerated="true"`, with Impeller/Skia on
+the GPU), iOS (Metal) and Windows (ANGLE → D3D11) do render on the GPU — but that only means
+`drawPath` is rasterised by the GPU. **The dashes themselves are computed on the CPU**: neither
+Skia nor Impeller dashes paths on the GPU. The original code ran `Path.computeMetrics()` plus
+`extractPath()` per ring per frame — about 57 segments for a 100px ring and 285 for a 500px one,
+with a 120-ring cap, so up to roughly **6800** segment-and-draw calls in the worst frame; and
+`maxStations` is unlimited by default, so that cap really can be reached. Now a single
+"unit dashed circle" (radius 1, 48 segments) is built once and reused via `canvas.scale(r)` (with
+the stroke width divided by `r` to cancel the scale), leaving **one** `drawPath` per ring,
+independent of radius, with no per-frame path work at all. Two more: rings approaching the size of
+the screen (beyond 1.5× its longest side) are skipped entirely, since they carry no information
+while forcing a large rasterisation; and the layer is wrapped in a `RepaintBoundary` so its
+once-a-second repaint does not drag the tiles and other overlays into re-rasterising.
+
+**6) Two new CI checks** (this machine cannot run analyze, so these are the only safety net):
+`tool/sim_selffix.py --check` is both simulation and regression — it verifies that the Dart
+constants match the simulation **term by term** (any drift means the simulation is validating a
+different algorithm), and asserts that stationary output never jumps around, that a single-point
+outlier never leaks out, and that **walking and driving are never smoothed**. `check_pos_quality.py`
+gained five assertions: that accuracy is really plumbed back from the native side, that every
+`locStatus` string is registered in the whitelist, that the cached-location gate and the "guard
+reference is not myTrack.last" invariant cannot regress, and that `clearAllData()` clears `myTrack`.
+Every regression sample was verified to go **red** — two of them are exactly the two paths above
+being reverted, and another is "the keep threshold landed inside the walking range, so walking got
+stuck".
+
+## [1.6.145] - 2026-09-21
+
+### 🎯 「打点算法」重做：旧帧、重复帧、错包与模糊位置都不再骗人 / A rebuilt position-quality layer for plotting stations
+
+台站位置有三个来源（APRS-IS / TNC / 音频解码），共用同一条解析管线；而同一帧还会经多条
+路径重复到达。在此之前 `_upsertStation` 是「收到就覆盖坐标、位移超过 20m 就记一笔」，
+于是地图上会出现四类假东西。这一版加了 `lib/pos_quality.dart`（打点质量层）逐条处理，
+并且**把不确定度如实画出来**—— 一个诚实标着 ±13km 的点，比一个假装精确的点有用得多。
+
+## 一、迟到的旧帧 / 重复帧：不再回拉、不再重复打点
+
+* **位置包的时间戳以前解析出来就丢掉了**，这是最直接的漏。APRS-IS 不保证有序，一个
+  几十秒前、几百米外的旧帧会把台站「拉回去」，轨迹上出现折返。现在 `/`、`@` 包的
+  7 字符时间戳（`DDHHMMz` / `HHMMSSh` / `DDHHMM/`，一律归一到 UTC）真正参与判断：
+  比已知位置旧 60 秒以上的帧**不覆盖位置、不追加轨迹**，只刷新「听到」。发送方时钟
+  超前 2 小时以上时忽略该时间戳（免得因为对方时钟错就整条丢掉）。
+* **同一帧的往返重复**：同时开着 APRS-IS 与射频、或经多个 iGate 时，同一帧会到两次。
+  现在按「呼号 + 正文」指纹去重（**不含转发路径** —— 两条副本只有路径不同），
+  20 秒窗口内只刷新「听到」，不打点也不记轨迹。
+
+## 二、错包：不再画出横跨城市的假线
+
+以前只有「自己」的位置有跳变守卫，接收到的台站没有 —— 一个错包就能让台站瞬移几十公里，
+轨迹上留一条假线。现在每个台站都有**速度门控**：
+
+* 按 APRS 符号估一个这类台站不可能超过的地速（飞机/卫星 2000、步行 15、默认 250 km/h），
+  用「距离 > 速度 × 时间 × 1.5 + 500m」判定物理上不可能；
+* 单点可疑**只保留旧位置**（不动标记、不记轨迹，只刷新「听到」），**连续 3 次都物理
+  不可能**才认账 —— 认账后清空轨迹从新位置重画，而不是画一条横跨两地的假线；
+* 为什么不能一次就否决：**真实的飞机 / ISS 每一帧都「物理不可能」**，一次否决会把它们
+  永久冻在地图角落。ISS 这类呼号直接豁免，报文自带速度时也会放宽上限。
+
+## 三、模糊位置：不再假装精确
+
+`posAmbiguity`（模糊位数）以前解析出来**全项目没有一处使用**。可它意味着真实误差是
+±0.13km / ±1.3km / ±13km / ±78km（对应 1′ / 10′ / 1° 的方格）。这些点以前被画得和精确点
+一模一样 ——「看着很准，其实差几十公里」，这是最伤专业用户信任的一种错。
+
+现在地图上按方格半对角画**不确定圈**（虚线），台站详情页多一行「位置精度」，
+写明 `±1.3 km（模糊 2 位）`。
+
+## 四、轨迹：抽稀按速度自适应、绘制前限幅平滑
+
+* 抽稀门限从「固定 20m」改成按速度自适应：步行 15m（下限，低于 GPS 噪声没有意义）、
+  汽车约 60m、飞机封顶 250m。固定值在步行时太粗、在高速时又太细（抖动被画成锯齿）。
+* 绘制前做一次三点加权平滑，但**每个点最多挪 25m** —— 抖动能抹掉，真实急弯抹不动。
+  瓦片地图与矢量地图走同一条平滑路径，两种底图不会长得不一样。
+
+## 五、推测位置：安静下来的移动台站，外推「现在大概在哪」
+
+移动台站安静 60 秒以上后，按最后的速度/航向外推位置：地图上画虚线鬼影 + 随时间扩大的
+不确定圈，详情页给出「± 不确定度 · x 分钟前最后定位」。只对**仍算在线**的台站外推 ——
+给一个已经离线的台站画推测位置只会更误导。这一层跟着地图的「轨迹」开关一起显示。
+
+## 六、顺带：两条本机查不了、只能进 CI 的检查
+
+* `tool/check_l10n_sync.py`：arb（真源）↔ 提交进 git 的 gen-l10n 产物。CI 会按 arb
+  重新生成产物，于是「产物没 regen」会被掩盖 —— 但本机开发时会报 undefined_getter，
+  也就是「我这儿有错、CI 却是绿的」，最耗人。这条按未生成产物的视角校验。
+* `tool/check_pos_quality.py`：打点质量层的**接线**检查。算法写好了但忘了在某条路径上
+  调用，编译与 analyze 都不会报错，功能只是悄悄不生效 —— 这条把「哪个文件必须调用哪个
+  入口」变成断言，含「固定 20m 门限不许回来」这条回归守卫。
+
+两条检查都按「必须会报红」的规矩用回归样本验证过。
+
+---
+
+**Station positions arrive from three sources (APRS-IS, TNC, decoded audio) through one shared
+pipeline, and the same frame often arrives over several paths. `_upsertStation` used to just
+overwrite the coordinates and append a track point whenever the station moved more than 20m —
+which put four kinds of fiction on the map. This release adds `lib/pos_quality.dart`, a position
+quality layer that handles each of them and **draws the uncertainty honestly**: a point labelled
+±13km is far more useful than one pretending to be exact.**
+
+**1) Late and duplicate frames.** The position packet's timestamp was parsed and then thrown away.
+APRS-IS does not guarantee ordering, so a frame from a minute ago, a few hundred metres away, could
+drag a station backwards and leave a fold in its track. The 7-character timestamps of `/` and `@`
+packets (`DDHHMMz` / `HHMMSSh` / `DDHHMM/`, normalised to UTC) now take part in the decision: a
+frame more than 60 seconds older than the known fix does not move the station and does not append
+to the track — it only refreshes "last heard". Timestamps more than two hours in the future are
+ignored so a sender's broken clock does not throw the whole packet away. Duplicates — the same
+frame seen via APRS-IS and RF, or via several iGates — are dropped by a callsign+payload
+fingerprint that deliberately excludes the digipeater path, since that is the only part that
+differs between copies.
+
+**2) Bad packets no longer draw lines across the country.** Only your own position had a jump
+guard; received stations had none, so a single corrupt packet could teleport a station tens of
+kilometres and leave a fake line. Every station now has kinematic gating: a plausible top ground
+speed chosen from its APRS symbol (2000 km/h for aircraft and satellites, 15 for pedestrians, 250
+by default), with "distance > speed × time × 1.5 + 500m" as the impossibility test. A single
+suspicious fix only keeps the old position (marker untouched, no track point, "last heard" still
+refreshed); three consecutive impossible fixes are accepted, and the track is then cleared and
+redrawn from the new position rather than connected across the gap. The reason not to reject on
+the first strike: a real aircraft or the ISS looks "physically impossible" on every single frame,
+and one-strike rejection would freeze them in a corner of the map forever. ISS callsigns are
+exempt outright, and a declared speed relaxes the limit.
+
+**3) Ambiguous positions stop pretending to be exact.** `posAmbiguity` was parsed but never used
+anywhere. It means a real error of ±0.13km / ±1.3km / ±13km / ±78km (a 1′ / 10′ / 1° cell), yet
+those points were drawn exactly like precise ones. The map now draws a dashed uncertainty circle
+at the cell's half-diagonal, and the station detail page gained a "position accuracy" row reading
+e.g. `±1.3 km (ambiguous to 2 digits)`.
+
+**4) Tracks: speed-adaptive decimation and capped smoothing.** The decimation threshold is no
+longer a fixed 20m — it scales with speed (15m floor, ~60m for a car, 250m cap for an aircraft),
+because a fixed value is too coarse when walking and too fine at speed (jitter becomes a saw
+tooth). Before drawing, a 1-2-1 weighted average is applied, but **each point may move at most
+25m**: jitter is erased, real corners are not. Tile and vector maps share the same smoothed path
+so they never look different.
+
+**5) Estimated position.** Once a moving station has been quiet for 60 seconds, its last
+speed/course is used to extrapolate where it probably is now: a dashed ghost marker with a growing
+uncertainty circle on the map, and an "± uncertainty · last fix x minutes ago" row in the detail
+page. Only stations still considered online are extrapolated — guessing for one that is known
+offline is simply more misleading. This layer follows the map's existing track toggle.
+
+**6) Two new CI-only checks.** `tool/check_l10n_sync.py` verifies the ARB files against the
+committed gen-l10n output: CI regenerates that output from the ARB, which hides a stale copy, but
+a local build then fails with undefined_getter — "my machine shows an error while CI is green",
+the most expensive kind of mismatch. `tool/check_pos_quality.py` verifies the wiring of the quality
+layer: an algorithm that compiles but is never called fails silently, so "which file must call
+which entry point" is now an assertion, including a regression guard that the fixed 20m threshold
+cannot come back. Both checks were verified to go red using regression samples.
+
+## [1.6.144] - 2026-09-21
+
+### ✨ 「满血磨砂玻璃」档；2.0 横屏改左侧竖条；修下拉/返回手势冲突 / A "full" frosted-glass tier; a new landscape layout; gesture fixes
+
+四件用户反馈。其中两件是我上一版引入的 bug，先列出来。
+
+## 一、修「消息页往下拉，面板就缩下去」（我上一版引入的）
+
+消息页的会话/聊天列表是 `reverse: true`（最新消息在底部，往上滑看历史）。在反向列表里
+用户「往下拉」是朝**最新消息**方向，却被我的 `OverscrollNotification` 监听当成了
+「滚到顶还想再拉」→ 收面板。
+
+现在加**方向门控**：只有正向竖向列表（`AxisDirection.down`）才允许「滚到顶继续下拉 →
+收面板」；反向列表（消息页）与横向列表（筛选芯片那一行）一律不参与。
+
+## 二、修「从会话详情按返回，一下跑到地图去了」（我上一版引入的）
+
+根因是 Flutter 的语义：`ModalRoute.popDisposition` **遍历**所有 PopScope，只要有一个
+`canPop == false` 就整体不弹；而 `onPopInvokedWithResult` 是对**每一个**逐个调用 ——
+**同一个 route 上的多个 PopScope 回调会全部触发，没有优先级**。外壳（返回→回地图）与
+消息页（返回→回会话列表）各有一个，于是两者同时发生，后者把前者盖掉。
+
+新增 `lib/back_router.dart`：内层页面在需要接手返回时**登记意愿**，外壳先问一句，
+有人接手就不插手。用登记而不是「让外壳去猜内层状态」——内层最清楚自己拦不拦，
+外壳去推演（哪个 tab、窄屏还是宽屏、是否在详情里）必然漏一种。
+
+顺带修正：给消息页传的 `isActive` 原先写死 `true`，而它是「页面是否在前台」的语义
+（同时决定是否拦返回、以及「正在看的会话」要不要算未读）；写死 true 会让消息页在
+别的页签上也拦返回。
+
+## 三、「满血磨砂玻璃」——小浮层也有磨砂
+
+原因很具体：原来的**磨砂玻璃**档给工具钮、图例这类**小浮层**只上 **12** 的轻磨砂
+（半径给大反而会把 38px 的边缘糊成一团灰），所以小东西看着像「没开材质」。
+
+新增第四档：透明度 **0.42**（最透）、模糊 **40**（最强），而且**小浮层用与大面板
+同一档的强模糊**。代价照实说：这一档**不省显卡**（每个小浮层都按大半径重绘一次
+离屏）—— 是明确要的重观感，所以做成**独立一档**，没有改掉原来的玻璃档。
+
+## 四、2.0 横屏：左侧「导航竖条 + 内容面板」
+
+横屏的**高度**很小（手机横放常不足 400dp），底部面板一展开就吃掉大半高度、地图基本
+看不见——而这一版的前提是「地图是底」。所以横屏把导航与内容一起挪到**左侧**：宽绰的
+那一维给内容，地图占满右侧，互不遮挡。
+
+* 导航竖条与底部导航**同一个数据源、同一套选中色**，只是排成竖的。
+* 内容面板宽 = min(屏宽 40%, 屏宽 − 竖条 − 260)，夹在 300~560，保证地图不被挤没。
+* 横屏**刻意不做拖拽**：竖向空间本来就紧，拉高拉低没意义；点导航切换、选「地图」收起。
+* 地图在横屏仍是**全尺寸**绘制（不是被压扁的窄条），只是左侧被面板遮住一部分。
+
+---
+
+**Four items of feedback; two of them are regressions I introduced in the previous release, so
+those come first.**
+
+**1) Fixed: pulling down on the messages page collapsed the sheet.** The conversation/chat
+lists there are `reverse: true` (newest at the bottom, swipe up for history). In a reversed list,
+pulling *down* moves toward the newest message — but my `OverscrollNotification` listener read it
+as “already at the top and still pulling”, and collapsed the sheet. There is now an **axis
+gate**: only a forward vertical list (`AxisDirection.down`) may collapse the sheet by
+over-scrolling; reversed and horizontal lists never do.
+
+**2) Fixed: pressing back from a chat jumped to the map.** This is Flutter's semantics, not a
+guess: `ModalRoute.popDisposition` **iterates** every registered `PopScope` (any one with
+`canPop == false` makes the whole route refuse to pop), while `onPopInvokedWithResult` is called
+on **each** of them — so **multiple PopScopes on one route all fire, with no priority**. The shell
+(back → map) and the messages page (back → conversation list) each had one, so both happened and
+the latter overwrote the former. A shared `lib/back_router.dart` now lets an inner page *register*
+that it wants the back gesture; the shell asks first and stands down if someone claims it.
+Registering beats the shell trying to infer the inner state — the inner page is the only one that
+knows, and any inference (which tab, narrow or wide, in a detail view or not) will miss a case.
+
+**3) A “full frosted glass” tier, so small overlays are frosted too.** The reason small widgets
+looked unfrosted is specific: the existing frosted-glass tier blurs small overlays (map tool
+buttons, legend, hint pills) by only **12** — a large radius would smear a 38px button's edges to
+grey. The new fourth tier uses opacity **0.42** and blur **40**, and gives small overlays the
+**same strong blur as large panels**. Stated plainly: this tier does **not** save GPU time (every
+small overlay is redrawn offscreen at a large radius). It is a separate tier rather than a change
+to the existing one, precisely because that cost is a deliberate choice.
+
+**4) A landscape layout for 2.0: side rail plus a left panel.** Landscape height is small (often
+under 400dp), so a bottom sheet eats most of the map — and the premise of this design is that the
+map is the base. So in landscape the navigation and content move to the **left**: the generous
+dimension holds content, the map fills the right, and they no longer overlap. The side rail shares
+the bottom navigation's data source and accent colours, just stacked vertically; the panel width is
+`min(40% of width, width − rail − 260)` clamped to 300–560 so the map is never squeezed out;
+landscape deliberately has **no dragging**; and the map is still drawn at **full size** (not a
+squashed strip) with only its left part covered by the panel.
+
+---
+
+## [1.6.143] - 2026-09-21
+
+### ✨ 小按钮恢复磨砂；连接提示重做；面板把手加大且「整页都能拖」 / Frosted small buttons restored; a clearer connection indicator; a bigger grab handle and full-page dragging
+
+三件用户反馈。另外顺手修了一个一直存在的布局 bug。
+
+## 一、小按钮恢复磨砂（轻档）
+
+上一版为性能把小组件的磨砂关掉了，这次加回来 —— 但不是简单回退，而是做成**两档材质**：
+
+| 档 | 元素 | 半径 | 填色 |
+|---|---|---|---|
+| 小浮层 | 工具钮 / 图例 / 提示胶囊 / 信标横杠 / 顶栏那一簇 | **12** | 半透明 0.72 |
+| 大面板 | 底面板 / 侧栏 / 顶栏 / 导航胶囊 / AppBar | 材质默认（玻璃 24 / 云母 16） | 半透明 |
+
+小浮层给 12 而不是默认半径：它们**面积本来就小**（38px 按钮 1.4k px²，底部面板 196k），
+代价低；但半径给大反而把边缘糊成一团灰、像没画好。真正的性能问题不是半径，
+而是**同时存在的层数**与**重建频率**——那条已在上一版修掉。
+
+## 二、连接提示重做（原来确实不明确）
+
+原胶囊显示「37 在线」—— 那是**台站数**，不是连接状态；而台站数在地图信息条里
+已经显示了。最糟的是「离线」这个词：`connected` 的真实含义是**发射链路可用**，
+与「有没有台站在线」完全是两件事，同一个词同时暗示两件事。
+
+现在如实拆开成 **来源 · 状态**：`APRS-IS · 已连接`（绿）/ `TNC · 未连接`（灰）/
+**`PKWDWPL · 只收不发`（青）**。最后那一档单列：只启用只读来源时「没有发射链路」
+是正常的，画成「未连接」会让人白去点连接、白去查设置。点一下进连接设置
+（原来只有 tooltip 提示，而 tooltip 在手机上根本看不到）；tooltip 里还给出
+**具体连到哪儿**（服务器地址 / 设备名 / 采样率）。连接按钮也改成**未连接时实心蓝**
+（主操作的样子），已连接仍是红色（断开语义）。
+
+## 三、把手加大到 44px，并让「整页都能拖」
+
+- **把手**：触摸区 22px → **44px**（药丸本身仍是 40×5）。22 是用户抱怨「很难活动」的直接原因。
+- **整页拖动**：不能靠给内容加手势 —— Flutter 的手势竞技场里内层 `Scrollable`
+  总是赢。所以换两条路：**内容滚到顶后继续下拉**（监听 `OverscrollNotification`）
+  即可收起面板；**内容不可滚动时**外层手势接管，整页上下拖都成立。另外**底部导航条
+  也能拖**（它紧贴面板下方、又高又宽，竖直拖动原本什么都不做）。
+- **诚实的边界**：内容可滚动且已在中间时，向上拖仍然是滚动列表（与系统底部面板一致）。
+
+## 四、顺手修一个一直存在的布局 bug
+
+内容原来按**当前的**面板高度布局，而可视区只有「面板 − 把手高」：底部被裁掉
+**一整个把手的高度**，而且因为滚动视图自身就那么高，那一条**永远滚不到**；
+拖动时高度每帧都在变 → **内容逐帧重新布局**（正是这套设计要避免的事）。
+现在固定按「展开到最大时的可视高度」布局：拖动期间不重排，展开到最大时不裁。
+
+---
+
+**Three pieces of feedback, plus one long-standing layout bug fixed along the way.**
+
+**1) Frosted small buttons are back — as a lighter tier.** The previous release turned frosting
+off for small widgets to save GPU time; that is reverted, but not as a plain rollback — there are
+now two tiers: small overlays (map tool buttons, legend, hint pills, beacon bar, the top-right
+cluster) get a **12px** radius with 0.72 opacity; large panels (bottom sheet, side rail, top bar,
+navigation pill, app bars) keep the material default (glass 24 / mica 16). Small overlays keep 12
+because they are *small* — a 38px button is 1.4k px² against a 196k px² panel — so they are cheap,
+while a large radius would smear their edges into grey mush. The real cost was never the radius but
+the **number of simultaneously live layers** and **rebuild frequency**, both addressed previously.
+
+**2) The connection indicator was genuinely unclear.** It used to read “37 在线” — that is the
+**station count**, not the connection state (and the map’s info chip already shows it). Worse was
+the word “offline”: `connected` actually means **the transmit link is up**, which is a different
+question from “are any stations being heard”, and one word implying both leaves the user unable to
+tell which problem they have. It now reads **source · state** — `APRS-IS · Connected`,
+`TNC · Not connected`, and **`PKWDWPL · Receive-only`** as its own state (having no transmit link
+is normal for a read-only source; calling it “not connected” sends people hunting for a problem
+that does not exist). Tapping opens connection settings, and the tooltip names what it is actually
+connected to — server address, device name, or sample rate. The connect button is now **solid blue
+when disconnected** (it looks like the primary action it is) and red when connected.
+
+**3) The grab handle is 44px and the whole page drags.** The handle's touch target went 22px →
+**44px** (the pill itself stays 40×5). Full-page dragging cannot be done by wrapping the content in
+a gesture — in Flutter's gesture arena the inner `Scrollable` always wins — so it takes two routes:
+**pull down past the top of the content** (`OverscrollNotification`) collapses the sheet, and when
+the content **cannot scroll** the outer gesture takes over so the whole page drags. The bottom
+navigation bar drags too (it sits right under the sheet, is large, and previously did nothing in
+that direction). **Stated plainly**: when the content *can* scroll and is mid-list, dragging up
+still scrolls the list — same as every system bottom sheet.
+
+**4) A long-standing layout bug.** The content was laid out at the *current* sheet height while its
+viewport was that height minus the handle: the bottom strip was cut off by a full handle height and
+could never be scrolled to, and every drag frame re-laid out the content (exactly what the
+fixed-height/clip-only design exists to avoid). It is now laid out at the maximum expanded viewport
+height: no relayout while dragging, and nothing clipped when fully expanded.
+
+---
+
+## [1.6.142] - 2026-09-21
+
+### 🐛 修「自身轨迹横跳」；磨砂玻璃性能优化 / Fixing the jumping self-track; frosted-glass performance
+
+两个用户反馈，一个比一个难查。
+
+## 一、自身轨迹横跳：跳回旧点再画一次，反复横画
+
+现象：轨迹每隔一会儿跳回初始点、再画一次当前位置，来回横画，但**实际发出去的位置是对的**。
+
+根因在 Android 原生侧，**不是算法**：`LocationService` 里有个 10 秒轮询会调
+`reportLastKnown()`，而它取的是 `getLastKnownLocation()` —— **系统缓存的「上次已知位置」**
+（可能几小时前、甚至在另一个城市）—— 它走的是**和实时定位完全相同**的判断函数，
+于是每 10 秒被当成一次正常定位上报：旧点写进轨迹 → 真实点又写一次 → 反复。
+这也解释了为什么**只有部分手机**出现（取决于缓存位置离当前位置多远）。
+
+顺带一个连带 bug：那个缓存点会推进「最近 GPS 时间」，让代码误以为 GPS 刚更新过，
+**反而把真正的网络兜底压掉 20 秒**。
+
+**三层修法**：
+
+- **原生（根因）**：缓存位置只在「还没有实时定位」时用于快速出图（且年龄 ≤ 5 分钟），
+  收到实时定位后一律丢弃；GPS 时间戳只由实时定位推进。
+- **不写轨迹**：定位回调新增 `lastKnown` 标记，缓存位置只更新地图上的「我」、不写轨迹；
+  IP 网络定位也归入此类（一次性的粗点）。
+- **跳变守卫（兜其它来源）**：**10 分钟内位移超过 30km** 才算可疑（只看距离会误伤
+  「停车几小时后开出去」这种合法位移），可疑点先只更新标记、不写轨迹，连续 **3 次**
+  落在同一处才认账 —— 认账后**清空轨迹从新位置重画**，而不是画一条横跨两地的
+  假线（那比没有轨迹更误导）。
+
+## 二、磨砂玻璃卡
+
+`BackdropFilter` 每帧都要把背后的内容离屏重绘一遍，代价 ≈ 面积 × 半径，
+且**每个实例各付一次**。量下来三个真凶：
+
+1. **2.0 外壳每秒被重建数次** —— 状态每秒 tick、每次收包也 notify，而外壳原来无条件
+   `setState`，那些模糊层跟着一起重建。现在只在「外壳真正显示的值」变化时重建。
+2. **小浮层也在模糊** —— 全仓库 48 处 `MaterialSurface`，光地图页就 12 处，其中 8 个是
+   **38px 的工具钮**；这类浮层根本看不出模糊（能看见的是填充色），却各自付一次整屏
+   离屏重绘；「跟随鼠标的信息窗」更是每次悬停都重算。现在按「小浮层实心、大面板磨砂」
+   分档（也是 iOS/Android 的做法）。
+3. **半径**：玻璃 34→24、云母 22→16。
+
+一个失败的设计也记在代码里：第一版想用 `LayoutBuilder` 按面积自动判断，但地图上的
+小浮层**全是 `Positioned` 包着的**，约束是整个 Stack 的尺寸而不是自身尺寸 ——
+38px 的按钮被量成整屏，自动规则恰好在最需要它的地方**静默失效**，所以改成显式。
+
+---
+
+**Two reports from users, the first one considerably harder to find.**
+
+**1) The self-track jumped back to an old point and redrew the current position, over and over** —
+while the positions actually being transmitted were correct. The cause was not the algorithm but a
+wiring bug on the Android side: `LocationService` runs a 10-second poll calling
+`reportLastKnown()`, which reads `getLastKnownLocation()` — the **system's cached last-known
+position**, possibly hours old or in a different city — and feeds it through **the very same**
+decision function as live fixes. So every ten seconds the stale point was reported as a normal fix:
+written into the track, then the real fix written again, back and forth. It also explains why only
+*some* phones show it: it depends on how far the cached position is from the current one. A related
+bug: that cached point advanced the “last good GPS” timestamp, which **suppressed the legitimate
+network fallback for 20 seconds**.
+
+Fixed in three layers: **the native side** (cached positions are only used for a quick first draw
+before any live fix, and only if under 5 minutes old; the GPS timestamp is advanced only by live
+fixes); **no track entries** from cached fixes (the callback now carries a `lastKnown` flag, and IP
+geolocation counts as one too); and a **jump guard** for any other source — a move of more than
+**30 km within 10 minutes** is treated as suspect (distance alone would wrongly punish “parked for
+hours, then drove off”), such points update the marker but not the track, and only after **3
+consecutive** readings in the same place is it accepted — at which point the track is **cleared and
+restarted from the new position** rather than drawing a fake line across the gap.
+
+**2) Frosted glass felt sluggish.** A `BackdropFilter` re-renders what is behind it offscreen every
+frame — cost ≈ area × radius, **paid per instance**. Three culprits: the 2.0 shell was rebuilt
+several times a second (so its blur layers were too — now it only rebuilds when a value it actually
+displays changes); **small overlays were being blurred at all** (48 `MaterialSurface` uses, twelve
+on the map page alone, eight of them **38px tool buttons** — invisible blur, paid in full; a hover
+info window recomputed a blur on every hover) — now “solid small overlays, frosted large panels”,
+as iOS and Android do it; and the radii came down (glass 34→24, mica 22→16).
+
+One failed design is documented in the code: the first attempt used `LayoutBuilder` to decide by
+area — but the map's small overlays are all wrapped in **`Positioned`**, whose child receives the
+*stack's* constraints rather than its own size, so a 38px button measured as full-screen and the
+rule failed silently exactly where it mattered most. Hence: explicit.
+
+---
+
+## [1.6.141] - 2026-09-21
+
+### 🔧 2.0 收尾：去掉顶部搜索框、返回键回地图、补回天气与一键连接 / 2.0 finishing touches: no more top search bar, back returns to the map, weather and connect restored
+
+三条用户反馈 + 我自己审计出的一处功能缺失。
+
+**一、2.0 顶栏不再有搜索框**
+
+- **台站页自己就有搜索框** —— `StationsPage._query` 的优先级是「本页优先」，
+  外壳那个只在它为空时才起作用，对台站页基本是重复的；
+- 「一整条浮在地图上的浅色横条」本身就压视觉重量。
+
+现在只留右上角一簇悬浮胶囊。**取舍说明**：2.0 的地图页不再有全局搜索
+（1.0 经典布局的顶栏搜索**未动**），地图仍可用图层/类型筛选，搜索在台站页里。
+
+**二、返回键在「其他页」时回到地图页**
+
+`PopScope(canPop: _tab == 0)`：在地图页交给系统（正常退出），在其他页则回到地图
+并收起内容面板。放在外壳而非各页（导航本来就是外壳的事），push 出来的子页
+（设置子页、底部面板）各自是独立路由，不受影响。
+
+**三、补回天气组件 —— 这是我漏的**
+
+用户问「还有个天气组件在哪了」：`shell2.dart` 里**根本没有天气**，
+`WeatherBadge` 从未被引进去。已补在那一簇的最左（与 1.0「在线数左侧」一致），
+仍由「设置 → 显示 → 顶栏天气组件」控制。
+
+顺便把 1.0 外壳的功能逐项对了一遍，又找出一处**功能**缺失：
+
+| 功能 | 1.0 | 2.0（改前） |
+|---|---|---|
+| 天气组件 | 顶栏在线数左侧 | **无** |
+| 一键连接/断开 | 侧栏 + 未连接横幅 | **无**（只能进设置页） |
+| 未连接横幅 | 有 | 无 |
+
+前两项已补。第三项**未擅自加**：那条横幅会给地图再添一块浮层，而用户刚反馈过
+「嫌乱」；它的独有信息（当前是哪种来源、为什么没连上）已在状态胶囊与连接设置页里。
+
+**四、又一个只有 analyze 能发现的错，以及为此新增的检查**
+
+写连接按钮时写了 `const Padding(... color: C.blue)` —— `C.blue` 是 **static 字段
+（非常量）**，`const` 构造里不能引用，报 `invalid_constant`。这是仓库里**早就踩过**
+的坑（`station_detail.dart` 还留着注释记着它）。
+
+这是同一类「本机语法解析放行、只有 analyze/编译能发现」的错误第四次漏到 CI。
+但这一种的判据是**完全确定**的，所以新增 `tool/check_const_colors.py` 并接进 CI。
+现在 CI 里有六个静态检查：备份键、Android 资源、材质覆盖、跨层导入、
+`widget.X` 声明、`const` 颜色 —— 每一个都对应一类实际犯过的错。
+
+默认仍是 1.0 经典布局；2.0 在「显示设置 → 界面布局」里切换。
+
+---
+
+**Three pieces of user feedback plus one feature gap I found while auditing my own work.**
+
+**1) The 2.0 top bar no longer has a search field.** The stations page already has its own
+search box, and `StationsPage._query` prefers the local one — the shell's only mattered when
+that was empty. On top of that, a full-width translucent strip floating over the map carries a
+lot of visual weight. What remains is a small cluster of pills at the top right. **Trade-off,
+stated plainly**: in 2.0 the map page no longer offers a global search (the classic 1.0 layout's
+search is **unchanged**); the map still has layer/type filters, and search lives on the
+stations page.
+
+**2) Back returns to the map** when you are on any other page: `PopScope(canPop: _tab == 0)` —
+on the map page the system handles it (normal exit), everywhere else it goes back to the map and
+collapses the content sheet. It lives in the shell rather than in each page, because navigation
+is the shell's business; pushed child routes (settings sub-pages, bottom sheets) are separate
+routes and are unaffected.
+
+**3) The weather widget is back — that one was my omission.** A user asked where it went:
+`shell2.dart` had **no weather at all**, `WeatherBadge` was never wired in. It is now the
+leftmost item in that cluster (matching 1.0, where it sat left of the online count) and is still
+controlled by Display settings → top-bar weather widget. While auditing, I compared the whole
+1.0 shell feature by feature and found one more **functional** gap: 2.0 had **no one-tap
+connect/disconnect** (you had to open connection settings), which is now restored. The
+“not connected” banner was deliberately **not** re-added — it would put yet another overlay on
+the map, and the user had just complained about clutter; its unique information already lives
+in the status pill and the connection settings page.
+
+**4) One more mistake only analyze could catch — and a new check for it.** While writing the
+connect button I wrote `const Padding(... color: C.blue)`; `C.blue` is a **non-const static
+field**, so that is `invalid_constant`. The repository had hit this before (there is a comment
+in `station_detail.dart` about it). This was the fourth time a mistake of the class “dart format
+is happy, only analyze/compile complains — and analyze cannot run on the maintainer's machine”
+reached CI. This one, however, has a **fully deterministic** test, so `tool/check_const_colors.py`
+is now the sixth static check in CI: backup keys, Android resources, material coverage,
+cross-layer imports, `widget.X` declarations, and const colours — each one earned by a real
+mistake.
+
+The default is still the classic 1.0 layout; 2.0 is switchable under Display settings → UI
+layout.
+
+---
+
+## [1.6.140] - 2026-09-21
+
+### 🎨 重做 UI 2.0 的底部（导航固定、面板只装内容）；收拾全局「视觉杂」 / Redesigned the bottom of UI 2.0 (fixed navigation, content-only sheet); general visual clean-up
+
+上一版（1.6.139）的 2.0 把 5 个页签放进了**可拖拽卡片的头部** —— 卡片一展开，
+导航就升到屏幕中间，底部还叠了两套 chrome（把手 + 页签约 80px）。这次是**重新设计**：
+
+**三层，职责单一**
+
+- **地图整屏**：它才是底，不再是一个页签；切到任何页都不会销毁它。
+- **底部悬浮导航**：5 个页签**永远在同一位置**，胶囊外形 + 背景模糊；选中态是
+  **一个滑动的指示胶囊**，而不是 5 块固定色底。
+- **内容面板**：只装内容、**不再包含导航**；头部只剩一根 22px 细把手。
+  拖两个档位（半屏 / 近全屏），**向下拖过阈值即收起**回到地图 ——
+  选「地图」就是地图真正全屏。
+
+**顺手把三处几何算错改对**（都是按真实数值画出来对照后发现的）
+
+- 面板展开时**以前会盖住顶栏**（搜索框、连接状态、定位按钮全被吞掉）：
+  原先最大档写死 0.86，在小屏上正好重合；现在按「屏高 − 导航 − 面板下边距 −
+  顶栏占位」算，两边各留 8px。
+- 地图贴底的比例尺/坐标条**以前会漂出一段空隙**：`bottomInset` 的口径含糊，
+  等于把「导航占用」与「安全区」重复算了一遍（实测差了 46px）。现在口径明确为
+  「底部被占用的边界（不含安全区）」，贴底控件永远落在占用区上方 14px。
+- 非搜索页的顶栏**不再重复导航的信息**：导航已高亮当前页，顶栏再写一遍标题是
+  重复的；改成右上角一小簇胶囊（连接状态 + 定位），地图因此多露一截。
+
+**全局「视觉杂」收拾**（1.0 与 2.0 都受益）
+
+| 项 | 之前 | 之后 |
+|---|---|---|
+| 圆角取值 | **12 种**（10/11/12/13/14/15/16/18/20/22…） | **7 档**：2/6/8/12/16/24/999 |
+| 字号取值 | **25 种**（含 8.5/9.5/10.5/11.5/12.5/13.5/14.5 等小数档） | **8 级**：9/10/11/12/13/16/20/26 |
+| 阴影取值 | **19 种** (blur,y,alpha) 组合 | **3 级**：elev1/elev2/elev3 |
+| 「框套框」 | 顶栏与圆形工具钮同时画描边 + 投影 | 只留投影 |
+
+分档语义：6 小徽标、8 小控件、**12 按钮/输入/列表行/工具钮**、16 卡片面板、
+24 底部面板、999 胶囊。同类元素现在长得一样，才有节奏。
+
+**新增一个本机可跑的静态检查**（`tool/check_widget_members.py`，已进 CI）
+
+「State 里用到的 `widget.X` 必须在同文件有声明」。起因是同一类错误撞了三次
+（漏 import、字段重复声明、改文档时把中间的字段声明一起吞掉）—— 它们都只在
+analyze/编译时报错，而本机唯一能跑的语法检查一律放行。这个守卫双向验证过：
+仓库现状 0 报错，故意删掉一个字段能精确报出文件与行号。
+
+默认仍是 1.0 经典布局；2.0 在「显示设置 → 界面布局」里切换，两套设置各自保留。
+
+---
+
+**In 1.6.139 the 2.0 layout put its five tabs inside the draggable card's header** — so the
+navigation climbed into the middle of the screen whenever the card expanded, and the bottom
+stacked two layers of chrome (handle + tabs, about 80px). This release **redesigns it**:
+
+* **The map is full-screen and is the base** — no longer a tab, and it is never destroyed when
+you switch pages.
+* **A floating bottom navigation** whose five tabs **never move**, shaped as a pill with a
+backdrop blur. The selection is **a single sliding indicator pill** instead of five tinted
+blocks.
+* **A content sheet that holds content only** — no navigation inside it, just a 22px handle.
+Two detents (half / near-full); **drag down past the threshold to dismiss** back to the map.
+Choosing “Map” gives you a genuinely full-screen map.
+
+**Three geometry errors fixed along the way** (all found by drawing the layout to scale and
+looking at it): the expanded sheet used to **cover the top bar** (search, connection state and
+the locate button were swallowed — the old 0.86 hard-coded detent coincided with it on small
+screens); the map's bottom controls **drifted away from the navigation** because `bottomInset`
+was ambiguous and counted the safe area twice (46px off); and the top bar **no longer repeats
+what the navigation already shows** — on non-search pages it collapses to a small cluster of
+pills at the top right, letting the map show more.
+
+**General visual clean-up** (benefits both layouts): corner radii went from **12 distinct
+values** down to **7 steps** (2/6/8/12/16/24/999), font sizes from **25** down to **8 levels**
+(9/10/11/12/13/16/20/26), shadows from **19** ad-hoc (blur, y, alpha) combinations down to
+**3 elevations**, and surfaces that drew both a border and a shadow (the top bar, the round map
+buttons) now rely on the shadow alone.
+
+**A new local static check** (`tool/check_widget_members.py`, wired into CI) verifies that every
+`widget.X` used by a State has a declaration in the same file. It exists because the same class
+of mistake — invisible to `dart format`, only caught by analyze/compile, which cannot run on the
+maintainer's machine — was hit three times.
+
+The default is still the classic 1.0 layout; 2.0 is switchable under Display settings → UI
+layout, and each layout keeps its own settings.
+
+---
+
+## [1.6.139] - 2026-09-21
+
+### ✨ UI 2.0：以地图为基底的布局（显示设置里可切换）/ New map-first layout (switchable in Display settings)
+
+显示设置新增「界面布局」两档：**经典布局（1.0，默认）/ 地图为基底（2.0）**。
+它与「界面材质」（磨砂玻璃 / 云母）是**两个独立的开关**，可以任意组合（2.0 + 云母、
+1.0 + 磨砂玻璃都成立），切完立即生效。
+
+**2.0 长什么样**
+
+- **地图常驻整屏**：它不再是一个页签，而是整个界面的底（所以在地图之外的页面
+  也能一眼看到自己与台站的位置关系）；
+- **底部可拖拽卡片**：台站 / 消息 / 数据包 / 设置装进来，卡片顶部就是导航行 ——
+  「切页」和「这页在卡片里」是同一件事。上滑或点把手展开，收起只留导航行；
+- **浮在地图上的顶栏**：搜索、在线数、连接状态、定位入口；点连接胶囊可直接进
+  连接设置（2.0 没有侧栏，得给它一个入口）；
+- **地图页签的卡片内容**：抬起卡片时看的是「我这台电台」—— 呼号、网格、速率、
+  定位状态、信标会不会真的发出去（带手动上报）。收起卡片就是看地图。
+
+**三个实现上的取舍（都写进了代码注释）**
+
+- **卡片内容永远按「展开高度」布局，只裁显示区**（`OverflowBox + ClipRect`）。
+  卡片收起到只剩导航行时可视高度只有几十像素，把页面直接塞进这么高的盒子会让
+  页面内部的 `Column` 立刻溢出（黄黑斜纹），而且拖动时高度每帧都变、布局每帧重做。
+  现在拖动零重算、不溢出，五页的滚动位置与状态全部保留。
+- **拖动只认把手与导航行，不抢列表的手势**。`DraggableScrollableSheet` 要求把它的
+  滚动控制器交给内部滚动体，那等于让外壳接管五个页面的列表（下拉刷新、横向列表
+  都会变脆）。代价是「列表滑到顶再上滑展开卡片」这种联动没有 —— 换来五页滚动
+  行为零改动。
+- **最矮那档按头部高度算出来**，不是写死比例：窄屏 / 大字号下写死的比例会把
+  导航行切掉一半（看起来像「导航行缺了一块」）。
+
+**与地图的接口**：`MapPage` 新增 `bottomInset` —— 2.0 下地图要让开卡片的高度，
+否则它贴底的比例尺/坐标条与上报横杠会被卡片压住（表现是「2.0 里这些控件不见了」）。
+
+**兼容**：默认仍是 1.0，界面与以前逐像素一致；两套布局的设置各自保留，
+随时可以切回去。
+
+新增偏好键 `uiLayout`（空 = 1.0，认不出的值一律回落 1.0；布局选错比颜色错严重
+得多），已归入备份的「设置」分组；新增 7 个文案键 × 6 语言。
+
+---
+
+**Display settings has a new “UI layout” entry with two options: Classic (1.0, default)
+and Map-first (2.0).** It is an **independent switch** from “UI material” (frosted glass /
+mica) — any combination works — and changes take effect immediately.
+
+- **The map is always full-screen**: it is no longer a tab but the base of the whole UI,
+  so the spatial relationship between you and the stations stays visible from every page.
+- **A draggable card at the bottom** holds stations / messages / packets / settings, and the
+  card's own header *is* the navigation — switching pages and “this page lives in the card”
+  are the same gesture. Swipe up or tap the handle to expand; collapsing leaves just the nav row.
+- **A floating top bar** carries search, the online count, connection state and a locate button;
+  tapping the connection pill opens connection settings (2.0 has no side rail, so that entry
+  point has to exist somewhere).
+- **The map tab's card content** is “my station”: callsign, grid, rate, fix status, and whether
+  the beacon will actually go out (with a manual-beacon button). Collapse the card to see the map.
+
+**Three deliberate trade-offs** (documented in code): the card's content is always laid out at
+its *expanded* height and merely clipped (`OverflowBox + ClipRect`) — otherwise a 50-pixel-tall
+card would make inner `Column`s overflow and relayout on every drag frame; dragging is limited to
+the handle and nav row instead of using `DraggableScrollableSheet`, whose scroll controller would
+have to drive five pages' lists; and the lowest detent is computed from the header height rather
+than hard-coded, which would clip the nav row on narrow screens or at large text sizes.
+
+`MapPage` gained a `bottomInset` so the map can move its bottom controls (scale/coordinate bar,
+beacon bar) out from under the card. The default stays 1.0 and is pixel-identical to before; both
+layouts keep their own settings and you can switch back at any time.
+
+New preference key `uiLayout` (empty = 1.0, unrecognised values fall back to 1.0 — picking the
+wrong layout is far worse than the wrong colour), filed under the backup “settings” group, plus
+7 new localised strings × 6 languages.
+
+---
+
+## [1.6.138] - 2026-09-20
+
+### ✨ 界面材质：磨砂玻璃与云母，显示设置里可切换 / New UI materials — frosted glass and mica, switchable in Display settings
+
+显示设置里新增一项「界面材质」，三档：**关闭（默认）／磨砂玻璃／云母**。
+
+**这三档各自是什么**
+
+- **磨砂玻璃**：更透（表面不透明度 0.55）、模糊更强，接近 Windows 11 的亚克力（Acrylic）；
+- **云母**：更实（0.78）、模糊较轻，带一层从主色混出来的色，接近 Windows 11 的云母（Mica）；
+- **关闭**：与旧版**逐像素一致** —— 这是默认值，也是兼容底线：老用户升级后界面不会被改掉。
+
+**实现上的三处取舍（都写进了代码注释，因为下次改动会再碰到）**
+
+- **底是一次性画好的**：材质开启（且主题没设背景图）时，应用在最底层画一张从主色混出来的
+  柔和渐变当「壁纸」，页面底色随之透明 —— 半透明表面背后得有东西可透，否则磨砂玻璃看起来
+  只是「变淡了」，用户只会以为开关没生效。
+- **只有压在内容上的表面做真模糊**：顶栏、侧栏、底部导航、各页 AppBar、地图浮层、
+  地图/站点/群组面板用 `BackdropFilter` 真模糊，因为背后是地图瓦片或正在滚动的列表，
+  不模糊就会糊成一片。**卡片不套模糊** —— 它们背后只是那张已经画好的底，再模糊一次是纯浪费，
+  而每个 `BackdropFilter` 都是一次整屏 `saveLayer`：一屏十几张卡片就是十几层，低端 Android 上直接掉帧。
+- **材质与主题不打架**：表面不透明度 = 材质档位 × 用户自己调的 `surfaceAlpha`（相对默认 0.85 的比例），
+  所以「玻璃永远比云母透」和「滑杆往哪边拉就真往哪边去」两件事同时成立。
+  主题已设**背景图**时不再叠材质壁纸（在他自己挑的图上再叠一层渐变只会变成脏颜色），
+  只把顶栏与浮层做成磨砂，设置页里也会说明这一点。
+
+**设置页里每一档都配了小样**（渐变底 + 三条色带，再盖上该档的磨砂层）。
+小样用的是与真实材质**同一对颜色、同一组数字**（`uiMaterialAlphaOf` / `uiMaterialBlurOf`），
+预览和实际效果不会各走各的 —— 那种漂移只有截图对比才看得出来，也就是没人会发现。
+
+**边界**：这是应用内的材质，不是系统窗口透明（Windows 的 Mica/Acrylic 窗口效果要额外插件，
+而 Android 上没有对等物，那会变成「这档设置在手机上点了没反应」）。模糊要占显卡：旧机型上
+可能不如「关闭」顺滑，设置页里也照实说了。
+
+新增偏好键 `uiMaterial`（字符串，空 = 关闭，认不出的值一律回落关闭），已归入备份的「设置」分组，
+换机后材质设置跟着走；新增 11 个文案键 × 6 语言。
+
+---
+
+**Display settings has a new “UI material” entry with three options: Off (default) / Frosted glass / Mica.**
+
+- **Frosted glass** — more transparent (surfaces at 0.55) with a stronger blur, close to Windows 11 Acrylic.
+- **Mica** — more solid (0.78) with a lighter blur and a tint mixed from your accent colour, close to Windows 11 Mica.
+- **Off** — pixel-identical to previous versions. It is the default, and that is the compatibility promise: an
+  existing user upgrading must not find their UI changed underneath them.
+
+**Three deliberate trade-offs (documented in the code, because the next change will hit them again)**
+
+- **The backdrop is painted once.** With a material on (and no background image in the theme), the app paints a
+  soft gradient mixed from the accent colour as a wallpaper and makes page fills transparent — a translucent
+  surface needs something worth showing through, otherwise “frosted glass” just looks slightly faded and users
+  conclude the switch does nothing.
+- **Only surfaces that sit *on top of content* get a real blur**: top bar, side rail, bottom navigation, page
+  app bars, map overlays and the map/station/group panels. What is behind them is map tiles or a scrolling list,
+  so without a blur the text would smear into them. **Cards are deliberately not blurred** — the only thing behind
+  a card is that already-painted backdrop, so blurring again buys nothing while every `BackdropFilter` costs a
+  full-screen `saveLayer`; a dozen cards on screen means a dozen layers and visible frame drops on low-end Android.
+- **Materials and themes do not fight each other**: surface opacity = the material's base × the user's own
+  `surfaceAlpha` (as a ratio against the 0.85 default), so “glass is always more transparent than mica” and
+  “the slider really moves things” hold at the same time. When the theme already has a **background image**, the
+  material wallpaper is skipped (stacking a gradient over a picture the user chose only makes mud) and only the
+  bars and overlays get frosted — the settings page says so as well.
+
+**Every option in settings comes with a small swatch** (gradient backdrop, three colour bars, then that
+option's frosting). The swatch uses the very same colours and numbers as the real thing
+(`uiMaterialAlphaOf` / `uiMaterialBlurOf`), so the preview cannot drift away from the result — that kind of drift
+is only visible when someone compares screenshots, which means nobody ever finds it.
+
+**Scope, stated honestly**: this is an in-app material, not window transparency. (Real Windows Mica/Acrylic
+windows need an extra plugin, and Android has no equivalent — that would have turned this switch into “nothing
+happens on my phone”.) Blur costs GPU time, so on older devices it may feel less smooth than Off; the settings
+page says that too.
+
+New preference key `uiMaterial` (string, empty = off, unrecognised values fall back to off), filed under the
+backup “settings” group so it travels with a device change, plus 11 new localised strings × 6 languages.
+
+---
+
+## [1.6.137] - 2026-09-19
+
+### 🛠 修「网关传递统计一直是 0」：先把 0 说清楚，也别自己制造 0 / Fixing “the iGate counters are always 0” — explain the zero, and stop creating one
+
+用户报：网关传递统计一直是 0。逐层查下来，计数逻辑本身是好的（判据与改写都是
+纯函数 `Igate`，有测试），真正的问题是这个 `0` **四个含义长得一模一样**：
+
+① 射频根本没收到报文（TNC 没连上 / 线速不对）→ 链路问题；
+② 收到了，但 APRS-IS 没连上（没有可转递的目标）→ 网络问题；
+③ 收到了，但全被环路防护拒收（报文来自互联网）→ 其实**在正确工作**；
+④ 真的什么都没转。
+
+而界面上只有一串 0，四种情形的显示完全一样 —— 排查只能靠猜。这一版把它拆开。
+
+**新增两个数，把「没流量」和「没转递」分开**
+
+- **射频收到（条）**：**只要射频在收就计，与网关开不开、APRS-IS 通不通无关**。
+  它是唯一能自证的数字 —— 有了它，「射频到底有没有东西进来」不再需要靠日志猜。
+- **环路拒收（条）**：原先只在日志里且还按节流（20 条才打一行）。它一直涨，
+  「已转递 = 0」就是有原因的，得让人直接看见。
+
+**「不涨」时界面直接说缺哪一项**（这四种情形分开说，不合并成一句「不能用」）
+
+- 没勾射频来源 → 去勾 TNC / 音频；
+- 勾了但链路没连上（线速不对 / 设备没开机）→ 去查设备页，**而不是怀疑网关**；
+- APRS-IS 没连上 → 没有可转递的目标网络，等它连上数字才会涨；
+- 条件全齐、却一条都没收到 → 明说「这不是网关的问题，报文根本没进来」，
+  并指出上游该查什么（音量/静噪、天线、对方是否真的在发射）。
+- 全被环路防护拒收 → 说明这是**在正确工作**（那些报文本来就从互联网来，
+  再送回去会让同一条报文无限增殖），不是故障。
+
+**顺手修两个「由统计自己制造出来的 0」**
+
+它们比缺字段更隐蔽，因为表现和「一切正常但没流量」一模一样：
+
+- **开关一关一开就把统计清零**。而「数字不涨 → 关掉再打开」正是用户的第一反应，
+  于是数字立刻归零、再开回来也永远看不到它曾经涨过 —— 诊断路径被自己的界面堵死。
+  现在清空统计只认「清空统计」这个按钮（切换数据来源时也清，那是换了一套配置）。
+- **射频链路已经断了还在计「射频收到」**。链路是断的却还在冒数，只能说明有别的链路
+  在往同一条管线里灌（同时绑了同一台设备、APRS-IS 被当成射频…）。那时这个数就是假的 ——
+  而**假的自证数字比没有数字更糟**：用户会拿它去证明「射频没问题」，然后往错的方向查。
+
+**真正的功能 bug：串口线速被静默复位成 9600**
+
+`TncConfig._copy()` 是一段**手写的逐字段拷贝**，而**真正读配置走的就是它**
+（`TncLink.load()` → `_copy()`）。它漏抄了 `serialBaud` —— 于是串口 TNC 设了 38400，
+重启后又按 9600 打开，**一个字节都收不到**，症状正是「台站不上图、网关统计恒为 0」，
+而界面上任何地方都看不出线速变了。
+
+`toJson` / `fromJson` 都带着 `serialBaud`，测试也只验了 JSON 往返，所以看起来「早就修好了」——
+但那条路根本没人走。补上的同时还钉了一条**直接调 `load()`** 的回归测试，
+并把同一段拷贝里其它射频参数（`path` / `initString`）一起盯住：**漏字段 = 静默复位，
+与「没持久化」完全等价**。
+
+**顺带**：切换射频来源（换设备 / 线速 / 频段）时清掉去重表与「听到过」列表 ——
+旧表会把新链路上的**首包**当成重复丢弃，表现也是「网关统计一直是 0」（连「重复丢弃」
+都不涨时最难查）；但**统计不清**，用户正需要它来对比换配置前后。
+
+新增 6 条网关统计回归测试（`test/igate_state_test.dart`，含 `rf-down` 不计数、
+开关不清统计、切来路清表不清数、以及「解码器产物不被判成畸形」的接缝测试），
+新增 2 个文案键 ×6 语言。
+
+---
+
+**The iGate relay counters were always 0.** Layer by layer, the counting itself was fine
+(`Igate` is a pure function with its own tests); the real problem was that a single `0` had
+**four indistinguishable meanings**:
+
+① nothing was ever heard on RF (TNC down / wrong baud) — a link problem;
+② packets arrived but APRS-IS was down (nowhere to relay to) — a network problem;
+③ packets arrived but all were rejected by loop protection (they came from the internet) —
+the gateway **working correctly**;
+④ genuinely nothing was relayed.
+
+The UI showed the same row of zeros for all four, so troubleshooting was guesswork.
+
+**Two new counters to separate “no traffic” from “no relaying”**
+
+- **Heard on RF**: counted **whenever RF is receiving, regardless of whether the gateway is on
+  or APRS-IS is up**. It is the one self-proving number: “is anything at all arriving on RF”
+  no longer has to be inferred from the log.
+- **Loop-protection rejects**: previously log-only and throttled (one line per 20 packets).
+  If it keeps climbing, “relayed = 0” has a reason, and that reason should be visible.
+
+**When nothing is moving, the UI now names the missing piece** (four separate cases, not one
+vague “not available”)
+
+- No RF source ticked → tick TNC / audio.
+- Ticked but the link is not up (wrong baud, device off) → look at the device page,
+  **not at the gateway**.
+- APRS-IS not connected → there is nowhere to relay to; the numbers start moving once it is up.
+- Everything ready but not a single packet heard → it says plainly that this is not a gateway
+  problem and tells you what to check upstream (volume/squelch, antenna, whether anyone is
+  actually transmitting).
+- All rejected by loop protection → explained as **working correctly** (those packets came from
+  the internet; sending them back would multiply the same packet forever), not a fault.
+
+**Two “zeros the statistics created themselves”**
+
+These are sneakier than a missing field, because they look exactly like “everything is fine,
+just no traffic”:
+
+- **Toggling the gateway off and on used to wipe the counters.** And “it isn’t moving → turn it
+  off and on” is the user’s first reflex, so the numbers reset instantly and never show history
+  again — the UI sabotaged its own diagnostic path. Clearing is now only done by the
+  **“Clear statistics”** button (plus when switching data sources, i.e. a genuinely new setup).
+- **The RF link being down no longer counts as “Heard on RF”.** If the RF link is down and the
+  counter still climbs, something else is feeding the same pipeline (a shared device, APRS-IS
+  mistaken for RF…), and the number is a lie — and **a lying self-proof is worse than none**:
+  users use it to prove “RF is fine” and then search in the wrong direction.
+
+**The real functional bug: serial baud silently reset to 9600**
+
+`TncConfig._copy()` is a **hand-written field-by-field copy**, and it is exactly what the
+config-loading path uses (`TncLink.load()` → `_copy()`). It never copied `serialBaud` — so a
+serial TNC configured for 38400 was reopened at 9600 after a restart and **received not a
+single byte**, whose symptoms are precisely “stations never appear on the map and the iGate
+counters stay at 0”, with nothing in the UI to hint that the baud rate had changed.
+
+`toJson` / `fromJson` both carry `serialBaud`, and the tests only covered the JSON round trip,
+so it looked long fixed — but that path was never taken. Along with the fix, a regression test
+now calls `load()` directly and pins the other RF parameters in the same copy block
+(`path`, `initString`): **a missed field is a silent reset, exactly equivalent to never
+persisting it at all**.
+
+**Also**: switching the RF source (new device / baud / band) now clears the dedupe window and
+the “heard” list, because a stale window makes the **first** packet on the new link look like a
+duplicate — another way for the counters to sit at 0 (and the hardest to spot, since not even
+“duplicates dropped” moves). The statistics, however, are **not** cleared: comparing before and
+after the change is exactly what the user needs them for.
+
+Six new regression tests for the gateway counters (`test/igate_state_test.dart`, covering
+`rf-down` not counting, the switch not wiping stats, clearing tables but not numbers when the
+source changes, and the seam test that decoder output is never judged malformed), plus two new
+string keys ×6 languages.
+
+## [1.6.136] - 2026-09-19
+
+### 🔌 新增「硬件串口」：Android 支持 USB-OTG 串口线，桌面串口可设波特率 / New “hardware serial”: USB-OTG serial on Android, settable baud rate on desktop
+
+Android 侧此前只有蓝牙 SPP —— 插一根 USB-OTG 转串口线（CH340 / CP2102 / FTDI）
+或电台自带 USB 口时**完全用不了**，而这类线恰恰最便宜、延迟最低、最不会被系统
+限流。桌面串口更早就存在，但**没有波特率设置**（代码注释写的是「由系统决定」），
+Windows 上 COM 口还是独占设备、开两个句柄会失败 —— 等于那条路根本没通。
+
+- **Android USB 串口**（新增 `UsbSerialManager.kt`，零新增依赖）：`UsbManager`
+  枚举 + 批量传输搬字节，系统弹一次授权即可（无需存储权限）。
+  - **芯片适配**：CDC-ACM（标准 SET_LINE_CODING，电台自带 USB 口与 Arduino 类）、
+    CH34x（厂商私有初始化 + 分频写寄存器）、CP210x（含旧固件兼容路径）。
+    FTDI / PL2303 的私有序列**本版未实现** —— 设备仍可打开收发（很多模块出厂就是
+    9600/38400），但改不了它的线速，且会在日志里明确说明，不假装成功。
+  - **热插拔**：支持 USB_DEVICE_ATTACHED 广播 + `usb_device_filter.xml` 过滤表，
+    插上线时系统能直接列出本应用。
+  - **枚举不按 VID 白名单**：USB 转串口线的 VID/PID 组合极多（还有大量白牌），
+    按白名单会把能用的线判成「不支持」；这里按**端点形状**判断（有批量 IN+OUT
+    即串口设备），展示名里带 VID:PID 供用户认线。
+- **桌面串口补上波特率**：Linux `stty -F` / macOS `stty -f` / Windows `mode COMx:`，
+  先设参数再开句柄（tty 参数留在设备节点上，两个句柄自然继承）。设不上会如实
+  写进链路日志 —— 「没设上却以为设上了」比报错难查得多。
+- **蓝牙 / USB 自动选路**（新增 `TncAutoTransport`）：绑定的设备是持久化的，
+  用户下次启动直接点「连接」，那一刻没人会问「这是蓝牙还是 USB」—— 选路必须由
+  传输层按设备类型完成。同一时刻只保持一条链路（两条同时开会把接收字节流瓜分，
+  症状正是「能发不能收」）。
+- **线速放在设备页**（`TncConfig.serialBaud`，默认 9600，随配置持久化）：
+  USB 串口线与电台数据口必须同速，否则一个字节都收不到。蓝牙设备下这一项
+  会明确提示「不生效」（SPP 没有波特率概念），而不是静默忽略。
+- **顺手修掉一个真缺陷**：原生早就在发 `txok` / `txfail` 事件，但 **Dart 侧从未
+  监听** —— 于是「发射自检」的写出确认从来收不到回应，每次都退化成
+  「已入队但未收到写出确认」（看起来像没确认，实际是根本没人听）。现在蓝牙与
+  USB 共用同一条事件解析，两条链路都真正拿得到写出确认。
+- 界面文案随之更新（扫描按钮 / 空列表 / 权限提示不再只说蓝牙）。新增 16 条
+  回归测试（选路、线速传递、切路、断开语义）。
+
+Android previously had only Bluetooth SPP — plugging in a USB-OTG serial cable
+(CH340 / CP2102 / FTDI) or a radio's own USB port **did nothing**, even though those
+cables are the cheapest, lowest-latency and least-throttled option. Desktop serial
+had existed for longer but with **no baud rate setting** (the code comment said “decided
+by the system”), and a Windows COM port is exclusive so the second handle fails — in
+practice that path was never usable.
+
+- **USB serial on Android** (new `UsbSerialManager.kt`, no new dependencies):
+  enumeration via `UsbManager` and byte-pumping with bulk transfers, plus a one-time
+  system permission prompt (no storage permission).
+  - **Chip support**: CDC-ACM (standard SET_LINE_CODING — radios with a built-in USB
+    port and Arduino-class boards), CH34x (vendor init + divisor registers) and CP210x
+    (with a legacy-firmware path). FTDI / PL2303 vendor sequences are **not implemented
+    in this version** — those devices still open and transfer (many modules ship at
+    9600/38400), but the baud rate cannot be changed, and that is stated plainly in the
+    log instead of pretending it worked.
+  - **Hot plug**: `USB_DEVICE_ATTACHED` plus a `usb_device_filter.xml` table, so the
+    system can offer this app when the cable is plugged in.
+  - **Enumeration is not a VID allow-list**: USB-serial VID/PID pairs are numerous
+    (including many white-label cables), and an allow-list would call a working cable
+    “unsupported”. Detection is by **endpoint shape** (bulk IN + OUT means a serial
+    device), and the VID:PID is shown in the name so the user can identify the cable.
+- **Baud rate for desktop serial**: Linux `stty -F`, macOS `stty -f`, Windows
+  `mode COMx:` — parameters are applied before the handles are opened (tty settings
+  live on the device node, so both handles inherit them). Failures go into the link
+  log verbatim: “thought it was set but it wasn't” is far harder to diagnose than an
+  error message.
+- **Automatic routing between Bluetooth and USB** (new `TncAutoTransport`): the bound
+  device is persisted, so the next launch just taps “connect” — at that moment nobody
+  asks “Bluetooth or USB?”, and routing has to happen in the transport layer based on
+  the device type. Only one link is kept at a time (two at once split the received byte
+  stream, which shows up exactly as “transmits but receives nothing”).
+- **The baud rate lives on the device page** (`TncConfig.serialBaud`, default 9600,
+  persisted with the config): the USB cable and the radio data port must agree, or not a
+  single byte gets through. With a Bluetooth device the field says plainly that it has
+  no effect (SPP has no baud rate) instead of silently ignoring it.
+- **A real defect fixed along the way**: the native side had been emitting `txok` /
+  `txfail` events all along, but **nothing on the Dart side ever listened** — so the TX
+  self-test's write acknowledgement never arrived, and every run degraded to “queued but
+  no write confirmation” (which looks like “unconfirmed” when in fact nobody was
+  listening). Bluetooth and USB now share one event parser, so both links really do get
+  their write acknowledgements.
+- UI wording follows (scan button / empty list / permission hint no longer say Bluetooth
+  only). 16 new regression tests cover routing, baud propagation, switching and
+  disconnect semantics.
+
+## [1.6.135] - 2026-09-19
+
+### 📻 修「音频发射对方解不出」：Android 发射期间拉满音量、暂停麦克风、并给出接线与电平提示 / Fixes “on-air audio cannot be decoded by other software”: full media volume, mic paused during TX, plus wiring and level hints
+
+用户报告：**实时发射**（手机接电台 / 对着电脑上的 Direwolf）对方解不出。
+先把软件层排除干净 —— 我用一份**独立实现**（非本项目代码）解调「音频」页真实发射
+路径产出的音频，按规范（mark=1200Hz、NRZI 1=不变）能解出完整帧、FCS 正确。
+**所以波形与协议没问题，问题在「音频怎么送到对方」这一段。** 这一段此前
+完全没被照顾：
+
+- **发射期间把媒体音量拉到最大**（结束后原样恢复），并申请瞬时音频焦点。
+  手机媒体音量偏低时对端信噪比不够，整帧都解不出；而「别的应用正在放音乐」
+  会和 FSK 混在一起 —— 混音等于加噪声，波形直接毁掉。
+- **发射期间真正暂停麦克风采集**（半双工）。此前只是「收上来再丢掉」，
+  AudioRecord 仍开着：一边录音一边播放时，部分机型会把播放路由到听筒、
+  或叠加 AEC/降噪 —— 本机自检全过，电台却解不出，正是这个形状。
+- **发射体检进日志**：峰值%、时长、前导 flag 数。削顶（≥99.9%）与电平偏低
+  （<15%）都会明确报警 —— 这两种情况自检都「通过」，只有对方解不出，
+  是最难查的一类。
+- 音频页新增「接线提示」：接电台请走音频线；**手机扬声器在 2200Hz 衰减很大**，
+  对着麦克风很难解出。对端是电脑上的 Direwolf 时，先用导出的 WAV 验证一遍 ——
+  能解出就说明问题在音频通路，而不是协议。
+
+Reported: **live TX** (phone into a radio, or aiming at Direwolf on a PC) could not be
+decoded by the other end. I first ruled the software layer out — an **independent
+implementation** (not this project's code) decodes audio captured from the real TX path
+with correct FCS and legal addressing, so **the waveform and protocol are fine; the
+problem is in how the audio reaches the other end.** That part had no handling at all:
+
+- **Media volume is raised to maximum for the transmission** (restored afterwards) and
+transient audio focus is requested. At low media volume the far end's SNR is too poor to
+decode a whole frame, and music from another app mixes with the FSK — mixing is just
+noise, and it destroys the waveform.
+- **Microphone capture is actually paused during TX** (half duplex). Previously samples
+were merely dropped after capture, with AudioRecord still running; when recording and
+playback run together some devices route playback to the earpiece or stack AEC/noise
+suppression on it — the app's self-test passes while the radio cannot decode.
+- **TX diagnostics in the log**: peak %, duration, preamble flag count. Clipping (≥99.9%)
+and low level (<15%) are called out explicitly — both pass the self-test and only fail at
+ the far end, which is the hardest class of problem to find.
+- The audio page now shows **wiring hints**: use an audio cable into the radio;
+**a phone speaker rolls off badly at 2200 Hz**, so decoding it over the air from the
+speaker is very hard. When the far end is Direwolf on a PC, first verify with an exported
+WAV — if that decodes, the problem is the audio path, not the protocol.
+
+### 💾 修「导出路径」：不再要求手打路径，导出前自解一遍 / Fixes the export path: no more typing paths, and the file is decoded before it is written
+
+- **Android 导出改走系统「保存到下载目录」**（MediaStore，免存储权限）：
+  落到 `下载/APRSlocusAudio`，弹窗直接给出**真实路径**并可一键复制 ——
+  拷到电脑就能喂给 Direwolf。此前要用户手打路径，而 Android 应用**本来
+  就写不了任意目录**，私有目录用户又看不见 —— 这个入口在语义上就是坏的。
+- **导入改用系统文件选择器**（不再手打路径）；桌面端保留路径输入框
+  （桌面用户本来就习惯填路径）。
+- **导出前在内存里自己先解一遍**：解不出就直接报错，宁可不写，
+  也不给用户一个拿到对端反复试的坏文件。
+- **二进制走独立的原生通道**：文本导出按 UTF-8 写，WAV 是二进制 ——
+  沿用同一条通道会把文件写坏，而「坏了却显示成功」是最难查的一种。
+- 文件名带呼号与时间戳（`APRSlocus_<呼号>_<时间>.wav`）：下载目录会累积
+  多个导出，同名只能被系统加 `(1)(2)`，之后谁也分不清哪个是哪个。
+
+- **Android export now goes through the system “save to Downloads”** (MediaStore, no
+storage permission needed): files land in `Downloads/APRSlocusAudio`, and the dialog
+shows the **real path** with a one-tap copy — move it to a PC and feed it to Direwolf.
+Previously the user had to type a path, but an Android app **cannot write arbitrary
+directories** and its private directory is invisible — that entry point was broken by
+design.
+- **Import uses the system file picker** (no more typing paths); desktop keeps the path
+field, since desktop users expect to type paths.
+- **The WAV is decoded in memory before it is written**: if it does not decode the export
+fails outright — better to write nothing than to hand the user a broken file to retry at
+the far end.
+- **Binary goes through its own native channel**: text export writes UTF-8, while a WAV is
+binary — reusing that channel corrupts the file, and “corrupted but reported as success”
+is the hardest kind to notice.
+- Filenames carry the callsign and a timestamp (`APRSlocus_<call>_<time>.wav`): the
+Downloads folder accumulates exports, and identical names only get `(1)(2)` suffixes,
+after which nobody can tell which is which.
+
+### 📦 修「数据包控制台」：手动注入在 TNC / 音频下点了没反应 / Fixes the packet console: manual inject did nothing under TNC / audio
+
+射频（TNC / 音频）下手动注入一条报文，界面**既没有成功提示也没有失败提示** ——
+实为静默失败，三件事叠在一起：
+
+- **发送前先校验格式**：漏了 `>` 或 `:` 直接拦下并提示，不再「显示已发送、
+  其实对端什么都没收到」。
+- **未连接时如实返回 `not-connected`**，而不是照旧自增发包数 ——
+  计数从此只在真的交给链路后才增加。
+- **界面给出结果反馈**：成功弹绿条、失败弹红条（5s，够读完），
+  且**失败时保留输入**，改一个字符就能重发。
+- 输入框下方新增**上下文提示**：当前链路、整包字节数与上限
+  （射频按 AX.25 单帧上限、APRS-IS 按 512 字节整行）、当前路径，
+  含 `TCPIP*` 时提醒「射频上会被自动剔除」。
+
+Under RF (TNC / audio), injecting a packet produced **neither a success nor a failure
+message** — a silent failure, caused by three things stacking up:
+
+- **Format is validated before sending**: a missing `>` or `:` is rejected with a message
+instead of “shown as sent” while the far end receives nothing.
+- **`not-connected` is returned honestly** instead of incrementing the TX counter anyway —
+the counter now only advances once the packet is actually handed to a link.
+- **The UI reports the result**: a green bar on success, a red one on failure (5 s, long
+enough to read), and **the input is kept on failure** so one character can be fixed and
+resent.
+- A **context line** under the input shows the current link, the packet byte count and
+limit (AX.25 single-frame limit on RF, the 512-byte APRS-IS line limit), the current path,
+and a warning when `TCPIP*` is present.
+
+## [1.6.134] - 2026-09-19
+
+### 🔧 修 v1.6.133 把 4×2 弄没了：`minResizeHeight` 不能大于 `minHeight`
+
+装了 v1.6.133 之后 4×2 落不下来、或被强行撑大。根因是我在 widget_info 里写了一组
+**自相矛盾**的尺寸：
+
+| | `minHeight`（默认尺寸） | `minResizeHeight`（我写的） |
+|---|---|---|
+| 短波 | 110dp | **150dp** |
+| 系统状态 | 110dp | **125dp** |
+| 天气（一直正常） | 110dp | 60dp |
+
+`minResizeHeight` 的语义是「用户**最少**能拖到多小」。把它写成比组件自己的默认高度
+还大，等于宣告「默认的 4×2 低于下限」—— 启动器只能拒绝落到 4×2、或强行撑到那个下限。
+**约束是 `minResize* ≤ min*`，我把方向搞反了。**
+
+现在两个组件都取 105dp（略低于默认 110dp），4×2 始终可达。宽度下限不变
+（短波 200dp / 系统状态 170dp）—— 那是「再窄就先牺牲波段名」的位置。
+
+**顺带修掉判档阈值。** 原来按「≥3 格」判加高布局，而格子数是按 `74 × n − 16` 这个
+**标称**公式反推的 —— 实际每格多高随启动器与屏幕差很多，用它判档时 4×2 在部分启动器上
+被算成 3 格，直接套上了 232dp 的加高布局而溢出（表现同样是「4×2 坏了」）。
+现在改成**直接比 dp**：≥240dp 才换加高档。理由很直白 —— 加高布局放不放得下本来就是
+个 dp 事实（内容 232dp / 215dp），而 3 格标称只有 206dp，它本来就装不下。
+
+---
+
+**Fixes the 4×2 regression from v1.6.133: `minResizeHeight` must not exceed `minHeight`.**
+
+After v1.6.133 the 4×2 size could no longer be placed, or was forced larger. The cause was a
+**self-contradictory** set of size declarations in the widget infos:
+
+| | `minHeight` (default size) | `minResizeHeight` (what I wrote) |
+|---|---|---|
+| HF | 110dp | **150dp** |
+| System status | 110dp | **125dp** |
+| Weather (never broken) | 110dp | 60dp |
+
+`minResizeHeight` means "the smallest size the user may drag to". Declaring it *larger* than the
+widget's own default height announces that the default 4×2 sits below the floor — so the launcher
+either refuses to place it at 4×2 or forces it up to that floor. The constraint is
+**`minResize* ≤ min*`**, and I had it backwards.
+
+Both widgets now use 105dp (just under the 110dp default), so 4×2 is always reachable. The width
+floors are unchanged (200dp / 170dp) — the point where a narrower widget starts sacrificing the
+band name.
+
+**The tier threshold is fixed as well.** It used to switch to the tall layout at "3 cells or more",
+where cells come from the **nominal** `74 × n − 16` formula. Real cell heights vary widely with
+launcher and screen, so on some launchers a 4×2 was computed as 3 cells and received the 232dp tall
+layout, which overflowed — and that reads as "4×2 is broken" too. It now compares **dp directly**:
+the tall layout only applies at 240dp or more. The reasoning is plain — whether the tall layout fits
+is a dp fact (its content is 232dp / 215dp), and a nominal 3 cells is only 206dp, so it never fit
+in the first place.
+
+## [1.6.133] - 2026-09-19
+
+### ↔️ 短波与系统状态组件支持缩放了；拉高自动换「加高档」
+
+三个桌面组件里，只有**天气**原来能拖拽缩放，**短波**与**系统状态**是
+`resizeMode="none"`（固定尺寸）。这一版把它们也打开，并各多做一个
+**「加高档」布局**。
+
+**为什么是「分档」而不是真的按比例缩放**
+
+RemoteViews 没有百分比布局，能按比例设高的 `setViewLayoutHeight` 又要 API 31+
+（本项目 minSdk=24）—— 所以只能像天气组件那样分档。这不是偷懒，是平台限制。
+
+**横向：本来就能自适应**
+
+两条进度条用的是 `weight`（等分），所以拖宽时它们自己就跟着变宽，无需第二套
+代码。真正要防的是「拖太窄」：波段名 56dp + 两段 + 档位块 48dp 一旦挤不下，
+最先被牺牲的就是波段名 —— 所以最小宽度卡在内容放得下的地方：
+短波 200dp、系统状态 170dp。
+
+**纵向：高度够时换「加高档」**（判档见 v1.6.134 的修正）
+
+| | 标准档（4×2） | 加高档（4×3+） |
+|---|---|---|
+| 短波 | 157dp，条高 18dp，提示 1 行 | 232dp，条高 24dp、字号上一档、提示 **2 行** |
+| 系统状态 | 138dp | 215dp，字号上一档、状态点变大、各区块拉开 |
+
+两档的差别不是「把所有间距乘个倍数」（那样只会显得松散）：
+- **短波**把多出来的高度都用在**信息量**上 —— 条变粗、提示多一行；
+- **系统状态**没有「可以多给的内容」（它四段各自独立，硬塞新内容会变成另一张表），
+  所以把高度用在**可读性**上。
+
+**最小尺寸**
+
+> ⚠ 这里原来写的是「卡在内容放得下的下限」（短波 150dp / 系统 125dp）——
+> **那是错的，而且直接把 4×2 弄没了**：`minResizeHeight`（用户最少能拖到多小）
+> 被写成比组件自己的默认高度（`minHeight` 110dp）还大，等于宣告「默认的 4×2
+> 低于下限」，启动器于是拒绝落位、或强行撑大。**已在 v1.6.134 修正**，见该条。
+
+**实现上只改了一处**
+
+两档布局**共用同一套 id**（只有 dp 值不同）—— 所以 Provider 只换一个 layout
+资源，ResId 表两档通用。少一张表就少一处「改了一档忘了改另一档」。
+
+顺带把「波段名放得下」的回归测试扩到**两档都查**：加高档字号 10.5sp、列宽 68dp，
+只查标准档是不够的 —— 而它的表现同样是「波段名被截掉」。
+
+---
+
+**The HF and system-status widgets can now be resized, with a taller layout when you drag them bigger.**
+
+Of the three widgets only **weather** could be dragged to a different size; **HF** and **system status**
+were `resizeMode="none"` (fixed). This release opens them up and adds a **tall layout** to each.
+
+**Why tiers rather than true proportional scaling**
+
+RemoteViews has no percentage layout, and `setViewLayoutHeight` (which could scale a height
+proportionally) requires API 31+ — this project's minSdk is 24. So tiers are the only option, exactly as
+the weather widget already does it.
+
+**Horizontal: it already adapts**
+
+The two progress bars use `weight`, so they widen on their own when the widget does. What actually
+needs guarding is dragging it *too narrow*: band name 56dp + two segments + a 48dp level block —
+when that stops fitting, the band name is the first thing sacrificed. The minimum widths are therefore
+pinned to what the content needs: 200dp (HF) and 170dp (system status).
+
+**Vertical: switches to the tall layout when there is enough height** (threshold fixed in v1.6.134)
+
+| | standard (4×2) | tall (4×3+) |
+|---|---|---|
+| HF | 157dp, 18dp bars, one tip line | 232dp, 24dp bars, type up a step, **two** tip lines |
+| System status | 138dp | 215dp, type up a step, larger status dots, sections spread out |
+
+The difference is not "multiply every gap by some factor" (that just looks loose): HF spends the extra
+height on **information** (thicker bars, a second tip line), while system status has no extra content to
+show — its four sections are already distinct, and forcing more in would make it a different widget —
+so it spends the height on **legibility**.
+
+**Minimum size**
+
+> ⚠ This originally read "pinned to what the content needs" (150dp for HF, 125dp for system
+> status) — **that was wrong, and it removed the 4×2 size entirely**: `minResizeHeight` (the
+> smallest the user may drag to) was declared *larger* than the widget's own default height
+> (`minHeight`, 110dp), announcing that the default 4×2 sits below the floor, so the launcher
+> refused to place it there or forced it larger. **Fixed in v1.6.134** — see that entry.
+
+**Only one thing changed in the implementation**
+
+The two layouts **share the same set of ids** (only the dp values differ), so the provider just swaps one
+layout resource and the ResId table serves both tiers. One less table means one less "updated one tier,
+forgot the other".
+
+The regression test for "band names fit" now checks **both tiers**: the tall one uses 10.5sp type and a
+68dp column, and checking only the standard tier is not enough — it fails the same way (a truncated
+band name).
+
+## [1.6.132] - 2026-09-18
+
+### 📊 短波组件：**亮的是白天、暗的是晚上**；图标进条、条加高
+
+改三件事，都来自一个反馈：「亮暗反了，而且条看着太瘦」。
+
+**① 亮度改回表达「时段」，不再表达「现在」**
+
+上一版是「当前时段实色、另一段淡底」—— 于是**夜里那一段反而最亮**，
+而白天段是淡的。这确实反直觉：人对亮暗的第一反应是「日/夜」，不是「现在」。
+
+现在：**白天段恒亮（满色）、夜晚段恒暗（压暗）**。「现在」改由段内顶部
+的小白点表出（每行两个点，只亮当前那一个）。
+
+把「白点」与「明暗」拆开还有一个实际好处：以前的 drawable 要同时编码
+「档位 × 昼夜 × 是否当前」（4×2×2 = 16 张/主题），现在只编码「档位 × 昼夜」
+（4×2 = 8 张），白点交给一个独立 ImageView 控可见性。
+
+**② 太阳 / 月亮搬进条里**
+
+原来两个图标贴在条外侧，白占宽度、还要在运行时染色（`setColorFilter`）。
+搬进条内之后：宽度让给了条本身，而底色是满色或压暗色，**白图在两者上都够清楚，
+于是不再需要染色** —— 少两个颜色资源、少两处只在运行期才爆的 `setInt`。
+
+**③ 条高 13 → 18dp**
+
+原来四行加起来只有 52dp，整块显得空。提到 18dp（四行 72dp），
+再把几处 4/3dp 的间隔各收 1dp —— 总高 157dp，仍在 4×2 的内容预算内。
+
+**顺带**
+
+- 右端的「当前档位」块与 6m 格改用**压暗底 + 白字**。它们在语义上是**读值**
+  而不是「时段」，所以不跟昼夜明暗走；而亮底上的白字对比度不够
+  （fair 的橙 #D97706 只有约 2.9:1），压暗底 + 白字对四个档位都稳。
+- 生成器新增一条**语义自检**：按 BT.601 算亮度，**白天段必须比夜晚段亮 24 以上**。
+  写反了会直接报错，而不是等装到真机才发现又反了（已反向验证过会报红）。
+- 删除已死的 `aw_seg_*` / `aw_segnow_*` / `aw_sun` / `aw_moon`。
+
+---
+
+**HF widget: bright means day, dark means night; icons moved inside the bars; bars are taller.**
+
+Three changes, all from one piece of feedback: "the bright/dark is backwards, and the bars look too thin."
+
+**① Brightness now encodes the *time slot*, not *now***
+
+The previous version made the *current* slot solid and the other one pale — which left the **night
+segment as the brightest thing on the card** while the day segment was washed out. That is backwards:
+peoples' first reading of light vs dark is day vs night, not "now".
+
+Now the **day segment is always bright (full colour) and the night segment always dark (dimmed)**.
+"Now" moved to a small white pip at the top of whichever segment applies (two pips per row, only one lit).
+
+Separating the pip from the shading also pays off concretely: the drawables used to encode
+*level × slot × is-now* (4×2×2 = 16 per theme) and now encode only *level × slot* (4×2 = 8), with the pip
+handled by a separate ImageView whose visibility the widget controls.
+
+**② Sun and moon moved inside the bars**
+
+They used to sit outside, taking width and needing a runtime tint (`setColorFilter`). Inside the bar they
+no longer consume outside width, and because the fill is either full colour or dimmed, **white glyphs are
+legible on both — so the tint is gone**, along with two colour resources and two runtime-only `setInt` calls.
+
+**③ Bars grew from 13dp to 18dp**
+
+Four rows used to total only 52dp, which left the card looking empty. At 18dp they total 72dp, with a few
+4/3dp gaps trimmed by 1dp each — 157dp overall, still inside the 4×2 content budget.
+
+**Also**
+
+- The right-hand "current level" block and the 6m cell now use a **dimmed fill with white text**. They are
+  readings rather than time slots, so they deliberately do not follow the day/night shading; and white on a
+  bright fill does not have enough contrast (fair's orange #D97706 is about 2.9:1), whereas a dimmed fill is
+  safe across all four levels.
+- The generator gained a **semantic check**: luminance (BT.601) of the day segment must exceed the night one
+  by at least 24. Getting it backwards now fails the build instead of shipping and being noticed on the
+  device (verified by deliberately inverting it — it does fail).
+- Dead `aw_seg_*` / `aw_segnow_*` / `aw_sun` / `aw_moon` removed.
+
+## [1.6.131] - 2026-09-18
+
+### 🧩 三块桌面组件都不再「下面空空的」；天气主区不再挤
+
+三块组件各自补上一行真正有用的信息，顺带把天气主区「上挤下空」的成因修掉。
+
+**① 短波组件：底部加「通联提示」**
+
+读完「哪个波段好」之后的下一步是「那我该干什么」，所以表下加一行提示：
+圆点 + 级别图标 + 级别 + 一句话。文案**复用 `hfTips()`**（与 App 内面板的
+「业余无线电建议」同一个来源）—— 组件上一眼看到的那句话，点进 App 也找得到；
+两处各写一份文案，迟早会出现「组件说 A、面板说 B」。
+
+取**排序后的第一条**（`hfTips` 内部已按「安全警示 > 注意 > 通联机会 > 操作提示」
+排好）：4×2 只放得下一行，而再挤就要从波段表里拿地方，而波段表是这个组件的主语。
+
+颜色用**基准色**而不是给天气组件用的提亮色 —— 提亮 35% 是「压在彩色渐变上」的
+补偿，本组件是白底，提亮色会淡到看不清。此刻没有值得说的时候**整行收起**。
+
+**② 天气组件：修「上部分挤、下部分空」**
+
+根因是天气主区与 3 格指标**并排**：主区只拿到约一半宽，而 `hero()` 内部本来就是
+按「占满整行」设计的（温度 + 弹性空隙 + 靠右的天气现象/高低温）—— 被压到一半宽
+之后，现象与高低温紧贴在温度右边，右半边又竖着三格指标，整块看上去就是「上面挤」。
+
+改成**主区独占一行、指标单独一行**后：温度与现象分列两端，指标三格摊平到
+整行宽度，下半部分也不再空。代价是多花约 17.5dp，从几处 6dp 间隔里收回，
+实测总高 148dp（预算 160dp）。
+
+**③ 系统状态组件：底部加「最近收到」**
+
+原来底部只有「收 N / 发 N / 信标 / 台站」这排计数，下面空一截。补的一行是
+「最近收到 <呼号> …… 多久前」。
+
+为什么是这一行而不是再堆一个计数：**它比「收 N」更直接地回答「还在收吗」**——
+计数只说明「一共收过多少」，链路卡住时计数是不动的，用户从计数上看不出异常；
+而「最近收到谁、多久前」说明此刻还在不在收。没有台站时**整行收起**，
+不留一个「最近收到 · 」的空壳（空壳会让人以为组件坏了）。
+
+「多久前」复用仓库既有的 `secondsAgo / minutesAgo / hoursAgo / daysAgo`，
+**与 `packets_page.dart` 同一套分档** —— 同一个时间在两个界面上说法不同
+（「45分前」与「0小时前」并存）是最容易被截图吐槽的。
+
+**共同项**
+
+- 「现在」时段仍由原生按本机时钟判断（阈值随快照下发），不受组件 30 分钟
+  自刷新周期的限制；
+- 圆点与级别图标都是 ImageView + `setColorFilter` 染色 —— 该方法**只存在于
+  ImageView**（v1.6.114 的线上事故就是把 TextView 当圆点用）；
+- 三块组件的内容高实测：天气 148dp、短波 153dp、系统状态 129dp，均在 160dp 预算内。
+
+---
+
+**All three desktop widgets now put something useful in the space they were wasting, and the weather widget's cramped top half is fixed.**
+
+**① HF widget: a propagation tip under the band table**
+
+After "which band is good", the next question is "so what do I do" — hence one line with a dot,
+a level icon, the level, and a sentence. The text **reuses `hfTips()`**, the same source as the
+in-app panel's "amateur radio advice", so the line you see on the widget is the same one you can
+find inside the app. Two copies of that copy would eventually drift into "the widget says A, the
+panel says B". The **first tip after sorting** is used (`hfTips` already orders them
+safety warning > caution > opportunity > operating note): a 4×2 fits one line, and squeezing in more
+would take space from the band table, which is this widget's subject.
+
+Colours use the **base** values rather than the lightened ones used by the weather widget — that
++35% lightening compensates for sitting on a coloured gradient, and on this widget's white ground it
+would be too pale to read. When there is nothing worth saying, the **row is hidden entirely**.
+
+**② Weather widget: the cramped top half**
+
+The cause was that the hero area and the three metrics sat **side by side**: the hero got only about
+half the width, while `hero()` is internally designed to span the whole row (temperature, a flexible
+spacer, then condition/high-low right-aligned). Squeezed into half a row, the condition and high/low
+hugged the temperature while three stacked metrics occupied the right half — which reads as a
+cramped top. Splitting them into **a hero row and a metrics row** puts the condition at the opposite
+end of the temperature and spreads the metrics across the full width, so the bottom half is no longer
+empty either. It costs about 17.5dp, clawed back from several 6dp gaps; the real content measures
+148dp against a 160dp budget.
+
+**③ System status widget: a "last heard" row**
+
+Previously the bottom held only the counters (Rx / Tx / beacon / stations), leaving a stretch of
+empty space. The added row reads "last heard <callsign> … <how long ago>".
+
+Why this and not another counter: **it answers "am I still receiving?" far more directly than
+"Rx N"**. A counter only says how many have arrived in total, and when a link stalls the counter
+simply stops moving — you cannot tell from it. "Who was heard most recently, and how long ago"
+does tell you. With no stations yet the **row hides entirely** rather than showing an empty
+"last heard ·" shell, which would look like a broken widget.
+
+The relative time reuses the existing `secondsAgo / minutesAgo / hoursAgo / daysAgo`, **the same
+buckets as `packets_page.dart`** — the same interval described differently on two screens ("45 min
+ago" next to "0 h ago") is the kind of thing that gets screenshotted.
+
+**In common**
+
+- The current day/night slot is still resolved natively from the device clock (thresholds downlinked
+  in the snapshot), so it is not limited by the widget's 30-minute self-refresh.
+- The dots and level icons are ImageViews tinted with `setColorFilter`, which **only exists on
+  ImageView** (the v1.6.114 outage was a TextView used as a dot).
+- Measured content heights: weather 148dp, HF 153dp, system status 129dp — all within the 160dp budget.
+
+## [1.6.130] - 2026-09-18
+
+### 📊 短波组件再重做：每个波段一条「日 → 夜」进度条，一眼看出**现在**该用哪段
+
+上一版（条件色带）虽然解决了同形状药丸堆叠的问题，但还剩两件要用户自己做的事：
+**① 波段名被挤掉** —— 列宽 46dp 放不下 9sp 加粗的 `12m/10m`（实测 42.0dp），平时
+刚好、系统字体一放大（Android 上限 1.3 倍 → 需 55.3dp）就被截成 `12m/1…`；
+而「这是哪个波段」是整块的**前置信息**，它没了其余都白搭。
+**② 还得心算「现在该看日间那列还是夜间那列」** —— 而「现在」正是这个组件要回答的问题。
+
+**新结构：每波段一条两段条，左 = 日间、右 = 夜间（顺序即时间顺序）**
+
+`[波段名 56dp][☀][日间段][夜间段][☾][当前档位]`
+
+- **当前时段那一段是实色 + 顶部一颗小白点**，另一段是淡底 —— 三重提示（色调 + 白点
+  + 右端档位）都落在「现在」上，不靠用户读字；
+- 两端用**太阳 / 月亮图标**标注时段语义（图标用 `setColorFilter` 染色 —— 那是
+  ImageView 才有的方法，v1.6.114 的事故就是把 TextView 当圆点用）；
+- 右端档位块给的是**当前时段**的档位（好 / 一般 / 差），不再需要横向对照两列；
+- 顶栏标题右侧直接写「**现在 日间 / 现在 夜间**」。
+
+**「当前时段」由原生按本机时钟判断**（阈值随快照下发：`dayFrom` / `dayTo`）
+
+组件每 30 分钟自刷新时只重绘已存的快照。若把「现在算日间还是夜间」在 Dart 侧**算死**，
+用户一整天不开 App 就会出现「19:00 之后组件还指着日间」。所以规则只在 Dart 定义一处
+（`hfIsDaytime()` + `kHfDayFromHour/ToHour`），Kotlin 只用不猜。
+
+这次顺带把它收成了**唯一判据**：此前 `07:00–19:00` 这个表达式在文件里抄了**两遍**
+（`bestBandAt` 与建议生成各一份），多一个调用方就多一处漂移的地方 —— 而漂移的表现是
+「面板说 20m 好、组件游标却指在日间」，最难解释的那种不一致。
+
+**回归护栏**
+
+- `波段名放得下，且留出系统字体放大（1.3 倍）的余量` —— 这条盯的正是上面那个 bug。
+  预览工具画文字**不裁切**，所以那版预览看不出来，只能靠断言；
+- `level 名落在 Kotlin 认识的集合里`：契约是**等级名**而不是色值，认不出会回退灰底；
+- 跨语言契约测试新增 `nowPrefix` / `dayFrom` / `dayTo` —— 少了任一个，组件会渲染成
+  「 夜间」（前缀空）或永远算作日间；
+- 真布局内容高度 **135.00dp**，比上一版（158.67dp）还矮 23.67dp，不会溢出。
+
+**顺带**：新增 `hfNow` 文案（6 种语言）；`aw_track_*` 等上一版的条件色带资源已随本版删除。
+
+---
+
+**The HF widget was rebuilt again: one 「day → night」 bar per band, so you can see at a glance which half applies *now*.**
+
+The previous version (condition tracks) fixed the eight-identical-pills problem but left two things to the user:
+**① band names were truncated** — the 46dp column could not hold `12m/10m` at 9sp bold (measured 42.0dp);
+that fits at the default font size, but Android allows up to 1.3× scaling (→ 55.3dp needed), which clipped it
+to `12m/1…`. "Which band is this" is the widget's *premise*, so losing it makes the rest useless.
+**② you still had to work out whether to read the day or the night column** — and "now" is precisely the
+question this widget exists to answer.
+
+**New structure: one two-segment bar per band, left = day, right = night (the order is chronological)**
+
+`[band name 56dp][☀][day segment][night segment][☾][current quality]`
+
+- **The segment for the current part of the day is solid with a small white pip at its top**, the other is a
+  pale fill — three cues (tint, pip, and the right-hand block) all point at "now", none of which requires
+  reading text.
+- **Sun / moon icons** at the two ends carry the time-of-day semantics (tinted via `setColorFilter`, which
+  only exists on ImageView — the v1.6.114 outage was a TextView used as a dot).
+- The right-hand block shows the quality of the **current** slot only, so there is no more scanning two
+  columns against each other.
+- The header states 「现在 日间 / 现在 夜间」 ("now: day/night") right next to the title.
+
+**The current slot is resolved natively from the device clock** (thresholds downlinked in the snapshot as
+`dayFrom` / `dayTo`). The widget redraws the stored snapshot every 30 minutes, so if Dart decided "day or
+night" up front, a user who never opens the app would see the widget still pointing at daytime after 19:00.
+The rule is therefore defined in exactly one place in Dart (`hfIsDaytime()` with
+`kHfDayFromHour`/`kHfDayToHour`) and Kotlin only consumes it.
+
+This change also collapses it into the **single predicate** it should always have been: the `07:00–19:00`
+expression had been duplicated (once in `bestBandAt`, once in tip generation), and every extra caller is
+another place to drift — drift that shows up as "the panel says 20m is good while the widget's pip points at
+daytime", the least explicable kind of inconsistency.
+
+**Regression guards**
+
+- `band names fit, with headroom for 1.3× system font scaling` — this targets exactly the bug above. The
+  preview tool does not clip text when drawing, so that version's preview could not reveal it; an assertion
+  can.
+- `level names fall inside the set Kotlin knows`: the contract is the *level name*, not a colour value, and
+  an unknown level falls back to grey.
+- The cross-language contract test now also covers `nowPrefix` / `dayFrom` / `dayTo` — missing any one of them
+  makes the widget render " night" (empty prefix) or treat every hour as daytime.
+- The real layout measures **135.00dp** tall, 23.67dp *shorter* than the previous version (158.67dp), so there
+  is no overflow.
+
+**Also**: new `hfNow` string in six languages; the previous version's `aw_track_*` resources are removed.
+
+## [1.6.129] - 2026-09-18
+
+### 🎛️ 短波桌面组件重做：从「八个药丸」改为「条件色带」
+
+短波组件的逐波段表重新设计。上一版（淡色 tonal chip）的问题集中在一处：**8 个同形状、
+同大小的淡色药丸**——而「一般」一行内出现 3 次、「差」4 次，重复的图形不承载额外信息，
+只堆噪声；加上 4 行完全同构、没有层次，整块看起来像把一张表直接倒上去，
+波段名与第一个色块之间还横着约 40dp 空档，横向扫视要跨很远。
+
+**新结构：每行一条「条件色带」**
+
+- 色带**横贯整个日/夜列**（行的宽度就是列宽）——中段空档消失，扫视距离降到最短；
+- 颜色集中到色带**左端一道 2.5dp 色标**：四行扫下来是一条竖线，像仪表的指示列，
+  而不是 8 个孤立色块；
+- 档位文字就在色带内**左端**（紧挨色标），颜色与它说明的对象在同一处，不用跨空档去对；
+- 「日间 / 夜间」列头与色带左边缘**同一条竖线**（靠等分列实现，不靠调 margin）。
+
+**6m 段一起收拾**
+
+原来 6m 在「没有开通」时整格隐藏。改成**常驻**：没有开通时显示一个灰色的 `--`，
+并在前面补上「6m」这个说明文字。理由有两条：
+
+1. 「6m 没开通」本身就是**常态且有信息量**（开通是例外），隐藏等于把这个信息也藏了；
+2. 一个时有时无的格子在组件里会造成**宽度跳变**，反而更显眼。
+
+格子同时从 44dp 放宽到 46dp —— 原来容不下最长的档位词（印尼语的 `Tertutup` 约 38dp），
+会被省略号截掉。
+
+**实现：色带是一张 layer-list，每格仍只是一个 TextView**
+
+色带 = 淡色圆角底（14%）+ 左端实色竖标，两层合成一张 `layer-list` drawable
+（`aw_track_{good,fair,poor,closed}`）。这样每格仍然只是**一个 TextView**，
+靠 `setBackgroundResource` 换色带、`setTextColor` 换字色 —— 两个方法在
+`View`/`TextView` 上都确实存在。
+
+若改成「淡底容器 + 一个 2.5dp 的子 View」，就要多一个控件、多一个 id、多一行
+`setBackgroundResource`，而 RemoteViews 不允许原生 `<View>`（色标只能用
+TextView/ImageView 冒充）——每个都是**只在运行期才爆**的地方。
+
+夜间档的淡底从 14% 提到 22%：深底上 14% 几乎看不见。这一条现在是**生成时自检**：
+夜间不透明度必须大于白天，写反了会直接报错，而不是等你到夜间模式才发现色带隐形。
+
+**顺带修掉一个只在夜间第一帧出现的问题**
+
+`drawable-night/aw_bg_white.xml` 此前**不存在**（只有浅色版）。组件在夜间模式的
+第一帧（`initialLayout`）会退落到默认主题底色，约 200ms 后才被推送的渐变盖住。
+影响很小，但既已发现就补上，免得以后有人把它当「night 目录里都有一份」的前提去用。
+
+**预览工具：这一档的高度数字此前并不对应真机**
+
+短波组件按真布局逐项累加是 **162dp**，而预览工具一路报的是 **126.3dp** —— 它按自己
+理想的尺寸算，既没算顶/底内边距，也把色块高度取成了 14dp（真布局是 13+3+3=19dp）。
+也就是说这一档的「余 3.7dp」是个**看上去很安全、其实无从对应**的数字。
+
+现在改为按真布局的几何累加，并把判据换成**相对基线**：内容不得高于已发布版本
+（162.00dp）。因为 4×2 表类组件实际能拿到多少高度取决于启动器，拿固定值当阈值只会
+产生误报，而误报会让人干脆放宽规则。新布局实测 **158.67dp**，比线上版本还矮 3.33dp。
+
+---
+
+**The HF desktop widget was rebuilt: eight pills became condition tracks.**
+
+The previous version (pale tonal chips) had one dominant problem: **eight pills of identical
+shape and size** — with 「一般」 appearing three times and 「差」 four times, the repeated shapes
+carried no extra information, only noise. Combined with four identical rows and no hierarchy,
+the whole thing read as a table dumped onto the widget, and there was a ~40dp gap between a band
+name and its first chip, so scanning meant travelling a long way sideways.
+
+**New structure: one condition track per row**
+
+- The track spans **the full day/night column** (row width = column width), so the mid-row gap is
+  gone and the scan distance is minimal.
+- Colour is concentrated into a **2.5dp bar at the track's left edge**: across four rows that reads
+  as a single vertical indicator line rather than eight isolated blocks.
+- The condition text sits at the **left inside the track**, right next to the bar, so the colour and
+  the thing it describes are in the same place.
+- The day/night column headers share **the same x** as the track's left edge (via equal-weight
+  columns, not by tuning margins).
+
+**The 6m cell was reworked too**
+
+It used to hide entirely when 6m was closed. It is now **always present**, showing a grey `--` when
+closed, with a 「6m」 label in front. Two reasons: "6m is closed" is itself the common case *and*
+informative (being open is the exception), so hiding it hides information; and a cell that comes and
+goes makes the row width jump, which draws more attention, not less. The cell also grew from 44dp to
+46dp — 44dp could not hold the longest condition word (Indonesian `Tertutup`, ~38dp) and truncated it.
+
+**Implementation: the track is one layer-list; each cell is still a single TextView**
+
+A track is a pale 14% rounded fill plus a solid bar at the left edge, combined into one
+`layer-list` drawable (`aw_track_{good,fair,poor,closed}`). Each cell therefore remains **one
+TextView**, recoloured with `setBackgroundResource` and `setTextColor` — both of which really do
+exist on `View`/`TextView`. The alternative (a pale container plus a 2.5dp child View) would need
+another control, another id and another call, and RemoteViews forbids a native `<View>` (the bar
+could only be a TextView/ImageView stand-in) — each of those is a **runtime-only** failure mode.
+
+The night variant's fill goes from 14% to 22%, since 14% is nearly invisible on the dark surface.
+That is now a **generation-time check**: night opacity must exceed the day value, so getting it
+backwards fails the build instead of only showing up when the user switches to dark mode.
+
+**A bug that only appeared in night mode's first frame**
+
+`drawable-night/aw_bg_white.xml` did not exist (only the light version did). In night mode the
+widget's first frame (`initialLayout`) fell back to the default theme colour for ~200ms until the
+pushed gradient replaced it. The impact is small, but since it was found it is fixed, rather than
+leaving a "the night folder has a copy of everything" assumption for someone else to trip over.
+
+**The preview tool's height figure for this size never matched the device**
+
+Accumulating the real layout gives **162dp** for the HF widget, while the preview tool kept
+reporting **126.3dp** — it summed its own ideal sizes, ignoring the top/bottom padding and taking
+the chip height as 14dp (the real layout is 13+3+3=19dp). So this size's "3.7dp to spare" was a
+number that **looked safe but corresponded to nothing**. The tool now accumulates the real layout's
+geometry and judges against a **relative baseline** instead: the content may not exceed the
+previously released version (162.00dp). How much height a 4×2 table widget actually receives
+depends on the launcher, so a fixed threshold only produces false alarms — and false alarms are
+what make people stop trusting the check. The new layout measures **158.67dp**, i.e. 3.33dp shorter
+than the released one.
+
+## [1.6.128] - 2026-09-18
+
+### 🗺️ 离线地图：按区域下载瓦片，断网也能看
+
+新增「离线地图」：**所见即所得地框选一片区域 → 一次把该区域的瓦片下到本机 → 之后断网、无信号也能看这片地图**。入口在「设置 → 显示 → 离线地图」（数据设置页也有入口）。
+
+**下载**
+
+- **下载范围 = 当前视图**：不画可拖拽的矩形框，而是把屏幕上看得见的那一屏当作下载范围（带边框提示）。
+  这样就没有「框选坐标系」与「下载坐标系」两套真值，不会出现「框选范围和实际下到的范围差半屏」这种最难解释的错。
+- 可调图源与层级范围（0–19 级），实时显示**张数与估算体积**；
+- 单区域上限 **20 万张瓦片**（约 3 GB）。超限直接拒绝并提示缩小范围 —— 这不是防呆：
+  再大一次要跑几小时，中途失败的概率比成功高；
+- **断点续传**：已存在的瓦片直接跳过，任何时刻中断（含被系统杀掉）都能接着下；
+- 并发 6 张、限速 20 张/秒；命中 429/503 时按失败次数**退避**（上限 30 秒）。
+  限速是必需的：被限流之后的重试会让请求速率更高，这是个正反馈，必须从源头掐住；
+- 暂停 / 取消在**每张瓦片之间**生效，点下去立刻停，不用等几百张；
+- 同时只跑一个区域。瓦片下载的瓶颈是共享的图源与带宽，并行下多个区域只会每个都变慢，
+  还会让「暂停」的语义变得含糊。
+
+**离线显示的四级降级**
+
+在线瓦片与离线瓦片走**同一份**图源定义与 URL 构造函数（`lib/map_math.dart`）。两处各写一份迟早会
+漂移成「下载得到的和显示要的不是同一张图」——这是「下好了却离线看不到」最常见的成因。渲染时按
+以下顺序取图：
+
+1. **缓存**（下过离线区域，或之前浏览过）→ 断网也能看；
+2. **在线**（顺带写缓存）；
+3. **祖先瓦片放大**：只下到 z16、现场缩到 z17 时，用最近的祖先瓦片**按象限裁切**放大顶替。
+  裁切是必须的：整张祖先图直接铺进本格会看到**邻居**的地图，位置全错，比空白更糟；
+4. **其它同坐标系图源的缓存** → 再不行就透出内置自绘底图，地图仍可看可点。
+
+在线降级候选（当前图源 → Carto → OSM）**只接受同坐标系的图源**：拿 WGS-84 的图去填 GCJ-02 的瓦片
+会整整偏出 500 米，比留白更容易把人带错路。
+
+**几个不写就会出事的地方**
+
+- **缓存键含图源**。同一组 z/x/y 在不同图源下是不同内容的图；共用一份缓存会让「切换图源」静默显示
+  上一个图源的瓦片；
+- **命中也要认字节**：只接受已知图片魔数（PNG/JPEG/GIF/WebP/BMP），挡掉 status 200 的 HTML/JSON
+  错误页；小于 300 B 的响应按「占位图」判失败不入库 —— 有的图源对不存在的瓦片返回一张很小的
+  全透明 PNG，存下来会让这块区域**在线时也一直空白**，比不缓存更坏；
+- **国内图源是 GCJ-02 瓦片**：下载范围必须先把 WGS-84 转成 GCJ-02 再算瓦片编号，否则整片偏移 500 米以上；
+- **元数据与瓦片分家**：区域记录（KB 级）存偏好设置，瓦片（几十 MB 的二进制）只存文件系统。
+  瓦片塞进偏好设置一开始能用，攒到几百 MB 时会以「读设置越来越慢」的形式表现出来，最后写不进去直接丢新记录；
+- **进度落盘要节流**（2 秒 / 3 秒一次）。一张瓦片写一次等于在一次下载里做几万次磁盘写 + JSON 编码；
+- 写盘走**临时文件 + 改名**，下载途中断电不会留下半张能被解码一半的坏图；
+- 删除某个区域时**逐张删**它范围内的瓦片，不按「图源/层级」整目录删 —— 后者会顺手删掉邻居区域
+  已下载的瓦片，属于「删一个区域、坏另一个区域」的隐形破坏。
+
+**开关**
+
+- **浏览时缓存瓦片**（默认开）：关掉后浏览完全不落盘；
+- **仅离线模式**（默认关）：只用已缓存/已下载的瓦片，一个网络请求都不发（野外省流量），界面上会明确提示。
+- 占用统计与「清空缓存」；区域可「删除记录但保留瓦片」或「连瓦片一起删」。
+- **Web 版不提供离线下载**：浏览器没有稳定的应用可写目录，整条链路安全降级为不可用（入口隐藏、
+  读取一律未命中回落到在线瓦片），而不是抛错让地图整块白屏。
+- 区域记录随「设置」分组进备份；瓦片本体不随备份走（几十 MB 级），换机后记录还在，点「继续」即可重新下。
+
+**顺带修复**
+
+6m（六米波）在中文界面里露英文：短波面板的三条通路与桌面组件下发的是图源**原始串**
+（`Band Closed` / `Good`…），漏了本地化这一步 —— 而 `Band Closed` 恰是 6m 最常见的取值，
+等于长期露英文。现已统一过 `hfQualityLabel`。同时：**三条通路全为「未开通」时不再连列三行同一个词**
+（开通是例外、不开通是常态），只在某条开通时才展开细节。
+
+---
+
+**Offline maps: download tiles by region and keep them when the network is gone**
+
+A new "Offline map" screen (Settings → Display → Offline map; there is also an entry in Data settings) lets you
+**download the tiles of an area once and keep viewing that map with no network at all**.
+
+**Downloading**
+
+- **The download area *is* the current view**: no draggable rectangle — whatever is visible on screen is what
+  gets downloaded (with a border to say so). That removes the second source of truth for coordinates, and with it
+  the "the box I drew and the area that was downloaded are half a screen apart" class of bug.
+- Choose the tile source and the zoom range (0–19) with a live **tile count and size estimate**.
+- A single region is capped at **200,000 tiles** (~3 GB). Over that it is refused with a hint to shrink the area:
+  such a run takes hours, and failing partway is likelier than finishing.
+- **Resumable**: tiles that already exist are skipped, so an interruption at any point (including the process
+  being killed) can be resumed.
+- 6 concurrent tiles, 20 tiles/second, with **backoff** on 429/503 (up to 30 s). The rate limit matters: retries
+  after throttling only raise the request rate — a positive feedback loop that has to be capped at the source.
+- Pause/cancel take effect **between tiles**, so they stop immediately instead of after a few hundred more.
+- One region at a time. The bottleneck is the shared tile source and bandwidth, so parallel regions would only
+  make each of them slower and blur what "pause" means.
+
+**Four-step fallback when rendering**
+
+Online and offline tiles share **one** tile-source definition and URL builder (`lib/map_math.dart`). Two copies
+would eventually drift into "what was downloaded is not what is displayed", the most common cause of
+"it downloaded but I still can't see it offline". Tiles are resolved as: **cache** (downloaded region, or seen
+before) → **online** (also writing to cache) → **upscaled ancestor tile** → **cache of another source with the
+same datum** → the built-in vector basemap.
+
+The ancestor step is what makes "downloaded up to z16" usable while viewing z17: the nearest ancestor is
+**cropped by quadrant** and upscaled. Cropping is not optional — pasting the whole ancestor into the cell would
+show the *neighbour's* map, which is far worse than blank.
+
+Online fallbacks (current source → Carto → OSM) only accept sources with the **same datum**: filling a GCJ-02
+tile with a WGS-84 image shifts it by 500 m, which misleads more than a blank tile does.
+
+**Details that break if done differently**
+
+- The cache key **includes the source** (same z/x/y is a different image per source).
+- A cache hit still validates the bytes: only known image magic numbers are accepted (PNG/JPEG/GIF/WebP/BMP),
+  which rejects `200 OK` HTML/JSON error pages; responses under 300 B count as placeholder images and are not
+  stored — some sources answer missing tiles with a tiny fully transparent PNG, and storing it would keep that
+  area **blank even online**, worse than not caching at all.
+- Chinese sources serve **GCJ-02** tiles, so the WGS-84 area is converted before tile numbering; otherwise the
+  whole region is off by more than 500 m.
+- **Metadata and tiles are kept apart**: region records (KB) live in preferences, tiles (tens of MB of binary)
+  only on the filesystem. Tiles in preferences appear to work at first, then surface as "settings get slower"
+  once a few hundred MB have accumulated, and finally fail to save, silently dropping new records.
+- Progress saving is **throttled** (every 2–3 s); one write per tile means tens of thousands of disk writes and
+  JSON encodings per download.
+- Writes go through a **temp file + rename**, so a power loss mid-download cannot leave a half-decodable image.
+- Deleting a region deletes **its own tiles one by one**, never the whole `source/zoom` directory, which would
+  silently damage neighbouring regions.
+
+**Switches**
+
+- *Cache tiles while browsing* (on by default); when off, browsing writes nothing to disk.
+- *Offline only* (off by default): use cached/downloaded tiles exclusively and send no requests at all
+  (saves data in the field), clearly indicated in the UI.
+- Usage statistics, "clear cache", and per-region *remove record but keep tiles* / *delete tiles too*.
+- **No offline download on Web**: browsers have no stable writable app directory, so the whole chain degrades
+  safely (entry hidden, lookups miss and fall back to online) instead of throwing and blanking the map.
+- Region records travel with the *settings* backup group; the tiles themselves do not (tens of MB), so after
+  switching devices the records are still there and "Resume" re-downloads them.
+
+**Also fixed**
+
+6 m band text leaked English into non-English UIs: the HF panel's three paths and the desktop widget shipped the
+**raw** source strings (`Band Closed`, `Good`, …) without localisation — and `Band Closed` is by far the most
+common 6 m value, so it leaked permanently. They now go through `hfQualityLabel`. In addition, when all three
+paths are closed they are no longer listed as three rows of the same word (closed is the norm, open the
+exception); the details expand only when something is open.
+
+## [1.6.127] - 2026-09-18
+
+### 🎛️ 更高自定义：更多令牌、界面松紧与字体、分页签强调色、背景对齐缩放
+
+上一版把「颜色 / 图标 / 文字 / 背景图」都开放了，但界面里还有一批**写死**的东西：
+次级面板底色、较重的描边、弹窗遮罩、8 张设置入口卡片各自的渐变、卡片表面
+不透明度、每张卡片的留白 —— 改完主色后仍会看到「有些地方还是原来的样子」。
+这一版把这些也交出来，并给皮肤补上身份信息。
+
+**① 新增 5 个颜色令牌（共 17 个）**
+
+`surfaceAlt`（次级面板底色）、`dividerStrong`（较重描边）、`scrim`（遮罩）、
+`accentFrom` / `accentTo`（强调渐变）。
+
+**② 8 张设置入口卡片的渐变不再写死**
+
+原先每张卡片自带一组渐变（8 组互不相同）。现在皮肤可以打开「统一入口卡片配色」，
+把它们换成同一套 from→to；**默认关闭**，所以不装皮肤的界面与旧版逐像素一致。
+
+实现上只把 6 处写死渐变换成 `C.accentDeco(fallback: …)`：`fallback` 就是该卡片
+原本的配色，未开启统一时原样使用。这样「默认零回归」是结构性保证，而不是靠人工核对。
+
+开启统一但没给渐变时，强调色**跟随主色**推导 —— 否则用户刚把主色改成绿色，
+卡片却仍是内置的蓝。
+
+**③ 卡片表面不透明度可调（0.3 ~ 1.0）**
+
+原来写死 0.85。下限卡在 0.3：再低就等于把内容交给背景图了。没有背景图时，
+这一项下面会说明「暂时看不出效果」，而不是让用户以为坏了。
+
+**④ 界面松紧与字体**
+
+- **松紧**：紧凑 0.85 / 标准 1.0 / 宽松 1.2，作用于共用辅助函数算出来的留白
+  （卡片内边距）；
+- **字体**：跟随系统 / 系统界面字体 / Segoe UI / PingFang SC / Microsoft YaHei /
+  Noto Sans / 等宽。
+
+字体**只用系统已装的**：内置一款中文字体动辄 5~10MB，而本应用的包体已经因为
+图标库与 SVG 涨过一轮。因此选项里标注了它依赖的字体名，并明确写了「缺失时自动回退」——
+Flutter 找不到字体族会正常回退，不会出现方框或乱码。
+
+两处都如实说明了作用范围：密度「只改卡片内边距，没变的说明那处是单独写死的」、
+字体「某台设备没装就回退」。含糊其辞比范围小更糟 —— 用户会以为功能没生效。
+
+**⑤ 每个页签可以有自己的强调色**
+
+底部/侧栏 5 个页签的颜色可以逐个指定（未指定时显示「跟随主色」，而不是摆一个
+假颜色让人以为已改过）。侧栏的选中底色也跟着走。
+
+**⑥ 皮肤的身份信息**
+
+新增「作者」「说明」两个字段，可编辑、随皮肤一起导出；列表里也能直接改名
+（复制出来的皮肤默认叫「默认 2」，不改名列表全是一串后缀）。
+
+**⑦ 内置皮肤从 6 套扩到 10 套**
+
+新增**石墨**（深色 + 青强调）、**樱花**（粉、大圆角）、**终端**（深绿、方角）、
+**琥珀**（暖棕）。新增的这套都开启了「统一强调」，作为皮肤的样板。
+
+**⑧ 一个被测试抓到的真 bug**
+
+`uniformAccent` 的序列化条件写反了（`if (!uniformAccent) 'uniformAccent': false`），
+导致**打开统一强调后保存/导出会丢掉这个开关**——而且是静默的，重开界面就变回关闭。
+是「新字段往返」这条测试把它揪出来的：这类「写入时条件写反」的错，靠肉眼看 JSON
+很难发现，因为文件里确实**没有**那一行（看起来只是「用了默认值」）。
+
+`test/theme_test.dart` 53 → 66 条，新增的 13 条覆盖：新字段往返、分页签色白名单、
+未知密度/字体回退、表面不透明度与背景对齐缩放夹取、预览色板最多 5 个且滤非法色、
+`copy()` 深拷贝、`isEmpty` 判定包含新字段、内置皮肤 id 不重复且令牌都在白名单内、
+统一强调跟随主色、密度字体同步与复位、分页签色取值。
+
+---
+
+**Feature**: more customisation — extra colour tokens, UI density and font, per-tab accent
+colours, background alignment and zoom.
+
+The previous release opened up colours, icons, text and the background image, but a batch of
+things in the UI were still **hard-coded**: the secondary panel fill, the heavier stroke, the
+dialog scrim, the eight settings entry cards' individual gradients, the card surface opacity,
+and each card's padding. After changing the primary colour you would still see "some corners
+look unchanged". This release hands those over too, and gives skins an identity.
+
+**① Five new colour tokens (17 total)**
+
+`surfaceAlt` (secondary panel fill), `dividerStrong` (heavier stroke), `scrim` (dialog veil),
+`accentFrom` / `accentTo` (accent gradient).
+
+**② The eight settings entry cards' gradients are no longer hard-coded**
+
+Each card used to carry its own gradient (eight different pairs). A skin can now enable
+"unify entry-card colours" to replace them with one from→to pair; it is **off by default**, so
+without a skin the UI is pixel-identical to before.
+
+Only six hard-coded gradients changed, into `C.accentDeco(fallback: …)` where `fallback` is the
+card's original pair. "Zero regression by default" is therefore structural rather than something
+to verify by eye.
+
+When unification is on but no gradient is given, the accent is derived from the **primary**
+colour — otherwise a user who just turned the primary green would still see the built-in blue
+cards.
+
+**③ Card surface opacity is adjustable (0.3–1.0)**
+
+Previously fixed at 0.85. The floor is 0.3: any lower hands the content over to the background.
+With no background image the row explains that it has no visible effect yet, rather than looking
+broken.
+
+**④ UI density and font**
+
+- **Density**: compact 0.85 / normal 1.0 / comfortable 1.2, applied to padding computed by the
+  shared helpers (card padding);
+- **Font**: system default / system UI / Segoe UI / PingFang SC / Microsoft YaHei / Noto Sans /
+  monospace.
+
+Fonts use **system-installed families only**: bundling a CJK font costs 5–10 MB, and this app's
+bundle already grew once for the icon library and SVG. Each option therefore names the family it
+depends on, and the hint states plainly that a missing family falls back automatically — Flutter
+degrades gracefully here, no tofu boxes.
+
+Both settings state their own scope: density "changes card padding only; if something looks
+unchanged its spacing is fixed individually", font "falls back when not installed". Being vague
+is worse than a narrow scope — users conclude the feature does not work.
+
+**⑤ Per-tab accent colours**
+
+The five bottom/sidebar tabs can each have their own accent (when unset the row reads "follows
+primary" instead of showing a fake colour that implies it was already changed). The sidebar's
+selected background follows along.
+
+**⑥ Skins have an identity**
+
+New "Author" and "Description" fields, editable and exported with the skin; the list also allows
+renaming directly (a duplicated skin is called "Default 2" otherwise, leaving a list of suffixes).
+
+**⑦ Built-in skins grew from 6 to 10**
+
+Added **Graphite** (dark + cyan accent), **Sakura** (pink, large radii), **Terminal** (dark green,
+square corners) and **Amber** (warm brown). The new ones all enable "unify accent", as templates
+for what a skin can be.
+
+**⑧ A real bug the tests caught**
+
+`uniformAccent`'s serialisation condition was inverted
+(`if (!uniformAccent) 'uniformAccent': false`), so **enabling unified accents was silently lost
+on save/export** — reopening the UI showed it off again. The "new fields round-trip" test caught
+it. This class of "condition inverted on write" mistake is nearly invisible by eye, because the
+file genuinely does **not** contain the line (it just looks like a default).
+
+`test/theme_test.dart` went from 53 to 66 tests; the 13 new ones cover new-field round-trips, the
+per-tab colour whitelist, unknown density/font falling back, clamping of surface opacity and
+background alignment/zoom, preview swatches capped at 5 with invalid colours filtered, `copy()`
+deep-copying, `isEmpty` accounting for the new fields, built-in skins having unique ids and only
+whitelisted tokens, unified accent following the primary, density/font application and reset, and
+per-tab accent lookup.
+
+## [1.6.126] - 2026-09-18
+
+### 📦 主题导出可以带上图片了：换机/分享不再是一套「没有图」的主题
+
+上一版的主题只存**引用**（`file:bg_xxx.png`），图本身在应用目录里。
+于是换机恢复、或把主题发给别人，对方拿到的是一套缺背景、缺自定义图标的东西 ——
+界面不会坏，但用户会以为主题做坏了。
+
+这一版把图片本体（base64）也能打进 JSON 里。
+
+**① 主题页：「导出时包含图片」开关（默认开）**
+
+开关下面直接写着这次会多大（例如「约 3.2 MB」），并提示「文件因此不再适合手工编辑」。
+用户导出主题的意图本来就是「把这套东西搬走」，所以默认带上；但代价必须说清楚，
+不能替他默默决定。
+
+没有引用任何图片时，这里显示的是另一句话（「导出文件只含配色与文字」），
+而不是一个「约 0 B」的开关 —— 后者只会让人怀疑功能坏了。
+
+**② 图片太大时，剪贴板导出的按钮会被禁用并说明原因**
+
+base64 让文本膨胀 33%，几 MB 的图过剪贴板在多数平台上会被截断或直接失败。
+与其让用户粘出一段坏 JSON（然后以为是主题文件坏了），不如禁用那个按钮、
+并指向「导出全部主题」保存为文件。
+
+**③ 「备份与恢复」也能带图片（默认开）**
+
+只有主题页能带图是不够的：备份恢复是**换机**的主路径。不把图嵌进备份，
+恢复后主题照样缺图。勾了「主题」分组时会出现同一个开关，
+关掉时提示会明确说「换机恢复后主题会缺少背景与自定义图标」。
+
+**④ 导入侧：先落盘、再重定向引用**
+
+导入顺序不能颠倒：
+
+```
+解出嵌入的图片 → 逐张按内容哈希落盘 → 拿到「原文件名 → 本地文件名」映射
+              → 解析主题时用该映射重写 background 与 icons 的引用
+```
+
+先解析的话，主题会短暂指向一批不存在的文件（用户会看到「图标变成问号」一闪）。
+
+**⑤ 三道防线（嵌入内容是**不可信输入**）**
+
+- **总预算 24MB**：超过就丢弃多余的那几张并计数。不设预算的话，一份损坏/伪造的
+  文件能带几百 MB base64 进来，解码那一刻直接把内存吃爆 —— 而这只需要双击一个文件；
+- **逐张魔数校验**：复用选择器那条路径的 `_detectFormat`，扩展名与实际格式不符的、
+  或压根不是图片的，一律不落盘；
+- **文件名形状校验**：`../../etc/passwd` 这类在解包前就被丢掉。
+
+被跳过的张数会如实告诉用户（「有 N 张图片未导入（过大或格式不支持）」）——
+用户据此才知道是要换个图、还是换台设备重导。
+
+**⑥ 偏好里不会长期躺着 base64**
+
+如果偏好里出现带嵌入图片的主题包（例如刚从备份恢复），`load()` 会把它解开落盘、
+把引用改指本地文件、**再把 base64 剥掉写回**。
+
+这一条容易漏：即使一张图都没落成（全部被跳过），也要剥掉 ——
+否则那几 MB 会永远留在 SharedPreferences 里，而且每次保存主题都要整串搬一遍，
+看起来「能用」，实际是在持续为一次失败的导入付存储与性能成本。
+
+**⑦ 一个真实踩到的坑：store 必须保持平台中立**
+
+我在 `theme_store.dart` 里用 `Platform.pathSeparator` 算本地文件名时，
+忘了它必须能在 Web 上编译（`import 'dart:io'` 会直接废掉 Web 构建）。
+改成由 IO 层算好映射再返回。这类错误 `flutter analyze` **发现不了** ——
+它只解析非 Web 那一支，而 CI 不构建 Web。
+
+`test/theme_test.dart` 43 → 53 条，新增的 10 条覆盖：attach/extract 往返、
+无图片时不写空字段、奇怪输入不抛异常、非法条目（路径穿越等）被丢掉、
+stripImages 保留其余内容、remapRef 只改 `file:` 引用、导入时背景与图标引用
+被正确重定向、不传 remap 时引用不被改坏、以及预算上限的合理性。
+
+---
+
+**Feature**: theme export can now carry the images themselves, so moving to a new
+device (or sharing a theme) no longer produces a theme with missing art.
+
+The previous version stored only *references* (`file:bg_xxx.png`) while the images
+lived in the app directory, so restoring on another machine or sending a theme to
+someone else gave them one without the background or custom icons. Nothing broke —
+it just looked like the theme had been built wrong.
+
+**① "Include images in the export" switch on the Theme page (on by default)**
+
+The hint below it states the resulting size (e.g. "about 3.2 MB") and warns the file
+is no longer hand-editable. Exporting a theme means "move the whole thing", so images
+are included by default — but the cost has to be visible rather than silently decided.
+
+When no images are referenced, a different sentence appears ("only colours and text")
+instead of a switch reading "about 0 B", which would just look broken.
+
+**② When the images are large, the clipboard button is disabled with the reason**
+
+base64 inflates text by 33%, and a few MB through the clipboard gets truncated or fails
+on most platforms. Rather than let users paste a broken JSON (and conclude the theme file
+is corrupt), the button is disabled and points at "Export all themes" for a file instead.
+
+**③ "Backup & restore" can carry images too (on by default)**
+
+Theme-page export alone is not enough: backup/restore is *the* device-migration path.
+Without embedding, a restored theme still lacks its art. Selecting the "Theme" group now
+reveals the same switch, and turning it off warns plainly that the restored theme will be
+missing its background and custom icons.
+
+**④ Import: store first, then redirect references**
+
+The order cannot be swapped:
+
+```
+extract embedded images → write each by content hash → build "old name → local name" map
+                        → parse themes, rewriting background and icons refs through it
+```
+
+Parsing first would leave the theme briefly pointing at files that do not exist (a visible
+flicker of broken icons).
+
+**⑤ Three guards (embedded content is untrusted input)**
+
+- **24 MB total budget**: excess images are dropped and counted. Without it, a corrupt or
+  forged file could carry hundreds of MB of base64 and blow up memory on decode — and all
+  that takes is double-clicking a file;
+- **Per-image magic-byte check**: reuses the picker path's `_detectFormat`, so anything whose
+  extension does not match its bytes, or that is not an image at all, is never written;
+- **Filename shape check**: `../../etc/passwd` and friends are dropped before unpacking.
+
+Skipped images are reported honestly ("N image(s) were not imported (too large or
+unsupported)") so the user knows whether to re-encode an image or re-export on another device.
+
+**⑥ base64 does not linger in preferences**
+
+If a theme bundle with embedded images ever lands in preferences (e.g. restored from a
+backup), `load()` unpacks it, writes the images, repoints the references, and **strips the
+base64 back out**.
+
+This is easy to miss: even when *no* image could be written (all skipped), stripping still
+has to happen — otherwise those megabytes sit in SharedPreferences forever and every theme
+save copies the whole string, which looks "fine" while quietly charging storage and CPU for
+a failed import.
+
+**⑦ A trap actually hit: the store must stay platform-neutral**
+
+Computing local filenames with `Platform.pathSeparator` inside `theme_store.dart` ignored
+that the file must compile for the web (`import 'dart:io'` breaks a web build outright).
+The mapping is now computed in the IO layer and returned. Note that `flutter analyze`
+**cannot** catch this class of mistake — it only resolves the non-web branch, and CI does
+not build for web.
+
+`test/theme_test.dart` went from 43 to 53 tests; the 10 new ones cover attach/extract
+round-trips, no empty `images` field when there is nothing to embed, odd input not throwing
+on the export path, invalid entries (path traversal etc.) being dropped, `stripImages`
+preserving everything else, `remapRef` only touching `file:` refs, import redirecting both
+background and icon references, references staying intact when no remap is passed, and the
+sanity of the pack budget.
+
+## [1.6.125] - 2026-09-18
+
+### 🖼️ 主题新增背景图：可以用自己的照片当界面底
+
+**入口**：设置页 → 「主题」→ 「背景图」。
+
+**① 一张图铺满整个界面，四个旋钮**
+
+- **不透明度** 0.05 ~ 0.6；
+- **模糊** 0 ~ 30；
+- **填充方式**：铺满 / 完整显示 / 拉伸 / 平铺；
+- **移除**（回到纯色底）。
+
+支持 PNG / JPG / WebP / GIF / BMP / SVG，单个 ≤ 8MB（图标仍是 2MB —— 两者上限不同，
+所以「图太大」的提示会说明是哪一种，否则用户会拿着「超过 2MB」的提示去压缩一张
+本来只用到 8MB 的照片）。
+
+**② 背景覆盖所有页面，而不是逐个页面去改**
+
+插入点是 `MaterialApp.builder`：它位于 MaterialApp 之下、Navigator 之上，
+所以主页面、设置子页、push 出来的页面全都被盖到。逐个页面改的结果必然是漏几个，
+而那几页看起来就像「背景图有时候不生效」。
+
+**③ 三层合成，顺序有讲究**
+
+```
+图（按填充方式绘制） → 模糊（ImageFiltered，作用在已画好的像素上）
+                    → 遮罩（按深浅模式盖一层底色，浓度为不透明度）
+```
+
+模糊放在中间这层有个附带好处：**SVG 也能模糊**，因为它最终也是像素。
+遮罩层不能省：没有它，一张中等亮度的照片会让深色/浅色文字之一失效。
+
+**④ 有背景图时，卡片自动变半透明**
+
+这是让背景图不毁掉可读性的关键：卡片表面从纯白变成 85% 白（顶栏/侧栏 93%）。
+不这么做的话有两条路都走不通 —— 要么卡片不透明（背景图只从卡片缝隙里露出来，
+等于换了个更花的底色），要么卡片透明（内容直接被照片盖住，更不可读）。
+
+实现上只改了 `C.surfaceFill` / `C.pageFill` 两个取值点 + `cardDeco` 的默认色，
+21 处 `cardDeco()` 调用与所有 `SoftCard` 一个都没动。页面底色同理由 `C.bg`
+换成 `C.pageFill`（有背景时透明），共 10 个页面 —— 不换的话不透明底色会把
+背景图整个盖住，用户只会看到「设了图但没变化」。
+
+**⑤ 图只存在本机，主题文件里只有引用**
+
+主题 JSON 里存的是 `file:bg_<内容哈希>.png`，不含图片本身。理由与图标一致：
+二进制会把几十 KB 的主题文件撑到几 MB，base64 也没法人工编辑。
+所以**把主题分享给别人，对方看到的是没有背景的版本** —— 页面上直接写明了这一点，
+不写的话对方只会以为主题是坏的。
+
+背景图与图标共用同一条导入通道（`importPickedImage`）：按魔数判格式、按内容哈希命名、
+只接受纯文件名、渲染失败回退。只把「上限 / 目录 / 文件名前缀」做成参数 ——
+把「读字节、判魔数、算哈希、写盘」这四步复制两份的结果，通常是其中一份忘了同步修。
+
+**⑥ 顺带验证了一处 CI 覆盖不到的角落**
+
+`dart.library.html` 的条件导入（`theme_icon_io.dart` / `_web.dart`）在
+`flutter analyze` 里只解析 **非 Web** 那一支，而 CI 不构建 Web ——
+也就是说 Web 分支的签名写错了要等真去构建 Web 才会发现。
+这次用一个临时探针文件（以 `theme_store.dart` 里真实的调用形状去调用
+**web 变体**）让分析器替我们验了一遍，确认两个分支的公共 API 完全一致；
+顺带确认所谓「不一致」的几项其实是各文件内部的私有成员（`_isSafeName` 等），
+本来就不需要一致。
+
+`test/theme_test.dart` 从 33 条加到 43 条，新增的 10 条覆盖：背景参数往返、
+无背景时不写那三个键、非法引用（路径穿越/未知前缀/`lib:` 前缀/空串）被丢掉、
+不透明度与模糊夹取、未知填充方式回退 cover、`copy()` 深拷贝、
+以及「有背景图 → 页面底色透明 + 卡片半透明」这条可读性保证。
+
+---
+
+**Feature**: themes gained a background image — use your own photo as the app backdrop.
+
+**Entry point**: Settings → "Theme" → "Background image".
+
+**① One image behind everything, four knobs**
+
+- **Opacity** 0.05–0.6;
+- **Blur** 0–30;
+- **Fill mode**: cover / contain / stretch / tile;
+- **Remove** (back to a solid backdrop).
+
+PNG / JPG / WebP / GIF / BMP / SVG, up to 8 MB each (icons stay at 2 MB — the two limits
+differ, so the "too large" message names which one applies; otherwise users would go
+compress a photo against a 2 MB figure when only 8 MB was in play).
+
+**② The background covers every page — without touching every page**
+
+It is inserted in `MaterialApp.builder`, which sits below MaterialApp and above the
+Navigator, so the home page, settings sub-pages and pushed routes are all covered.
+Editing page by page guarantees missing a few, and those pages then look like
+"the background sometimes doesn't apply".
+
+**③ Three layers, and the order matters**
+
+```
+image (drawn per fill mode) → blur (ImageFiltered, on the already-painted pixels)
+                            → veil (a tint per light/dark, strength = opacity)
+```
+
+Putting blur in the middle has a bonus: **SVG can be blurred too**, since by that point it
+is pixels. The veil cannot be dropped: without it, a mid-brightness photo makes either
+dark or light text unreadable.
+
+**④ With a background, cards turn translucent automatically**
+
+This is what keeps a background from destroying legibility: the card surface goes from
+solid white to 85% white (bars/rails 93%). Both alternatives fail — opaque cards let the
+image show only through the gaps (i.e. you just changed to a busier flat colour), and
+fully transparent cards put content straight on top of the photo, which is worse.
+
+The implementation touches only two value sites (`C.surfaceFill` / `C.pageFill`) plus
+`cardDeco`'s default colour; none of the 21 `cardDeco()` call sites and no `SoftCard`
+changed. Page backdrops likewise moved from `C.bg` to `C.pageFill` (transparent when a
+background is set) across 10 pages — without that, an opaque backdrop hides the image
+entirely and users just see "I set an image and nothing changed".
+
+**⑤ The image lives on this device; the theme file keeps only a reference**
+
+The theme JSON stores `file:bg_<contenthash>.png`, not the image. Same reasoning as icons:
+binary would inflate a few-dozen-KB theme to several MB, and base64 stays uneditable by
+hand. So **sharing a theme gives the other person the version without a background** — and
+the page says so, because otherwise they would assume the theme is broken.
+
+Backgrounds and icons share one import path (`importPickedImage`): magic-byte format
+detection, content-hash naming, bare-filename-only references, fallback on render failure.
+Only the size cap, directory and filename prefix are parameters — duplicating the
+read/verify/hash/write steps in two places usually means one copy silently misses a later fix.
+
+**⑥ Also verified a corner CI cannot reach**
+
+The `dart.library.html` conditional import (`theme_icon_io.dart` / `_web.dart`) is resolved
+by `flutter analyze` **only for the non-web branch**, and CI does not build for web — so a
+signature mistake in the web branch would surface only when someone actually builds web.
+A temporary probe file (calling the **web variant** with the exact call shapes used in
+`theme_store.dart`) let the analyzer check it; the two branches' public APIs match. The
+apparent mismatches the first pass reported were private per-file members (`_isSafeName`
+and friends), which do not need to match at all.
+
+`test/theme_test.dart` grew from 33 to 43 tests; the 10 new ones cover background parameter
+round-trips, the three keys being omitted when there is no background, invalid references
+(path traversal / unknown prefix / `lib:` prefix / empty) being dropped, opacity and blur
+clamping, unknown fill mode falling back to cover, `copy()` deep-copying the background, and
+the legibility guarantee ("background set → transparent page fill + translucent cards").
+
+## [1.6.124] - 2026-09-18
+
+### 🎨 主题：界面的颜色、图标、文字都能自己改，也能导出成 JSON 分享
+
+**入口**：设置页 → 「主题」。
+
+**① 6 套内置预设 + 可自建主题**
+
+「默认 / 海洋 / 森林 / 暗夜 / 日落 / 高对比」。预设**不可直接编辑**，只能「复制为我的主题」
+再改 —— 否则用户改了一套预设又想要回原样时，只能靠逐项猜着恢复。每套主题还能
+「导出此主题」单独分享。
+
+**② 12 个配色令牌，只覆写你改过的那些**
+
+主色、卡片表面、页面背景、次层背景、主/次/弱化文字、分隔线、成功/警告/危险/信息色。
+
+主题是**覆写**而不是全量快照：升级时应用内置的默认值可以继续演进，用户只锁住自己想改的部分，
+导出的 JSON 也就短、可读、可手改。
+
+旧版的「自定义主题色」（单个 hex）**原样保留**：主题没有覆写主色时仍然用它 ——
+老用户升级后颜色不变，这是有意的兼容保证。反过来，主题已固定主色时，「显示」页的色板下面
+会直接写明去哪儿改，而不是让用户点了没反应以为坏了。
+
+配色刻意**不支持半透明**：半透明与背景叠加后对比度随主题变化，「看着还行」和「看不清」
+之间没有可靠判据，与其让用户踩坑不如只给不透明色。也刻意不暴露按字面理解的 `white`
+（它在深色模式下其实是深灰），要改表面色请用「卡片表面」。
+
+**③ 卡片圆角**
+
+一个滑杆。范围写清楚了：**只作用于卡片与输入框**，不改徽标那类小圆点 ——
+它们用的 2~10px 半径是形状语言的一部分，统一乘系数会把圆点变成菱形。
+
+**④ 13 个图标插槽 + 481 个内置图标**
+
+底部 5 个页签 + 设置页 8 个分类入口，可从内置图标库里搜索改选（显示它所服务的那条文案，
+比如「地图」「电台设置」，不必记插槽名）。
+
+图标库是**生成的常量表**（`tool/gen_theme_icons.py`）：Flutter 的图标 tree-shaking 只认字面量，
+运行时拼 `IconData` 要么编不过、要么把整套 MaterialIcons（约 1.6MB）打进包。
+收录范围 = lib/ 里已在用的 465 个（这些 glyph 本来就在包里，收录零成本）+ 人工挑选的候选。
+
+**⑤ 也能导入自己的图片当图标**
+
+PNG / JPG / WebP / GIF / BMP / SVG，单个 ≤ 2MB（Android：系统图片选择器；
+Windows：PowerShell 对话框；Linux：zenity；macOS：osascript）。
+
+几处细节都是「不这么写就会出错」的：
+
+- **按魔数判断格式，不看扩展名**：把 logo.jpg 改名成 logo.png 是常事，按扩展名判断就会
+  对着 JPEG 字节调 PNG 解码器，结果是「导入成功但显示不出来」；
+- **按内容哈希命名**（FNV-1a，不引 crypto 依赖）：同一张图重复导入不会攒出一堆副本，
+  主题文件里引用的名字也稳定；
+- **只接受纯文件名**：主题文件是用户可编辑的，`file:../../etc/passwd` 这类必须挡住；
+- **渲染失败一律回退内置图标**：图被删了、文件坏了，界面都不会跟着坏。
+
+Web 版不支持导入图片（浏览器里没有可写的应用目录），页面上直接说明并引导用内置图标库。
+
+**⑥ 26 条高频文案可覆写**
+
+页签名、设置分类名与说明、几个入口标题。**按钮动词与错误提示刻意不开放** ——
+它们是用户的操作依据，被改成不认识的词会让应用变得不可操作。这也是「白名单」而不是
+「全量覆写 1662 条」的根本原因。留空即恢复默认。
+
+**⑦ 导入与导出**
+
+JSON 文本，可导出整包（我的全部主题）或单个主题，也能从剪贴板导入。导入时：
+白名单外的项**跳过并计数**（导入完成会如实显示「跳过 N 项」）；`schema` 比当前高直接拒绝
+并提示升级应用；文件里的 `builtin` 标记一律清除 —— 否则一份文件就能造出「不可删除」的主题。
+整包**不含内置预设**：预设每台设备本来就有，导出去再导回来只会让对方平白多出 6 个重复项。
+
+**⑧ 主题并入备份（第 7 个分组）**
+
+「备份与恢复」新增「主题」分组，可单独勾选。注意**不含导入的图标图片文件本身**：
+那是二进制，塞进 JSON 会把备份从几十 KB 撑到几 MB，而 base64 也没法人工编辑。
+所以主题里的图片引用在**换机恢复后**会回退成内置图标 —— 界面不会坏，只是图标变默认。
+
+**⑨ 顺带修掉一个真实缺陷：TNC / 音频 / PKWDWPL 配置此前不在备份里**
+
+为了让「主题」这项不重蹈覆辙，我把 `tool/check_backup_keys.py` 补强成了三个方向：
+精确键、**常量键**、**动态前缀**。补强后它立刻报出 5 个键从未进过备份：
+
+```
+tncConfigJson / tncDeviceJson / audioConfigJson / pkwdwplConfigJson / pkwdwplDeviceJson
+```
+
+也就是说，v1.6.123 的备份**静默丢了整套链路配置**（蓝牙 TNC、声卡 TNC、Kenwood 航点），
+用户换机后得重新配设备。已一并归入「设置配置」分组。
+
+补强过程中还改掉两个检查器自身的毛病，都值得记下来：
+
+- **常量要按文件作用域解析**：`static const _kConfig` 在 tnc.dart / audio.dart / pkwdwpl.dart
+  里各有一份、值却不同；用一张全局表会让其中两个的键被算成第三个的值，
+  于是真问题被报成「别的键缺失」，白跑一趟。
+- **参数要用配对括号 + 顶层逗号切**，不能 `\(([^)]*)\)`：后者遇到 `jsonEncode(x, y)`
+  会在第一个 `)` 截断，把普通字面量误判成动态前缀 → 一屏假失败。
+  假失败比真失败更坏：修它的人通常会把规则放宽或删掉说明。
+
+三个方向都单独验证过**会报红**（临时塞未归组键 / 拿掉常量键 / 拿掉前缀声明），
+基线通过，并已接入 CI 的 Analyze 作业。
+
+**⑩ 新增依赖 `flutter_svg ^2.3.0`**
+
+只为 SVG 图标（纯 Dart、无平台通道，只多 3 个传递依赖）。若不需要 SVG 可以去掉：
+调用点集中在 `lib/theme_icon_io.dart` 一处。
+
+`test/theme_test.dart` 另钉 33 条：配色解析与互逆、白名单越界、空文字视为删覆写、
+圆角夹取、图标引用形状（含路径穿越）、schema 拒绝、builtin 不可伪造、整包/单主题两种形态、
+主题读写往返、偏好损坏时退回默认、图标名不认识时回退、id 撞车不遮蔽、
+以及「白名单里每个文案键在 Tx 里都有分支」（漏了不会报错，只会把 `radioCat` 这种内部键名显示出来）。
+
+---
+
+**Feature**: themes — recolour the UI, swap icons and rewrite common labels, with the whole
+thing exported as shareable, hand-editable JSON.
+
+**Entry point**: Settings → "Theme".
+
+**① Six built-in presets, plus your own themes**
+
+Default / Ocean / Forest / Midnight / Sunset / High contrast. Presets **cannot be edited
+directly** — you copy one into your themes first. Otherwise a user who tweaks a preset and
+wants the original back has to guess their way through "reset". Any theme can be exported on
+its own to share.
+
+**② Twelve colour tokens, and only the ones you changed are stored**
+
+Primary, card surface, page background, secondary background, primary/secondary/muted text,
+divider, success/warning/danger/info.
+
+A theme is an *overlay*, not a full snapshot: the built-in defaults can keep evolving on
+upgrade while users pin only what they actually want. It also keeps the exported JSON short
+and hand-editable.
+
+The old single-hex "theme colour" is **kept as-is**: it is still used whenever the active theme
+does not override the primary colour, so existing users see no change after upgrading — an
+intentional compatibility guarantee. Conversely, when the theme does pin the primary colour,
+the Display page now says where to change it instead of leaving users clicking a swatch that
+does nothing.
+
+Colours deliberately do **not** support alpha: over a background, semi-transparent colours make
+contrast vary per theme and there is no reliable line between "looks fine" and "unreadable".
+We also do not expose `white` by name (it is actually dark grey in dark mode) — use "card surface".
+
+**③ Card corner radius**
+
+One slider, with its scope stated honestly: **cards and inputs only**. Small radii (2–10px on
+badges and chips) are part of the shape language; scaling them all would turn dots into diamonds.
+
+**④ Thirteen icon slots + 481 built-in icons**
+
+The five bottom tabs and eight settings entries, searchable in the icon library. Rows are
+labelled with the text they serve ("Map", "Radio settings"), so you never have to know slot names.
+
+The library is a **generated const table** (`tool/gen_theme_icons.py`): Flutter's icon
+tree-shaking only understands literals, so a runtime-constructed `IconData` either fails to
+compile or drags the whole MaterialIcons font (~1.6 MB) into the bundle. Scope = the 465 glyphs
+already used somewhere in lib/ (zero marginal cost) plus a hand-picked selection.
+
+**⑤ Import your own images as icons**
+
+PNG / JPG / WebP / GIF / BMP / SVG, up to 2 MB each (Android: system image picker; Windows:
+PowerShell dialog; Linux: zenity; macOS: osascript).
+
+The details are all "got this wrong and it breaks in a way you cannot see":
+
+- **Format is detected from magic bytes, not the extension**: renaming logo.jpg to logo.png is
+  routine, and trusting the extension means decoding JPEG bytes with the PNG decoder — which
+  presents as "import succeeded but nothing shows";
+- **Files are named by content hash** (FNV-1a, no crypto dependency), so re-importing the same
+  image leaves no duplicates and references stay stable;
+- **Only bare filenames are accepted** — the theme file is user-editable, so `file:../../etc/passwd`
+  must be rejected;
+- **Any render failure falls back to the built-in icon**, so a deleted or corrupt file cannot
+  break the UI.
+
+Importing images is not available on the web (browsers have no writable app directory); the page
+says so and points at the built-in library.
+
+**⑥ Twenty-six common labels can be overridden**
+
+Tab names, settings category names and descriptions, and a few entry titles. **Button verbs and
+error messages are deliberately excluded** — they are what users act on, and replacing them with
+unrecognisable words makes the app unusable. This is the real reason for a whitelist rather than
+"override all 1662 strings". Clearing a field restores the default.
+
+**⑦ Import and export**
+
+JSON text: export the whole bundle or a single theme, or import from the clipboard. On import,
+entries outside the whitelist are **skipped and counted** (reported honestly as "skipped N entries"),
+a higher `schema` is rejected with an "update the app" message, and any `builtin` flag in the file
+is stripped — otherwise a file could forge an undeletable theme. The bundle **excludes built-in
+presets**: every install already has them, so round-tripping them would just add six duplicates.
+
+**⑧ Themes joined the backup (7th group)**
+
+"Backup & restore" gained a "Theme" group you can select independently. Note it **does not include
+the imported image files themselves**: they are binary, and embedding them would inflate a
+few-dozen-KB backup to several MB while base64 stays uneditable by hand. So after restoring on
+another device, image references fall back to built-in icons — the UI is fine, the icons are
+simply default.
+
+**⑨ While at it: a real defect fixed — TNC / audio / PKWDWPL settings were never backed up**
+
+So that "Theme" would not repeat that mistake, I extended `tool/check_backup_keys.py` to three
+directions: exact keys, **constant keys**, and **dynamic prefixes**. It immediately reported five
+keys that had never been in any backup group:
+
+```
+tncConfigJson / tncDeviceJson / audioConfigJson / pkwdwplConfigJson / pkwdwplDeviceJson
+```
+
+In other words, v1.6.123's backup **silently lost the entire link configuration** (Bluetooth TNC,
+sound-card TNC, Kenwood waypoint), forcing users to re-configure devices after switching devices.
+They are now part of the "Settings" group.
+
+Two flaws in the checker itself were fixed along the way, and both are worth recording:
+
+- **Constants must be resolved per file**: `static const _kConfig` exists in tnc.dart, audio.dart
+  and pkwdwpl.dart with *different* values. A single global table attributes two of them to the
+  third, so the real finding gets reported as "some other key is missing" — a wasted trip.
+- **Arguments must be split with matched brackets and top-level commas**, not `\(([^)]*)\)`:
+  the latter truncates at the first `)` in `jsonEncode(x, y)`, misclassifying ordinary literals as
+  dynamic prefixes → a screenful of false failures. False failures are worse than real ones,
+  because whoever fixes them usually loosens or deletes the rule.
+
+All three directions were individually verified to **actually go red** (temporary ungrouped key /
+removing a constant key / removing a prefix declaration), the baseline is green, and it runs in the
+CI Analyze job.
+
+**⑩ New dependency: `flutter_svg ^2.3.0`**
+
+Only for SVG icons (pure Dart, no platform channels, three transitive dependencies). If SVG is not
+wanted it can be dropped: the call site is a single place in `lib/theme_icon_io.dart`.
+
+`test/theme_test.dart` adds 33 more regressions: colour parsing and round-trips, whitelist escapes,
+empty text meaning "delete the override", radius clamping, icon-reference shape (including path
+traversal), schema rejection, unforgeable `builtin`, both bundle and single-theme shapes, theme
+read/write round-trips, falling back to default on corrupt preferences, unknown icon names falling
+back, id collisions not shadowing, and "every whitelisted label key has a branch in `Tx`"
+(missing one throws nothing — it just prints an internal name like `radioCat` on screen).
+
+## [1.6.123] - 2026-09-18
+
+### 💾 备份与恢复：把设置与数据导出成一个 JSON，换机/重装后导回来
+
+**入口**：设置页 → 「备份与恢复」（与「导出 ADIF」并列）。
+
+**① 分 6 组导出，导入时按组覆盖**
+
+| 分组 | 内容 |
+|---|---|
+| 设置配置 | 电台身份、信标（含智能信标档位）、主题/语言/缩放、地图、筛选、数据来源、服务器、ADIF 选项、位置 |
+| 台站与联系人 | 收藏、手动添加的联系人、备注 |
+| 消息记录 | 单聊消息 + 两套已读位置 |
+| 群聊 | 群组、成员状态 |
+| 翻译设置 | 翻译接口、密钥、每会话语言偏好 |
+| 成就与荣誉 | 解锁记录、计数、默认展示徽章 |
+
+导出默认全选（备份的常见诉求是「整份搬走」）；导入时只列出备份里**真实存在**的组，
+并默认勾选。选中哪几组，就只覆盖哪几组 —— 不想动消息的人不必动消息。
+
+**② 值带类型标签：`{"s":…}` / `{"b":…}` / `{"i":…}` / `{"d":…}` / `{"l":[…]}`**
+
+JSON 分不清 `int 1` 与 `double 1.0`，而 SharedPreferences 的 `getDouble`
+读到 int 值会直接抛类型错误。所以导出时不写裸值，而是带上类型标签；
+导入按标签调用对应的 setter。这样即使文件被手工编辑过（例如把 `0.0` 写成 `0`），
+最坏也只是这一项被跳过，而不会把应用写坏。测试里专门钉了一条
+「`0.0` 不会退化成 int」。
+
+**③ 只回写白名单里的键**
+
+备份文件是用户可见、可编辑、也可能来自别人分享的文本。如果无脑回写
+「文件里出现的任意键」，一份伪造的 JSON 就能改写应用里**任何**偏好
+（包括未来新增的内部状态键）。所以：
+
+- 键必须落在该分组的白名单内，白名单外的键**跳过并计数**（导入完成后如实显示「跳过 N 项」）；
+- 不认识的整组忽略 —— 更新版本导出的备份，在旧版本上不会整份崩掉；
+- `schema` 比当前高则直接**拒绝**并提示先升级应用，而不是猜着解析。
+
+**④ 导出前强制落盘（修掉一个静默丢数据的坑）**
+
+`persist()` / `_saveMessages()` 原本是「调用即返回」的顺手保存。
+用户「刚加完收藏就点导出」时，写入还排在队列里，导出的会是旧快照 ——
+备份功能里这种静默缺失最致命：用户以为备份里有，直到恢复那天才发现没有。
+现在新增 `persistNow()` / `flushForBackup()`，导出前逐项 await；
+且它与顺手保存**共用同一份键列表**（`_writePrefs`），两处不会漂移。
+
+**⑤ 导入后即时生效，并如实提示重启**
+
+写回偏好后会清空并重载消息/群聊/台站（这些都是「追加」语义的读取函数，
+不清空会产生重复数据）。但成就、翻译、服务器连接是在各自单例里只加载一次的，
+所以完成后会明确提示「重启后完全生效」，并给一个「退出应用」按钮 ——
+不假装一切已经生效。
+
+**⑥ 平台支持**
+
+| 平台 | 选文件 | 保存位置 |
+|---|---|---|
+| Android | 系统文件选择器（`ACTION_GET_CONTENT`，临时读权限） | 下载目录（MediaStore，免存储权限） |
+| Windows | PowerShell + WinForms 打开文件对话框（`-Sta`，UTF-8 输出） | 文档目录 |
+| Linux | zenity | 文档目录 |
+| macOS | osascript | 文档目录 |
+| Web | —（改用剪贴板） | 复制到剪贴板 |
+
+读文件有 32MB 上限（分块读取，超限即拒），避免误选一个大文件把内存吃爆。
+
+**⑦ 页面上的安全提示**
+
+备份里含呼号、服务器口令、翻译 API 密钥 —— 页面上直接写明，不藏着。
+
+**⑧ 新增静态检查并接入 CI：`tool/check_backup_keys.py`**
+
+「新增偏好时忘了把它归入备份分组」不会让编译失败、不会让测试失败，
+只会在用户换机那天少一项设置。所以加了一条**双向**静态检查：
+
+- lib/ 里所有 `getX('key')`/`setX('key')` 的键都必须被某个分组覆盖；
+- 白名单里的键必须在 lib/ 里仍然有人读写（防止删代码后留下死项）。
+
+检查器自己验证过会报红（临时塞一个 `brandNewFlag` → `MISSING brandNewFlag`）；
+解析白名单时用**配对括号**而不是 `\(([^)]*)\)`，避免嵌套括号截断造成假失败。
+这条检查已加进 CI 的 Analyze 作业。
+
+`test/backup_test.dart` 另钉了 15 条回归：类型标签往返、白名单越界、
+未知分组、schema 拒绝、分组覆盖不碰未选组、导出→导入→再导出一致。
+
+---
+
+**Feature**: back up settings and data to a single JSON file, and restore it — for
+switching devices or reinstalling.
+
+**Entry point**: Settings → "Backup & restore" (next to "Export ADIF").
+
+**① Six groups, imported group by group**
+
+| Group | Contents |
+|---|---|
+| Settings | Station identity, beacon (incl. smart-beacon tiers), theme/locale/scale, map, filters, data sources, server, ADIF options, location |
+| Stations & contacts | Favourites, manual contacts, notes |
+| Messages | Direct messages + both read-position maps |
+| Group chats | Groups and member state |
+| Translation | Providers, API keys, per-conversation language prefs |
+| Achievements & honours | Unlocks, counters, default badge |
+
+Export selects everything by default (the common case is "move it all"); import lists
+only the groups that are **actually present** in the file, pre-selected. Only the
+selected groups are overwritten — nobody has to touch their messages to move their
+settings.
+
+**② Typed values: `{"s":…}` / `{"b":…}` / `{"i":…}` / `{"d":…}` / `{"l":[…]}`**
+
+JSON cannot tell `int 1` from `double 1.0`, and SharedPreferences'
+`getDouble` throws if the stored value is an int. So values are written with a type
+tag and applied through the matching setter. If the file is hand-edited (say `0.0`
+becomes `0`), the worst case is one skipped entry instead of a broken preference —
+there is a dedicated test asserting `0.0` never degrades to an int.
+
+**③ Only whitelisted keys are written back**
+
+The backup is user-visible, editable text that may come from someone else. Blindly
+writing back "whatever keys appear in the file" would let a forged JSON change
+*any* preference, including internal keys added later. Therefore: keys must be in
+that group's whitelist (anything else is skipped **and counted**, and the result
+dialog reports "skipped N entries"); unknown groups are ignored (a backup from a
+newer version does not break an older app); and a higher `schema` is **rejected** with
+an "update the app first" message instead of being guessed at.
+
+**④ Force-flush before export (fixes a silent data-loss trap)**
+
+`persist()` and the `_save…()` helpers were fire-and-forget. If you added a
+favourite and immediately hit export, the write could still be queued and the export
+would capture the *old* snapshot — the worst kind of bug in a backup feature, since
+you only find out on restore day. There are now `persistNow()` / `flushForBackup()`
+which are awaited before export, sharing the very same key list (`_writePrefs`) with
+the ordinary save path so the two cannot drift apart.
+
+**⑤ Import takes effect immediately, and honestly says a restart is needed**
+
+After writing preferences, messages/chats/stations are cleared and reloaded (those
+loaders *append*, so not clearing them would duplicate data). Achievements,
+translation and the server connection are loaded once by their own singletons, so
+the dialog states plainly that a restart is required for everything to take effect —
+and offers a "Quit app" button rather than pretending otherwise.
+
+**⑥ Platforms**
+
+| Platform | Picking a file | Saving |
+|---|---|---|
+| Android | system file picker (`ACTION_GET_CONTENT`, temporary read grant) | Downloads (MediaStore, no storage permission) |
+| Windows | PowerShell + WinForms open dialog (`-Sta`, UTF-8 output) | Documents |
+| Linux | zenity | Documents |
+| macOS | osascript | Documents |
+| Web | — (clipboard instead) | copy to clipboard |
+
+Reading is capped at 32 MB (chunked, rejected above the cap) so a mis-picked huge
+file cannot exhaust memory.
+
+**⑦ Security note in the UI**
+
+The file contains your callsign, server passcode and translation API keys; the page
+says so instead of hiding it.
+
+**⑧ New static check wired into CI: `tool/check_backup_keys.py`**
+
+"Forgetting to put a new preference into a backup group" fails no build and no test;
+it just loses a setting on restore day. So there is now a **two-way** check: every
+`getX('key')`/`setX('key')` in lib/ must be covered by a group, and every whitelisted
+key must still be read/written somewhere in lib/ (catching leftovers after a
+deletion). The checker was verified to actually go red (temporary `brandNewFlag` →
+`MISSING brandNewFlag`), and it parses the whitelist with **matched parentheses**
+rather than `\(([^)]*)\)` so nested parentheses cannot truncate it into false
+failures. It now runs in the CI Analyze job. `test/backup_test.dart` adds 15 more
+regressions: type-tag round-trips, whitelist escapes, unknown groups, schema
+rejection, group-scoped overwrite, and export→import→export consistency.
+
+## [1.6.122] - 2026-09-17
+
+### 🔤 短波条件「关闭」改「未开通」——它被误读成关闭按钮
+
+**现象**：短波组件上有一颗看起来像「关闭」按钮的圆角块。
+
+**原因**：那不是按钮，是 **「Band Closed」（波段未开通）这个条件标记**。
+它是圆角色块（形状与按钮一样），而中文文案恰好是**「关闭」**——
+「关闭」在中文里正是关闭弹窗的那个动词，于是它被读成了一颗关闭按钮。
+（核实过：组件与面板都没有任何关闭控件，也没有 `Icons.close`。）
+
+**修法**：按「该词在本语言里会不会被读成 UI 动作」逐个判断，而不是笼统全改：
+
+| 语言 | 原 | 现 | 理由 |
+|---|---|---|---|
+| zh | 关闭 | **未开通** | 「关闭」就是关闭弹窗的动词 |
+| zh_TW | 關閉 | **未開通** | 同上 |
+| ja | クローズ | **伝搬なし** | カタカナ借词在 UI 里同样是「关闭」 |
+| id | Tutup | **Tertutup** | `Tutup` 是祈使式（= 关闭按钮）；`Tertutup` 是状态形容词 |
+| es | Cerrada | 保留 | 已是与 banda 性数一致的分词形容词（祈使式才是 `Cerrar`） |
+| en | Closed | 保留 | 源数据 N0NBH 自己的分类就叫 *Band Closed*，是该领域惯用语 |
+
+新词都表示**状态**（「无传播」），形状仍像按钮也不会被读成动作。
+
+**同时修掉预览工具的一个保真度缺陷**：组件 chip 的**颜色**由质量 key 决定、
+**文字**由本地化函数决定，而预览一直拿英文 key 当文字显示 ——
+也就是说预览展示的是**英文界面**（Poor / Good / Fair / Band Closed）。
+这不但不准，还导致一个更隐蔽的问题：**我此前是按英文长度做版式判断的**，
+而中文 chip 文案短得多。现在预览区分这两件事，并补上中文文案映射。
+
+`Band Closed` 在 46dp chip 里本来就会溢出（约 54dp）——中文改短后（未开通 ≈ 26dp）
+反而更宽松。另加两条护栏测试：
+
+- **质量文案必须放得进 46dp chip**（不靠省略号；截断成「未开…」等于没给信息）；
+- **「Band Closed」的文案不得是该语言的 UI 关闭动词**（防它再被改回来）。
+
+---
+
+**Symptom**: the HF widget showed a rounded block that reads as a "Close" button.
+
+**Cause**: it is not a button — it is the **"Band Closed" condition marker**. It is a
+rounded colour block (the same shape as a button), and the Chinese label happened to be
+**「关闭」**, which is exactly the verb used for "close" in dialogs, so it read as a close
+button. (Verified: neither the widget nor the panel contains any close control, and there is
+no `Icons.close` anywhere.)
+
+**Fix**: decided per language by asking whether the word is read as a *UI action* in that
+language, rather than changing all of them wholesale. Chinese/Traditional Chinese/Japanese/Indonesian
+were changed (「关闭」→「未开通」, 「關閉」→「未開通」, クローズ→伝搬なし, Tutup→Tertutup — `Tutup`
+is the imperative form used on close buttons, while `Tertutup` is a state adjective). Spanish
+(`Cerrada`) and English (`Closed`) were **kept**: the Spanish word is already a participle
+agreeing with *banda* (the imperative is `Cerrar`), and *Band Closed* is the source feed's
+own category name, i.e. established terminology. The new words all denote a **state**
+("no propagation"), so the button-like shape no longer invites a click.
+
+**Also fixed a fidelity defect in the preview tool**: a chip's **colour** comes from the
+quality key while its **text** comes from the localisation function, but the preview had been
+drawing the English key as the label — meaning it was showing an **English interface**
+(Poor / Good / Fair / Band Closed). Besides being inaccurate, this hid a subtler problem:
+**earlier layout judgements had been made against English string lengths**, whereas the
+Chinese labels are much shorter. The preview now separates the two and carries the Chinese
+mapping.
+
+`Band Closed` overflowed the 46dp chip anyway (about 54dp); the shorter Chinese label
+(未开通 ≈ 26dp) fits comfortably. Two guards added: **quality labels must fit a 46dp chip**
+without ellipsis (a truncated 「未开…」 conveys nothing), and **the "Band Closed" label must not
+be the UI close verb in any language**, so it cannot be reverted to 「关闭」 by accident.
+
+
+## [1.6.121] - 2026-09-17
+
+### 📡 6m 波段预测 · 组件暗黑模式 · 系统状态组件
+
+**① 6m（50MHz）波段预测**
+
+6m 的传播机理与 HF 波段**完全不同**，所以没有沿用「日间/夜间」那套模型，而是按三条独立通路判断后再合成：
+
+| 通路 | 成因 | 判据 |
+|---|---|---|
+| **Es**（偶发 E 层） | 夏季常见，单跳可跨 1000–2000km，是 6m 的主要开通方式 | 源数据按区域给（含 6m/4m 专门项） |
+| **极光** | 地磁活跃时高纬出现，CW/SSB 有特征啸声 | Kp ≥ 4 且源数据报开通 |
+| **F2** | 需 MUF ≥ 50MHz，太阳活动高年偶发 | `muf` 字段 ≥ 50 |
+
+合成取三条中**最好**的一档而不是平均：三条是并列通路，任一开通就值得上机；
+取平均会把「开了」抹平成「关着」。同理，Es 取各区域里最好的一档而不是平均 ——
+Es 是局地现象，全球平均会把开通信号抹掉。
+
+数据来源 hamqsl.com 的 `calculatedvhfconditions`。落点两处：
+App 内的短波区块（独立成一段，不并进「日间/夜间」表 —— 硬并会让
+「6m 日间 Poor」这种组合读起来像同一机理），以及短波组件。
+
+`muf` 字段源数据常为 `NoRpt`，此时 F2 按「不成立」处理而不是猜 ——
+猜错会让用户白等一晚。
+
+**② 全部组件支持暗黑模式**
+
+组件由系统进程渲染，读不到应用主题，所以深浅两套色必须走资源目录：
+
+- 新增 `values/widget_colors.xml` 与 `values-night/widget_colors.xml`，
+  前景色（主文字 / 次要文字 / 分隔线 / 表面 / 条件色）全部改为 `@color/aw_*`；
+- 系统处于深色模式时自动取 `values-night/` 的值，无需任何运行时代码。
+
+夜间不是把浅色简单反相，而是**重新取值**：
+
+| token | 浅色 | 夜间 |
+|---|---|---|
+| 表面 `aw_surface` | `#FFFFFF` | `#1E2530` |
+| 主文字 `aw_ink` | `#253044` | `#E6EAF2` |
+| 条件色 good/fair/poor | `#16A34A` / `#D97706` / `#E11D48` | `#68C389` / `#E6A75D` / `#EC6C88` |
+
+条件色在夜间要**提亮**（往白方向约 35%）—— 深底上原色对比不足。
+天气组件的背景渐变另有 `drawable-night/` 的深色版本；其上的半透明白分隔线
+（白 10%）在深浅两种底色上都成立，不需切换。
+
+**③ 新增系统状态组件（4×2）**
+
+回答台站运行的三个问题，按这个优先级排布：
+
+```
+ ⚙ 系统状态                                [logo] APRSlocus
+ BG7LZQ-7 · 已定位 · OL62XC
+ ──────────────────────────────────────────────────────
+ ● APRS-IS 已连接        ● TNC      未启用
+ ● 音频    连接中        ● PKWDWPL  未启用
+ ──────────────────────────────────────────────────────
+ 收 1 284   发 37              信标 45s   台站 213
+```
+
+| 问题 | 由什么回答 |
+|---|---|
+| 还在收吗 | 链路区的状态点 + 「收 N」 |
+| 我的位置有没有上报 | 身份行的定位状态 + 「信标 45s」 |
+| 为什么地图没台站 | 「台站 213」 |
+
+**链路是三态而非两态**：`未启用`（用户没开这条，不用管）/ `已连接` / `已启用未连上`
+（开了、连不上，要去查）。混成一个「未连接」会让人对着根本没启用的链路白折腾。
+三态三色，且**顺序固定**（APRS-IS / TNC / 音频 / PKWDWPL），不按状态排序 ——
+位置固定才能一眼扫到要看的那条。
+
+信标倒计时直接取状态层已本地化的 `nextBeaconIn`，不在组件侧再判一次
+「已关闭/未连接/等待定位/即将」—— 那套分支判断属于状态层，两处各判一次必然漂移。
+
+固定 4×2：内容分「身份 / 四条链路 / 计数」三段，压到 2×2 会把链路区挤掉，
+而那正是本组件的主要价值。
+
+**④ 组件快照的推送策略：重要变化立即、计数节流**
+
+`AppState` 每个报文都会通知，而系统状态里有「收 N / 发 N」这种必然跟着变的计数。
+照直推每秒要过十几次 MethodChannel。所以分两路：
+
+- **重要字段**（链路状态 / 定位 / 网格 / 信标 / 台站数）变化 → 立即推；
+- **只有计数变化** → 最多每 20 秒推一次。
+
+判据是「距上次推送的时间」而不是定时器 —— 定时器不受 dispose 管辖，
+会在 widget 测试里留下 pending timer 并造成假失败（此前踩过）。
+
+**⑤ 新增工具**
+
+- `tool/add_sys_widget_l10n.py`：为系统状态组件补 6 语言 l10n 键（9 个）。
+  手改 6×9=54 处漏一处就是「某语言下组件显示空字符串」，而组件不报错，只能机械操作。
+- 预览工具补**明暗两套取色**与**系统状态组件**，并修正：白底组件的底色此前硬写
+  白色，导致 `--dark` 对它们完全无效、看不到夜间效果。
+
+---
+
+**① 6m (50 MHz) band prediction.** 6m propagation does not follow the HF day/night model at
+all, so it is judged as three independent paths and then combined: **Es** (sporadic-E — the
+main way 6m opens, single hop covering 1000–2000 km, reported per region including dedicated
+6m/4m entries), **aurora** (appears at high latitudes when the field is active, with the
+characteristic raspy CW/SSB sound; requires Kp ≥ 4 *and* the source reporting it open), and
+**F2** (needs MUF ≥ 50 MHz, occasional in high solar years, from the `muf` field).
+
+The combination takes the **best** of the three rather than an average: the three are parallel
+paths and any one opening justifies getting on the air, while averaging would flatten "open"
+into "closed". For the same reason Es takes the best region rather than an average — Es is a
+local phenomenon and a global mean erases the opening. Source: hamqsl.com's
+`calculatedvhfconditions`. It appears in two places: the in-app HF section (as its own block,
+*not* merged into the day/night table, since merging would produce combinations like "6m daytime
+Poor" that read as the same mechanism) and the HF widget. The `muf` field is often `NoRpt`, in
+which case F2 is treated as *not* satisfied rather than guessed — a wrong guess means waiting up
+all night for nothing.
+
+**② Dark mode for every widget.** Widgets are rendered by the system process and cannot read the
+app theme, so the two palettes must live in resource directories: `values/widget_colors.xml` and
+`values-night/widget_colors.xml`, with all foreground colours (primary text, secondary text,
+hairline, surface, condition colours) now referencing `@color/aw_*`. Android picks the night
+values automatically with no runtime code. Night is not an inversion but a re-derived palette —
+the condition colours are *lightened* (about 35% toward white) because the base colours lack
+contrast on a dark surface. The weather widget's gradient backgrounds have their own
+`drawable-night/` variants; the translucent white hairlines on top of them (white at 10%) work on
+both palettes and need no switching.
+
+**③ A new system-status widget (4×2)**, answering three questions in priority order: *is it still
+receiving* (link status dots plus an Rx counter), *has my position been reported* (fix state plus
+the beacon countdown), and *why is the map empty* (station count). **Links have three states, not
+two** — `off`, `connected`, and `enabled but not connected` — because "you never turned this on"
+and "it is on but will not connect" call for completely different actions; collapsing them into
+one "not connected" sends people debugging a link they never enabled. The three states get three
+colours, and the order is fixed (APRS-IS / TNC / audio / PKWDWPL) rather than sorted by state, so
+a glance always finds the link you care about. The beacon countdown reuses the state layer's
+already-localised `nextBeaconIn` instead of re-deciding "disabled / not connected / waiting for
+fix / due now" on the widget side, since two copies of that branching will drift. Fixed at 4×2:
+the content is identity / four links / counters, and squeezing to 2×2 drops the link block, which
+is the widget's main value.
+
+**④ Snapshot push policy: important changes immediately, counters throttled.** `AppState`
+notifies on every packet, and the system widget shows Rx/Tx counters that necessarily change with
+it — pushing straight through would cross the MethodChannel dozens of times a second for numbers
+nobody reads that closely. So changes to important fields (link state, fix, grid, beacon, station
+count) push immediately, while counter-only changes push at most every 20 seconds. The criterion
+is elapsed time rather than a timer, because a timer outside `dispose`'s control leaves pending
+timers in widget tests and produces false failures — a trap hit earlier in this work.
+
+**⑤ New tooling.** `tool/add_sys_widget_l10n.py` adds the widget's nine strings across six
+languages (hand-editing 6×9 = 54 places, where one miss means a blank string in one language and
+the widget never reports an error). The preview tool gained light/dark palettes and the system
+widget, and a bug was fixed: the white-background widgets had their surface hard-coded to white,
+so `--dark` had no effect on them and their night appearance was invisible in previews.
+
+
+## [1.6.120] - 2026-09-17
+
+### 🎨 短波组件：条件标记改为 tonal chip（淡底 + 条件色字）
+
+波段条件的呈现从**实心饱和色块**改为 **tonal chip**（条件色 11% 淡底 + 条件色文字）。
+理由：条件只是「四档之一」这一个信息，实心色块的颜色用量远大于其承载的信息量，
+八个并列时观感接近警示色堆叠；淡底 + 彩字把颜色用量降到约 1/10，同时保留
+v1.6.119 建立的对齐关系（chip 固定宽度、两列各在一条竖线上、列头与 chip 列同一 x）。
+
+同时调整：
+
+- **汇总指数去色**：SFI / Kp / A 一律墨色。此前 Kp / A 按阈值着色，与下方表格
+  争夺注意力，颜色出现在两处反而失去重点；现在颜色只用于表达波段条件。
+- **重建字号层级**：标题 13sp/w800 › 指数值 11sp/w600 › 波段名 10sp/w600 ›
+  条件 9sp/w700 › 列头 8sp/w600（带字距）。此前只有四级字号（12/11/9.5/8.5sp），
+  层级不明显。
+
+新增 `aw_chipsoft_{good,fair,poor,closed}.xml` 四张淡底 drawable；文字色由
+`setTextColor` 设为条件基本色，与 `lib/hf.dart` 的 `hfQualityColor` 共用同一组色值。
+
+> 实现注意：chip 是 `TextView`，**不能**用 `setColorFilter` 染色 —— 该方法只存在于
+> `ImageView`（v1.6.114 的故障即由此而来）。底走 `setBackgroundResource`，字走
+> `setTextColor`。
+
+预览工具补充**字距**支持：PIL 无 `letterSpacing` 参数，改为逐字绘制并额外推进。
+面板与组件均以「小字号 + 字距」弱化次级文字，预览若不模拟会失真。
+
+---
+
+**Condition markers changed from solid saturated blocks to tonal chips** (an 11% condition-colour
+fill with condition-coloured text). A band condition is a single piece of information ("one of four
+levels"), so a solid block used far more colour than that information warrants, and eight of them in a
+column read as stacked alert colours. A pale fill with coloured text cuts colour usage to roughly a
+tenth while preserving the alignment established in v1.6.119 (fixed chip width, each column on its own
+vertical line, column headers sharing an x with the chip columns).
+
+Also changed: the summary indices (SFI / Kp / A) are now ink-coloured rather than threshold-tinted —
+previously Kp/A competed with the table below, so colour appeared in two places and therefore carried
+no emphasis; colour now means band conditions and nothing else. And the type scale was rebuilt:
+13sp/w800 title › 11sp/w600 index values › 10sp/w600 band names › 9sp/w700 conditions › 8sp/w600
+letter-spaced column headers (previously only four steps, 12/11/9.5/8.5sp, so the hierarchy was flat).
+
+Four new pale-fill drawables (`aw_chipsoft_{good,fair,poor,closed}.xml`); the text colour is applied via
+`setTextColor` using the same base palette as `lib/hf.dart`'s `hfQualityColor`.
+
+> Implementation note: a chip is a `TextView`, so `setColorFilter` cannot be used to tint it — that method
+> exists only on `ImageView`, which is what caused the v1.6.114 failure. Background goes through
+> `setBackgroundResource`, text through `setTextColor`.
+
+The preview tool now supports letter spacing (PIL has no `letterSpacing`, so it draws character by
+character and advances the extra amount); both the panel and the widget de-emphasise secondary text with
+"small type + letter spacing", which a preview would otherwise misrepresent.
+
+## [1.6.119] - 2026-09-17
+
+### 🎨 短波组件重排版；消息页移除瀑布流；清理高德地图文案
+
+**短波组件**：条件标记改为实心彩色 chip（固定宽度 44dp、圆角 4dp、白字加粗），
+并修正上一版的四处排版问题：
+
+| 问题 | 处理 |
+|---|---|
+| 「日 ｜ 夜」图例位于汇总行右端，与下方两列不对齐 | 改为独立列头，与 chip 列同一 x |
+| 夜间列右对齐、日间列左对齐，两列参差 | 两列统一左对齐 |
+| 条件圆点的 x 随文字宽度浮动 | chip 固定宽度，所有 chip 落在两条竖线上 |
+| 波段名与条件之间空白过大 | 波段名列宽收到 52dp |
+
+新增 `aw_chip_{good,fair,poor,closed}.xml` 四张实心 drawable。
+
+**消息页**：移除瀑布流模式，只保留会话模式。删除 `_feedPane`、`_feedBubble`、模式切换器、
+`_feedMode` 状态与其持久化、`_scrollFeed`（约 240 行）。切换器随功能一并移除，不留单边开关。
+「消息气泡必须渲染译文块」的源码级断言保留（改为断言唯一的 `_bubble`），
+它拦截的是「翻译成功但界面不显示」这类静默故障。
+
+**地图文案**：清理 6 种语言共 7 个键中的第三方地图品牌描述 ——
+功能列表标题改为「在线地图」、「高德火星」改为 `GCJ-02`、图源说明不再点名、
+引导页文案改为「在线地图瓦片」、导航失败提示改为「未安装地图应用」（该提示与具体地图应用无关）、
+地图分组标题改为「国内地图」。**保留**地图选项自身的名称与关于页的开源致谢
+（该项目实际使用该瓦片服务）；代码中 `MapType.group == '高德'` 是分组数据实参而非文案，
+界面显示走 `domesticMaps`，改动会导致分组失效。
+
+---
+
+**HF widget**: condition markers became solid colour chips (fixed 44dp width, 4dp radius, bold white
+text), fixing four layout problems from the previous revision — the "day | night" legend sat at the right
+end of the summary row and did not line up with the two columns below (now a proper column header sharing
+an x with the chip columns); the night column was right-aligned while the day column was left-aligned (both
+now left-aligned); the condition dots' x position drifted with text width (chips are fixed-width, so every
+chip lands on one of two vertical lines); and the gap between band name and conditions was excessive (band
+column narrowed to 52dp). Four solid drawables were added (`aw_chip_{good,fair,poor,closed}.xml`).
+
+**Messages page**: the feed mode was removed, leaving conversation mode only. `_feedPane`, `_feedBubble`,
+the mode toggle, the `_feedMode` state and its persistence, and `_scrollFeed` were deleted (about 240
+lines); the toggle went with the feature rather than remaining as a one-sided switch. The source-level
+assertion that "the message bubble must render the translation block" was kept (now asserting the single
+`_bubble`), because it guards a silent failure mode — translation succeeding while nothing appears.
+
+**Map copy**: third-party map branding was removed from 7 keys across 6 languages — the feature-list
+headline is now "Online map", "高德火星" became `GCJ-02`, the map-source note no longer names a provider,
+the onboarding line says "online map tiles", the navigation failure toast says "no map app is installed"
+(that message was never specific to any provider), and the map group heading became "国内地图". The map
+picker's own option names and the About page's open-source acknowledgements were **kept** (the project
+does use that tile service); the internal `MapType.group == '高德'` value is a grouping argument rather
+than copy — the UI displays `domesticMaps` for it — and changing it would break the grouping.
+
+## [1.6.118] - 2026-09-17
+
+### 📦 v1.6.114–118 合并发布；短波组件改白底；撤掉面板星空层
+
+本版发布的 tag 覆盖 v1.6.114 至 v1.6.118 的全部改动（v1.6.113 是上一个发布 tag，
+中间各版仅经 CI 验证、未单独打 tag）。
+
+**短波组件改为白底**：与天气组件（彩色渐变）形成明确区分，同时白底配深色文字的可读性
+优于彩色小字压深色底。相应调整：
+
+- 新增 `aw_bg_white.xml`；分隔线改用 `C.border`（`#E5E9F0`），不再用白色低透明度
+  （后者只适用于彩色渐变底）；空状态文字改墨色（白字在白底上不可见）。
+- **色值改为基准色**：条件色原为「级别色提亮 35%」，那是为压在彩色渐变上做的补偿；
+  白底上提亮色过淡，改用与面板浅色 UI 一致的基准色。
+- 汇总行改为单行「小标签 + 大数字」（SFI/Kp/A 由 10sp 提到 15sp 加粗）；
+  不设独立表头，「日 ｜ 夜」图例并入汇总行右端（130dp 可用高度下，
+  独立表头会使内容超出 17.2dp）。
+
+**撤掉面板的星空与大气层**：删除 `_StarLayer`、`_StarPainter`、`_atmosphere`
+及其在面板背景 Stack 中的两层，预览工具中对应的示意图一并删除。
+
+---
+
+**This tag ships everything from v1.6.114 through v1.6.118** (v1.6.113 was the previous released tag;
+the intervening versions were CI-verified only).
+
+**The HF widget now uses a white background**, which distinguishes it clearly from the weather widget's
+coloured gradient, and dark text on white is more legible than small coloured text on a dark ground.
+Supporting changes: a new `aw_bg_white.xml`; hairlines switched to `C.border` (`#E5E9F0`) instead of
+low-alpha white (which only works on the gradient); and the empty-state text became ink (white would be
+invisible on white). **Colour values switched to the base palette** — condition colours had been
+"base colour lightened 35%", a compensation for sitting on the coloured gradient, and that lightened
+version is too pale on white, so the widget now uses the same base colours as the panel's light UI. The
+summary became a single row of small labels with large numbers (SFI/Kp/A from 10sp to 15sp bold), and the
+separate header row was dropped with the "day | night" legend folded into that row, because at 130dp of
+usable height a separate header overflowed by 17.2dp.
+
+**The panel's star field and atmosphere layer were removed**, along with the corresponding mockup in the
+preview tool.
+
+## [1.6.117] - 2026-09-17
+
+### 📻 短波与电离层传播：面板区块、独立组件；修正天气组件在真机上的溢出
+
+**新增短波/电离层传播数据**（`lib/hf.dart`）：数据源为 hamqsl.com 的 `solarxml.php`
+（N0NBH 维护，业余无线电界通用的 HF 传播数据源），30 分钟缓存。解析字段：SFI、A 指数、
+K 指数、X 射线通量、太阳黑子数、太阳风速、地磁状态、噪声底噪、MUF，以及
+`calculatedconditions` 中的四个波段对（80m/40m、30m/20m、17m/15m、12m/10m）各自的
+日间与夜间条件。注意该接口需使用 HTTPS（HTTP 会 301 重定向）。
+
+**面板新增传播区块**：太阳与地磁指数（两列 label/value 布局），以及逐波段的
+日间/夜间条件表（每格圆点 + 条件文字，按 Good/Fair/Poor/Closed 分色）。
+无数据时整块不渲染。
+
+**无线电建议纳入传播状态**：新增 `allHamTips` = 天气类建议 + 传播类建议，
+**按级别归并**而非首尾相接 —— 后者会把传播类的「通联机会」插到天气类的
+「操作提示」之前，破坏既定的「安全警示优先」排序。传播类建议覆盖地磁暴（K≥5）、
+地磁活跃（K≥4）、SFI 偏低/偏高、底噪偏高、单波段条件好/差。
+
+**新增短波传播桌面组件**（4×2，固定尺寸）：固定尺寸的原因是内容为「波段 × 昼夜」
+二维表，无法像列表那样降级显示 —— 缩到 2×2 只剩波段名而无条件值。
+
+**修正天气组件在真机上的溢出**。根因是预览工具的两处系统性低估：
+
+1. 文本高度按「墨迹高度」估算，而 `TextView` 的行盒高度取决于字体
+   `ascent + descent`（Noto Sans SC 为 1.45em，中文墨迹仅约 1.0em，
+   `includeFontPadding="false"` 不改变行盒），每行低估约 4dp。
+2. 未计算**圆角净空** —— 20dp 圆角下距底边 10dp 内的左右两侧已被裁掉，
+   而判据此前只比较内容高度与卡片高度。
+
+两处均已修正，并据此重排主档：顶栏合并为一行、指标由 4 格 2 行改为 3 格 1 行、
+建议改为「级别与正文同行」（正文使用完整短句，缩短的是措辞而非截断句子）。
+
+---
+
+**New HF/ionospheric propagation data** (`lib/hf.dart`) sourced from hamqsl.com's `solarxml.php`
+(maintained by N0NBH, the standard HF propagation feed in amateur radio), cached for 30 minutes. It parses
+SFI, A/K indices, X-ray flux, sunspot number, solar wind speed, geomagnetic state, noise floor, MUF, and
+the day/night condition for each of the four band pairs in `calculatedconditions` (80m/40m, 30m/20m,
+17m/15m, 12m/10m). The endpoint requires HTTPS (HTTP returns a 301).
+
+**New propagation section in the panel**: solar and geomagnetic indices in the existing two-column
+label/value layout, plus a per-band day/night condition table (a dot and a condition label per cell,
+coloured by Good/Fair/Poor/Closed). The whole block is omitted when there is no data.
+
+**Radio advice now accounts for propagation**: `allHamTips` merges weather advice with propagation advice
+**grouped by severity** rather than concatenated, because concatenating would place propagation "openings"
+above weather "operating tips" and break the established "safety first" ordering. Propagation advice covers
+geomagnetic storms (K≥5), active field (K≥4), low and high SFI, high noise, and per-band good/poor
+conditions.
+
+**New HF propagation home-screen widget** (4×2, fixed size). The size is fixed because the content is a
+two-dimensional band-by-day/night table, which cannot degrade like a list — at 2×2 only band names would
+remain, without any condition values.
+
+**Fixed a real-device overflow in the weather widget.** The root cause was two systematic under-estimates
+in the preview tool: text height was estimated from ink extent, whereas a `TextView`'s line box follows the
+font's `ascent + descent` (1.45em for Noto Sans SC, against roughly 1.0em of Chinese ink, and
+`includeFontPadding="false"` does not change the line box), under-counting about 4dp per line; and
+**corner clearance was not accounted for** — with a 20dp radius the left and right edges within 10dp of the
+bottom are already clipped, while the check compared content height against card height only. Both were
+corrected and the main tier re-laid out accordingly: the header collapsed to one row, metrics went from four
+cells in two rows to three cells in one row, and tips place the severity label and body on one line (with
+bodies drawn from complete short clauses, shortening the wording rather than truncating the sentence).
+
+## [1.6.116] - 2026-09-17
+
+### 🎨 小组件改用真实图标与图形 logo；新增设计预览工具
+
+**图标改为预烘焙的位图**：组件进程不具备应用内的 Material 图标字体，RemoteViews 也不支持字体图标与
+矢量图。此前因此退化为使用 emoji，而 emoji 与面板的图标语言不一致。现于构建期用
+`tool/gen_app_widget_icons.py` 将 Flutter 自带的 `MaterialIcons-Regular.otf` 渲染为 PNG
+（13dp / 26dp 两档，共 39 个），组件图标因此与面板 `Icons.*` 为同一套字形。
+「图标名 → 资源」映射表由同一脚本生成（`WidgetIcons.kt`），Dart 侧只传名称。
+
+**logo 改为圆形**：源图取自 `mipmap-xxxhdpi/ic_launcher.png`。该图标的圆角外部并非全透明，
+而是 alpha≈166 的半透明黑，直接缩放会在彩色渐变上形成暗边；且源图仅 192px，裁圆后边缘呈阶梯状。
+现按其**实测几何与颜色**重绘（4× 超采样）：底色 `#031F55`→`#011840`、中心圆 `#595959` 半径 18/96、
+两道灰环半径 29/96 与 44.5/96、外环 `#A8C2F2` 半径 59/96、左右白点半径 54/96。
+
+**新增设计预览工具** `tool/preview_app_widget.py`：使用真实素材（同一批 PNG 图标、同一组渐变色值、
+同一套字号）渲染全部档位，并将「内容是否放得下」作为**硬性失败**（退出码 1）。
+该工具在编码前即发现 7 处排版问题（顶栏溢出、观测时刻与指标重叠、内容超出卡片高度等）。
+
+**其它**：两个组件 Provider 各自的 `JSONObject.read` 扩展合并为 `WidgetJson.kt`。
+
+---
+
+**Icons are now pre-baked bitmaps**: the widget process has no access to the app's Material icon font, and
+RemoteViews supports neither font icons nor vector drawables — which is why earlier revisions fell back to
+emoji, whose visual language does not match the panel. `tool/gen_app_widget_icons.py` now renders Flutter's
+bundled `MaterialIcons-Regular.otf` to PNGs at build time (13dp and 26dp, 39 icons), so widget icons and the
+panel's `Icons.*` share the same glyphs. The name-to-resource map is emitted by the same script
+(`WidgetIcons.kt`), and Dart sends names only.
+
+**The logo is now circular.** The source (`mipmap-xxxhdpi/ic_launcher.png`) is not fully transparent outside
+its rounded corners — those pixels are semi-transparent black at alpha≈166 — so scaling it down produces a
+dark halo on the coloured gradient; and at 192px, cropping to a circle leaves a stair-stepped edge. It is now
+redrawn from measured geometry and colours (4× supersampled): `#031F55`→`#011840` background, a `#595959`
+centre circle at radius 18/96, two grey rings at 29/96 and 44.5/96, a `#A8C2F2` outer ring at 59/96, and white
+dots at radius 54/96.
+
+**New design preview tool** (`tool/preview_app_widget.py`) renders every tier from real assets (the same PNG
+icons, the same gradient values, the same type scale) and treats "content does not fit" as a **hard failure**
+(exit code 1). It surfaced seven layout problems before any code was written.
+
+**Also**: the two providers' separate `JSONObject.read` extensions were merged into `WidgetJson.kt`.
+
+## [1.6.115] - 2026-09-17
+
+### 🔴 修复「小组件加载失败」：一个方法名用在了不支持该方法的控件上
+
+**故障现象**：桌面组件显示启动器的「加载失败」占位，四档布局全部失效。
+
+**根因**：条件圆点使用 `TextView` 实现，而代码对其调用
+`setInt(viewId, "setColorFilter", color)`。该方法**仅存在于 `ImageView`**
+（`android.view.View` 与 `android.widget.TextView` 均无此方法），因此运行时抛出
+`NoSuchMethodException`，`RemoteViews.apply()` 随之抛出 `ActionException`，
+启动器渲染失败占位。
+
+需要强调的是：**RemoteViews 的失败是整块的**，并非「该处样式不生效」——
+单个无效调用即导致整个组件不可用。这也是 v1.6.114 之前的版本能够正常显示的原因：
+那些版本未使用 `setColorFilter`。
+
+**修复**：改用**更换 drawable** 表达级别色 —— 新增
+`aw_dot_{danger,warn,good,tip}.xml` 四张记色圆点，运行时以
+`setInt(dot, "setBackgroundResource", …)` 切换。这是 RemoteViews 中唯一可靠的换色手段，
+与危险级提示行更换红底同属一种做法。级别名无法识别时回退到中性圆点，
+而不是传入 0（传 0 会清除背景，圆点消失）。
+
+圆点颜色为级别原色向白色提亮 35%，与级别文字同值；提亮算法由 `Color.lerp` 改为
+**整数分量运算**，以消除浮点表示在边界值上的 1 单位偏差，使 Dart 与 Python 两侧结果
+可精确断言。
+
+**同时补强静态检查**：`tool/check_android_res_ids.py` 增加**按目标控件类型**校验
+`setInt` 字符串方法名的规则（方法名 → 定义该方法的类：`setTextColor`→`TextView`、
+`setColorFilter`→`ImageView`、`setBackgroundResource`→`View`）。
+此前该检查只有一份手写的**方法名白名单**，而 `setColorFilter` 恰在其中 ——
+名字级别的白名单无法表达「该方法在该控件类型上是否存在」，因而未能拦住此故障。
+新规则已用 v1.6.114 的代码验证会报错（3 个调用点、共 15 条）。
+
+**另修**：`compactRows` 外层缺少 `level` 字段，导致 Kotlin 取到空串、小尺寸档的级别颜色
+静默丢失；生成脚本 `dot()` 将颜色写死为 `#FFFFFF`，使 `aw_dot_danger.xml` 的注释与实际
+渲染颜色不一致（已加自检：注释中声明的颜色必须出现在产物中）。
+
+---
+
+**Symptom**: the home-screen widget showed the launcher's failure placeholder and all four tiers were dead.
+
+**Root cause**: the condition dot was a `TextView`, and the code called
+`setInt(viewId, "setColorFilter", color)` on it. That method exists **only on `ImageView`** (neither
+`android.view.View` nor `android.widget.TextView` has it), so it threw `NoSuchMethodException`,
+`RemoteViews.apply()` threw `ActionException`, and the launcher rendered its failure placeholder.
+
+It is worth stressing that **a RemoteViews failure is all-or-nothing** — not "that bit of styling is lost".
+A single invalid call makes the entire widget unusable, which is also why the revisions before v1.6.114
+displayed correctly: they never called `setColorFilter`.
+
+**Fix**: severity colour is now expressed by **swapping drawables** — four tinted dots
+(`aw_dot_{danger,warn,good,tip}.xml`) selected at runtime with
+`setInt(dot, "setBackgroundResource", …)`. In RemoteViews this is the only reliable way to change colour, and
+it is the same technique already used to give the danger row a red background. An unrecognised severity falls
+back to the neutral dot rather than passing 0 (which clears the background and makes the dot vanish).
+
+The dot colours are the severity colours lightened 35% toward white, matching the severity labels; the
+lightening was also changed from `Color.lerp` to **integer component arithmetic** to remove a one-unit
+floating-point discrepancy at boundary values, making the Dart and Python results exactly assertable.
+
+**Static checks were strengthened**: `tool/check_android_res_ids.py` now validates `setInt` string method
+names **by target view type** (method → defining class: `setTextColor`→`TextView`,
+`setColorFilter`→`ImageView`, `setBackgroundResource`→`View`). The previous check used a hand-written
+**method-name whitelist**, which happened to include `setColorFilter` — a name-level whitelist cannot express
+"does this method exist on this view type", so it could not have caught this failure. The new rule was verified
+against the v1.6.114 code, where it reports all 15 violations across three call sites.
+
+**Also fixed**: `compactRows` omitted the outer `level` field, so Kotlin read an empty string and the small
+tiers silently lost their severity colours; and the generator's `dot()` hard-coded `#FFFFFF`, leaving
+`aw_dot_danger.xml`'s comment disagreeing with the colour it actually rendered (a self-check now ensures the
+colour named in a comment appears in the output).
+
+## [1.6.114] - 2026-09-17
+
+### 📱 新增 Android 桌面小组件：天气 + 业余无线电提示（4 档自适应）
+
+主屏组件，显示当前天气与**此刻需要注意的无线电操作事项**，按主屏可用空间自动切换四档布局：
+
+| 档位 | 格子 | 内容 |
+|---|---|---|
+| 主档 | 3~4×2 | 天气主区（图标、温度、天气现象、今日高低温）+ 指标格 + 通栏建议 |
+| 竖长档 | 2×4 | 温度 + 指标 + 堆叠式建议（最接近应用内面板的排布） |
+| 紧凑档 | 2×2 | 温度 + 天气现象 + 单条最要紧的建议 |
+| 单行档 | 3~4×1 | 一行显示温度、天气现象与一条建议 |
+
+**架构：数据单向推送，组件不自行请求天气。** 和风天气密钥在构建期通过
+`--dart-define=QWEATHER_KEY` 注入 Dart 侧，原生侧无法获取 —— 为一个组件在 Kotlin 中
+再保存一份密钥会引入额外的泄漏面，且两份密钥不同步时会出现「应用有天气、组件没有」。
+更关键的是判定规则：火腿建议的整套逻辑（雷电、大风、低温、高湿、沙尘、大气波导、
+灰线）、空气质量分级、逐日预报解析均实现在 `lib/weather.dart`，
+在 Kotlin 中重写必然与面板产生分歧，且两处分别看都成立，属难以排查的一类缺陷。
+因此由 Flutter 侧（`lib/app_widget.dart`）组装一份**已计算、已本地化**的快照 JSON
+推送给原生，原生仅负责渲染。
+
+**字号与颜色层级对齐应用内面板**：提示行的级别色、分隔线透明度、文字弱化方式均取自
+面板既有数值。小尺寸档放不下一整句建议，因此 Dart 侧将建议切为逐级变短的若干版本，
+由原生按可用宽度选取 —— 切分规则涉及全角冒号与句末标点，属本地化范畴。
+
+---
+
+A home-screen widget showing current weather plus **what needs attention right now**, switching
+automatically between four layouts based on available space: a 3–4×2 main tier (weather hero, metric cells,
+full-width tips), a 2×4 tall tier (stacked tips, closest to the in-app panel), a 2×2 compact tier, and a
+3–4×1 single-row tier.
+
+**Architecture: one-way data push; the widget never fetches weather itself.** The QWeather key is injected
+into Dart at build time via `--dart-define=QWEATHER_KEY` and is not available to native code — keeping a second
+copy in Kotlin for the widget would add a leak surface, and drift between the two copies would produce
+"app has weather, widget does not". More importantly, every rule lives in `lib/weather.dart` (the ham-advice
+logic for storms, gales, cold, humidity, dust, ducting and gray-line; AQI grading; daily forecast parsing),
+and reimplementing it in Kotlin would inevitably diverge from the panel — with each side looking correct on
+its own, which makes such defects hard to diagnose. Flutter therefore composes an **already computed and
+already localised** snapshot JSON and pushes it to the native side, which only renders it.
+
+**Type and colour hierarchy follows the in-app panel** (severity colours, hairline opacity, and text
+de-emphasis all reuse the panel's existing values). Because the smaller tiers cannot fit a full sentence, Dart
+pre-slices each tip into progressively shorter variants and the native side selects by available width — the
+splitting rules involve full-width colons and sentence punctuation, which is a localisation concern.
+
 ## [1.6.113] - 2026-09-15
 
 ### ⚡ 修一个会「越用越卡」的累积性缺陷：APRS-IS 被反复重建 + socket 泄漏
@@ -846,7 +8361,7 @@ emits near-Nyquist noise during 0 bits and made the signal undecodable.
 - **根因**：中文界面下目标语言就是中文，而群聊消息本来就是中文 →
   接口返回的内容与原文相同 → 而上一版把「译文＝原文」**当成失败并自动跳到
   下一个接口** → 三个候选都「失败」→ 报错。**数字、呼号、坐标同理**。
-- **修法**（也就是你说得对的那件事）：
+- **修法**：
   - 「译文与原文相同」**不再算失败、不再跳接口**，只作为一个标记
   - 界面不再把原文再抄一遍，而是如实说明：
     「译文与原文相同 · 可能无需翻译，或该接口未能翻译」
@@ -2178,8 +9693,7 @@ v1.6.80 新增的定位状态串 `模拟位置 · 后台保活` **不在映射�
   清空按钮 + 二次确认弹窗）
 - **原「聊天」入口替换为「设备」**：新增 `DeviceSettingsPage`，点开显示
   「前方施工，尚未开放」占位（图标 + 提示文案），为后续电台设备接入预留
-- 按你的确认，**「管理联系人」一并移除**（消息页仍可添加/收藏联系人，
-  但不再有删除入口）
+- **「管理联系人」一并移除**（消息页仍可添加/收藏联系人，但不再有删除入口）
 
 **② 整理「连接」设置页**（原先 4 张卡片职责混乱）
 - **「服务器（连接状态）」+「服务器配置」→ 合并为「APRS-IS 连接」**

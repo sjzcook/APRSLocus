@@ -12,7 +12,8 @@
 
 | 场景 | 改动文件数 | 是否需发版 |
 |---|---|---|
-| **① 授予已有称号**（最常见） | 1（`docs/members.json`） | ❌ 不需要 |
+| **① 授予称号**（名单里已有的人） | 1（`docs/members.json`） | ❌ 不需要 |
+| **①′ 授予称号 + 新面孔**（首次进名单） | 3（`members.json` + `member-card.html` + `lib/early_member.dart`） | ❌ 即时生效；`lib/` 那处**要发版**才完全生效 |
 | **② 新增一个称号** | 7（`docs/` + `lib/`） | ✅ **需要**（`lib/` 那 3 处） |
 | **③ 上赞助墙**（见文末，独立于称号） | 5 | ❌ 不需要 |
 
@@ -23,17 +24,33 @@
 
 ---
 
-## ① 授予已有称号
+## ① 授予称号
 
-只改 `docs/members.json` 一个文件。
+**名单里已有的人**：只改 `docs/members.json` 一个文件。
+**首次进名单的新面孔**：另有 2 处配套（见下「新面孔的补充登记」）——漏了就会出现
+「官网会员卡里查无此人」或「卡面三块留白」。
 
 ### 步骤
 
 1. 在 `developers`（默认称号 `kaishan`）或 `earlyMembers`（默认称号 `earlyMember`）里找到该呼号
+   —— **找不到就是新面孔**，先把下面「新面孔的补充登记」那 3 处一起做完
 2. 往它的 `honors` 数组**追加**称号 key
 3. `primary` 按惯例处理（见下）
 4. `version` +1、`updated` 改成当天（仅人工追溯，见「易错点」）
 5. `git commit` → `git push` → 等 Pages 部署（约 1 分钟）后线上即生效
+
+### 新面孔的补充登记（缺一处就少一块）
+
+| # | 文件 | 做什么 | 漏了会怎样 |
+|---|---|---|---|
+| 1 | `docs/members.json` | 追加成员条目：`call` / `who` / `role` / `brief` / **`contrib` / `quote` / `tags`** / `c` / `grp` / `honors` / `primary` | 官网会员卡的「贡献」「寄语」「标签」三块**空着**（寄语框里只剩一个大引号） |
+| 2 | `docs/member-card.html` | `PEOPLE` 兜底名单末尾追加一条，注释写 `与 members.json vNN 对齐`；**`honors` 必须显式写出** | 「取不到 JSON」时（断网 / 本地 `file://` 打开）**整条不出现**；只给 `grp` 不给 `honors` 时，徽章会按 grp 兜底映射成别人的组合 |
+| 3 | `lib/early_member.dart` | `_seedDefaults()` 的 `_honorsCache` / `_primariesCache` 各加一行 | App 离线 / 首帧时该称号不显示（**要发版才生效**） |
+
+> `contrib` / `quote` / `tags` 三语都写，但**只写在 `members.json` 一处**即可 ——
+> `member-card.html` 的 `toPeople()` 取值顺序是
+> `it.contrib || 兜底名单.contrib || 空`，**在线内容优先**；兜底名单那条保持精简，避免两处漂移。
+> 最近的完整范例：**BH7GZB**（v53，开发人员）、**BA7NFI**（v55，播种）。
 
 ### 示例
 
@@ -58,8 +75,8 @@
 
 惯例（以现有数据为准）：**追加称号时一般保持原 `primary` 不变**，不抢原主展示。
 
-> 参考：`[earlyMember, jadeGift]` 组合共 5 人，其中 4 人保持 `primary = earlyMember`
-> （BA4JLD / BG7ORC / BG9KAG / BA4IUD），仅 BA3MDC 用 `jadeGift`。
+> 参考：`[earlyMember, jadeGift]` 组合共 6 人，其中 5 人保持 `primary = earlyMember`
+> （BA4JLD / BG9KAG / BA4IUD / BD1FEH / BG0AVI），仅 BA3MDC 用 `jadeGift`。
 
 ### `role` 要不要跟着改
 
@@ -236,6 +253,7 @@ iSelfReliant:'<path d="M4.5 5h15v14h-15zM8 9.5l3 3-3 3M13.5 15.5h3"/>'
 | `coffee` | 赞助/咖啡 | `Icons.local_cafe_rounded` |
 | `jade` | 赠我以琼琚 | `Icons.card_giftcard_rounded` |
 | `school` | 学校/社团 | `Icons.school_rounded` |
+| `api` | 协议/接口支持 | `Icons.api_rounded` |
 | 其他 | 兜底 | `Icons.favorite_rounded` |
 
 官网 contributor 块模板（注意各语言 `c-role` 文案不同）：
@@ -260,14 +278,11 @@ iSelfReliant:'<path d="M4.5 5h15v14h-15zM8 9.5l3 3-3 3M13.5 15.5h3"/>'
 # 1) JSON 合法性
 python3 -c "import json;json.load(open('docs/members.json',encoding='utf-8'));print('json ok')"
 
-# 2) HTML 内嵌 JS 括号平衡（有字符串内的括号，只看基线是否与改动前一致）
-python3 - <<'PY'
-for f in ['docs/member-card.html','docs/badge.html','lib/early_member.dart']:
-    s=open(f,encoding='utf-8').read()
-    print(f, 'braces', s.count('{')-s.count('}'),
-             'parens', s.count('(')-s.count(')'),
-             'brackets', s.count('[')-s.count(']'))
-PY
+# 2) 内嵌 JS 真体检（**必跑**）：数组元素逗号 + 括号配对，会指出行号
+#    注意：不要再用「数括号个数」那种写法 —— 往对象数组里手加一条、
+#    忘了给上一条补逗号时，**括号个数完全是对的**，只是那个 <script>
+#    整段解析失败、页面一个人都不显示（member-card.html 从 v2.0.4 踩到 v2.0.5）。
+python3 tool/check_embedded_js.py
 
 # 3) 与既有称号逐处对照计数（新增称号时用；数字应一致）
 #    仅 members.json 允许 +1，因为 primary 也指向新称号

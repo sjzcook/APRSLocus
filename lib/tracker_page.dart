@@ -8,6 +8,7 @@ import 'state.dart';
 import 'widgets.dart';
 import 'coord.dart';
 import 'tile_map.dart';
+import 'material.dart';
 
 /// 群组跟踪页：把聊天群的成员放到整屏地图跟踪（车队 / 好友结伴）
 /// - 横屏：左侧成员栏 + 右侧全屏地图（导航风格）
@@ -93,11 +94,14 @@ class _TrackerPageState extends State<TrackerPage>
   (double, double) _tc(double lat, double lng) =>
       _isGcj ? Gcj.wgsToGcj(lat, lng) : (lat, lng);
 
+  /// 渲染投影（百度不是 Web Mercator）
+  MapProjection get _proj => projectionFor(_mapType);
+
   Offset _toScreen(double lat, double lng) {
     final t = _tc(lat, lng);
     final b = _base;
-    final c = MapProj.latLngToPx(b.$1, b.$2, _zoom);
-    final p = MapProj.latLngToPx(t.$1, t.$2, _zoom);
+    final c = _proj.latLngToPx(b.$1, b.$2, _zoom);
+    final p = _proj.latLngToPx(t.$1, t.$2, _zoom);
     return Offset(
       p.dx - c.dx + _mapSize.width / 2 + _pan.dx,
       p.dy - c.dy + _mapSize.height / 2 + _pan.dy,
@@ -107,8 +111,8 @@ class _TrackerPageState extends State<TrackerPage>
   Offset _panFor(double lat, double lng, double zoom) {
     final b = _base;
     final g = _tc(lat, lng);
-    final c = MapProj.latLngToPx(b.$1, b.$2, zoom);
-    final p = MapProj.latLngToPx(g.$1, g.$2, zoom);
+    final c = _proj.latLngToPx(b.$1, b.$2, zoom);
+    final p = _proj.latLngToPx(g.$1, g.$2, zoom);
     return c - p;
   }
 
@@ -163,13 +167,22 @@ class _TrackerPageState extends State<TrackerPage>
     }
     final w = _mapSize.width > 100 ? _mapSize.width : 1000;
     final h = _mapSize.height > 100 ? _mapSize.height : 700;
-    final spanLng = math.max(maxLng - minLng, 0.02);
-    final spanY = math.max((_mercY(maxLat) - _mercY(minLat)).abs(), 1e-4);
-    final zX = math.log((w - 120) * 360 / (spanLng * 256)) / math.ln2;
-    final zY = math.log((h - 160) / (spanY * 256)) / math.ln2;
-    final z = (zX < zY ? zX : zY).clamp(3.0, 16.0);
     final cLat = (minLat + maxLat) / 2;
     final cLng = (minLng + maxLng) / 2;
+    // 用投影在 z0 上的像素跨度反算缩放级（对 Web Mercator 与百度都成立）
+    final spanXpx = math.max(
+        (_proj.latLngToPx(cLat, maxLng, 0).dx -
+                _proj.latLngToPx(cLat, minLng, 0).dx)
+            .abs(),
+        1e-3);
+    final spanYpx = math.max(
+        (_proj.latLngToPx(maxLat, cLng, 0).dy -
+                _proj.latLngToPx(minLat, cLng, 0).dy)
+            .abs(),
+        1e-3);
+    final zX = math.log((w - 120) / spanXpx) / math.ln2;
+    final zY = math.log((h - 160) / spanYpx) / math.ln2;
+    final z = (zX < zY ? zX : zY).clamp(3.0, 16.0);
     _panCtrl.stop();
     final z0 = _zoom;
     setState(() {
@@ -193,7 +206,7 @@ class _TrackerPageState extends State<TrackerPage>
     if (_mapSize.width <= 0 || _mapSize.height <= 0) return;
     // 视口世界像素范围（含余量 70px）
     final b = _base;
-    final c = MapProj.latLngToPx(b.$1, b.$2, _zoom);
+    final c = _proj.latLngToPx(b.$1, b.$2, _zoom);
     final left = c.dx - _mapSize.width / 2 - _pan.dx - 70;
     final right = c.dx + _mapSize.width / 2 - _pan.dx + 70;
     final top = c.dy - _mapSize.height / 2 - _pan.dy - 70;
@@ -202,7 +215,7 @@ class _TrackerPageState extends State<TrackerPage>
       final s = m.st;
       if (s == null) continue;
       final t = _tc(s.lat, s.lng);
-      final p = MapProj.latLngToPx(t.$1, t.$2, _zoom);
+      final p = _proj.latLngToPx(t.$1, t.$2, _zoom);
       if (p.dx < left || p.dx > right || p.dy < top || p.dy > bottom) {
         _fitAll(keep: true);
         return;
@@ -213,11 +226,6 @@ class _TrackerPageState extends State<TrackerPage>
   /// 退出全览保持（用户手动操作/点人时调用）
   void _exitKeepFit() {
     _keepFitAll = false;
-  }
-
-  double _mercY(double lat) {
-    final s = math.sin(lat * math.pi / 180);
-    return (1 - math.log((1 + s) / (1 - s)) / (2 * math.pi)) / 2;
   }
 
   /// 跟踪成员：群成员(confirmedMembers) ∪ 我自己。排序：我 → 有位置 → 无位置
@@ -429,8 +437,8 @@ class _TrackerPageState extends State<TrackerPage>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: softShadow(blur: 10, alpha: 0.2),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: elev1(),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -454,22 +462,25 @@ class _TrackerPageState extends State<TrackerPage>
     return SafeArea(
       child: Row(
         children: [
-          Container(
-            width: 272,
-            color: C.white,
-            child: Column(
-              children: [
-                _header(members, showGroupChat: !_isTemp),
-                const Divider(height: 1),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: members.length,
-                    itemBuilder: (_, i) => _memberTile(members[i]),
+          MaterialSurface(
+            radius: 0,
+            child: Container(
+              width: 272,
+              color: C.sheetFill,
+              child: Column(
+                children: [
+                  _header(members, showGroupChat: !_isTemp),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      itemCount: members.length,
+                      itemBuilder: (_, i) => _memberTile(members[i]),
+                    ),
                   ),
-                ),
-                _toolRow(),
-              ],
+                  _toolRow(),
+                ],
+              ),
             ),
           ),
           // 横屏：地图区左上角叠模式徽章，底部叠会话信息条
@@ -521,24 +532,27 @@ class _TrackerPageState extends State<TrackerPage>
                   child: _chatBar(members, compact: true),
                 ),
               if (members.isNotEmpty)
-                Container(
-                  height: 116,
-                  margin: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-                  decoration: BoxDecoration(
-                    color: C.white.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.7),
+                MaterialSurface(
+                  radius: 16,
+                  child: Container(
+                    height: 116,
+                    margin: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                    decoration: BoxDecoration(
+                      color: C.white.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                      boxShadow: elev3(),
                     ),
-                    boxShadow: softShadow(blur: 16, alpha: 0.12),
-                  ),
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                    itemCount: members.length,
-                    itemBuilder: (_, i) =>
-                        SizedBox(width: 244, child: _memberTile(members[i])),
-                  ),
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                      itemCount: members.length,
+                      itemBuilder: (_, i) =>
+                          SizedBox(width: 244, child: _memberTile(members[i])),
+                    ),
+                  )
                 )
               else
                 _emptyHint(),
@@ -557,74 +571,77 @@ class _TrackerPageState extends State<TrackerPage>
         .length;
     return Material(
       color: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        decoration: BoxDecoration(
-          color: C.white.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: softShadow(blur: 10, alpha: 0.08),
-        ),
-        child: Row(
-          children: [
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.arrow_back_rounded, size: 20, color: C.ink),
-              onPressed: () => Navigator.pop(context),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.group.name,
-                    style: ts(14, w: FontWeight.w800),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    S
-                        .of(context)
-                        .trackHeader(members.length, online, withPos),
-                    style: ts(9, c: C.grey),
-                  ),
-                ],
-              ),
-            ),
-            // 群聊快捷入口（可选，横屏成员栏显示）
-            if (showGroupChat)
+      child: MaterialSurface(
+        radius: 16,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: elev1(),
+          ),
+          child: Row(
+            children: [
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: S.of(context).groupChatShort,
-                icon: Icon(Icons.chat_bubble_rounded,
-                    size: 18, color: C.orange),
-                onPressed: () => _openChatSheet(null),
+                icon: Icon(Icons.arrow_back_rounded, size: 20, color: C.ink),
+                onPressed: () => Navigator.pop(context),
               ),
-            // 全览（进入自动保持模式；再次点击退出）
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              tooltip: S.of(context).fitAll,
-              icon: Icon(
-                Icons.zoom_out_map_rounded,
-                size: 19,
-                color: _keepFitAll ? Colors.white : C.blue,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.group.name,
+                      style: ts(13, w: FontWeight.w800),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      S
+                          .of(context)
+                          .trackHeader(members.length, online, withPos),
+                      style: ts(9, c: C.grey),
+                    ),
+                  ],
+                ),
               ),
-              style: IconButton.styleFrom(
-                backgroundColor: _keepFitAll
-                    ? C.green
-                    : C.blueBg,
-                disabledBackgroundColor: Colors.transparent,
+              // 群聊快捷入口（可选，横屏成员栏显示）
+              if (showGroupChat)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: S.of(context).groupChatShort,
+                  icon: Icon(Icons.chat_bubble_rounded,
+                      size: 18, color: C.orange),
+                  onPressed: () => _openChatSheet(null),
+                ),
+              // 全览（进入自动保持模式；再次点击退出）
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: S.of(context).fitAll,
+                icon: Icon(
+                  Icons.zoom_out_map_rounded,
+                  size: 19,
+                  color: _keepFitAll ? Colors.white : C.blue,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: _keepFitAll
+                      ? C.green
+                      : C.blueBg,
+                  disabledBackgroundColor: Colors.transparent,
+                ),
+                onPressed: () {
+                  if (_keepFitAll) {
+                    _exitKeepFit();
+                  } else {
+                    _fitAll(keep: true);
+                  }
+                },
               ),
-              onPressed: () {
-                if (_keepFitAll) {
-                  _exitKeepFit();
-                } else {
-                  _fitAll(keep: true);
-                }
-              },
-            ),
-            const SizedBox(width: 2),
-          ],
+              const SizedBox(width: 2),
+            ],
+          ),
         ),
       ),
     );
@@ -734,7 +751,7 @@ class _TrackerPageState extends State<TrackerPage>
                               ),
                               child: Text(
                                 localizedStatusLabel(context, s!.effectiveStatus),
-                                style: ts(8,
+                                style: ts(9,
                                     c: C.blue, w: FontWeight.w700),
                               ),
                             ),
@@ -743,7 +760,7 @@ class _TrackerPageState extends State<TrackerPage>
                       ),
                       Text(
                         _memberSub(m),
-                        style: ts(9.5, c: C.grey, h: 1.25),
+                        style: ts(9, c: C.grey, h: 1.25),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -871,7 +888,10 @@ class _TrackerPageState extends State<TrackerPage>
       isScrollControlled: true,
       builder: (bctx) {
         return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(bctx).viewInsets.bottom),
+          // 键盘 + 系统导航栏（同 settings_pages 的速度档弹层，issue #25）
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(bctx).viewInsets.bottom +
+                  sysBottomInset(bctx)),
           child: StatefulBuilder(
             builder: (bctx, setSheet) {
               final isGroup = target == null;
@@ -888,7 +908,7 @@ class _TrackerPageState extends State<TrackerPage>
               return Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                 child: Column(
@@ -905,7 +925,7 @@ class _TrackerPageState extends State<TrackerPage>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(title,
-                              style: ts(15, w: FontWeight.w800),
+                              style: ts(16, w: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                         ),
@@ -937,7 +957,7 @@ class _TrackerPageState extends State<TrackerPage>
                                       horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
                                     color: mine ? C.blueBg : C.bgSoft,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(m.text,
                                       style: ts(12, c: C.ink),
@@ -1047,70 +1067,73 @@ class _TrackerPageState extends State<TrackerPage>
     final target = isGroupMsg ? null : m.from;
     return GestureDetector(
         onTap: () => _openChatSheet(target),
-        child: Container(
-          padding: compact
-              ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
-              : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: C.white.withValues(alpha: compact ? 0.98 : 0.95),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: (isGroupMsg ? C.orange : C.cyan).withValues(alpha: 0.4),
-            ),
-            boxShadow: softShadow(blur: 12, alpha: 0.15),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isGroupMsg ? Icons.group_rounded : Icons.person_rounded,
-                size: compact ? 14 : 28,
-                color: isGroupMsg ? C.orange : C.cyan,
+        child: MaterialSurface(
+          radius: 12,
+          child: Container(
+            padding: compact
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+                : const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: C.white.withValues(alpha: 1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: (isGroupMsg ? C.orange : C.cyan).withValues(alpha: 0.4),
               ),
-              SizedBox(width: compact ? 6 : 8),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!compact) ...[],
-                    Text(
-                      compact
-                          ? '${isGroupMsg ? widget.group.name : fromName}: ${m.text}'
-                          : m.text,
-                      style: ts(
-                        compact ? 10 : 11,
-                        c: C.ink,
-                        w: compact ? FontWeight.w600 : FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (!compact)
+              boxShadow: elev2(),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isGroupMsg ? Icons.group_rounded : Icons.person_rounded,
+                  size: compact ? 14 : 28,
+                  color: isGroupMsg ? C.orange : C.cyan,
+                ),
+                SizedBox(width: compact ? 6 : 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!compact) ...[],
                       Text(
-                        isGroupMsg ? widget.group.name : fromName,
-                        style: ts(9, c: C.slate, w: FontWeight.w600),
+                        compact
+                            ? '${isGroupMsg ? widget.group.name : fromName}: ${m.text}'
+                            : m.text,
+                        style: ts(
+                          compact ? 10 : 11,
+                          c: C.ink,
+                          w: compact ? FontWeight.w600 : FontWeight.w700,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                  ],
-                ),
-              ),
-              if (recent.length > 1) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: C.red,
-                    borderRadius: BorderRadius.circular(7),
+                      if (!compact)
+                        Text(
+                          isGroupMsg ? widget.group.name : fromName,
+                          style: ts(9, c: C.slate, w: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
-                  child: Text('${recent.length}',
-                      style: ts(8, c: Colors.white, w: FontWeight.w800)),
                 ),
+                if (recent.length > 1) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: C.red,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('${recent.length}',
+                        style: ts(9, c: Colors.white, w: FontWeight.w800)),
+                  ),
+                ],
+                const SizedBox(width: 4),
+                Icon(Icons.reply_rounded,
+                    size: compact ? 12 : 14, color: C.blue),
               ],
-              const SizedBox(width: 4),
-              Icon(Icons.reply_rounded,
-                  size: compact ? 12 : 14, color: C.blue),
-            ],
+            ),
           ),
         ),
     );
@@ -1254,7 +1277,7 @@ class _TrackerOverlayPainter extends CustomPainter {
           tp.width + 6,
           tp.height + 3,
         ),
-        const Radius.circular(4),
+        const Radius.circular(6),
       );
       canvas.drawRRect(
         bg,

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      桌面小组件文案（Android 资源，只用于系统界面里显示的那几处：
+      「添加小组件」列表名称、长按 → 信息、以及从未同步过时的占位提示）。
+      组件内部的天气/建议文字全部由 Flutter 侧本地化后下发，
+      不走这里 —— 见 lib/app_widget.dart。
+      默认（values/）为中文；英文在 values-en/。
+    -->
+    <string name="app_widget_weather_label">天气与无线电提示</string>
+    <string name="app_widget_weather_desc">显示当前位置天气与业余无线电操作提示（4×2）</string>
+    <string name="app_widget_weather_empty">打开 APRSlocus 并完成定位后，这里会显示天气与业余无线电提示</string>
+    <!-- 短波/电离层传播组件 -->
+    <string name="app_widget_hf_label">短波传播与各波段条件</string>
+    <string name="app_widget_hf_desc">各波段的日间/夜间传播条件与太阳指数（4×2）</string>
+    <string name="app_widget_hf_empty">打开 APRSlocus 获取短波传播数据后，这里会显示各波段条件</string>
+    <!-- 系统状态组件 -->
+    <string name="app_widget_sys_label">台站系统状态</string>
+    <string name="app_widget_sys_desc">定位、四条链路、收发计数与信标状态（4×2）</string>
+    <string name="app_widget_sys_empty">打开 APRSlocus 并连接后，这里会显示台站运行状态</string>
+</resources>

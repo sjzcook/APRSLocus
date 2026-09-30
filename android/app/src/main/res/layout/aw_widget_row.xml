@@ -1,0 +1,138 @@
+<!--
+  桌面小组件 · 单行档（3~4×1）
+
+  一条通栏：天气图标 + 温度 + 天气现象 / 高低温 ｜ 一条建议 ｜ 右端 logo。
+  
+  高度只有 1 格（约 72dp），所以一切必须单行。建议用 Dart 侧预先切好的
+  短版本（compactRows[0].singles），由 Kotlin 按可用宽度从长到短挑第一个
+  放得下的 —— 切分规则（全角冒号 / 句末标点）属于本地化范畴，不在 Kotlin 做。
+  
+  右端**只放 logo 不放名称**：一行里要挤下 温度/天气/高低温 再加一条建议，
+  再写「APRSlocus」会把建议截成「雷雨天气…」等于没给信息（预览里就是）。
+  
+  ⚠ 硬约束同主档。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/aw_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/aw_bgs_cloudy">
+    <LinearLayout
+        android:id="@+id/aw_pad"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_hero_icon"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_big_thunderstorm" />
+    <TextView
+        android:id="@+id/aw_temp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:letterSpacing="-0.02"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <LinearLayout
+        android:id="@+id/aw_cond_box"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="5dp"
+        android:orientation="vertical">
+    <TextView
+        android:id="@+id/aw_cond"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="9.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_range"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/aw_sep"
+        android:layout_width="1dp"
+        android:layout_height="22dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="11dp"
+        android:background="@drawable/aw_sep"
+        android:textColor="@color/aw_ink"
+        android:textSize="1sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/aw_tip0_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <ImageView
+        android:id="@+id/aw_tip0_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginStart="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_rss_feed" />
+    <TextView
+        android:id="@+id/aw_tip0_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="8.5sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_tip0_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="9sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/aw_logo"
+        android:layout_width="17dp"
+        android:layout_height="17dp"
+        android:layout_marginStart="8dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_logo" />
+    </LinearLayout>
+    <TextView
+        android:id="@+id/aw_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.35"
+        android:visibility="gone"
+        android:includeFontPadding="false" />
+</FrameLayout>

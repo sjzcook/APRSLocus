@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
@@ -15,12 +16,54 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aprslocus/location"
     private val EVENT_CHANNEL = "com.aprslocus/location_events"
     private var permCompleter: MethodChannel.Result? = null
+
+    /**
+     * 计步（ACTIVITY_RECOGNITION）权限请求的回调（issue #22-2）。
+     *
+     * 与定位权限分开一个 requestCode：`onRequestPermissionsResult` 里按 code 分派，
+     * 共用 code 会让两边同时命中、把对方尚未完成的 completer 误 resolve
+     * （TNC/PKWDWPL 那里已经踩过一次，注释就在下面）。
+     */
+    private var motionPermCompleter: MethodChannel.Result? = null
+    private val motionPermCode = 200
+
+    // 备份导入的文件选择：系统文件选择器是异步的（先 startActivityForResult，
+    // 结果在 onActivityResult 里回来），所以这里要暂存 Dart 侧的 Result，
+    // 等选完再回。同一时刻只允许一个选择在飞（否则两个 Result 会互相踩）。
+    private var pickCompleter: MethodChannel.Result? = null
+
+    // 当前这次选择要的是文本还是二进制。放在字段上而不是靠 requestCode 区分：
+    // 两者用的是同一个 startActivityForResult，结果回调里分不出来。
+    private var pickBinary = false
+
+    // 这次要读的字节上限。由 Dart 传进来：图标 2MB、背景图 8MB ——
+    // 上限必须**在读之前**就知道，否则大文件照样会把内存吃爆。
+    private var pickMaxBytes = MAX_ICON_BYTES
+    private companion object {
+        const val REQ_PICK_BACKUP = 4711
+
+        // 备份文本上限：读进来要整体转成 String 传给 Dart，
+        // 不设上限的话一个误选的几个 G 的文件就能把应用 OOM 掉。
+        // 32MB 对「设置+消息记录」来说已经极其宽松。
+        const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
+
+        // 主题自定义图标的大小上限（与 Dart 侧 kIconMaxBytes 保持一致）
+        const val MAX_ICON_BYTES = 2 * 1024 * 1024
+
+        // 分享入口（佳明 LiveTrack）：与本应用**发起**分享的
+        // "com.aprslocus/share" 是相反方向，故意不同名 —— 那个是把文本 SEND
+        // 出去给别的 App，这个是从别的 App 把 SEND 进来的文本收下。
+        const val SHARE_IN_CHANNEL = "com.aprslocus/share_in"
+        const val SHARE_IN_EVENT_CHANNEL = "com.aprslocus/share_in_events"
+
+    }
 
     // 蓝牙 TNC（经典蓝牙 SPP）：只搬字节，KISS/AX.25 在 Dart 侧
     private var tnc: TncManager? = null
@@ -34,8 +77,49 @@ class MainActivity : FlutterActivity() {
     // 声卡 TNC（AFSK 1200）：同样只搬 PCM 采样，调制解调在 Dart 侧
     private var audio: AudioManager? = null
 
+    // USB 串口（USB-OTG）：Android 侧此前只有蓝牙 SPP，插 USB 转串口线
+    // （CH340 / CP2102 / FTDI）或电台自带 USB 口时用不了。同样只搬字节，
+    // KISS/AX.25 全在 Dart 侧 —— 与蓝牙侧同一套分层。
+    private var usbSerial: UsbSerialManager? = null
+
+    // 运动传感器（加速度计 + 指南针）：只服务「自己」的轨迹打点（低速航向
+    // 补正 + 判断是否真的在动）。通道常挂，Dart 侧按需 start/stop/sample。
+    private var motion: MotionManager? = null
+
+    // BLE 心率带（标准心率服务 0x180D）：只把心率/电量搬出来，不做任何业务 ——
+    // 与 TNC 同一套分层（协议与用法全在 Dart 侧）。
+    private var bleHr: BleHrManager? = null
+
+    // 外部分享进来的文本（目前只认佳明 LiveTrack 链接）。
+    // 为什么要存下来而不是直接发事件：分享**冷启动**也会发生（应用没在运行时
+    // 从佳明 App 点分享），那一刻 Flutter 引擎还没起来、事件通道还没有监听者，
+    // 直接 send 会丢。所以先存着，冷启动由 Dart 主动 takePendingSharedText 取走，
+    // 热启动才走事件通道。
+    private var pendingShared: String? = null
+
+    // 分享入口的事件 sink（为 null 说明 Dart 侧还没在监听 —— 冷启动路径）
+    private var shareInSink: EventChannel.EventSink? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // 桌面小组件桥：Dart 把算好的天气快照推过来，这里落盘并刷新组件
+        WeatherWidgetBridge(this, flutterEngine.dartExecutor.binaryMessenger).attach()
+
+        // 运动传感器桥：拉取式（Dart 每次定位回调 sample 一次），
+        // 避免持续的事件流；没有传感器的设备 start() 返回 false。
+        val motionManager = MotionManager(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, MotionManager.CHANNEL)
+            .setMethodCallHandler { call, result ->
+                // 计步权限必须由 Activity 发起（MotionManager 只有 Context），
+                // 所以这一条在这里拦下来，其余照旧交给 manager。
+                if (call.method == "requestActivityPermission") {
+                    requestActivityPermission(result)
+                } else {
+                    motionManager.handle(call, result)
+                }
+            }
+        motion = motionManager
 
         // 方法通道：控制定位服务 + 权限
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
@@ -134,10 +218,11 @@ class MainActivity : FlutterActivity() {
                             } else {
                                 try {
                                     manager.connect(address)
-                                    // 蓝牙已接入：让前台服务声明 connectedDevice 类型。
-                                    // 与音频同一个坑 —— Android 14+ 不声明就会在退到
-                                    // 后台后限制蓝牙访问（表现为「切后台收不到报文」）。
-                                    setBtActive(true)
+                                    // 蓝牙已接入：重算「还有没有设备在用蓝牙」，让前台
+                                    // 服务声明 connectedDevice 类型。与音频同一个坑 ——
+                                    // Android 14+ 不声明就会在退到后台后限制蓝牙访问
+                                    // （表现为「切后台收不到报文」）。
+                                    refreshBtActive()
                                     result.success(true)
                                 } catch (e: Exception) {
                                     result.error("BT_CONNECT_FAILED", e.message ?: "连接失败", null)
@@ -149,12 +234,12 @@ class MainActivity : FlutterActivity() {
                                 manager.disconnect()
                             } catch (_: Exception) {
                             }
-                            // 只有两条 SPP 链路都断开时才撤销 connectedDevice 声明。
-                            // 判断用「另一个 manager 是否还连着」而不是各记各的状态 ——
-                            // 否则先断开的那条会把仍在工作的那条的类型声明撤掉，
-                            // 重新落回「后台被限制蓝牙」的坑里。
-                            val other = if (manager === tnc) pkwdwpl else tnc
-                            setBtActive(other?.isConnected() == true)
+                            // 断开后**重算**「还有设备在用蓝牙吗」，而不是自己传一个
+                            // 布尔值。原来这里写的是「看另一个 manager 是否还连着」——
+                            // 那种写法漏了 USB 与 BLE：先断开的那条链路会把仍在工作的
+                            // 那条的 connectedDevice 声明撤掉，重新落回「后台被限制
+                            // 蓝牙」的坑。判断统一收进 refreshBtActive。
+                            refreshBtActive()
                             result.success(true)
                         }
                         "send" -> {
@@ -220,6 +305,71 @@ class MainActivity : FlutterActivity() {
             TncManager.EVENT_CHANNEL_PKWDWPL,
         )
 
+        // BLE 心率带通道：扫描 → 连接 → 订阅标准心率服务 0x180D 的通知。
+        //
+        // 与上面两条 SPP 链路**刻意隔离**（用户明确要求「不要跟 TNC 的蓝牙
+        // 通道起冲突」）：
+        //   * 全程只用 BluetoothLeScanner，**绝不调用 adapter.startDiscovery()**
+        //     —— 经典蓝牙「发现设备」会打断正在工作的 SPP 连接（表现：TNC
+        //     正在收报文时突然断流），BLE 扫描器走的不是那条路径；
+        //   * 不调用 adapter.enable() / disable()（整机重启蓝牙，SPP 必断）；
+        //   * connect 前先 stopScan()（扫描与连接争用同一个蓝牙控制器）；
+        //   * 不读写 TncManager 的任何状态，只通过 busySppAddresses 回调问一句
+        //     「这个地址现在被 SPP 占着吗」。
+        val bleHrManager = BleHrManager(
+            this,
+            // 地址占用判定：TNC 与 PKWDWPL 各最多占一条 SPP 链路。
+            // 传回调而不是把 TncManager 塞进去，是为了不让两个管理器互相引用 ——
+            // 这里只需要「哪些地址现在被占着」这一个事实。
+            busySppAddresses = {
+                setOfNotNull(tnc?.connectedAddress(), pkwdwpl?.connectedAddress())
+            },
+            // 链路状态是异步变化的（GATT 回调），Dart 的方法调用点覆盖不到，
+            // 所以由管理器主动通知这里重算前台服务类型。
+            onLinkChanged = { refreshBtActive() },
+        )
+        bleHr = bleHrManager
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BleHrManager.METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isSupported" -> result.success(bleHrManager.isSupported())
+                    "requestPermissions" -> bleHrManager.requestPermissions(result)
+                    "startScan" -> result.success(bleHrManager.startScan())
+                    "stopScan" -> {
+                        bleHrManager.stopScan()
+                        result.success(true)
+                    }
+                    "connect" -> {
+                        val address = call.argument<String>("address")
+                        if (address.isNullOrEmpty()) {
+                            result.error("NO_ADDRESS", "缺少设备地址", null)
+                        } else {
+                            // 校验与「防跟 SPP 撞车」都在管理器里回 error，
+                            // 这里不要再包一层 —— 会变成「先 success 再 error」
+                            bleHrManager.connect(address, result)
+                        }
+                    }
+                    "disconnect" -> {
+                        bleHrManager.disconnect()
+                        result.success(true)
+                    }
+                    "status" -> result.success(bleHrManager.status())
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, BleHrManager.EVENT_CHANNEL)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, things: EventChannel.EventSink?) {
+                        bleHrManager.setEventSink(things)
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        bleHrManager.setEventSink(null)
+                    }
+                }
+            )
+
         // 音频通道（声卡 TNC）：采集 PCM16 上传 / 接收 PCM16 播放
         val audioManager = AudioManager(this)
         audio = audioManager
@@ -263,6 +413,90 @@ class MainActivity : FlutterActivity() {
                     override fun onCancel(arguments: Any?) {
                         audioManager.setEventSink(null)
                         setAudioCaptureActive(false)
+                    }
+                }
+            )
+
+        // USB 串口通道：枚举 / 授权 / 打开 / 收发（只搬字节）
+        val usbManager = UsbSerialManager(this)
+        usbSerial = usbManager
+        usbManager.attach()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UsbSerialManager.METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isSupported" -> result.success(usbManager.isSupported())
+                    "listDevices" -> {
+                        try {
+                            result.success(usbManager.listDevices())
+                        } catch (e: Exception) {
+                            result.error("USB_LIST_FAILED", e.message ?: "列出 USB 设备失败", null)
+                        }
+                    }
+                    "connect" -> {
+                        val id = call.argument<String>("id")
+                        val baud = call.argument<Int>("baudRate") ?: 9600
+                        if (id.isNullOrEmpty()) {
+                            result.error("NO_ID", "缺少设备标识", null)
+                        } else {
+                            usbManager.connect(id, baud, result)
+                            // USB 已接入：重算「还有没有设备在用蓝牙」，让前台服务
+                            // 声明 connectedDevice 类型。与蓝牙/音频同一个坑 ——
+                            // Android 14+ 不声明就会在退到后台后限制 USB 访问
+                            // （表现为「切后台收不到报文」）。
+                            refreshBtActive()
+                        }
+                    }
+                    "disconnect" -> {
+                        try {
+                            usbManager.disconnect()
+                        } catch (_: Exception) {
+                        }
+                        // 同样交给 refreshBtActive：四条链路（TNC / PKWDWPL /
+                        // USB / BLE）里还有活着的就保留 connectedDevice 声明
+                        refreshBtActive()
+                        result.success(true)
+                    }
+                    "send" -> {
+                        val data = call.argument<ByteArray>("data")
+                        if (data == null) {
+                            // 与蓝牙侧同一条教训：List<int> 会编成 ArrayList，
+                            // Kotlin 侧取 ByteArray 得 null（发送静默失败）
+                            val raw = call.argument<Any>("data")
+                            result.error(
+                                "NO_DATA",
+                                "缺少数据：期望 ByteArray，实际收到 " +
+                                    (raw?.javaClass?.name ?: "null") +
+                                    "。Dart 侧必须传 Uint8List（见 Kiss.escape 注释）",
+                                null
+                            )
+                        } else {
+                            try {
+                                usbManager.send(data)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("USB_SEND_FAILED", e.message ?: "发送失败", null)
+                            }
+                        }
+                    }
+                    "requestPermissions" -> {
+                        // USB 的授权是**按设备**、由系统弹窗完成的（见 connect），
+                        // 没有可预先申请的运行时权限 —— 恒为 true，免得上层把
+                        // 「还没插线」误判成「没有权限」。
+                        result.success(true)
+                    }
+                    "info" -> result.success(usbManager.info())
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, UsbSerialManager.EVENT_CHANNEL)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                        usbManager.setEventSink(events)
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        usbManager.setEventSink(null)
                     }
                 }
             )
@@ -320,21 +554,225 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // 导出通道：把文本文件写入「下载」目录（供 ADIF 导出使用）
+        // 分享入口（佳明 LiveTrack）：与上面的分享通道方向相反。
+        // 冷启动的文本走 takePendingSharedText（Flutter 还没起来时事件没人收），
+        // 热启动的文本走事件通道（见 intakeShared）。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_IN_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "takePendingSharedText" -> {
+                        // 取走即清空：否则 Flutter 引擎重建 / 界面热重载时会
+                        // 把同一次分享当成新的再处理一遍（用户会莫名多出一路追踪）
+                        val text = pendingShared
+                        pendingShared = null
+                        result.success(text)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_IN_EVENT_CHANNEL)
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, things: EventChannel.EventSink?) {
+                        shareInSink = things
+                        // 这里**刻意不补发** pendingShared 里的旧文本：冷启动那条
+                        // 路径由 Dart 主动 take 走，两边都发会让同一次分享被处理
+                        // 两遍。Dart 侧只要「先 take、再监听」就不会漏。
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        shareInSink = null
+                    }
+                }
+            )
+
+        // 导出通道：把文本文件写入「下载」目录（供 ADIF 导出 / 备份导出使用）
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.aprslocus/export").setMethodCallHandler { call, result ->
             when (call.method) {
                 "saveToDownloads" -> {
                     val filename = call.argument<String>("filename") ?: "export.adi"
                     val content = call.argument<String>("content") ?: ""
-                    val path = saveToDownloads(filename, content)
+                    // 备份是 application/json，ADIF/音频保持 text/plain。
+                    // 不能都写 text/plain：部分系统会据此给文件名追加 .txt。
+                    val mime = call.argument<String>("mimeType") ?: "text/plain"
+                    val path = saveToDownloads(filename, content, mime)
                     if (path == null) {
                         result.error("SAVE_FAILED", "保存失败", null)
                     } else {
                         result.success(path)
                     }
                 }
+                // 音频 WAV 导出：二进制不能走 saveToDownloads（那条按 UTF-8 写文本）
+                "saveBytesToDownloads" -> {
+                    val filename = call.argument<String>("filename") ?: "audio.wav"
+                    val b64 = call.argument<String>("base64")
+                    val mime = call.argument<String>("mimeType") ?: "audio/wav"
+                    if (b64 == null) {
+                        result.error("NO_DATA", "缺少文件内容", null)
+                    } else {
+                        val bytes = try {
+                            android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (bytes == null) {
+                            result.error("BAD_DATA", "文件内容解码失败", null)
+                        } else {
+                            val path = saveBytesToDownloads(filename, bytes, mime)
+                            if (path == null) {
+                                result.error("SAVE_FAILED", "保存失败", null)
+                            } else {
+                                result.success(path)
+                            }
+                        }
+                    }
+                }
+                // 备份导入：拉起系统文件选择器，返回 {name, content}
+                // 用户取消返回 null；文件过大 / 读失败走 error
+                "pickTextFile" -> pickTextFile(result)
+                // 主题自定义图标：同一条选择器，但要把**二进制**读回来。
+                // 不能复用 pickTextFile：图片按 UTF-8 解码会被替换字符破坏，
+                // 得到的是一堆「看起来像文本」的垃圾。这里改成 base64。
+                "pickBinaryFile" -> pickBinaryFile(
+                    result,
+                    call.argument<Int>("maxBytes") ?: MAX_ICON_BYTES
+                )
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /// 拉起系统文件选择器（ACTION_GET_CONTENT），把选中的文本文件读回 Dart。
+    ///
+    /// 用 GET_CONTENT 而不是 OPEN_DOCUMENT：前者任何文件管理器都支持，
+    /// 且拿到的是临时读权限，够读一次备份；不需要持久化权限。
+    private fun pickTextFile(result: MethodChannel.Result) {
+        if (pickCompleter != null) {
+            result.error("BUSY", "已有文件选择在进行中", null)
+            return
+        }
+        pickCompleter = result
+        pickBinary = false
+        try {
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "*/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+                // 有些文件管理器对 .json 的 MIME 识别成 octet-stream，
+                // 所以 type 用 */* 兜底，只把 json/plain 作为优先提示。
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf("application/json", "text/plain")
+                )
+            }
+            startActivityForResult(
+                Intent.createChooser(intent, "APRSlocus"),
+                REQ_PICK_BACKUP
+            )
+        } catch (e: Exception) {
+            pickCompleter = null
+            result.error("NO_PICKER", e.message, null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_PICK_BACKUP) return
+        val completer = pickCompleter ?: return
+        pickCompleter = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) {
+            // 用户取消：不是错误，回 null（Dart 侧据此区分「取消」与「读失败」）
+            completer.success(null)
+            return
+        }
+        val binary = pickBinary
+        pickBinary = false
+        try {
+            val name = displayNameOf(uri) ?: if (binary) "icon.png" else "backup.json"
+            if (binary) {
+                // 上限用 MAX_ICON_BYTES（2MB）：图标要塞进 22~40dp 的位置，
+                // 2MB 已极宽松；不设限的话一张手机原图就能变成主题里的巨石。
+                val bytes = readBytesCapped(uri, pickMaxBytes)
+                if (bytes == null) {
+                    completer.error("TOO_LARGE", "图片过大", null)
+                    return
+                }
+                val b64 = android.util.Base64.encodeToString(
+                    bytes, android.util.Base64.NO_WRAP
+                )
+                completer.success(mapOf("name" to name, "data" to b64))
+            } else {
+                val text = readTextCapped(uri, MAX_BACKUP_BYTES)
+                if (text == null) {
+                    completer.error("TOO_LARGE", "文件过大", null)
+                    return
+                }
+                completer.success(mapOf("name" to name, "content" to text))
+            }
+        } catch (e: Exception) {
+            completer.error("READ_FAILED", e.message, null)
+        }
+    }
+
+    /// 读取二进制，超过 [max] 字节返回 null（与文本版同样的分块思路）
+    private fun readBytesCapped(uri: Uri, max: Int): ByteArray? {
+        val input = contentResolver.openInputStream(uri) ?: return null
+        input.use { ins ->
+            val buf = ByteArrayOutputStream()
+            val chunk = ByteArray(64 * 1024)
+            while (true) {
+                val n = ins.read(chunk)
+                if (n <= 0) break
+                if (buf.size() + n > max) return null
+                buf.write(chunk, 0, n)
+            }
+            return buf.toByteArray()
+        }
+    }
+
+    /// 与 [pickTextFile] 同一条选择器，但以 base64 返回二进制（主题图标用）。
+    private fun pickBinaryFile(result: MethodChannel.Result, maxBytes: Int) {
+        if (pickCompleter != null) {
+            result.error("BUSY", "已有文件选择在进行中", null)
+            return
+        }
+        pickCompleter = result
+        pickBinary = true
+        pickMaxBytes = if (maxBytes > 0) maxBytes else MAX_ICON_BYTES
+        try {
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "image/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+                // 部分机型把 svg/webp 识别成 octet-stream，所以只当提示用
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf("image/*", "application/octet-stream")
+                )
+            }
+            startActivityForResult(
+                Intent.createChooser(intent, "APRSlocus"),
+                REQ_PICK_BACKUP
+            )
+        } catch (e: Exception) {
+            pickCompleter = null
+            result.error("NO_PICKER", e.message, null)
+        }
+    }
+
+    /// 读取文本文件，超过 [max] 字节返回 null（继续读下去只会把内存吃爆）。
+    /// 用分块读取而不是 readBytes()：后者会先按不限长度分配。
+    private fun readTextCapped(uri: Uri, max: Int): String? {
+        val input = contentResolver.openInputStream(uri) ?: return null
+        input.use { ins ->
+            val buf = ByteArrayOutputStream()
+            val chunk = ByteArray(64 * 1024)
+            while (true) {
+                val n = ins.read(chunk)
+                if (n <= 0) break
+                if (buf.size() + n > max) return null
+                buf.write(chunk, 0, n)
+            }
+            return buf.toString(Charsets.UTF_8.name())
         }
     }
 
@@ -344,42 +782,68 @@ class MainActivity : FlutterActivity() {
     ///   （应用向 Downloads 集合插入自己的内容不需要 WRITE_EXTERNAL_STORAGE）。
     /// - Android 9 及以下：写入应用的外部私有目录（同样无需权限；
     ///   在那些系统版本上该目录可被文件管理器直接浏览）。
-    private fun saveToDownloads(filename: String, content: String): String? {
+    private fun saveToDownloads(
+        filename: String,
+        content: String,
+        mime: String = "text/plain"
+    ): String? = saveToDownloads(filename, mime) {
+        it.write(content.toByteArray(Charsets.UTF_8))
+    }
+
+    /// 二进制版本（音频 WAV 导出用）。
+    ///
+    /// 为什么必须单独一条：文本导出把内容按 UTF-8 写，WAV 是二进制 ——
+    /// 用同一条通道会把文件写坏（而且「坏了但看着成功」最难查）。
+    ///
+    /// 路径与文本版**共用同一个 helper**：导出目的地只有一处定义，
+    /// 免得出现「文本进 Downloads、音频进别处」这种不一致。
+    private fun saveBytesToDownloads(
+        filename: String,
+        bytes: ByteArray,
+        mime: String = "audio/wav"
+    ): String? = saveToDownloads(filename, mime) { it.write(bytes) }
+
+    /// 写入「下载」目录的公共实现：插入 MediaStore 条目（或落到应用外部目录）
+    /// → 交给 [write] 写内容 → 把文件名改成我们要求的那个。
+    ///
+    /// 返回**用户可见的路径**（File 管理器里看到的那种）。
+    private fun saveToDownloads(
+        filename: String,
+        mime: String,
+        write: (java.io.OutputStream) -> Unit
+    ): String? {
         // 文件名来自 Dart，做一次净化，避免路径穿越
         val safe = filename.replace('/', '_').replace('\\', '_')
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, safe)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
-                    put(
-                        MediaStore.MediaColumns.RELATIVE_PATH,
-                        Environment.DIRECTORY_DOWNLOADS
-                    )
+                    put(MediaStore.MediaColumns.MIME_TYPE, mime)
                 }
                 val resolver = contentResolver
                 // 音频 WAV 属于音乐/音频类型：放进 Downloads 的 Audio 子目录更整齐，
-                // 也让系统文件管理器的分类视图能直接找到。
+                // 也让系统文件管理器的分类视图能直接找到（导出后要能一眼找到，
+                // 才能拿它去给 Direwolf / 电台解）。
                 val isAudio = safe.lowercase().endsWith(".wav")
-                if (isAudio) {
-                    values.put(
-                        MediaStore.MediaColumns.RELATIVE_PATH,
+                values.put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    if (isAudio) {
                         Environment.DIRECTORY_DOWNLOADS + "/APRSlocusAudio"
-                    )
-                }
+                    } else {
+                        Environment.DIRECTORY_DOWNLOADS
+                    }
+                )
                 val uri = resolver.insert(
                     MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
                 ) ?: return null
                 resolver.openOutputStream(uri)?.use { out ->
-                    out.write(content.toByteArray(Charsets.UTF_8))
+                    write(out)
                     out.flush()
                 } ?: return null
-                // 部分实现会根据 MIME（text/plain）给文件名**追加 .txt**，
-                // 使 APRSlocus_….adi 变成 APRSlocus_….adi.txt。
-                // 这里读回实际名字，不一致就改回原名（.adi 是 ADIF 的惯用扩展名）。
+                // 部分实现会根据 MIME 给文件名**追加后缀**（text/plain → .txt、
+                // 音频 → .wav/.mp3），使 APRSlocus_….adi 变成 APRSlocus_….adi.txt。
+                // 这里读回实际名字，不一致就改回原名。
                 val actual = displayNameOf(uri)
-                // 媒体类型下部分系统会给音频文件补 .wav/.mp3 之类的后缀，
-                // 与文本同理：写回原名，保证与自检/日志里报告的路径一致。
                 if (actual != null && actual != safe) {
                     try {
                         resolver.update(
@@ -394,11 +858,17 @@ class MainActivity : FlutterActivity() {
                         // 改不回去也不影响导出成功（内容已写入）
                     }
                 }
-                "Download/$safe"
+                // 报告**真实路径**：音频在 Download/APRSlocusAudio/ 下，
+                // 之前一律回 "Download/$safe" 会让用户去错的目录里找。
+                if (isAudio) {
+                    "Download/APRSlocusAudio/$safe"
+                } else {
+                    "Download/$safe"
+                }
             } else {
                 val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
                 val f = File(dir, safe)
-                f.writeText(content, Charsets.UTF_8)
+                f.outputStream().use { write(it) }
                 f.absolutePath
             }
         } catch (_: Exception) {
@@ -432,11 +902,149 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /// 冷启动的分享入口。
+    ///
+    /// Activity 是 singleTop：应用**没在**运行时点分享，系统会新建 Activity，
+    /// 意图在 onCreate 的 intent 里；应用在后台时点分享，系统不新建 Activity，
+    /// 只回调 onNewIntent（见下）。两条路都要接，缺一条就成了
+    /// 「第一次分享能用，后面再分享毫无反应」。
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 此刻 Flutter 引擎刚建、Dart 还来不及监听事件通道，所以这里几乎一定
+        // 走「存起来」这条分支（见 intakeShared）。
+        intakeShared(intent)
+    }
+
+    /// 热启动的分享入口。
+    ///
+    /// **必须重写**：singleTop 下第二次分享只走这里，不重写就会把分享悄悄
+    /// 丢掉（表现：在佳明 App 里再点一次分享，切回 APRSlocus 什么也没发生）。
+    /// setIntent 也要做：否则 getIntent() 一直是第一次那个，后续再读 intent
+    /// 会拿到过期内容（比如用户又分享了一个不同的链接）。
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // 到这里 Flutter 引擎通常已起来、Dart 也已在监听事件通道 —— 直接推事件；
+        // 万一还没人监听，intakeShared 会退化成存起来等 Dart 来 take。
+        intakeShared(intent)
+    }
+
+    /// 收下分享进来的 LiveTrack 链接：能直接推就推（热启动），
+    /// 推不了就先存着（冷启动，Flutter 还没起来）。
+    private fun intakeShared(intent: Intent?) {
+        // 只处理「文本分享」；不是分享意图就安静返回（那是别的事）。
+        if (intent == null || intent.action != Intent.ACTION_SEND) return
+        val type = intent.type ?: ""
+        if (!type.startsWith("text/")) return
+        // ⚠ **读不到文本也要照推一次（空串）**：以前这里 `?: return` 直接静默返回 ——
+        // 用户点了分享却什么都没发生，**既没有提示也没有日志**，只能来问「为什么没反应」。
+        // 现在空串也送到 Dart，由那边如实提示「没有找到佳明链接」，失败可见、可诊断。
+        val text = readSharedText(intent) ?: ""
+        val sink = shareInSink
+        if (sink != null) {
+            sink.success(mapOf("type" to "shared", "text" to text))
+        } else {
+            pendingShared = text
+        }
+    }
+
+    /// 从 ACTION_SEND 意图里取出分享文本；不是文本分享、或不是佳明 LiveTrack
+    /// 的链接则返回 null（安静忽略）。
+    ///
+    /// 为什么要有域名闸门：声明了 ACTION_SEND 的
+    /// intent-filter 之后，**任意 App 分享任意文本**时 APRSlocus 都会出现在
+    /// 分享目标里（这是系统机制，没法按宿主 App 过滤）。不设闸门的话，用户在
+    /// 微信里分享一句话也会看到 APRSlocus，点进来又什么都没发生 —— 一脸问号。
+    /// 所以只在文本里确实出现佳明 LiveTrack 域名时才收下。
+    ///
+    /// 只做「识别 + 透传」：**不解析 URL 的 uuid/token、不发任何网络请求**
+    /// （那涉及登录态与跨域，全部交给 Dart 侧）。
+    /// 取分享文本：`EXTRA_TEXT` → `EXTRA_SUBJECT` → **`clipData`**。
+    ///
+    /// ── 为什么要 ClipData 这一路 ──
+    /// 不少应用（部分佳明版本、浏览器、笔记类）把分享内容塞在 `intent.clipData`
+    /// 里而不是 `EXTRA_TEXT`。只读 extras 会拿到 null，于是整条分享在我们这边
+    /// **完全静默**（用户实测报的「有时候行、有时候不行」就是这个：
+    /// 取决于那一次分享走的是哪条 extras/clipData 路径）。
+    private fun sharedTextOf(intent: Intent): String? {
+        val direct = textExtra(intent, Intent.EXTRA_TEXT)
+            ?: textExtra(intent, Intent.EXTRA_SUBJECT)
+        if (!direct.isNullOrBlank()) return direct
+        return try {
+            val item = intent.clipData?.getItemAt(0) ?: return null
+            (item.coerceToText(this)?.toString() ?: item.text?.toString())
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun readSharedText(intent: Intent?): String? {
+        if (intent == null || intent.action != Intent.ACTION_SEND) return null
+        // 不写死 "text/plain"：部分分享方会带参数（如 text/plain;charset=utf-8），
+        // 用相等比较会把这些全漏掉；按 text/ 前缀接更稳。
+        val type = intent.type ?: ""
+        if (!type.startsWith("text/")) return null
+        val raw = sharedTextOf(intent)
+        val text = raw?.trim()
+        if (text.isNullOrEmpty()) return null
+        // **不再在这里按域名过滤**。
+        //
+        // 以前只放行含 `livetrack.garmin.com` / `gar.mn` 的文本，理由是「不设闸门
+        // 用户会在分享面板里看到 APRSlocus」—— 那个理由**是错的**：应用是否出现在
+        // 分享面板只由 AndroidManifest 的 intent-filter（`text/plain`）决定，
+        // 这里过滤不掉任何东西。它唯一的作用是把「佳明换了域名 / 分享的是别的形式」
+        // 变成**静默丢弃**：Dart 侧连一次网络请求都没发出，用户和日志都看不到原因。
+        //
+        // 现在一律透传给 Dart：能识别就追踪，识别不了就如实提示
+        // （见 AppState._onSharedIncoming 的 onGarminShareNoLink）。
+        return text
+    }
+
+    /// 取字符串型 extra。
+    ///
+    /// 用 extras.get 而不是 getStringExtra：分享方常把 EXTRA_TEXT 塞成
+    /// CharSequence（SpannableString，微信/浏览器很常见），这时 getStringExtra
+    /// 会抛 ClassCastException —— 接收方直接崩，而「我分享了一下对方就闪退」
+    /// 是最难归因的一类问题（用户根本不会想到是接收方崩的）。
+    private fun textExtra(intent: Intent, key: String): String? = try {
+        when (val v = intent.extras?.get(key)) {
+            null -> null
+            is CharSequence -> v.toString()
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
+    }
+
     override fun onPostResume() {
         super.onPostResume()
         // 权限请求统一由 Dart 侧按业务时机触发（OOBE 完成后 / 用户主动开启定位），
         // 避免首次启动向导期间系统权限弹窗突兀打断。
         // 这里仅兜底：如果 Dart 尚未请求但用户已回到前台且已有权限，就绪无需操作。
+    }
+
+    /**
+     * 请求 ACTIVITY_RECOGNITION（计步）。Android 10 以下没有这条运行时权限，
+     * 直接返回 true —— 免得在旧系统上弹一个不存在的权限、永远等不到回调。
+     */
+    private fun requestActivityPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < 29) {
+            result.success(true)
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            motion?.refreshStepsRegistration()
+            result.success(true)
+            return
+        }
+        motionPermCompleter = result
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.ACTIVITY_RECOGNITION),
+            motionPermCode,
+        )
     }
 
     private fun requestPermissionsNow() {
@@ -463,10 +1071,19 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == motionPermCode) {
+            val ok = checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
+                PackageManager.PERMISSION_GRANTED
+            if (ok) motion?.refreshStepsRegistration()
+            motionPermCompleter?.success(ok)
+            motionPermCompleter = null
+            return
+        }
         // 蓝牙/录音权限请求走各自的 requestCode，勿与定位权限混淆
         tnc?.onRequestPermissionsResult(requestCode, grantResults)
         pkwdwpl?.onRequestPermissionsResult(requestCode, grantResults)
         audio?.onRequestPermissionsResult(requestCode, grantResults)
+        bleHr?.onRequestPermissionsResult(requestCode, grantResults)
         if (requestCode != 100) return
         val ok = hasPermissions()
         permCompleter?.success(ok)
@@ -502,11 +1119,29 @@ class MainActivity : FlutterActivity() {
         stopService(Intent(this, LocationService::class.java))
     }
 
-    /// 蓝牙是否在用 → 同步给前台服务（决定要不要声明 connectedDevice 类型）。
+    /// 重新统计「还有没有蓝牙/USB 设备在用」，再同步给前台服务。
+    ///
+    /// 为什么收敛成一个函数：setBtActive(布尔) 原本由 TNC / PKWDWPL / USB 三处
+    /// 各自传值调用，「断开时该传什么」各写各的 —— 已经踩过一次：先断开的那条
+    /// 链路会把仍在工作的那条的 connectedDevice 声明撤掉，落回「退到后台就收不到
+    /// 报文」的坑（Android 14+ 后台访问蓝牙必须有这个前台服务类型）。所以改成：
+    /// **调用方都不传布尔值**，由这里统一统计四条链路里是否还有活着的。
+    /// 任何「我这条链路断了所以整体不活跃」的判断都是错的，必须走这里。
+    private fun refreshBtActive() {
+        val anyActive = tnc?.isConnected() == true ||
+            pkwdwpl?.isConnected() == true ||
+            usbSerial?.isConnected() == true ||
+            bleHr?.isConnected() == true
+        setBtActive(anyActive)
+    }
+
+    /// 把「是否有设备在使用蓝牙」推给前台服务（决定要不要声明 connectedDevice）。
     ///
     /// 与音频的 setAudioCaptureActive 对应：Android 14（API 34）起，前台服务中
     /// 访问蓝牙设备必须声明 connectedDevice 类型，否则系统会限制蓝牙访问 ——
     /// 症状正是「能发不能收」或「退到后台就收不到」。当初只修了音频，漏了蓝牙。
+    ///
+    /// **只应由 [refreshBtActive] 调用**（onDestroy 里那处显式 false 除外）。
     private fun setBtActive(active: Boolean) {
         try {
             LocationService.setBtActiveStatic(active)
@@ -582,6 +1217,14 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        // USB 串口的读线程与连接句柄要显式释放：
+        //   * 不释放时 reader 线程会一直挂在长超时的 bulkTransfer 上；
+        //   * 连接句柄不关，界面里选了一根线、退出应用后那根线仍显示占用。
+        try {
+            usbSerial?.detach()
+        } catch (_: Exception) {
+        }
+        usbSerial = null
         try {
             tnc?.dispose()
         } catch (_: Exception) {
@@ -592,11 +1235,28 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {
         }
         pkwdwpl = null
+        // 传感器监听必须显式注销：否则 Activity 销毁后传感器仍在唤醒
+        try {
+            motion?.stop()
+        } catch (_: Exception) {
+        }
+        motion = null
         try {
             audio?.dispose()
         } catch (_: Exception) {
         }
         audio = null
+        // BLE 心率带：dispose 里会停扫描 + gatt.close()。
+        // 不 close 的话系统的 GATT 客户端资源一直占着（上限约 32 个），
+        // 下次进应用连心率带很容易直接 133 失败。
+        try {
+            bleHr?.dispose()
+        } catch (_: Exception) {
+        }
+        bleHr = null
+        // 分享入口的 sink 必须清掉：Activity 都销毁了，EventChannel 已经没人听，
+        // 留着会让下一次分享被推给一个失效的 sink（丢事件且不报错）
+        shareInSink = null
         // 撤销蓝牙/音频的前台服务类型声明：Activity 销毁后不该再声称在用这些设备，
         // 否则服务会带着 connectedDevice/microphone 类型继续跑（系统可能因此在
         // 下次启动时要求额外权限，也浪费电）。

@@ -20,6 +20,20 @@
 <meta name="twitter:title" content="APRSlocus — APRS Tracking & Mapping">
 <meta name="twitter:description" content="An APRS client for amateur radio operators. Runs on Android and Windows.">
 <meta name="twitter:image" content="https://aprslocus.theez.top/assets/logo.png">
+<script>
+/* 主题：localStorage 优先，否则跟随系统。必须在首帧前执行，
+   否则深色偏好用户会先闪一下白屏（CSS 键在 <html data-theme> 上）。 */
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t !== 'dark' && t !== 'light')
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+  } catch (e) {}
+})();
+</script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -41,10 +55,11 @@
 <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/">
 <link rel="canonical" href="https://aprslocus.theez.top/en/">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="stylesheet" href="../css/style.css?v=4">
+<link rel="stylesheet" href="../css/style.css?v=5">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 </head>
 <body>
+<a class="skip-link" href="#features">Skip to main content</a>
 
 <!-- ═══════════ Preloader ═══════════ -->
 <div class="preloader" id="preloader" aria-hidden="true">
@@ -79,11 +94,13 @@
       <a href="#changelog">Changelog</a>
       <a href="#getting-started">Getting Started</a>
       <a href="#faq">FAQ</a>
+      <a href="manual/index.html">Guide</a>
       <a href="#community">Community</a>
       <a class="nav-cta" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">2.0 BETA</a>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode" data-label-dark="Switch to light mode" data-label-light="Switch to dark mode"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
       <span class="lang-switch-group"><a class="lang-switch" href="../" hreflang="zh-Hans">简中</a><a class="lang-switch" href="../zh-TW/" hreflang="zh-Hant">繁中</a><a class="lang-switch" href="./" hreflang="en">EN</a></span>
     </nav>
-    <button class="nav-burger" id="navBurger" aria-label="Menu">
+    <button class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
   </div>
@@ -91,7 +108,7 @@
 
 <!-- ═══════════ HERO ═══════════ -->
 <section class="hero" id="hero">
-  <canvas class="hero-canvas" id="heroCanvas"></canvas>
+  <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
   <div class="hero-grid"></div>
 
   <div class="hero-inner">
@@ -255,36 +272,45 @@
     <div class="announce-ribbon"><span class="ar-dot"></span>Announcement</div>
 
     <header class="announce-head">
-      <p class="announce-kicker">APRSLocus 2.0 BETA — Development Begins</p>
-      <h2 class="announce-title">TOUCH SKY<span class="announce-en">A Thank-You Letter</span></h2>
-      <p class="announce-sub">From network-only to radio frequency — from "seeing" to "reaching".</p>
+      <p class="announce-kicker">📡 v2.0.9 released · Life guard beta</p>
+      <h2 class="announce-title">Life guard: crash &amp; fall detection (beta)<span class="announce-en">v2.0.9 · crash &amp; fall detection (beta)</span></h2>
+      <p class="announce-sub">The phone accelerometer watches for "one sharp impact, then no movement from you" and raises an alert plus a system notification. It is a beta feature and it does false-alarm — please read the caveats before leaving it switched on.</p>
     </header>
 
     <div class="announce-body">
-      <p class="announce-greet">Dear fellow travelers of APRSLocus,</p>
-      <p>When <b>FIRST FIX</b> lit up for the first time, we were still searching for a coordinate deep inside the network. A bright dot crossed clouds and servers and landed on the map, like a first breath. Now <b>TOUCH SKY</b> lets the signal leave the cable, enter the air, cross mountain ridges and cities, and land in the ripples of RF. Going from pure network to radio is more than a technical migration — it is a journey from "seeing" to "reaching".</p>
-      <p>Thanks to the APRS community, digipeaters, iGates, server maintainers, map and data providers, and all open-source projects and amateur-radio pioneers. You are the invisible bridges and the silent shores; you built the road between network and radio, letting every fix travel farther.</p>
-      <p>1.0 "<b>FIRST FIX</b>" gave us our footing; 2.0 "<b>TOUCH SKY</b>" makes us look up. From pure network to radio, we write "connected" as "heard", and "data arrived" as "the sky answered". And now we are officially moving into <b>APRSLocus 2.0 BETA</b> development. TOUCH SKY is not the destination — it is the starting point of the next voyage.</p>
-      <p>Testers, HAMs and developers are all welcome to join the <b>2.0 BETA</b>. Your logs, suggestions, reproductions and patience remain the brightest signal on this road.</p>
-      <p class="announce-quote">FIRST FIX is where we started; TOUCH SKY is a salute. 2.0 BETA is the next departure.<br>The sky is vast — let's keep going together.</p>
-
-      <div class="announce-sign">
-        <span class="ann-sign-line">Radio waves never end — thanks for traveling with us! 73!</span>
-        <span class="ann-sign-team">The APRSLocus Team</span>
-        <span class="ann-sign-date">September 15, 2026</span>
-      </div>
+      <p><b>v2.0.9 is out.</b> It extends <b>Life guard</b> beyond the abnormal-heart-rate alarm with <b>crash and fall detection</b>: the phone notices one sharp impact and then no movement from you, and it raises an alert plus a system notification.</p>
+      <p><b>This is a beta feature. Treat it as "may help, will sometimes false-alarm".</b> The criteria and the caveats are below — please read them before leaving it switched on.</p>
+      <p><b>1. How it decides that something happened</b></p>
+      <p>Two stages, and <b>both</b> must hold:</p>
+      <p><b>① Impact</b> — the acceleration with gravity removed spikes above <b>3.2 g</b>. Crashes and falls both produce such a spike; sustained acceleration such as hard braking does not (gravity is separated out of the reading first).</p>
+      <p><b>② Then stillness</b> — for <b>12 seconds</b> after the impact there is almost no movement.</p>
+      <p>Why the second stage is required: with the spike alone, <b>speed bumps, a phone dropped on a desk, or a good shake</b> all qualify, and an alert that fires several times a day gets ignored. The trade-off, stated plainly: <b>a minor impact — one where you can still move — will not alert.</b> This is about "I cannot move", not "a collision occurred".</p>
+      <p>Two more guards: nothing is judged in the first <b>20 seconds</b> after the app starts (picking the phone up and putting it down also creates spikes), and two alerts are at least <b>3 minutes</b> apart (one crash produces a burst of spikes).</p>
+      <p><b>2. Caveats — please read them all</b></p>
+      <ul class="announce-list"><li><b>It does false-alarm.</b> A speed bump followed by a 12-second stop at a red light satisfies both stages. The first button in the alert is "I am fine"; tap it and nothing else is affected.</li><li><b>It is a heuristic, not engineering-grade crash detection.</b> Fixed thresholds, no direction of travel, no GPS fusion, no cross-checking of any kind.</li><li><b>It only alerts; it does not act for you.</b> Calling emergency services and asking nearby stations for help both require <b>you to press the button</b> — the app never dials by itself and never sends a distress message on its own.</li><li><b>"Ask nearby stations" is not 110 / 120.</b> It sends one message to each of the <b>5</b> nearest APRSLocus stations within 100 km: `SOS CRASH HR=… position` (`SOS HR=…` for a heart-rate alarm), and it asks for confirmation first. Those operators <b>may not be online or looking at their phones</b>, and if no station is known nearby the request cannot be sent (the app says so).</li><li><b>It depends on phone hardware and on the app running.</b> An accelerometer is required (if there is none, the page says "this device cannot detect impact"); the accelerometer needs no extra permission. <b>Once the system ends the app's process there will be no alert</b> — this is not a background-resident service.</li><li><b>It is on by default</b> and can be turned off in <b>Settings → Life guard</b>. It does <b>not</b> require tracking to be on: it keeps watching even with no position updates (deliberately so — people turn GPS off to save battery when riding).</li><li><b>Please do not treat it as your only safety measure.</b> Ride and drive as carefully as you always would, and in a real emergency call <b>110 / 120</b> (or your local emergency number) directly.</li></ul>
+      <p><b>3. The heart-rate alarm is unchanged</b></p>
+      <p>The original <b>abnormal heart-rate alarm</b> still works the same way: an <b>external heart-rate device must be connected and pushing data</b> (a Bluetooth chest strap or Garmin LiveTrack), and a reading must reach or cross the upper / lower limit you set. <b>A stale reading does not alert.</b> The limits and the emergency number are on the same page and take effect the moment you change them.</p>
+      <p><b>4. Three fixes in this release</b></p>
+      <ul class="announce-list"><li><b>Steps always showed "permission needed" even after it was granted.</b> A reading of -1 has three different causes: no step sensor, no activity-recognition permission, or <b>no hardware event yet</b> (without permission the system simply does not dispatch events, and reports no error). They were conflated, so "granted but has not walked yet" was displayed as "permission needed". There are now four states: unsupported / needs permission / <b>waiting for data</b> / ok.</li><li><b>Switches on the Life guard page did nothing</b> (state was written back, but the page did not follow it).</li><li><b>The "Save" button of the speed-tier editor was covered by the navigation bar</b> — the sheet now reserves both the keyboard and the system navigation bar.</li></ul>
+      <p><b>Please report what you see while it is in beta.</b> If it fires when it should not (or stays silent when it should not), send the <b>phone model and what was happening</b> (speed bump, hard braking, phone dropped…) to <a href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">GitHub Issues</a> — thresholds like these can only be tuned against real situations.</p>
+      <p><b>73!</b></p>
+      <p><b>The APRSLocus team</b></p>
+      <p>29 September 2026</p>
     </div>
 
     <div class="announce-actions">
-      <a class="btn btn-primary" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
-        <i class="fa-solid fa-flask"></i>
-        Join the 2.0 BETA
+      <a class="btn btn-primary" href="https://github.com/dariondong/APRSLocus/releases/tag/v2.0.9" target="_blank" rel="noopener">
+        <i class="fa-solid fa-download"></i>
+        Download 2.0.9
       </a>
-      <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">
+      <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+        <i class="fa-solid fa-list-check"></i>
+        View full changelog
+      </a>
+      <a class="btn btn-text" href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">
         <i class="fa-solid fa-comment-dots"></i>
         Feedback &amp; Suggestions
       </a>
-      <a class="btn btn-text" href="#community">Join the community<svg viewBox="0 0 24 24"><path d="M8 5l7 7-7 7V5z"/></svg></a>
     </div>
   </div>
 </section>
@@ -300,8 +326,8 @@
     <article class="card reveal">
       <div class="card-icon c1"><i class="fa-solid fa-location-dot"></i></div>
       <h3>Real-time Map Tracking</h3>
-      <p>Many tile sources: AMap tiles, AMap satellite, Vector, Carto (light/dark/voyager), OSM (standard/humanitarian), OpenTopo, and Esri. Stations are grouped by callsign, with trail playback support.</p>
-      <ul class="card-tags"><li>GCJ-02 / WGS-84</li><li>Station Clustering</li><li>Trail Display</li></ul>
+      <p>Many tile sources: AMap tiles, AMap satellite, Vector, Carto (light/dark/voyager), OSM (standard/humanitarian), OpenTopo, and Esri. One marker per station (clustering removed in v1.6.149), with trail playback support; the heatmap shows density when zoomed out.</p>
+      <ul class="card-tags"><li>GCJ-02 / WGS-84</li><li>Heatmap</li><li>Trail Display</li></ul>
     </article>
 
     <article class="card reveal">
@@ -388,6 +414,30 @@
       <h3>Data Export</h3>
       <p>One-tap ADIF export — the standard amateur-radio log interchange format — with a configurable frequency, ready to import into other logging software.</p>
       <ul class="card-tags"><li>ADIF</li><li>Custom frequency</li></ul>
+    </article>
+    <article class="card reveal">
+      <div class="card-icon c15"><i class="fa-solid fa-table-cells-large"></i></div>
+      <h3>Home-screen Widgets</h3>
+      <p>Android home-screen widgets: weather (four adaptive sizes), HF propagation and system status. The widgets never open a connection themselves — the app pushes a snapshot to them, which keeps them cheap on battery.</p>
+      <ul class="card-tags"><li>Android</li><li>4 adaptive sizes</li><li>No direct network</li></ul>
+    </article>
+    <article class="card reveal">
+      <div class="card-icon c16"><i class="fa-solid fa-satellite-dish"></i></div>
+      <h3>HF & Ionospheric Propagation</h3>
+      <p>An HF panel plus a standalone widget: SFI / Kp / A index, sunspots, X-rays, solar wind, and day/night conditions for four band pairs at a glance. Data comes from hamqsl.com (N0NBH) with a 30-minute cache.</p>
+      <ul class="card-tags"><li>SFI / Kp / A</li><li>Day / night</li><li>30-min cache</li></ul>
+    </article>
+    <article class="card reveal">
+      <div class="card-icon c17"><i class="fa-solid fa-map-location-dot"></i></div>
+      <h3>Offline Maps</h3>
+      <p>Download the tiles of the current view to the device (resumable, 200k tiles per region) and keep the map with no network at all; a four-step fallback keeps it readable and clickable.</p>
+      <ul class="card-tags"><li>Download view</li><li>Resumable</li><li>4-step fallback</li></ul>
+    </article>
+    <article class="card reveal">
+      <div class="card-icon c18"><i class="fa-solid fa-paintbrush"></i></div>
+      <h3>Themes & Backup</h3>
+      <p>Themes go beyond colour: icons, text and your own background image (17 colour tokens), exported as JSON to share; settings and data back up as one file for a one-tap restore.</p>
+      <ul class="card-tags"><li>17 tokens</li><li>JSON export</li><li>One-tap backup</li></ul>
     </article>
   <!-- /site-sync:features -->
   </div>
@@ -515,6 +565,437 @@
 
   <div class="changelog-list">
 <!-- site-sync:changelog -->
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.9</span>
+        <span class="cl-date">2026-09-28</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**New: crash and fall detection in Life guard (beta)** — judged from the phone accelerometer; it raises an alert (I am fine / call emergency services / ask nearby stations) and also shows in the notification. The test is **two-stage**: a sharp spike **and** then almost no movement for 12 seconds. With the spike alone, speed bumps and a phone dropped on a desk all qualify, and an alert that fires several times a day gets ignored; the trade-off is that a minor impact (where you can still move) will not alert — this is about "I cannot move". It can false-alarm (speed bump plus a red light), so the first button is "I am fine" and the page states it is a heuristic, not engineering-grade crash detection.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fix: steps always showed "permission needed" even after granting it.** A reading of -1 has three causes — no sensor / no activity-recognition permission / **no hardware event yet** (without permission the system just does not dispatch events, with no error). They were conflated, so "granted but has not walked yet" read as "permission needed". The native side now reports the permission separately and steps have four states (unsupported / needs permission / **waiting for data** / ok) behind one decision point; the step counting depending on the sensor-assist switch, and the grant button appearing while merely waiting, were fixed too. **Fix: switches on the Life guard page did nothing** (SettingsPageShell.state only serves the guide card; it does not make the page follow state changes). **Fix: the speed-tier editor Save button was covered by the navigation bar** — the sheet now reserves both the keyboard and the system navigation bar, taking the larger of padding and viewPadding (some ROMs only report the latter).</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.8</span>
+        <span class="cl-date">2026-09-28</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**New: step counting and a leaderboard** — steps come from the phone's hardware counter and can ride along in the beacon (`STEPS=`, off by default). A new **activity leaderboard** sits above the honour wall in Settings: today's steps, and tapping a row opens the station detail. **You cannot see the board without contributing** — every number there was sent by someone else, and receiving without sending should not get you other people's data for free. The page states plainly that it ranks the neighbours you can hear, not the whole network.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**New: a "Life guard" page, and background downloads.** The heart-rate alarm moved into its own **Life guard** page that states what it is, the exact trigger conditions, and what "ask nearby stations" does — clearly marked as beta (the judgement uses the heart-rate number only, with no medical basis). Update downloads now **run in the background**: leaving the page or backgrounding the app keeps it going, progress shows in the notification, and it can be cancelled. It writes a `.part` file and renames atomically, so an interrupted download never leaves an uninstallable package behind.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fix: the heart-rate alarm limits could not be changed** — the fields only saved on the keyboard's enter key, not on focus loss, so editing and tapping elsewhere saved nothing. Input now saves as you type, and the card shows "Currently active 40 ~ 150 bpm".</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.7</span>
+        <span class="cl-date">2026-09-28</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fix: dragging the immersive map jumped to Beijing.** The follow-mode viewport offset was never handed to manual mode, so a drag snapped the map to the projection base point. It now picks up the current viewport first, and the map rotation is accounted for (with the heading up, a screen drag must be converted back to canvas space).</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**New: a "Detailed" beacon status bar** showing what will actually trigger the next report (active tier, seconds left, metres until the distance trigger, degrees until the turn trigger). **New: heart-rate alarm** — an out-of-range reading raises a warning and a notification, offering an emergency call or a help message to the 5 closest stations within 100 km; it only warns, never acts for you. **New: idle the phone GPS while an external GPS feeds data**, switching back and saying so when the external source goes stale.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fixes**: the notice banner reappears when the notice changes; network-only positioning can use its own station icon; the 2.0 connection banner says what is missing; the sponsors entry moved above "About". **Update page**: the channel text follows the current channel, long release notes are collapsed by default, and the button turns into "Install" after downloading. **Floating panels and the exit animation**: panels and the bottom pill now use the system-UI inset (it used to compute as 0 on some ROMs), and the "flat colour then gone" exit is fixed.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.6</span>
+        <span class="cl-date">2026-09-28</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**Heart-rate logging and charts on the history track page.** Track points now record heart rate (from the same source as `HR=` in the beacon comment: a BLE chest strap or Garmin LiveTrack), and the day detail page gains three polylines — **heart rate / speed / distance** — each of which can be toggled, or the whole panel hidden. A vertical cursor follows playback, and the heart-rate row shows the day's min–max. Gaps with no reading are drawn as **breaks**, not straight lines. A day can hold 40,000 points, so the curves are bucketed once to 240 points on entry; playback stays smooth.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Selectable audio devices and TX serial port on Windows.** The audio page can now pick the **playback and capture device** instead of being stuck with the system default — which decides what actually feeds your radio. The TNC device page can pick a **separate TX serial port**; the default is still one port for both directions, and splitting them avoids two handles fighting over one COM port on Windows. (Android/iOS hide the audio picker: routing there is the OS's job, and a fake switch would only mislead.)</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**A round of user-reported fixes (#12, #13, #15, #16, #18, #19).** (1) The "Advanced" extras on the station identity card could not be cleared: empty means "do not send", but saving merely skipped the write, so the old value stayed on disk and came back after a restart — clearing now removes it. (2) A custom status was overwritten by the 15-second keep-alive frame; a custom status is now re-sent right after it. (3) Android 15 forces edge-to-edge, so the navigation bar covered buttons at the bottom of a page — scrollable content now reserves that inset. (4) Expand/collapse on settings pages flashed or snapped; height and opacity now animate together. (5) The download button stayed after finishing (a file-name version `2.0.5` was compared against the tag `v2.0.5`, which never matches); the comparison now ignores the `v` prefix. (6) The update channel now defaults to GitHub (one tap switches back to the mirror).</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.5</span>
+        <span class="cl-date">2026-09-27</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fix: 2.0.4's PHG never actually took effect for third parties.** In 2.0.4 the data extensions were space-separated (`000/000 PHG2130 /A=000033`), and the reference implementation (aprslib) reports `phg` as **missing entirely** with `PHG2130` left as ordinary comment text — meaning third-party maps showed no coverage and the feature did nothing. Two independent traps caused it: (1) APRS101 defines PHG / `/A=` / CsT as **fixed-length data extensions** that must be glued to the symbol with no separators (real stations look like `…ErPHG1460/A=000071`); (2) CsT and PHG compete for the same "start of comment" slot — parsers match `^\d{3}/\d{3}` first and, once it hits, **only look for a DF report and never search for PHG**, so even glued together PHG stays unreadable while `000/000` comes first.</div>
+        <div class="cl-item"><span class="cl-dot up"></span>**The fix**: keep the extension block **glued together** and **give the first slot to PHG** — when PHG is present, CsT is no longer sent with the position packet. Afterwards: `!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%` (spaces appear only between the block and the comment). **One trade-off**: a mobile station that also fills in PHG shows no speed/bearing on aprs.fi — both need that single "start of comment" slot and cannot coexist; stations without PHG are unaffected. The beacon packet's third-party compatibility test now runs in CI, so this class of "compiles, analyze is green, third parties cannot read it" bug has a guard.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.4</span>
+        <span class="cl-date">2026-09-27</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**Position packet data extension (PHG, APRS101 chapter 9)**: under Radio settings → "Station comment" there is now an "Advanced" section taking power (W) / antenna height (ft) / gain (dB). Filling in any one of them appends the fixed 7-byte `PHGphgd`; leaving them empty sends nothing at all. The encoding follows the spec: power uses the **largest step that does not exceed the real value** (25 W reports 25, and 30 W still reports 25 — over-reporting claims coverage you do not have) and antenna height snaps to 10×2ⁿ feet. The settings page **echoes back what will actually be encoded**, since quantisation is invisible and there would otherwise be no way to know what went out. In the packet the extension sits where the spec puts it: `PHGphgd` comes **immediately after the symbol** (right after `!lat/lon/symbol`, ahead of the `/A=` altitude and any other comment text), matching the standard packet `…:!2216.45N/11113.90ErPHG5950` — third-party parsers look for PHG as a data extension at the start of the comment, and reading it after other fields fails.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Standalone status packets**: the Advanced section takes a status text, sharing one "Transmit" button with the position packet — whichever has content is sent, and an empty status text sends the built-in `APRSlocus CONNECT vX.Y.Z` online frame. A status packet is a **frame of its own** (`>`-prefixed, carrying no coordinates, and it does not move you on aprs.fi), so it can be sent even without a fix. Transmitting reads the current contents of the field directly instead of relying on input-event timing — with an IME composing text the app used to send the default frame although the user had typed something. A manually entered altitude was added too: empty follows the fix (the default is unchanged), and the settings page shows the `/A=aaaaaa` fragment that will be sent.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Station details and the map info window**: station details gained a line for the **standalone status packet** (purple, with a megaphone icon), shown separately from the position comment — the two come from different packets (frequencies usually live in the position comment, device provenance in the status packet), and merging them makes it impossible to tell which is which. That text used to appear only in the raw packet console and never on the station. The map marker info window gained **altitude**, **position comment** and **status text** lines, each **appearing only when present** rather than as a permanent placeholder — few stations carry these fields, and placeholders would print two rows of `--`, making "absent" and "not received" look identical.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fixes in this build**: (1) the Transmit button **checks the link first** and says "connect the link first" instead of silently recording locally; (2) PHG without a fix is reported honestly — the receipt says the position packet with PHG was not sent; (3) status packets **use their own connection text** (previously the banner claimed "position beacon sent" when only a status frame had gone out); (4) the countdown for the next report on the map page now **ticks every second** (it used to freeze when no station update arrived); (5) the link self-test on the device page no longer shows its title and subtitle twice; (6) the phone-battery switch **stays on the beacon page** ("Beacon contents") with unchanged defaults.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.2</span>
+        <span class="cl-date">2026-09-26</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**New Baidu Map / Baidu Satellite sources**: Baidu is not Web Mercator (BD-09 coordinates plus its own projection, tiles with a north-pointing y-axis), so a per-source projection now runs through the whole chain — rendering, markers / tracks, the immersive map, the tracker, track replay and offline downloads share one projection, and markers no longer drift against the tiles.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**New "Network only" location mode**: cell / Wi-Fi only (GPS not registered), for devices without GPS and for extreme battery saving; auto-beaconing uses a dedicated fixed interval (default 300s, configurable) — no force switch needed, and smart beaconing does not apply because network fixes have no reliable speed.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Notices can embed video**: the in-app notice is now hand-written Markdown (Simplified Chinese / Traditional Chinese / English) and an `@video` marker plays in-app (Android / iOS / macOS; Windows / Linux / Web fall back to the external browser). Older versions simply show that line as plain text (still a link).</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Update check on launch**: the app checks once on start and shows a reminder when a new version exists (once per version, dismissible).</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fixes**: the map info window still showed "Tap to view" (2.0.1 only changed the generated l10n output and missed the ARB source, so the build reverted it; fixed in all six languages); the Windows build now drops the webview_windows plugin that is incompatible with the current toolchain and opens such links externally.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.0</span>
+        <span class="cl-date">2026-09-25</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**TOUCH SKY · 2.0**: the **322 updates** from 1.5.8 to 2.0 land together — the new UI 2.0 (a map-first layout with a draggable sheet, bottom capsule nav, landscape unified across phone / tablet / desktop), frosted-glass and mica materials, the immersive map with many sources, offline maps and track replay, aprs.org device identification, group chat and 7 translation providers, Bluetooth and sound-card TNCs, iGate and PKWDWPL, native iOS / macOS location, smart beaconing by turn and by distance, weather and HF propagation advice, Android home-screen widgets, ADIF export and the packet console, Garmin sharing and BLE heart-rate straps, and six UI languages.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.173</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**The Garmin page now has auto-fill, a confirm button and a status display** (reported from a real device). (1) The URL field used to read the state once at init, so a share arriving while the page was already open would never fill it in — it now follows the state and says "Share link filled in automatically". (2) There used to be only an ambiguous switch (labelled "Tracking", a state rather than an action) — it is now explicit **[Start tracking] / [Stop tracking]** buttons. (3) A new status card shows Not tracking / Tracking (with forwarded-point count and last update time) / Fetch failed (with the reason), and the field shows "Link is valid" live. The share toast also lasts 8s instead of 4s so it is not missed.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.172</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**The About page name card no longer touches the section below** — the "Code contributions" header used to start immediately after it (0 gap); it now has 22, matching the other sections. Also, **"which position source wins?" is now stated**: the UI used to describe it in two halves (beacon page "Location / Simulated", Devices page "Phone GPS / Garmin"), which read as two different things. There is now one decision (`positionSourceNow`) whose priority is written in both places — **simulated/manual › Garmin (while the watch has live data) › phone GPS** — and the beacon page option is renamed to "Phone GPS" (matching the Devices page), with an "In use now: …" line.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.171</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Garmin sharing "sometimes works, sometimes doesn't" is fixed.** (1) Share text was only read from `EXTRA_TEXT`, while plenty of apps (some Garmin versions, browsers) put it in `clipData` — a null read made the whole share go silent, which is exactly the intermittent mechanism. (2) No text meant a silent return, with neither a message nor a log line. (3) A **cold-start race**: the share can arrive **before** the UI registers the callback, so the callback is null and the event is dropped (the "still no feedback after the hand-off") — it is now "call if present, otherwise store", with the UI consuming it once it is up. Link detection was widened too: the short code is unbounded in length and case-insensitive.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.170</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>**Heart rate now names its source** (on request): there are two sources (a BLE strap / the heart rate carried in Garmin points), so while Garmin is supplying data both the heart-rate card and the heart-rate row of the data-sources card say "Heart rate from Garmin LiveTrack (watch) · 128 bpm" — no strap required, and it is obvious where the number comes from. Also **About page spacing** (reported as too tight): section header → card 8 → 12, and inside the credits card the "test members" label → callsign chips 8 → 11 with chip gaps 8 → 10, and the BA3RZL group 6 → 8.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.169</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Garmin sharing was still silent in the 1.0 layout**: the previous release made "the shared content has no link" visible too, but that callback was registered only in the 2.0 shell — so on 1.0 sharing still showed nothing, exactly like "not recognised". The 1.0 shell now registers both callbacks: a link shows a notice plus an "Open settings" action, and a share without a link says so plainly (failures are visible too).</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.168</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**"Position source" is now an honest status row, not a two-way choice** (pointed out from a real device): with tracking not started, "Phone GPS" still showed a filled selection dot (nothing was running) and "Garmin" could be "selected" — the state only looked at the switch, never at whether tracking was running. Garmin and the phone GPS are not a choice at all: while the watch is live it wins, and after 120s without a fresh point the phone takes over. It now reports reality: "Not tracking (location off)" / "Tracking" / "Tracking (phone GPS stepped aside)" / "Link set, but Garmin has no fresh points"; the heart-rate row shows the current bpm too.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.167</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>**The beacon UI now says where the position comes from.** While Garmin is live the beacon bar shows "Garmin · 45s · ❤128" in red instead of an indistinguishable countdown (the two positions can be tens of kilometres apart). A coarse (cell/Wi-Fi) fix is now blocked from replacing the watch position: once Garmin goes stale the phone GPS rightly takes over, but a cell-tower centroid must not — the bar would still show a normal countdown, so nothing on screen reveals a wrong coordinate is being transmitted. **Garmin and the strap also became selectable "data sources"** (position source: phone GPS / Garmin; heart-rate source: the BLE strap), listed separately from the packet links, and **the manual-beacon toast now lists what was actually attached** (e.g. "Grid FN20xx · HR 128 bpm").</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.166</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Fix: the short link the Garmin app shares (`gar.mn/…`) never got through.** Garmin's Share button produces a short link, but the app only accepted the long form and the Android share target only allowed that host — so "Share → APRSlocus" did nothing. Both forms are recognised now (including a bare `gar.mn/xxx` with no scheme), redirects are followed, and the token is masked before logging, because a share link is the credential for reading a live position.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.165</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**Bluetooth heart-rate straps** (standard BLE service 0x180D): the beacon settings page can scan/connect and show the current BPM, with a new "Send heart rate in beacon" switch (on by default) that adds `HR=nn` to the position comment — and sends **nothing** without a reading (HR=0 would read as "pulse 0"). It does not fight with the TNC link: TNC uses classic Bluetooth SPP while heart rate uses BLE GATT, they run in parallel, classic discovery (which would tear down the SPP link) is never used, and a device already held by TNC is rejected with a reason.</div>
+        <div class="cl-item"><span class="cl-dot new"></span>**Garmin LiveTrack**: your watch activity can feed straight in — either share it from the Garmin Connect app to APRSlocus (a registered system share target), or paste the link on the new "Garmin LiveTrack" page (clipboard button included). It reads trackPoints from the public share page (position, altitude, speed, heart rate) and accepts only points up to 120s old, skips to the newest past a 60s backlog, and forwards at most one point every 10s; while Garmin is live the phone GPS steps aside automatically.</div>
+        <div class="cl-item"><span class="cl-dot up"></span>**Heart rate on the main screen** (the first chip in the map top-left column, tagged BLE or Garmin, and hidden entirely with no reading). Two gaps while Garmin is driving are closed: the heading was not computed at all (Garmin points carry none, so the compass froze on the phone GPS last value) and it is now derived from the previous point; and the daily history log was not written while the phone GPS was standing down, leaving a blank stretch — it now records like the GPS path. The device page also gained an "Other data sources" card (strap + Garmin), which is independent of the packet links and can run alongside them.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.164</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Three layout fixes.** (1) In the About share sheet the title and subtitle sat flush against each other (0 gap); now 3px, with 14→18px above the option list and 8→10px between options. (2) The About cover switched to `contain` whenever "container width / card height > 1.62" — but the card height is capped at 300 while the container reaches 600, so that held on **every screen 600 wide or more**: the photo shrank to a band in the middle with 75px of blank space on each side, and in landscape the logo card sat on that left gap (the "logo backdrop isn't filled" report). It is now cover + topCenter, filling the card while keeping the snow-capped summit. (3) The messages page switched columns by **orientation** (any landscape screen got two columns), but the 2.0 landscape shell puts it in the ≤560 left pane (often 200–280 on a phone), where the fixed 280 list column squeezed the chat column to a negative width. Column switching now looks only at the available width, the list column follows its container, and a new narrow-container degradation lets the callsign ellipsise and wraps the group action chips onto their own row (nothing hidden).</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.163</span>
+        <span class="cl-date">2026-09-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>**Network positioning is de-emphasised overall: coarse (cell/Wi-Fi) fixes are never transmitted automatically.** An automatic beacon is a public statement of "I am here", and a coarse fix is routinely hundreds of metres off and wanders in place — what goes out is a wrong coordinate. The map beacon bar, immersive map, home page and settings all say "network fix · auto beacon paused", and reporting resumes the moment GPS is back (manual "beacon now" is unaffected). Three thresholds were tightened at the same time: a coarse fix is only used once GPS has been stale for 300s (was 120s), its self-jump limit is 3km (was 8km), and its accuracy floor is 300m (was 150m). Coarse fixes no longer move the APRS-IS filter centre either — the filter string is rounded to 0.01°, so a drift could trigger a full link reconnect.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**Landscape polish for phone, tablet and desktop.** (1) Widths inside the pane are no longer computed from the screen — message bubbles used to take "screen width × 0.55", which on a 1920 desktop is 1056px, silently clipped by the pane so long messages were cut off (they now use the message area's actual width). (2) The top-left station chip degrades to "online + stations" when the map area is narrow (landscape with the pane open often leaves only about 200px). (3) "Short landscape" is now judged by the height actually available below the top bar — the disconnected and notice banners each take a row — so the clipped, unreachable locate button at the bottom of the tool column is no longer missed. (4) Self-drawn buttons on desktop are wrapped in ClickCursor (MouseRegion + SystemMouseCursors.click), because GestureDetector has no mouseCursor parameter, so a hover shows a hand cursor.</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>**About page: the name card is no longer cramped** — bigger header padding, title/subtitle gap 2→4px, title 13.5→14.5, a roomier share row, and the website icon went 32→34 with a hover tooltip on desktop.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.162</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>**Guide/overlay overlap on the map is fixed.** The previous build hard-coded the guide card at `topBase+46`, right on top of the immersive-map entry. Merging it into the same column fixed that, but measuring the real geometry showed it was **one pixel** from intersecting the legend — a layout that relies on "it just barely fits" breaks with a longer language or a different text scale. So both full-screen map views now use a **one-off bottom sheet**: with overlays on every side there is no position where a floating card is safe. The sheet only fires when the page is actually in the foreground.</div>
+        <div class="cl-item"><span class="cl-dot up"></span>The card is smaller and quieter: tint 8%→6%, border 22%→16%, icon chip 30→28, and the lone × became a **"Got it" text button**. The map copy was shortened (the card is only ~300px wide there and used to wrap to four lines). `check_landscape_layout.py` no longer counts occurrences of `leftInset` but judges the structure instead — counting implementation details punishes refactoring, and it produced a false failure this time.</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.161</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>**Feature guides**: sixteen pages now show a dismissible one-off tip card at the top of the body on first visit, saying in one line what the page does and where to start. Closing it records "seen", after which it never appears and takes up no space. Sub-pages built on the settings shell also gain a "show this guide again" button in the app bar. Covered: map, station list, immersive map, messages, packets, devices, settings, offline maps, log, backup, track replay, theme, translation, sound-card TNC, Bluetooth TNC and PKWDWPL</div>
+        <div class="cl-item"><span class="cl-dot up"></span>The "seen" record is stored in settings and **included in backups** (a restored device should not replay guides the user already read), and settings gained "show all feature guides again", which clears the record. A new static check, `tool/check_guides.py`, ties the guide table, the six-locale text, the generated l10n output and the page call-sites together — missing any one of them breaks neither the build nor the tests, it just means the guide never appears. The check caught three real problems the moment it was written</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.160</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>The About page business card no longer **overlaps the hero**: the previous build lifted it 14px onto the bottom edge of the photo, which on a real device hid a strip of the image and cut the card's rounded corners into it, looking like a misalignment. The card now sits below the hero with a 12px gap, leaving the photo intact</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.159</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>About page redesigned: the hero cover is now a **real photograph of Pico del Teide** instead of the logo backdrop, with the version in a glass pill at the top-right and the logo and title anchored to the lower-left over a gradient. The hero height now follows the window width (`width × 0.64`, 196–300) and switches to “fit entirely” on ultra-wide screens so the volcano is never cropped; the hero and body now share **one width-capped container** (600) on desktop</div>
+        <div class="cl-item"><span class="cl-dot up"></span>Removed the Features section from the About page (the seven rows for live map, GPS, beacon, messages, auto-connect, layer filter and FMO duplicated what the app already shows). The share entry became a **full-width tappable** row, section headers gained a tinted icon chip and a trailing hairline rule, and the footer gained a divider plus a photo credit for the cover</div>
+        <div class="cl-item"><span class="cl-dot up"></span>About page relaid out as a **business card**: a card now rides the bottom edge of the hero (callsign and name, a globe button and a full-width share row), and the section count drops from 8 to 5 — "Open source thanks + License" became "Open source & licence" (the four projects in a 2×2 grid) and "Test members + AI compute support + Sponsor entry" became "Credits" (callsigns as wrapping chips). The author's personal site `theez.top` and the "site owner" label are **removed**, and the globe button now opens the app's own website (already listed under Feedback)</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.158</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>Fixed the flash when leaving a Settings sub-page: the transition backdrop decided “is the transition over” from the value, but on pop `reverse()` only changes the status — the **value moves a frame later** — so the page underneath showed through for one full frame (visible only with the material or a background image enabled)</div>
+        <div class="cl-item"><span class="cl-dot up"></span>The announcement entry moved to the **bottom of the Settings home screen** (after Backup, before About); the Settings sub-page no longer shows a banner, only the toggle. The entry **only goes online when tapped**, so it still works with the toggle off — without breaking the “off means no background network requests” promise</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.157</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>The announcement banner moved to the **home screen** (above the map, in both 1.0 and 2.0) with another copy in Settings; it now opens in a **bottom sheet** (scrollable, drag to dismiss) and carries its own **close button** — switch it back on in Settings any time</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>Fixed the base-map panel that would not open: that button's callback was **missing its parentheses** (returning the function instead of calling it) — broken since v1.6.151, and neither the compiler nor analyze reports it</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.156</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>New **announcement banner** (Settings → Display, on by default): its content is taken straight from the website homepage announcement, so publishing a notice needs no app release. Markdown (headings, lists, tables, images) and hyperlinks are rendered in-app, with the last cached copy shown offline</div>
+        <div class="cl-item"><span class="cl-dot new"></span>Smart beaconing gains a **third trigger: turning** — a point is added once you turn past the configured angle, set **per tier** (10–180°, 0 = off). On mountain roads you are slow, so the distance threshold takes ages to reach, yet those hairpins are exactly where the track matters most</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>The station comment field now **looks editable**: that row used to be entirely blank (no border, no placeholder), indistinguishable from the static "label + value" rows. Empty fields now show a placeholder, the input area has a fill and border, and the border turns blue on focus — all 42 input rows benefit</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.155</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>Fixed map buttons that “did nothing”: the layers and zoom buttons only responded on the small centre icon — now the whole button works</div>
+        <div class="cl-item"><span class="cl-dot new"></span>A much clearer offline notice: an orange bar above the map, tappable anywhere to connect — no longer just a tiny pill in the corner</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>Opening a chat now raises the panel by itself (the input box is no longer hidden below the fold); “View on map” from the station list switches back to the map and collapses the panel</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.154</span>
+        <span class="cl-date">2026-09-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Live track sampling refined from 10 s to 1 s so corners are no longer cut into diagonals; the points actually sent to the server are marked with small orange diamonds, so count and spacing are visible at a glance</div>
+        <div class="cl-item"><span class="cl-dot new"></span>Smart beaconing can now trigger by distance: each tier takes an “or N metres” value, so fast movement adds points while standing still falls back to pure timing</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.153</span>
+        <span class="cl-date">2026-09-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>Fixed the UI 2.0 sheet having its bottom edge cut into right angles: the clip now rounds the bottom corners, so a half-open panel still looks like a complete rounded card</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.152</span>
+        <span class="cl-date">2026-09-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>Frosted glass optimised again: surfaces over the same backdrop share a single sample, and shells that only sit on the wallpaper no longer blur — smoother list scrolling, pixel-identical looks</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.151</span>
+        <span class="cl-date">2026-09-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>UI 2.0 landscape: five defects that only show up on a real device, including the rail covering the map’s controls, the tool column clipping “locate”, and the bottom inset counting the safe area twice</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.150</span>
+        <span class="cl-date">2026-09-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Tap into a day in track history and replay it on the map (the line grows as it plays, 0.5×–4× speed, follow view; stops over 45 s are fast-forwarded)</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>Network fixes no longer make the marker fly around: coarse points are dropped while GPS is fresh, and only allowed as a fallback after 2 minutes without an GPS update</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.149</span>
+        <span class="cl-date">2026-09-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Clustering removed: both maps are back to one marker per station, with low-zoom density left to the heatmap (its toggle stays)</div>
+        <div class="cl-item"><span class="cl-dot new"></span>More accurate track points (Android): the compass fills in heading at low speed and the accelerometer decides whether you are moving; on by default, switchable</div>
+        <div class="cl-item"><span class="cl-dot new"></span>Personal track history: saved per day on the device, with total distance, average and top speed and moving time in Settings; delete a day or clear all</div>
+        <div class="cl-item"><span class="cl-dot up"></span>The "no stations in view" pill is gone: the map already has an info chip and a toolbar</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.139</span>
+        <span class="cl-date">2026-09-21</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>UI 2.0: a new map-first layout, switchable back to the classic one in Display settings</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.138</span>
+        <span class="cl-date">2026-09-20</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>UI materials: frosted glass and mica, switchable in Display settings</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.136</span>
+        <span class="cl-date">2026-09-19</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>New "hardware serial": USB-OTG serial on Android to wire a radio, with desktop serial parameters you can tune</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.135</span>
+        <span class="cl-date">2026-09-19</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>On-air audio that others could not decode: media volume is maxed and the mic muted during TX, with wiring and level hints</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.128</span>
+        <span class="cl-date">2026-09-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Offline maps: download the tiles of the current view once (resumable, 200k tiles per region) and keep the map with no network at all</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.124</span>
+        <span class="cl-date">2026-09-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Themes: recolour the UI, replace icons and text, and export the result as JSON to share</div>
+        <div class="cl-item"><span class="cl-dot new"></span>Themes can carry a background image — your own photo behind the UI; exports can include it too (v1.6.125–126)</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.123</span>
+        <span class="cl-date">2026-09-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>Backup and restore: settings and data export to a single JSON, import it after a reinstall</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.121</span>
+        <span class="cl-date">2026-09-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>The HF widget gained 6 m band forecasts, widgets gained dark mode, and a system-status widget was added</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.117</span>
+        <span class="cl-date">2026-09-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>HF and ionospheric propagation: a new panel section plus a standalone widget, with SFI / Kp / A and day/night conditions for four band pairs at a glance</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.114</span>
+        <span class="cl-date">2026-09-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>New Android home-screen widgets: weather plus ham-radio tips, in four adaptive sizes</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v1.6.113</span>
+        <span class="cl-date">2026-09-15</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>Fixed "the longer it runs the slower it gets": the APRS-IS connection was rebuilt repeatedly, leaking sockets</div>
+      </div>
+    </div>
     <div class="cl-version reveal">
       <div class="cl-head">
         <span class="cl-tag">v1.6.109</span>
@@ -672,7 +1153,7 @@
 <section class="section" id="faq">
   <div class="section-head reveal">
     <h2>Frequently Asked Questions</h2>
-    <p>From Passcode to battery drain — everything we could think of.</p>
+    <p>From Passcode to battery drain — everything we could think of. The full 23 questions, grouped by topic, live in the <a href="faq.html">Help Center</a>.</p>
   </div>
 
   <div class="faq-list">
@@ -800,6 +1281,10 @@
           <span class="avatar" style="background:linear-gradient(135deg,#f97316,#ea580c)">Z</span>
           <span><span class="c-name">清零 (BG2HCB)</span><span class="c-role">Settings optimization</span></span>
         </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#1d6ff2,#1348a8)">G</span>
+          <span><span class="c-name">BH7GZB</span><span class="c-role">Code contribution</span></span>
+        </span>
       </div>
     </div>
 
@@ -809,6 +1294,14 @@
         <span class="contributor">
           <span class="avatar" style="background:linear-gradient(135deg,#ec4899,#db2777)">B</span>
           <span><span class="c-name">BA3RZL</span><span class="c-role">AI compute support</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#0891b2,#164e63)">N</span>
+          <span><span class="c-name">BH7NOR</span><span class="c-role">Protocol interface support</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#0891b2,#164e63)">A</span>
+          <span><span class="c-name">APRS.TV</span><span class="c-role">APRS.TV interface support</span></span>
         </span>
       </div>
     </div>    
@@ -867,6 +1360,18 @@
         <span class="contributor">
           <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">R</span>
           <span><span class="c-name">BA3RZL</span><span class="c-role">Gifted with jade — compute given as jade, the light that keeps our long nights burning.</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">E</span>
+          <span><span class="c-name">BG2EFX</span><span class="c-role">Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work.</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#0891b2,#164e63)">N</span>
+          <span><span class="c-name">BH7NOR</span><span class="c-role">Protocol interface support</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#0891b2,#164e63)">A</span>
+          <span><span class="c-name">APRS.TV</span><span class="c-role">APRS.TV interface support</span></span>
         </span>
         <span class="contributor">
           <span class="avatar" style="background:linear-gradient(135deg,#ec4899,#be185d)">E</span>

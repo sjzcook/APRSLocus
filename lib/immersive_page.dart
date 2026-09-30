@@ -8,8 +8,10 @@ import 'l10n/app_localizations.dart';
 import 'models.dart';
 import 'state.dart';
 import 'theme.dart';
+import 'guide.dart';
 import 'tile_map.dart';
 import 'widgets.dart';
+import 'material.dart';
 
 /// ─── 沉浸地图（导航风格）───
 ///
@@ -120,12 +122,15 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
   (double, double) _tc(double lat, double lng) =>
       _isGcj ? Gcj.wgsToGcj(lat, lng) : (lat, lng);
 
+  /// 渲染投影（百度不是 Web Mercator，覆盖层必须与瓦片同投影）
+  MapProjection get _proj => projectionFor(_mapType);
+
   /// 让指定经纬度落在画布中心所需的 pan
   Offset _panFor(double lat, double lng, double zoom) {
     final b = _base;
     final g = _tc(lat, lng);
-    final c = MapProj.latLngToPx(b.$1, b.$2, zoom);
-    final p = MapProj.latLngToPx(g.$1, g.$2, zoom);
+    final c = _proj.latLngToPx(b.$1, b.$2, zoom);
+    final p = _proj.latLngToPx(g.$1, g.$2, zoom);
     return c - p;
   }
 
@@ -141,8 +146,8 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
   Offset _toScreen(double lat, double lng) {
     final t = _tc(lat, lng);
     final b = _base;
-    final c = MapProj.latLngToPx(b.$1, b.$2, _zoom);
-    final p = MapProj.latLngToPx(t.$1, t.$2, _zoom);
+    final c = _proj.latLngToPx(b.$1, b.$2, _zoom);
+    final p = _proj.latLngToPx(t.$1, t.$2, _zoom);
     final pan = _pan;
     return Offset(
       p.dx - c.dx + _canvas.width / 2 + pan.dx,
@@ -155,6 +160,16 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
       _follow = true;
       _manualPan = Offset.zero;
     });
+  }
+
+  /// 把**屏幕**上的位移换算回画布坐标。
+  ///
+  /// 画布被 `Transform.rotate(_rot)` 转过了，手指的位移是屏幕方向的；
+  /// 直接累加到 pan 上，会变成「横屏导航时往左拖、地图往斜下方跑」。
+  /// 因为 `Transform.rotate(a)` 把画布映射到屏幕是乘 `R(a)`，所以反过来是 `R(-a)`。
+  static Offset _rotateDelta(Offset d, double a) {
+    final c = math.cos(a), s = math.sin(a);
+    return Offset(d.dx * c - d.dy * s, d.dx * s + d.dy * c);
   }
 
   void _zoomBy(double dz) {
@@ -174,43 +189,47 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: C.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(S.of(ctx).mapType, style: ts(15, w: FontWeight.w800)),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final t in MapType.values)
-                GestureDetector(
-                  onTap: () {
-                    st.setMapType(t.name);
-                    Navigator.pop(ctx);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: st.mapType == t.name ? C.blue : C.bgSoft,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: st.mapType == t.name ? C.blue : C.border),
-                    ),
-                    child: Text(t.label,
-                        style: ts(12,
-                            c: st.mapType == t.name ? Colors.white : C.slate,
-                            w: FontWeight.w600)),
-                  ),
-                ),
-            ],
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-        ]),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(S.of(ctx).mapType, style: ts(16, w: FontWeight.w800)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final t in MapType.values)
+                  GestureDetector(
+                    onTap: () {
+                      st.setMapType(t.name);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: st.mapType == t.name ? C.blue : C.bgSoft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: st.mapType == t.name ? C.blue : C.border),
+                      ),
+                      child: Text(t.label,
+                          style: ts(12,
+                              c: st.mapType == t.name ? Colors.white : C.slate,
+                              w: FontWeight.w600)),
+                    ),
+                  ),
+              ],
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -228,6 +247,10 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
             return Stack(children: [
               _mapLayer(size),
               // ── 四角 HUD（不随地图旋转，始终水平可读）──
+              // 功能引导：这是**全屏地图**，四角全是 HUD（左上返回+定位、右上按钮列、
+              // 左下信标倒计时、右下速度卡），浮卡片必然压住其中之一 —— 第一版就糊在
+              // 右上按钮列上。这类页面改用**一次性底部弹层**，进入时弹一次。
+              GuideSheetOnce(guideId: 'immersive', state: st),
               _hud(size, st),
             ]);
           },
@@ -266,8 +289,22 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
                   zoom: _zoom,
                   pan: pan,
                   onPan: (d) => setState(() {
-                    _follow = false;
-                    _manualPan = _manualPan + d;
+                    // ── 拖动会「跳到北京」的根因就在这里（issue #21-1）──
+                    //
+                    // 跟随时 `_pan` 是**由我的位置实时算出**的，而 `_manualPan`
+                    // 一直是零（从来没人给它赋过值）。所以原来这一行：
+                    //   先 `_follow = false`，pan 立刻改读 `_manualPan`，
+                    //   而这个值是**空**的 —— 地图当场平移到投影基准点
+                    //   （`_baseLat/_baseLng` 写的是北京），也就是用户看到的
+                    //   「一拖就跑到北京」。
+                    //
+                    // 修法：切手动之前**先把当前视野接过来**（这一帧 `_pan` 还是
+                    // 跟随算出来的），然后才置 false。
+                    if (_follow) {
+                      _manualPan = _pan;
+                      _follow = false;
+                    }
+                    _manualPan = _manualPan + _rotateDelta(d, -_rot);
                   }),
                   onViewChanged: (z, p) => setState(() {
                     _follow = false;
@@ -475,7 +512,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
             padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.46),
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
             ),
             child: Column(
@@ -490,7 +527,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
                     child: Text(s.nearbyStations,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: ts(9.5,
+                        style: ts(9,
                             w: FontWeight.w700,
                             c: Colors.white.withValues(alpha: 0.75))),
                   ),
@@ -536,6 +573,16 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
   Widget _beaconCard(AppState st, AppLocalizations s) {
     final on = st.beaconEnabled;
     final col = st.connected ? C.green : C.grey;
+    // 不能自动上报时（射频信标没开 / 当前是粗定位）要显示**原因**而不是照走的
+    // 倒计时；判据只用结构化的 beaconPhase（与 AppState.canAutoBeacon 同源）。
+    final String? note = switch (st.beaconPhase) {
+      BeaconPhase.rfDisabled => s.beaconRfBeaconOff,
+      BeaconPhase.coarseFix => s.beaconCoarseFix,
+      // 强制上报下的粗定位：会发射，但必须说清发的是网络定位（否则这一页
+      // 看起来与正常 GPS 上报完全一样）。
+      BeaconPhase.coarseForced => s.beaconCoarseForcedNote,
+      _ => null,
+    };
     return _card(
       children: [
         Row(children: [
@@ -546,16 +593,16 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
           ),
           const SizedBox(width: 6),
           Text(st.connected ? s.connected : s.disconnected,
-              style: ts(10.5, w: FontWeight.w700, c: Colors.white)),
+              style: ts(10, w: FontWeight.w700, c: Colors.white)),
         ]),
         const SizedBox(height: 6),
         Row(crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic, children: [
           Text(
-              // 未开射频信标时 nextBeaconIn 是「射频信标未开启」这句话，
+              // 不能自动上报时 nextBeaconIn 是一整句原因，
               // 用 26 号大字体显示会溢出；这里让数量级跟着内容走。
-              st.beaconNeedsRfEnable ? S.of(context).beaconRfBeaconOff : st.nextBeaconIn,
-              style: st.beaconNeedsRfEnable
+              note ?? st.nextBeaconIn,
+              style: note != null
                   ? ts(13, w: FontWeight.w700, c: Colors.white)
                   : ts(26, w: FontWeight.w900, c: Colors.white, ls: -0.5)),
           const SizedBox(width: 6),
@@ -567,7 +614,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
         ]),
         const SizedBox(height: 2),
         Text('${s.beaconsSent} ${st.beaconsSent}${on ? '' : ' · ${s.beaconOff}'}',
-            style: ts(9.5, c: Colors.white.withValues(alpha: 0.6))),
+            style: ts(9, c: Colors.white.withValues(alpha: 0.6))),
       ],
     );
   }
@@ -619,7 +666,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
             st.myHasFix && st.myLat != null && st.myLng != null
                 ? '${st.myLat!.toStringAsFixed(5)}, ${st.myLng!.toStringAsFixed(5)}'
                 : '--',
-            style: ts(9.5, c: Colors.white.withValues(alpha: 0.55))),
+            style: ts(9, c: Colors.white.withValues(alpha: 0.55))),
       ],
     );
   }
@@ -632,7 +679,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
       constraints: const BoxConstraints(minWidth: 116),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.52),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Column(
@@ -661,7 +708,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 6),
         Text(value,
-            style: ts(10.5, w: FontWeight.w700, c: Colors.white)),
+            style: ts(10, w: FontWeight.w700, c: Colors.white)),
         if (sub != null) ...[
           const SizedBox(width: 6),
           Text(sub,
@@ -682,7 +729,7 @@ class _ImmersiveMapPageState extends State<ImmersiveMapPage>
           color: active
               ? C.blue.withValues(alpha: 0.92)
               : Colors.black.withValues(alpha: 0.52),
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
         ),
         child: Icon(icon,

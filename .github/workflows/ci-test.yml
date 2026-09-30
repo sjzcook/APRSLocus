@@ -28,6 +28,178 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # 备份白名单与代码里真实读写的偏好键必须一致。
+      # 「新增偏好忘了归入备份分组」不会让编译失败、也不会让测试失败，
+      # 只会在用户换机那天丢一项设置，所以放在 CI 里每次推都查。
+      - name: Check backup preference keys
+        run: python3 tool/check_backup_keys.py
+
+      # Android 资源的静态检查：ResId 对不上、布局引用了不存在的 drawable、
+      # `setInt("方法名")` 在目标控件上不存在、**小组件尺寸声明不合法**等。
+      # 这些**全都是只在装机时才发作**的问题（白块、默认尺寸落不下来），
+      # 所以必须在 CI 里拦 —— 以前它只在我手动跑，于是 v1.6.133 的
+      # 「minResizeHeight 比 minHeight 还大 → 4×2 不能用了」就是这样漏出去的。
+      - name: Check Android resources
+        run: python3 tool/check_android_res_ids.py
+
+      # 材质覆盖：半透明的「壳」表面（顶栏/面板/浮层/对话框）必须套了材质壳。
+      # 漏一个面板不会让编译或测试失败，只在**开着材质**时才看得出来 ——
+      # 表现是「半透明但没有模糊」，底下的地图瓦片直接透出来，看着像坏了。
+      # v1.6.138 就是这样漏了两个浮动面板与十来个底部面板/对话框。
+      - name: Check material coverage
+        run: python3 tool/check_material_coverage.py
+
+      # 跨层导入：用了 C / MaterialSurface / SettingsRow2 这类名字，就必须导入定义
+      # 它的那个文件。漏一个只在 analyze/编译时报 undefined —— 而本机跑不了
+      # analyze，于是每漏一个就白等一轮 CI。同一个坑已经撞过两次
+      # （state.dart 缺 theme.dart、五个页面缺 material.dart），这条把它变成
+      # CI 里一眼就能看出来的错误。
+      - name: Check cross-layer imports
+        run: python3 tool/check_cross_imports.py
+
+      # State 里用到的 `widget.X` 必须在同文件有声明。第三次踩同一类坑之后加的：
+      # 用跨块正则改注释时把中间的字段声明一起吞掉了，而
+      # `this.topInset = 0,` 与 `widget.topInset` 都还在 —— 代码读起来完全正常，
+      # 只有 analyze 报 undefined_getter。本机跑不了 analyze，所以本机查。
+      - name: Check widget members
+        run: python3 tool/check_widget_members.py
+
+      # `const Padding(... color: C.blue)` 会报 invalid_constant（C 的字段是非常量）。
+      # 仓库里早就踩过（station_detail.dart 留着注释），我写 2.0 连接按钮时又踩了
+      # 一次。这种判据完全确定，本机几秒可查，没必要再等一轮 CI。
+      - name: Check const colors
+        run: python3 tool/check_const_colors.py
+
+      # l10n 一致性：arb（真源）↔ 提交进 git 的 gen-l10n 产物。
+      # CI 里 `generate: true` 会按 arb 重新生成产物，于是「产物没 regen」
+      # 会被掩盖 —— 但本机开发时它报 undefined_getter。这条按**未生成产物**
+      # 的视角校验，把「我这有错、CI 却绿」这种最耗人的错位挡在 CI。
+      - name: Check l10n sync
+        run: python3 tool/check_l10n_sync.py
+
+      # 打点质量层的**接线**检查：算法写好了但忘了在某条路径上调用，
+      # 编译与 analyze 都不会报错 —— 功能只是悄悄不生效。
+      - name: Check position quality wiring
+        run: python3 tool/check_pos_quality.py
+
+      # 帧成本：面板展开/拖动时不产出多余帧，且不把磨砂弄坏。
+      # 这几条优化「不做某件事」—— 编译与测试都不会失败，只有真机看得出来，
+      # 所以钉在这里（含「不许把地图换成 Offstage」这条：磨砂背后必须有内容）。
+      - name: Check frame cost
+        run: python3 tool/check_frame_cost.py
+
+      # 蓝牙心率带 + 佳明 LiveTrack：全是「只有真机才看得出来」的接线 ——
+      # CCCD 不写收不到心率、经典蓝牙发现会打断 TNC 的 SPP 链路、singleTop 不重写
+      # onNewIntent 会丢第二次分享、不解析 Next.js 的 trackPoints 就一个点都拿不到。
+      # 本机编不了 Android / 也连不上心率带，只能把判据钉在这里。
+      - name: Check heart rate & Garmin LiveTrack wiring
+        run: python3 tool/check_hr_garmin.py
+
+      # 2.0 横屏布局：竖条/面板不许压住地图贴左控件、右侧工具列在矮横屏
+      # 不许被裁掉、底部让位不许重复计安全区、收起时的竖条卡不许被撑成通高。
+      # 这几条**全都能正常编译、也能通过 analyze**，只在真机横屏才看得出来，
+      # 而且手机横屏是「矮」的那一维，问题最明显 —— 所以钉在 CI。
+      - name: Check landscape layout
+        run: python3 tool/check_landscape_layout.py
+
+      # 轨迹采样 + 信标打点：GPS 采样率（1s 级）、落点判据里的「最大间隔保底」、
+      # 信标点（只记已发送/可清空/地图有图层）、智能信标的「定时或距离」。
+      # 这几条**全都能正常编译、也能通过 analyze**，只在真机上看得出差别
+      # （轨迹过疏、拐弯被拉直、清空后剩孤点），所以钉在 CI。
+      - name: Check beacon & track sampling
+        run: python3 tool/check_beacon_track.py
+
+      # 公告横幅：官网 6 个语言文件齐备、开关关闭时不联网、MD 走 GFM、
+      # 链接交给系统浏览器、相对地址补全、开关落盘并进备份。
+      # 这几条都能正常编译、也能通过 analyze，只在真机上表现成
+      # 「某些语言看不到公告」「关了还在请求」「链接点了没反应」。
+      - name: Check notice banner
+        run: python3 tool/check_notice.py
+
+      # 交互接线：自绘小按钮的命中区（DecoratedBox 不吸收点击 → 只有图标能点）、
+      # 外壳对三种跨页请求（在地图查看 / 在地图选点 / 展开面板）的处理位置、
+      # 未连接横幅（要排除只读模式、要占顶部让位量）。
+      # 这些**编译与 analyze 全绿**，只有在真机上按下去才知道不对。
+      - name: Check UI wiring
+        run: python3 tool/check_ui_wiring.py
+
+      # 转场底：那份底的判据必须是「转场是否进行中」（status），不能是「值到没到 1」。
+      # 按值判断在**推入**时是对的、只在**弹出**那一帧漏 —— 而漏出来的表现是
+      # 底下那一页整帧透出（「公告横幅怎么显示在设置子页？退出动画会闪一下」）。
+      # 它依赖三个前提同时成立，本机很难复现，所以写死成检查。
+      - name: Check transition backdrop
+        run: python3 tool/check_transition_backdrop.py
+
+      # Release 说明的提取：**直接跑 build-release.yml 里那段 awk**，断言它把
+      # 该版本的中英两个条目都取到了、且没混入相邻版本。
+      # 那段 awk 一改错不会让任何东西失败 —— 只是打 tag 后 Release 页少半篇，
+      # 而那时 Release 已经发出去了。v1.6.78~v1.6.153 就是这么一直只有中文的。
+      - name: Check release notes extraction
+        run: python3 tool/check_release_notes.py
+
+      # iOS 打包：真跑一遍 tool/make_ipa.py（造一个忠实的最小 Runner.app），断言封出来的
+      # .ipa 结构对（Payload 顶层 / Info.plist / 执行位 / 符号链接），并断言
+      # build-release.yml 里 .ipa 真的挂进了 Release。
+      # 「.app 是**目录**、action-gh-release 静默跳过」这个 bug 让 v1.6.175~177 的
+      # Release 一个 iOS 资产都没有，而整条流水线全绿 —— 这种错必须在这里拦住。
+      - name: Check IPA packaging
+        run: python3 tool/check_ipa_packaging.py
+
+      # 官网静态页里内嵌的 JS（docs/ 下 98 段 <script>）是手写维护的，
+      # 最容易犯、也最不容易被发现的错是「往对象数组里手加一条，忘了给上一条补逗号」：
+      # 它不会少一条，而是**整个 <script> 解析失败 → 页面整块空白**，
+      # 而 HTML 结构、括号个数、命名全是对的 —— check_site.py 那条
+      # 「js braces/parens balanced」只数括号，数不出逗号。
+      # docs/member-card.html 从 v2.0.4 起就踩了这个（追加 BH7GZB 时漏了
+      # BG2EFX 那条末尾的逗号），会员卡页一个人都不显示，一路带到 v2.0.5 才发现。
+      - name: Check embedded JS in site pages
+        run: python3 tool/check_embedded_js.py
+
+      # 自己位置「静止防抖」的算法回归（纯 Python，1:1 移植自 pos_quality.dart）。
+      # 断言的是可数的量：静止不许反复横跳、单点 200m 漂移不许漏出去、
+      # **步行/开车不许被平滑**（加了滞后就是 bug），并校验 Dart 常量与仿真一致。
+      # 这几条都是「本机跑不了 analyze/真机」时唯一能提前拦住的办法。
+      - name: Check self-fix debounce (algorithm regression)
+        run: python3 tool/sim_selffix.py --check
+
+      # 「转弯打点」的航向过滤层（纯 Python，1:1 移植自 lib/turn_dot.dart）。
+      # 断言：**航向干净时逐点直通**（不可能把本来就准的场景改坏）、直路上不再被
+      # 野值凭空触发补点、含噪声时不多花信道且平均弦高不退化、门的取值有两侧依据、
+      # 以及「连续丢帧不设上限会永久失明」。
+      - name: Check turn-based beaconing (algorithm regression)
+        run: python3 tool/sim_turn_dot.py --check
+
+      # 第三方包（DTI `}`）解包：这类报文**只有真机收得到**才知道是坑。
+      # 欧洲的 iGate / 中继大量用 `}` 把**整条报文**再包一层，不解包时内层的
+      # `:收件人:文本` 会落到默认类型「位置」—— 数据包页把消息标成位置，
+      # 消息页一条也收不到（用户 v1.6.174 报的就是这个，本机没有任何环境能复现）。
+      # 它编译得过、analyze 也全绿，所以只能靠这个测试守住「按内层走」：
+      # 类型、发信台、消息列表、内层台站上台。
+      # 「强制接受网络定位自动上报」（v1.6.177）动到的是一条**既有约定**
+      # （v1.6.163：粗定位不自动上报），所以三条边界必须钉住：默认仍然不发、
+      # 打开后真的能发、打开的当下界面看得出「发的是网络定位」。
+      # 第三条最容易漏 —— 混进普通倒计时的话编译/测试/界面全都「正常」，
+      # 而用户看到的是一个绿色倒计时，发出去的却是偏几百米的坐标。
+      - name: Test coarse-fix beacon override
+        run: flutter test test/beacon_coarse_force_test.dart
+
+      - name: Test third-party packet unwrapping
+        run: flutter test test/third_party_packet_test.dart
+
+      # 信标报文的**第三方兼容性**：格式错了不会编译失败、analyze 也全绿，
+      # 只会让 aprs.fi 里少东西 —— 属于「测试没跑就必然漏」的那一类。
+      # v2.0.4 就是活教材：数据扩展被空格分隔（`000/000 PHG2130 /A=000033`），
+      # 用户实测 aprslib 解出来 `phg` 完全缺失、`PHG2130` 落进 comment 当文字。
+      # 这个文件当时不在 CI 里，所以没有任何环节能拦住它。
+      - name: Test beacon packet format (third-party compatibility)
+        run: flutter test test/beacon_format_test.dart
+
+      # 百度瓦片投影/编号数学：官方参考向量锁定（BD-09 坐标 + 多项式平面投影 +
+      # 瓦片 y 朝北 + 每级瓦片数不是 2^z）。这些**编译能过、analyze 也全绿**，
+      # 只有把标记画到与瓦片错开的位置才看得出来，所以钉在 CI。
+      - name: Test Baidu tile projection math
+        run: flutter test test/baidu_proj_test.dart
+
       - name: Analyze (tolerate known vector_map false positive)
         shell: bash
         run: |
@@ -41,6 +213,12 @@ jobs:
           known_lines=$(grep -c "Future<Directory> Function()" /tmp/analyze.log || true)
           other_errors=$(grep -v "Future<Directory> Function()" /tmp/analyze.log | grep -c "error •" || true)
           cat /tmp/analyze.log
+          if [ "$other_errors" -gt 0 ]; then
+            # 逐条打成**注解**（annotations 公开可读）：这样没有仓库日志权限时
+            # 也能从 check-runs API 直接看到是哪几条错误，不必翻 job 日志。
+            grep "error •" /tmp/analyze.log | grep -v "Future<Directory> Function()" \
+              | while IFS= read -r line; do echo "::error::$line"; done
+          fi
           if [ "$code" -ne 0 ] && [ "$other_errors" -gt 0 ]; then
             echo "analyze 发现除已知误报外的错误"
             exit 1
@@ -102,3 +280,46 @@ jobs:
         with:
           name: APRSLocus-Android
           path: build/app/outputs/flutter-apk/app-release.apk
+
+  # iOS 走的是**真机流程**（真编、真封 .ipa），与分析 job 里那条
+  # `check_ipa_packaging.py` 是两件事：后者验的是「封包代码与发版接线对不对」，
+  # 它跑在 Linux 上、用的是造出来的样本；这里验的是「macOS 上真编出来的
+  # Runner.app 能不能封成 .ipa」。
+  #
+  # 为什么要在**打 tag 之前**跑：iOS 的 .ipa 是发版产物之一，而发版只在打 tag 时发生。
+  # 若只在发版时才知道封不出来，就得删 tag / 删 Release 重打（v1.6.1、v1.6.3 的教训）。
+  # 仓库是公开仓库，macOS runner 不花额度，所以这笔「提前发现」是白得的。
+  build-ios:
+    name: Build iOS (IPA)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (Release, no codesign)
+        run: flutter build ios --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --no-codesign
+
+      - name: Package IPA (unsigned)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver=$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/version: ([0-9.]+).*/\1/')
+          ipa="build/ios/ipa/APRSLocus_${ver}_unsigned.ipa"
+          python3 tool/make_ipa.py build/ios/iphoneos -o "$ipa"
+          test -s "$ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: APRSLocus-iOS
+          path: build/ios/ipa/*.ipa
+          if-no-files-found: error

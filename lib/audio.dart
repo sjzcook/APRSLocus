@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'afsk.dart';
 import 'kiss.dart';
 import 'net/audio.dart';
+import 'net/audio_export.dart';
 import 'net/audio_file.dart';
 import 'wav.dart';
 
@@ -71,6 +72,15 @@ class AudioConfig {
   /// 发射前等待信道空闲的最长时间（ms）；期间持续检测到信号则延后发射
   int csmaWaitMs;
 
+  /// 播放（發射）设备序号；[kAudioDeviceDefault] = 系统默认（issue #14）。
+  ///
+  /// 只有 Windows（winmm）真的参与选择 —— 其它平台由系统路由决定，
+  /// 存着这个值也不会有效果（UI 也不显示选择器）。
+  int outDeviceId;
+
+  /// 采集（接收）设备序号；语义同 [outDeviceId]。
+  int inDeviceId;
+
   AudioConfig({
     this.afsk = const AfskParams(),
     this.path = 'WIDE1-1,WIDE2-1',
@@ -80,6 +90,8 @@ class AudioConfig {
     this.autoAck = true,
     this.autoReconnect = true,
     this.csmaWaitMs = 3000,
+    this.outDeviceId = kAudioDeviceDefault,
+    this.inDeviceId = kAudioDeviceDefault,
   });
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +103,8 @@ class AudioConfig {
         'autoAck': autoAck,
         'autoReconnect': autoReconnect,
         'csmaWaitMs': csmaWaitMs,
+        'outDeviceId': outDeviceId,
+        'inDeviceId': inDeviceId,
       };
 
   static AudioConfig fromJson(Object? j) {
@@ -106,6 +120,8 @@ class AudioConfig {
       autoAck: b(j['autoAck'], true),
       autoReconnect: b(j['autoReconnect'], true),
       csmaWaitMs: i(j['csmaWaitMs'], 3000).clamp(0, 10000),
+      outDeviceId: i(j['outDeviceId'], kAudioDeviceDefault),
+      inDeviceId: i(j['inDeviceId'], kAudioDeviceDefault),
     );
   }
 }
@@ -159,8 +175,32 @@ class AudioLink {
   /// 解码中途中止的次数（失步/噪声）——信道质量参考
   int get badFrames => _demod.badFrameCount;
 
-  /// 发射期间丢弃的采样字节数（半双工：不听自己）
+  /// 发射期间丢弃的采样字节数（半双工：不听自己）。
+  ///
+  /// Android 侧发射时会真的暂停采集（见 AudioManager.kt），这时不会有
+  /// 数据上来，计数器自然为 0；其它后端仍是「收上来但丢掉」。
   int droppedDuringTx = 0;
+
+  // ─── 最近一次发射的体检数据（UI 用来发现「发出去但电平不对」）───
+
+  /// 最近一次发射的调制峰值（0~1 满量程）。
+  ///
+  /// 注意：这是**交给系统播放前**的峰值 —— 它只能证明「我们送的波形不低、
+  /// 不削顶」，不能证明手机实际输出多大（那取决于音量）。Android 侧已在
+  /// 发射期间把媒体音量拉满，两端合起来才是完整链路。
+  double lastTxPeak = 0;
+
+  /// 最近一次发射的音频时长（秒）
+  double lastTxSeconds = 0;
+
+  /// 最近一次发射的前导 flag 数（对端解调器锁定用）
+  int lastTxPreamble = 0;
+
+  /// 最近一次发射是否削顶（幅度 ≥ 0.999 视为削顶）
+  bool lastTxClipped = false;
+
+  /// 发射电平百分比（给 UI 画电平条）
+  int get txPeakPercent => (lastTxPeak * 100).clamp(0, 100).round();
 
   /// 链路日志（环形，最多 100 条；供「音频」页排查用）
   final List<String> log = [];
@@ -246,6 +286,9 @@ class AudioLink {
     _log('打开音频采集 @${config.afsk.sampleRate}Hz（${_t.backendName}）…');
     onStateChanged?.call();
     _rebuildModem();
+    // 采集设备必须在打开句柄**之前**告诉后端（Windows 换设备要重开 waveIn）
+    _t.setInputDevice(config.inDeviceId);
+    _t.setOutputDevice(config.outDeviceId);
     final err = await _t.startCapture(sampleRate: config.afsk.sampleRate);
     connecting = false;
     if (err != null) {
@@ -412,10 +455,34 @@ class AudioLink {
     final pcm = Uint8List.view(audio.buffer, audio.offsetInBytes, audio.lengthInBytes);
     final seconds = audio.length / config.afsk.sampleRate;
 
+    // 发射体检：峰值过低（对方信噪比不够）/ 削顶（产生谐波，直接毁掉 FSK
+    // 频谱）都要在日志里说清楚 —— 这两种情况本机自检都「通过」，只有对方
+    // 解不出，是最难查的一类问题。
+    var peak = 0;
+    for (final s in audio) {
+      final v = s.abs();
+      if (v > peak) peak = v;
+    }
+    lastTxPeak = peak / 32767.0;
+    lastTxSeconds = seconds;
+    lastTxPreamble = config.afsk.preambleFlags;
+    lastTxClipped = lastTxPeak >= 0.999;
+    _log('发射：${_trunc(tnc2)}'
+        ' · ${seconds.toStringAsFixed(2)}s · 前导 $lastTxPreamble flag'
+        ' · 峰值 $txPeakPercent%');
+    if (lastTxClipped) {
+      _log('⚠ 发射波形削顶：请把「输出幅度」调到 0.8 以下（削顶会产生谐波）');
+    } else if (lastTxPeak < 0.15) {
+      _log('⚠ 发射电平偏低：对方可能解不出，请调高「输出幅度」与设备音量');
+    }
+
     // ② 半双工：发射期间不喂解调器；结束后复位，避免把发射尾音当半帧
     _txActive = true;
     _playing = true;
     _playDone = Completer<void>();
+    // 发射前把当前选择的播放设备同步给后端（设置里刚改完也能直接生效，
+    // 不必非要重连一次；Windows 侧_ensureOut 会发现设备变了而重开句柄）
+    _t.setOutputDevice(config.outDeviceId);
     final err = await _t.play(pcm, sampleRate: config.afsk.sampleRate);
     if (err != null) {
       lastError = err;
@@ -459,7 +526,12 @@ class AudioLink {
   Future<(List<String>, String?)> decodeWavFile(String path) async {
     final bytes = await readAudioFile(path);
     if (bytes == null) return (const <String>[], 'read-failed');
-    final wav = Wav.decode(Uint8List.fromList(bytes));
+    return decodeWavBytes(Uint8List.fromList(bytes));
+  }
+
+  /// 解码一段已经在内存里的 WAV（Android 走系统选择器时用）
+  Future<(List<String>, String?)> decodeWavBytes(Uint8List bytes) async {
+    final wav = Wav.decode(bytes);
     if (wav == null) return (const <String>[], 'bad-wav');
     final dem = AfskDemodulator(config.afsk.copyWith(sampleRate: wav.sampleRate));
     final out = <String>[];
@@ -470,12 +542,39 @@ class AudioLink {
     return (out, null);
   }
 
-  /// 把一条 TNC2 报文编码成 WAV 文件；返回错误描述，null 表示成功
-  Future<String?> encodeWavFile(String path, String tnc2) async {
+  /// 把一条 TNC2 报文编码成 WAV 字节。
+  ///
+  /// 编码完**立刻自己解一遍**：导出是给「别的软件」用的，如果我们自己都
+  /// 解不出来，那这个文件就毫无意义 —— 宁可在导出时就报错，也不要用户
+  /// 拿着一个坏文件去对端反复试。
+  ///
+  /// 返回 (字节, 错误描述)。
+  Future<(Uint8List?, String?)> encodeWavBytes(String tnc2) async {
     final frame = Ax25.encodeTnc2(tnc2);
-    if (frame == null) return 'bad-format';
+    if (frame == null) return (null, 'bad-format');
     final audio = _mod.modulate(frame);
-    return writeAudioFile(path, Wav.encode(audio, sampleRate: config.afsk.sampleRate));
+    final bytes = Wav.encode(audio, sampleRate: config.afsk.sampleRate);
+    final (back, err) = await decodeWavBytes(bytes);
+    if (err != null) return (null, err);
+    final want = Ax25.decodeToTnc2(frame);
+    if (back.length != 1 || back.first != want) {
+      return (null, 'verify-failed');
+    }
+    return (bytes, null);
+  }
+
+  /// 把一条 TNC2 报文导出为 WAV 文件；返回保存结果（含用户可见路径）
+  Future<AudioExportResult> exportWav(String tnc2, String filename) async {
+    final (bytes, err) = await encodeWavBytes(tnc2);
+    if (bytes == null) return AudioExportResult.fail(err ?? 'bad-format');
+    return saveAudioBytes(filename, bytes);
+  }
+
+  /// 把一条 TNC2 报文编码成 WAV 文件（按路径，桌面用）；返回错误描述
+  Future<String?> encodeWavFile(String path, String tnc2) async {
+    final (bytes, err) = await encodeWavBytes(tnc2);
+    if (bytes == null) return err;
+    return writeAudioFile(path, bytes);
   }
 
   // ─── 持久化 ───

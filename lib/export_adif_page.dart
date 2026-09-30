@@ -11,6 +11,7 @@ import 'models.dart';
 import 'state.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'material.dart';
 
 /// ADIF 导出页：勾选会话 → 生成 `.adi` 文件。
 ///
@@ -315,12 +316,14 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
     final sample = _sampleRecord();
 
     return Scaffold(
-      backgroundColor: C.greyBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(s.exportAdif),
+      backgroundColor: C.pageFill,
+      appBar: MaterialAppBar(
+        AppBar(
+          backgroundColor: surfaceTint(Colors.white),
+          elevation: 0,
+          centerTitle: true,
+          title: Text(s.exportAdif),
+        ),
       ),
       body: total == 0
           ? Center(
@@ -429,7 +432,7 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.fromLTRB(6, 10, 14, 10),
@@ -448,7 +451,7 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
                   height: 34,
                   decoration: BoxDecoration(
                     color: bg,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 18),
                 ),
@@ -475,11 +478,11 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
                             ),
                             decoration: BoxDecoration(
                               color: bg,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               chip,
-                              style: ts(8, c: color, w: FontWeight.w700),
+                              style: ts(9, c: color, w: FontWeight.w700),
                             ),
                           ),
                         ],
@@ -576,7 +579,7 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
         DropdownButton<String>(
           value: value,
           underline: const SizedBox.shrink(),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           style: ts(12),
           items: [
             for (final it in items)
@@ -814,7 +817,7 @@ class _ExportAdifPageState extends State<ExportAdifPage> {
             : const Icon(Icons.file_download_rounded, size: 18),
         label: Text(
           s.export,
-          style: ts(14, c: Colors.white, w: FontWeight.w700),
+          style: ts(13, c: Colors.white, w: FontWeight.w700),
         ),
       ),
     );

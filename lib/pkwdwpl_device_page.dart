@@ -54,7 +54,7 @@ class _PkwdwplDevicePageState extends State<PkwdwplDevicePage> {
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         backgroundColor: color ?? C.ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -148,6 +148,8 @@ class _PkwdwplDevicePageState extends State<PkwdwplDevicePage> {
     return ListenableBuilder(
       listenable: st,
       builder: (context, _) => SettingsPageShell(
+        guideId: 'pkwdwpl',
+        state: widget.state,
         title: s.pkwdwplDeviceTitle,
         subtitle: s.pkwdwplDeviceDesc,
         icon: Icons.route_rounded,

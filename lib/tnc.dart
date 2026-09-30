@@ -77,6 +77,23 @@ class TncConfig {
   /// 一直退避而不发射。需要时可在设备页显式打开或手动下发一次。
   bool pushKissParams;
 
+  /// 串口线速（bd）。**只管 USB 串口与桌面串口**；蓝牙 SPP 没有波特率概念。
+  ///
+  /// 为什么必须让用户能设：USB 串口线两端必须同速，而 TNC/电台的速率
+  /// 五花八门（9600 / 19200 / 38400 / 57600 / 115200）。此前桌面串口完全
+  /// 没法设（注释写的是「由系统/驱动决定」），Windows 上 COM 口还是独占
+  /// 设备、开两个句柄会失败 —— 等于那条路根本没通。Android 的 USB-OTG
+  /// 更是从无到有。默认 9600（APRS 串口 TNC 最常见）。
+  int serialBaud;
+
+  /// **发射专用串口**（如 `COM5`；留空 = 与接收设备同一个口，issue #14）。
+  ///
+  /// 为什么单独一个设置：Windows 的 COM 口是**独占**设备 —— 同一个口开
+  /// 读、写两个句柄会失败（tnc_io 里要是真失败会直接报出来），而不少
+  /// 用户的接法是「一个口收、另一个口发」。留空即保持旧行为（单口收发），
+  /// 所以对现有用户零影响。
+  String txSerialId;
+
   TncConfig({
     this.txDelayMs = 300,
     this.txTailMs = 50,
@@ -94,6 +111,8 @@ class TncConfig {
     this.initString = '',
     this.initDelayMs = 300,
     this.pushKissParams = false,
+    this.serialBaud = 9600,
+    this.txSerialId = '',
   });
 
   /// ms → KISS 值（10ms 单位，封顶 255）
@@ -119,6 +138,11 @@ class TncConfig {
         'initString': initString,
         'initDelayMs': initDelayMs,
         'pushKissParams': pushKissParams,
+        // serialBaud **必须一起存**：不存的话重启回到默认 9600，
+        // 用户会看到「设了 38400、下次打开又变回 9600」这种静默复位。
+        // 连拍时由 TncLink.connect 把它填进 TncDevice.baud 交给传输层。
+        'serialBaud': serialBaud,
+        'txSerialId': txSerialId,
       };
 
   static TncConfig fromJson(Object? j) {
@@ -144,6 +168,8 @@ class TncConfig {
       initString: s('initString', ''),
       initDelayMs: i('initDelayMs', c.initDelayMs).clamp(0, 5000),
       pushKissParams: b('pushKissParams', c.pushKissParams),
+      serialBaud: i('serialBaud', c.serialBaud).clamp(1200, 1000000),
+      txSerialId: j['txSerialId']?.toString() ?? c.txSerialId,
     );
   }
 }
@@ -310,7 +336,13 @@ class TncLink {
     _dec.reset();
     onStateChanged?.call();
     _log('连接 ${target.label} …');
-    final err = await _t.connect(target);
+    // 串口类设备（USB-OTG / 桌面串口）把用户配的线速随设备带下去：
+    // 传输层接口只有 connect(device)，线速作为设备属性传最自然，
+    // 也不必为一个参数去改所有平台实现的签名。蓝牙不需要（无此概念）。
+    final wireTarget = target.needsBaud
+        ? target.copyWith(baud: config.serialBaud, txSerialId: config.txSerialId)
+        : target;
+    final err = await _t.connect(wireTarget);
     connecting = false;
     if (err != null) {
       connected = false;
@@ -594,7 +626,18 @@ class TncLink {
       ..autoReconnect = from.autoReconnect
       ..initString = from.initString
       ..initDelayMs = from.initDelayMs
-      ..pushKissParams = from.pushKissParams;
+      ..pushKissParams = from.pushKissParams
+      // serialBaud **必须在这里也抄一遍**。
+      //
+      // 这里是一段**手写的逐字段拷贝**，而真正读配置走的就是它
+      // （[load] → [_copy]）。之前 `toJson`/`fromJson` 都带上了 serialBaud，
+      // 测试也只验了 JSON 往返，于是看起来「已经修好了」—— 但 load() 仍然
+      // 把它丢在门外：串口 TNC 设了 38400，重启后又按 9600 打开，
+      // **一个字节都收不到**，而界面上没有任何地方能看出线速变了
+      // （症状是台站不上图、网关统计恒为 0，像是「射频坏了」）。
+      // 教训：漏字段 = 静默复位，与「没持久化」完全等价，所以拷贝必须成对。
+      ..serialBaud = from.serialBaud
+      ..txSerialId = from.txSerialId;
   }
 
   Future<void> persistConfig() async {

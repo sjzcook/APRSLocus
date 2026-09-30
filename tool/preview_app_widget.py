@@ -1,0 +1,1501 @@
+#!/usr/bin/env python3
+"""桌面小组件 + App 天气面板的**设计预览**：写代码之前先看效果。
+
+为什么要这个脚本（血泪史）：组件要装到真机才能看效果，一轮反馈 = CI + 装 APK。
+前几轮都是装上去才发现「挤 / 不像面板 / logo 错了 / 溢出」，每次重走一遍。
+这里用**真实素材**把设计渲染成 PNG：
+
+- 真实 Material 图标（直接用 `res/drawable-xxhdpi/aw_ic_*.png`，即运行时那几张）
+- 真实 logo（`aw_logo.png`）
+- 真实天气渐变（与 `lib/weather.dart::_fxGradient()` 同一组色）
+- 真实字号/字重/透明度（照抄面板 `ts(12.5, w: w700, c: white 0.68)` 那一套）
+- 按 3x 渲染（与 xxhdpi 一致）
+
+**并且硬性报「内容放不下」**（退出码 1）——这条是它最值钱的地方。
+
+⚠ 一个必须记住的坑：**文本高度要按字体行盒算，不是按墨迹算。**
+Android 的 TextView 行高 ≈ 字体 (ascent + descent)，即使设了
+`includeFontPadding="false"`（那只是去掉上下额外留白）。
+Noto Sans SC 的这个值是 **1.45em**，而中文墨迹只有约 1.0em。
+我第一版按墨迹算，每行少算约 4dp，十几行下来少算 50dp ——
+于是「预览说余 5.5dp、真机却溢出」。见 line_h()。
+
+用法：
+    python3 tool/preview_app_widget.py               # 全部档位
+    python3 tool/preview_app_widget.py --out /tmp/a.png
+"""
+
+import argparse
+import os
+import sys
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    print("需要 Pillow：pip install Pillow", file=sys.stderr)
+    raise SystemExit(2)
+
+SCALE = 3
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ICON_DIR = os.path.join(ROOT, "android", "app", "src", "main", "res",
+                        "drawable-xxhdpi")
+
+# 天气渐变（照抄 weather.dart::_fxGradient 的 light 表）
+LIGHT = {
+    "clear":    ("#2E86D6", "#79C4F2"),
+    "cloudy":   ("#4A6E93", "#87AACB"),
+    "overcast": ("#56677A", "#8C9BAB"),
+    "rain":     ("#36506B", "#63809B"),
+    "storm":    ("#232F3E", "#4A5B70"),
+    "snow":     ("#5C7FA8", "#A8C6E2"),
+    "fog":      ("#6C7A87", "#A3AEB9"),
+}
+# 深色（照抄 darkc 表）
+DARK = {
+    "clear":    ("#26374A", "#141F2E"),
+    "cloudy":   ("#2A3444", "#161D28"),
+    "overcast": ("#313B49", "#1A212B"),
+    "rain":     ("#1F3143", "#0F1924"),
+    "storm":    ("#232E3A", "#0D131B"),
+    "snow":     ("#2C3642", "#171E27"),
+    "fog":      ("#2B3138", "#171B21"),
+}
+
+# 建议级别提亮色（与 Dart widgetTipTextArgb 逐值一致，整数字面量）
+LEVEL_LIT = {
+    "danger": "#EC6C88", "warn": "#E6A75D",
+    "good": "#68C389", "tip": "#719AF2",
+}
+TIP_LINE_MULT = 1.3   # 布局里提示正文的 lineSpacingMultiplier
+LEVEL_LABEL = {
+    "danger": "安全警示", "warn": "注意", "good": "通联机会", "tip": "操作提示",
+}
+
+# 传播质量 → 颜色（绿=好 黄=一般 橙=差 红=很差）
+def _lit(base_hex):
+    """把基准色往白提亮 35% —— **必须**与 Dart 的 widgetTipTextArgb 用同一套
+    整数运算（c*0.65 + 255*0.35，逐通道 round）。
+
+    这里刻意**算**而不是手抄：原来 "Band Closed" 手写了 #B9C4D4，而同一公式
+    算出的是 #B9C3D1 —— 预览与真机差一点点颜色，就违背了「预览不能骗人」
+    这条契约（而且测试会按精确值断言 Dart 侧，根本发现不了预览这边抄错）。
+    """
+    # 自己解析而不调 hex2rgb：hex2rgb 定义在本文件靠后的「工具」区，
+    # 而这段常量在文件更上面 —— 依赖定义顺序是那种「换个顺序就炸」的坑，
+    # 就地解析三行更稳。
+    h = base_hex.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    m = lambda c: round(c * 0.65 + 255 * 0.35)  # noqa: E731
+    return "#%02X%02X%02X" % (m(r), m(g), m(b))
+
+
+# 传播条件 → 颜色。基准色与 lib/hf.dart 的 hfQualityColor 一致，提亮后即
+# 组件上圆点/文字的实际颜色（Dart 侧调 widgetTipTextArgb 得到同一个值）。
+QUALITY_COLORS = {
+    "Good": _lit("#16A34A"),
+    "Fair": _lit("#D97706"),
+    "Poor": _lit("#E11D48"),
+    "Band Closed": _lit("#94A3B8"),
+}
+
+# ── 示例数据 ────────────────────────────────────────────────────────
+WEATHER = {
+    "city": "北京", "aqi": "42", "aqi_label": "优", "aqi_color": "#22C55E",
+    "observed": "观测 14:30", "temp": "31°", "cond": "雷阵雨", "range": "12°/25°",
+    "weather_icon": "thunderstorm",
+    "metrics": [("湿度", "45%"), ("风力", "3 级"),
+                ("气压", "1013 hPa"), ("能见度", "25 km")],
+    "tips": [
+        ("danger", "flash_on",
+         "雷雨天气：请勿在室外架设/操作天线！断开天线馈线，谨防雷击感应损坏设备",
+         "雷雨天气：请勿在室外架设/操作天线！"),
+        ("good", "nightlight",
+         "夜间 D 层消失：80/40m 吸收减小、噪声较低，适合本土与夜间远程通信",
+         "夜间 D 层消失：80/40m 吸收减小…"),
+        # 第 3 条（拆开主区/指标后腾出的位置）：建议是按
+        # 「安全警示 > 注意 > 通联机会 > 操作提示」排过序的，只给 2 条会把
+        # 后面整类丢掉 —— 例如只剩天气类，看不到传播类。
+        ("tip", "public", "地磁较活跃：短波高纬度路径不如平时稳定，建议留出更多呼叫时间",
+         "地磁较活跃：短波高纬度路径不如平时稳定…"),
+    ],
+    "tips_title": "业余无线电建议",
+    "app_name": "APRSlocus",
+}
+
+# 短波/电离层数据（字段与 hamqsl.com/solarxml.php 对应）
+HF = {
+    "sfi": "100", "kp": "3", "a": "9", "sunspots": "23", "xray": "B2.2",
+    "solarwind": "508.8", "geomag": "UNSETTLD", "noise": "S2-S3",
+    "muf": "NoRpt", "updated": "05:13 GMT",
+    # 逐波段日/夜传播条件 —— 「各个波段的传播信息」
+    "bands": [
+        ("80m/40m", "Poor", "Fair"),
+        ("30m/20m", "Good", "Good"),
+        ("17m/15m", "Fair", "Fair"),
+        ("12m/10m", "Poor", "Poor"),
+    ],
+    "hf_title": "短波传播",
+}
+
+FALLBACK_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+
+def font(size_dp, bold=False):
+    name = "NotoSansSC-Bold.otf" if bold else "NotoSansSC-Regular.otf"
+    p = os.path.expanduser(os.path.join("~/.fonts", name))
+    if not os.path.exists(p):
+        p = FALLBACK_FONT
+    return ImageFont.truetype(p, max(1, round(size_dp * SCALE)))
+
+
+_METRICS = {}
+
+
+def line_h(size_dp, bold=False):
+    """一行文本在 Android 里占的高度（dp）。
+
+    这是本脚本最关键的一处「真相」：TextView 的行高 ≈ 字体 (ascent + descent)，
+    **不是**字符墨迹高度。Noto Sans SC 是 1.45em，中文墨迹约 1.0em ——
+    按墨迹算会每行少 4dp 左右，十几行就少 50dp，于是「预览说放得下、真机溢出」。
+    """
+    key = (size_dp, bold)
+    if key not in _METRICS:
+        asc, desc = font(size_dp, bold).getmetrics()
+        _METRICS[key] = (asc + desc) / SCALE
+    return _METRICS[key]
+
+
+def stack_h(*sizes):
+    """若干**上下堆叠**的文本行总高度。"""
+    return sum(line_h(s) for s in sizes)
+
+
+def block_lines_h(size_dp, n, mult=1.0):
+    """n 行文本块的高度。**必须**把 lineSpacingMultiplier 算进来：
+    布局里提示正文写的是 lineSpacingMultiplier="1.3"，Android 会按倍数拉开
+    后续行的间距，忽略它又是一处「预览偏乐观」。"""
+    if n <= 0:
+        return 0.0
+    lh = line_h(size_dp)
+    return lh + (n - 1) * lh * mult
+
+
+def hex2rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgba(h, a):
+    return hex2rgb(h) + (int(round(a * 255)),)
+
+
+class Canvas:
+    def __init__(self, w_dp, h_dp, kind="clear", radius_dp=20, dark=False):
+        w, h = round(w_dp * SCALE), round(h_dp * SCALE)
+        table = DARK if dark else LIGHT
+        top, bot = hex2rgb(table[kind][0]), hex2rgb(table[kind][1])
+        img = Image.new("RGB", (w, h))
+        for y in range(h):
+            t = y / max(1, h - 1)
+            img.paste(tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)),
+                      (0, y, w, y + 1))
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            [0, 0, w - 1, h - 1], round(radius_dp * SCALE), fill=255)
+        self.base = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        self.base.paste(img, (0, 0), mask)
+        self.layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        self.d = ImageDraw.Draw(self.layer)
+        self.size = (w_dp, h_dp)
+
+    # ── 基础绘制 ──
+    def text(self, x, y, s, size, alpha=1.0, bold=False, color="#FFFFFF",
+             anchor="la", spacing=None):
+        f = font(size, bold)
+        if not spacing:
+            self.d.text((round(x * SCALE), round(y * SCALE)), s, font=f,
+                        fill=rgba(color, alpha), anchor=anchor)
+            return
+        # 字距：逐字绘制并多推进 spacing*size 像素。
+        # PIL 没有字母间距参数，只能自己排；anchor 只按左对齐起画，
+        # 需要居中/右对齐时先量总宽再换算起始 x。
+        extra = spacing * size * SCALE
+        total = (sum(self.d.textlength(ch, font=f) for ch in s)
+                 + extra * max(0, len(s) - 1))
+        sx = round(x * SCALE)
+        if anchor[0] == 'm':
+            sx -= round(total / 2)
+        elif anchor[0] == 'r':
+            sx -= round(total)
+        yy = round(y * SCALE)
+        cx = sx
+        for ch in s:
+            self.d.text((cx, yy), ch, font=f, fill=rgba(color, alpha),
+                        anchor='l' + anchor[1])
+            cx += self.d.textlength(ch, font=f) + extra
+
+    def measure(self, s, size, bold=False):
+        return self.d.textbbox((0, 0), s, font=font(size, bold))[2] / SCALE
+
+    def icon(self, name, x, y, size, big=False, color=None):
+        fn = f"aw_ic_big_{name}.png" if big else f"aw_ic_{name}.png"
+        im = Image.open(os.path.join(ICON_DIR, fn)).convert("RGBA")
+        side = round(size * SCALE)
+        im = im.resize((side, side), Image.LANCZOS)
+        if color:
+            tint = Image.new("RGBA", im.size, hex2rgb(color) + (255,))
+            tint.putalpha(im.getchannel("A"))
+            im = tint
+        self.layer.alpha_composite(im, (round(x * SCALE), round(y * SCALE)))
+
+    def logo(self, x, y, size):
+        im = Image.open(os.path.join(ICON_DIR, "aw_logo.png")).convert("RGBA")
+        side = round(size * SCALE)
+        sc = side / max(im.size)
+        im = im.resize((max(1, round(im.width * sc)), max(1, round(im.height * sc))),
+                       Image.LANCZOS)
+        self.layer.alpha_composite(im, (round(x * SCALE), round(y * SCALE)))
+
+    def paste(self, img, x, y):
+        self.layer.alpha_composite(img, (round(x * SCALE), round(y * SCALE)))
+
+    def rounded(self, w, h, r, color, alpha, border_alpha=None):
+        im = Image.new("RGBA", (round(w * SCALE), round(h * SCALE)), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rounded_rectangle([0, 0, im.width - 1, im.height - 1], round(r * SCALE),
+                            fill=rgba(color, alpha),
+                            outline=rgba(color, border_alpha) if border_alpha else None,
+                            width=max(1, round(0.7 * SCALE)))
+        return im
+
+    def circle(self, d_dp, color):
+        d = max(2, round(d_dp * SCALE))
+        im = Image.new("RGBA", (d, d), (0, 0, 0, 0))
+        ImageDraw.Draw(im).ellipse([0, 0, d - 1, d - 1], fill=hex2rgb(color) + (255,))
+        return im
+
+    def hairline(self, x, y, w, alpha=0.10):
+        self.d.rectangle([round(x * SCALE), round(y * SCALE),
+                          round((x + w) * SCALE), round(y * SCALE) + SCALE - 1],
+                         fill=rgba("#FFFFFF", alpha))
+
+    def out(self):
+        o = self.base.copy()
+        o.alpha_composite(self.layer)
+        return o
+
+    def out_clipped(self, radius_dp):
+        """按圆角裁切输出：内容排不下时要**看得见**被切掉，而不是漫出卡片外。"""
+        o = self.out()
+        mask = Image.new("L", o.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            [0, 0, o.width - 1, o.height - 1], round(radius_dp * SCALE), fill=255)
+        o.putalpha(Image.composite(o.getchannel("A"),
+                                   Image.new("L", o.size, 0), mask))
+        return o
+
+
+def wrap(c, text, size, max_w, max_lines):
+    """按实测字宽折行，超出时末行加省略号。用实测而非估算：预览要诚实回答
+    「放不放得下」，估算会让预览比真机好看。"""
+    f = font(size)
+    lines, cur = [], ""
+    for ch in text:
+        if c.d.textbbox((0, 0), cur + ch, font=f)[2] / SCALE <= max_w:
+            cur += ch
+        else:
+            lines.append(cur)
+            cur = ch
+            if len(lines) == max_lines:
+                break
+    if cur and len(lines) < max_lines:
+        lines.append(cur)
+    if sum(len(l) for l in lines) < len(text) and lines:
+        last = lines[-1]
+        while last and c.d.textbbox((0, 0), last + "…", font=f)[2] / SCALE > max_w:
+            last = last[:-1]
+        lines[-1] = last + "…"
+    return lines
+
+
+# ── 通用区块 ────────────────────────────────────────────────────────
+CITY_SIZE, APP_SIZE, OBS_SIZE, AQI_SIZE, TITLE_SIZE = 10.5, 11, 8.5, 8.5, 9.5
+
+
+def header(c, x, y, w, s, *, narrow=False, glass=False):
+    """顶栏。宽档一行放下（城市+AQI 在左、logo+名称在右）；
+    窄档（2×4 / 2×2）一行放不下，拆两行 —— 否则 logo 会压住名称。"""
+    brand_w = 21 + c.measure(s["app_name"], APP_SIZE, bold=True)
+    c.icon("place", x, y - 0.5, 11)
+    c.text(x + 13, y + CITY_SIZE * 0.65, s["city"], CITY_SIZE, alpha=0.94,
+           bold=True, anchor="lm")
+    c.logo(x + w - brand_w, y - 2, 17)
+    c.text(x + w - brand_w + 21, y + APP_SIZE * 0.65, s["app_name"], APP_SIZE,
+           bold=True, anchor="lm")
+    y += line_h(CITY_SIZE, True)
+
+    pill = f"AQI {s['aqi']} {s['aqi_label']}"
+    mw = c.measure(pill, AQI_SIZE, bold=True)
+    pw = mw + 19
+    if narrow:
+        c.paste(c.rounded(pw, 15, 7.5, "#000000" if glass else "#FFFFFF",
+                          0.20 if glass else 0.16), x, y - 1)
+        c.paste(c.circle(6, s["aqi_color"]), x + 6, y + 2.5)
+        c.text(x + 13 + mw / 2, y + 6.5, pill, AQI_SIZE, bold=True, anchor="mm")
+        c.text(x + w, y + 6.5, s["observed"], OBS_SIZE, alpha=0.62, anchor="rm")
+        return y + line_h(OBS_SIZE) + 2
+    # 宽档：AQI 紧跟城市，中间是观测时刻，右端仍是品牌
+    px = x + 13 + c.measure(s["city"], CITY_SIZE, bold=True) + 7
+    c.paste(c.rounded(pw, 15, 7.5, "#000000" if glass else "#FFFFFF",
+                      0.20 if glass else 0.16), px, y - 8.5)
+    c.paste(c.circle(6, s["aqi_color"]), px + 6, y - 5)
+    c.text(px + 13 + mw / 2, y - 1, pill, AQI_SIZE, bold=True, anchor="mm")
+    c.text(x + w - brand_w - 10 - c.measure(s["observed"], OBS_SIZE), y - 1,
+           s["observed"], OBS_SIZE, alpha=0.60, anchor="lm")
+    return y
+
+
+def hero(c, x, y, w, s, *, temp=30, icon=25):
+    """天气主区：图标 + 大温度（左）…… 现象 / 高低温（右）。返回底边 y。"""
+    c.icon(s["weather_icon"], x, y, icon, big=True)
+    tx = x + icon + 5
+    th = line_h(temp)
+    c.text(tx, y + th / 2 - 1, s["temp"], temp, bold=True, anchor="lm")
+    # 现象/高低温右对齐到行尾（与生成器 hero() 一致）：独占一行后若还贴着
+    # 温度站，右侧会空掉一半 —— 面板是窄而高的一列，组件是宽而扁的一条。
+    rx = x + w
+    c.text(rx, y + 1, s["cond"], 9.5, alpha=0.90, bold=True, anchor="ra")
+    c.text(rx, y + line_h(9.5) + 1, s["range"], 9, alpha=0.74, anchor="ra")
+    return y + max(icon, th)
+
+
+def kv(c, x, y, w, label, value):
+    """面板 _kvPair 的复刻：标签左（白 0.58）/ 值右（加粗纯白）。返回底边 y。"""
+    lh = line_h(9)
+    c.text(x, y + lh / 2, label, 9, alpha=0.58, anchor="lm")
+    c.text(x + w, y + lh / 2, value, 10, bold=True, anchor="rm")
+    return y + lh + 1
+
+
+def tip(c, x, y, w, level, icon, text, *, lines=2, size=9):
+    """一条通栏建议，与面板 _tipRow 同构：圆点 + 图标 + 级别 / 正文另起一行。"""
+    c.paste(c.circle(6, LEVEL_LIT[level]), x, y + 3)
+    bx = x + 11
+    c.icon(icon, bx, y, 11, color=LEVEL_LIT[level])
+    c.text(bx + 14, y + 5.5, LEVEL_LABEL[level], 8.5, bold=True,
+           color=LEVEL_LIT[level], anchor="lm")
+    fy = y + line_h(8.5)
+    wrapped = wrap(c, text, size, w - 11, lines)
+    for ln in wrapped:
+        c.text(bx, fy, ln, size, alpha=0.93)
+        fy += line_h(size) * TIP_LINE_MULT   # 布局里是 1.3
+    return y + line_h(8.5) + block_lines_h(size, len(wrapped), TIP_LINE_MULT)
+
+
+def tip_inline(c, x, y, w, level, icon, text, *, size=9):
+    """一条**单行**建议：圆点 + 图标 + 级别 + 正文都在同一行。
+
+    与 tip()（级别一行、正文另起一行）的区别就是省掉那一行。
+    4×2 主档高度不够，必须用这个版本；2×4 竖长档空间富余，仍用两行版
+    （级别单独一行更醒目）。正文用 Dart 侧切好的 shortText。
+    """
+    c.paste(c.circle(6, LEVEL_LIT[level]), x, y + line_h(size) / 2 - 3)
+    bx = x + 11
+    c.icon(icon, bx, y + 1, 11, color=LEVEL_LIT[level])
+    lx = bx + 14
+    c.text(lx, y + line_h(size) / 2, LEVEL_LABEL[level], size - 0.5,
+           bold=True, color=LEVEL_LIT[level], anchor="lm")
+    tx = lx + c.measure(LEVEL_LABEL[level], size - 0.5, bold=True) + 6
+    c.text(tx, y + line_h(size) / 2, text, size, alpha=0.93, anchor="lm")
+    return y + line_h(size) + 2
+
+
+def section_title(c, x, y, w, title, count=None, icon="rss_feed"):
+    c.icon(icon, x, y, 11)
+    c.text(x + 14, y + TITLE_SIZE * 0.6, title, TITLE_SIZE, alpha=0.80,
+           bold=True, anchor="lm")
+    if count:
+        c.text(x + w, y + TITLE_SIZE * 0.6, count, 9, alpha=0.55, anchor="rm")
+    return y + line_h(TITLE_SIZE) + 2
+
+
+# ── 天气组件四档 ────────────────────────────────────────────────────
+def render_tile(w=296, h=140, kind="clear", dark=False):
+    c = Canvas(w, h, kind, dark=dark)
+    x, iw = 12, w - 24
+    y = header(c, x, 8, iw, WEATHER)
+    c.hairline(x, y, iw)
+    y += 6
+    # 天气主区**独占一行**，指标另起一行（原来是并排 42%/58%）——
+    # 并排时 30sp 的大温度只剩约 110dp、湿度/风力/气压挤在一行，而卡片上半
+    # 其余地方全空，就是「上面挤、下面空」。
+    y = hero(c, x, y, iw, WEATHER, temp=30, icon=25)
+    y += 6
+    # 指标 **3 格单行**，占满整行宽度
+    rw = iw / 3
+    y_kv = y
+    for i, (lab, val) in enumerate(WEATHER["metrics"][:3]):
+        yy = kv(c, x + i * rw, y + 1, rw - 10, lab, val)
+        y_kv = max(y_kv, yy)
+    y = y_kv
+    c.hairline(x, y + 1, iw)
+    y += 7
+    # 条建议各 **1 行**：140dp 装不下「2 行 + 1 行」的组合（实测超 17dp）。
+    # 用 Dart 侧预切好的完整短句（shortText），一行仍是一句完整的话，
+    # 而不是从句子中间被省略号切掉。
+    # 用**单行**建议（级别与正文同行）：主档 140dp 放不下「级别一行 +
+    # 正文一行」×2 条（实测每条要 28.6dp）。正文仍用 Dart 侧切好的完整短句。
+    # 主档真布局有 3 条建议格（ID_TILE.tipRows 三项）
+    for level, icon, _text, short in WEATHER["tips"][:3]:
+        y = tip_inline(c, x, y, iw, level, icon, short)
+    return c.out_clipped(20), y
+
+
+def render_tall(w=150, h=300, kind="clear", dark=False):
+    c = Canvas(w, h, kind, dark=dark)
+    x, iw = 12, w - 24
+    y = header(c, x, 8, iw, WEATHER, narrow=True)
+    c.hairline(x, y, iw)
+    y += 6
+    c.icon(WEATHER["weather_icon"], x, y, 26, big=True)
+    y += 30
+    c.text(x, y + line_h(32) / 2, WEATHER["temp"], 32, bold=True, anchor="lm")
+    y += line_h(32)
+    c.text(x, y + 3, WEATHER["cond"], 10, alpha=0.90, bold=True)
+    c.text(x + iw, y + 3, WEATHER["range"], 9, alpha=0.74, anchor="ra")
+    y += line_h(10) + 2
+    c.hairline(x, y, iw)
+    y += 6
+    # 指标 2 行（原 3 行）：3 行 + 两行建议实测超 12.7dp。
+    # 竖长档的重点是「多给两条建议」，所以砍指标而不是砍建议。
+    for lab, val in WEATHER["metrics"][:2]:
+        y = kv(c, x, y, iw, lab, val)
+    y += 2
+    c.hairline(x, y, iw)
+    y += 5
+    y = section_title(c, x, y, iw, WEATHER["tips_title"],
+                      count=str(len(WEATHER["tips"])))
+    # 行距 4→2：2×4 扣掉圆角净空后只剩 290dp，原来 294.3dp 超出 4.3dp。
+    # 建议行本来就靠「圆点 + 级别」分隔，行距缩 2dp 不影响可读性。
+    # 竖长档（2×4）的真布局只有 2 条建议格（ID_TALL.tipRows 两项），
+    # 所以这里只画前 2 条 —— 演示数据的长度不控制档位内容。
+    for level, icon, text, short in WEATHER["tips"][:2]:
+        y = tip(c, x, y, iw, level, icon, text, lines=2) + 2
+    return c.out_clipped(20), y
+
+
+def render_compact(w=150, h=150, kind="clear", dark=False):
+    c = Canvas(w, h, kind, dark=dark, radius_dp=16)
+    x, iw = 11, w - 22
+    y = header(c, x, 9, iw, WEATHER, narrow=True)
+    c.hairline(x, y, iw)
+    y += 7
+    y = hero(c, x, y, iw, WEATHER, temp=25, icon=21)
+    y += 3
+    c.hairline(x, y, iw)
+    y += 5
+    level, icon, _full, text = WEATHER["tips"][0]
+    # 2 行（原 3 行）：超 1.1dp。这条建议是紧凑档唯一的内容点，所以不是砍它，
+    # 而是让它少折一行 —— 配合 Dart 侧的 shortText，一行到两行都是完整句子。
+    y = tip(c, x, y, iw, level, icon, text, lines=2, size=8.5)
+    return c.out_clipped(16), y
+
+
+def render_row(w=296, h=72, kind="clear", dark=False):
+    c = Canvas(w, h, kind, dark=dark, radius_dp=16)
+    x = 12
+    y = (h - 22) / 2
+    c.icon(WEATHER["weather_icon"], x, y, 22, big=True)
+    x += 26
+    c.text(x, y + line_h(20) / 2 - 1, WEATHER["temp"], 20, bold=True, anchor="lm")
+    x += c.measure(WEATHER["temp"], 20, bold=True) + 5
+    c.text(x, y + 1, WEATHER["cond"], 9.5, alpha=0.90, bold=True)
+    c.text(x, y + line_h(9.5) + 1, WEATHER["range"], 9, alpha=0.74)
+    x += max(c.measure(WEATHER["cond"], 9.5, bold=True),
+             c.measure(WEATHER["range"], 9)) + 11
+    c.d.rectangle([round((x - 6) * SCALE), round((y + 2) * SCALE),
+                   round((x - 6) * SCALE) + SCALE - 1, round((y + 20) * SCALE)],
+                  fill=rgba("#FFFFFF", 0.22))
+    level, icon, _full, text = WEATHER["tips"][0]
+    c.paste(c.circle(6, LEVEL_LIT[level]), x + 4, y + 9)
+    c.icon(icon, x + 15, y + 6, 11, color=LEVEL_LIT[level])
+    avail = w - 12 - (x + 30) - 25
+    lines = wrap(c, text, 9, avail - 11, 1)
+    c.text(x + 30, y + line_h(9) / 2 + 1, lines[0] if lines else text, 9,
+           alpha=0.93, anchor="lm")
+    c.logo(w - 12 - 17, y + 5.5, 17)
+    return c.out_clipped(16), h
+
+
+# ── 短波传播组件（4×2）──────────────────────────────────────────────
+def render_hf(w=296, h=140, dark=False):
+    """短波/电离层传播组件。逐波段给出日间/夜间条件 —— 「各个波段的传播信息」。"""
+    c = Canvas(w, h, "storm", dark=dark)
+    x, iw = 12, w - 24
+    # 顶栏：左标题 / 右品牌（复用天气组件的顶栏风格）
+    brand_w = 21 + c.measure(WEATHER["app_name"], APP_SIZE, bold=True)
+    c.icon("waves", x, 8, 14)
+    c.text(x + 18, 8 + APP_SIZE * 0.65, HF["hf_title"], 12, bold=True, anchor="lm")
+    c.logo(x + iw - brand_w, 7, 17)
+    c.text(x + iw - brand_w + 21, 8 + APP_SIZE * 0.65, WEATHER["app_name"],
+           APP_SIZE, bold=True, anchor="lm")
+    y = 8 + line_h(12, True) + 2
+    # 汇总指标行：SFI / Kp / A —— 与天气组件的「label 左 / value 右」同一套
+    # （面板 _kvPair 的复刻）。Kp 与 A 越小时传播越稳，用级别色提示。
+    cells = [("SFI", HF["sfi"], None),
+             ("Kp", HF["kp"], "good" if int(HF["kp"]) <= 3 else "warn"),
+             ("A", HF["a"], "good" if int(HF["a"]) <= 15 else "warn")]
+    cw = iw / len(cells)
+    for i, (lab, val, tone) in enumerate(cells):
+        cx = x + i * cw
+        c.text(cx, y + 1, lab, 9, alpha=0.58)
+        c.text(cx + cw - 10, y + 1, val, 10, bold=True,
+               color=LEVEL_LIT[tone] if tone else "#FFFFFF", anchor="ra")
+    y += line_h(9) + 4
+    c.hairline(x, y, iw)
+    y += 6
+    # 逐波段：左波段名 / 中「日间」/ 右「夜间」，条件用颜色区分
+    c.text(x, y + 1, "波段", 8.5, alpha=0.5)
+    c.text(x + iw * 0.52, y + 1, "日间", 8.5, alpha=0.5)
+    c.text(x + iw, y + 1, "夜间", 8.5, alpha=0.5, anchor="ra")
+    y += line_h(8.5)
+    for name, day, night in HF["bands"]:
+        c.text(x, y + 2, name, 9.5, bold=True)
+        c.paste(c.circle(6, QUALITY_COLORS[day]), x + iw * 0.52 - 10, y + 5)
+        c.text(x + iw * 0.52, y + 2, day, 9, color=QUALITY_COLORS[day], bold=True)
+        c.paste(c.circle(6, QUALITY_COLORS[night]), x + iw - 42, y + 5)
+        c.text(x + iw, y + 2, night, 9, color=QUALITY_COLORS[night], bold=True,
+               anchor="ra")
+        y += line_h(9.5) + 1
+    return c.out_clipped(20), y
+
+
+
+
+# ── 白底组件的取色（浅色 / 夜间两套）──
+# 与 android/app/src/main/res/values{,-night}/widget_colors.xml 一一对应 ——
+# 那两份是**真机**实际用的值，这里必须同步，否则预览的夜间效果是假的。
+SURFACE = {False: "#FFFFFF", True: "#1E2530"}
+INK_C = {False: "#253044", True: "#E6EAF2"}
+SLATE_C = {False: "#637083", True: "#AAB4C5"}
+LINE_C = {False: "#E5E9F0", True: "#2A3344"}
+Q_COLOR = {
+    False: {"Good": "#16A34A", "Fair": "#D97706", "Poor": "#E11D48",
+            "Band Closed": "#94A3B8"},
+    True: {"Good": "#68C389", "Fair": "#E6A75D", "Poor": "#EC6C88",
+           "Band Closed": "#B9C3D1"},
+}
+
+
+def surf(dark):
+    return SURFACE[bool(dark)]
+
+
+def ink_of(dark):
+    return INK_C[bool(dark)]
+
+
+def slate_of(dark):
+    return SLATE_C[bool(dark)]
+
+
+def line_of(dark):
+    return LINE_C[bool(dark)]
+
+
+def qcol(q, dark):
+    return Q_COLOR[bool(dark)][q]
+
+# ── 短波组件的**白底**方案 ─────────────────────────────────────────
+#
+# 为什么白底要用**基准色**而不是提亮色：`widgetTipTextArgb` 提亮 35% 是为了
+# 「压在天气渐变上还能看清」；白底上提亮色会太淡（#68C389 在白底上几乎看不见）。
+# 面板本身就是浅色 UI，用的就是基准色 —— 白底组件跟着用基准色才一致。
+# 质量 key → chip 上显示的**本地化**文案。
+# 真机：chip 颜色由 level（key）决定，文字由 hfQualityLabel() 决定；
+# 预览必须把这两件事分开 —— 否则预览显示的是英文 key，不是真实的中文界面。
+Q_LABEL = {
+    "Good": "好", "Fair": "一般", "Poor": "差", "Band Closed": "未开通",
+}
+
+QUALITY_COLORS_BASE = {
+    "Good": "#16A34A", "Fair": "#D97706",
+    "Poor": "#E11D48", "Band Closed": "#94A3B8",
+}
+
+# 白底组件的前景层级（取自 theme.dart 的 C.* 浅色值）
+HF3_DAY, HF3_NIGHT = "日间", "夜间"
+HF_NOW = "现在"   # 与 l10n 的 hfNow 同值（仅预览用）
+INK = "#253044"      # C.ink    主文字
+SLATE = "#637083"    # C.slate  次要文字
+LINE = "#E5E9F0"     # C.border 细分隔线
+
+
+# ── 短波组件的三个重做方案 ─────────────────────────────────────────
+#
+# 旧版（单稿调参）的问题，逐条：
+#   ① 「日 ｜ 夜」图例挤在汇总行右端，**和下面两列并不对齐** → 等于没起作用
+#   ② 夜间列右对齐、日间列左对齐 → 两列内容 zigzag，扫视对不齐
+#   ③ 圆点的 x 随条件文字宽度浮动 → 点不在一条竖线上
+#   ④ 圆点只占 6dp，颜色信号很弱，条件其实靠读字
+#   ⑤ 波段名与条件之间一大片空白，横向扫视要跨很远
+#   ⑥ 4 行一模一样、没有结构线，像把表格直接倒上去
+#
+# 三个方案分别针对这些问题的不同解法，不是换个颜色。
+
+# 方案 A/B 共用的数据
+def _hf_cells():
+    return [(name, day, night) for name, day, night in HF["bands"]]
+
+
+def render_hf_A(w=296, h=140, dark=False):
+    """**方案 A · 彩色 chip 矩阵**（推荐）
+
+    解法：
+      · 用**彩色圆角 chip**（条件色填充 + 白字加粗）代替「圆点 + 深色文字」——
+        颜色面积从 6dp 变成整块 chip，一眼扫过去就是红黄绿；
+      · chip **固定宽度**，两列各在自己的固定 x 上，列头「日间 / 夜间」与
+        chip 列**严格对齐**（旧版图例浮在右端，等于没标）；
+      · 波段名与 chip 之间不留空档：把三列收成「窄名 + 两列 chip」，
+        横向扫视距离缩短；
+      · 行间用 1dp 极淡分隔线给结构（面板 _hairline 的语言），
+        不再靠「一片白」堆行。
+    """
+    c = Canvas(w, h, "clear", dark=dark)
+    c.base = Image.new("RGBA", c.base.size, (255, 255, 255, 255))
+    c.layer = Image.new("RGBA", c.base.size, (0, 0, 0, 0))
+    c.d = ImageDraw.Draw(c.layer)
+
+    px, pw = 12, w - 24           # 内边距与可用宽
+    # ① 顶栏
+    c.icon("waves", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    bw = 18 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True)
+    # ② 指数一行（次要信息，不再抢大字号；波段条件才是主角）
+    y += 2
+    ic = [("SFI", HF["sfi"], None),
+          ("Kp", HF["kp"], "good" if int(HF["kp"]) <= 3 else "warn"),
+          ("A", HF["a"], "good" if int(HF["a"]) <= 15 else "warn")]
+    ix = px
+    for lab, val, tone in ic:
+        c.text(ix, y + line_h(11) / 2, lab, 8.5, color=SLATE, anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        col = (QUALITY_COLORS_BASE["Good"] if tone == "good"
+               else QUALITY_COLORS_BASE["Fair"] if tone == "warn" else INK)
+        c.text(ix, y + line_h(11) / 2, val, 11, bold=True, color=col,
+               anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 14
+    y += line_h(11)
+    y += 3
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 4
+    # ③ 列头：与下面 chip 列**严格对齐**
+    BAND_W = 52
+    COL_W = (pw - BAND_W) / 2
+    CHIP_W, CHIP_H = 44, 13
+    c.text(px + BAND_W, y + line_h(8.5) / 2, HF3_DAY, 8.5, color=SLATE,
+           anchor="lm")
+    c.text(px + BAND_W + COL_W, y + line_h(8.5) / 2, HF3_NIGHT, 8.5,
+           color=SLATE, anchor="lm")
+    y += line_h(8.5) + 1
+    # ④ 4 行波段
+    for i, (name, day, night) in enumerate(_hf_cells()):
+        if i:
+            c.d.rectangle([round(px * SCALE),
+                           round((y - 1) * SCALE),
+                           round((px + pw) * SCALE),
+                           round((y - 1) * SCALE) + SCALE - 1],
+                          fill=rgba(LINE, 1.0))
+        cy = y + 1
+        c.text(px, cy + CHIP_H / 2, name, 9.5, bold=True, color=INK,
+               anchor="lm")
+        for k, q in ((0, day), (1, night)):
+            cx = px + BAND_W + k * COL_W
+            c.paste(c.rounded(CHIP_W, CHIP_H, 4, QUALITY_COLORS_BASE[q], 1.0),
+                    cx, cy)
+            c.text(cx + CHIP_W / 2, cy + CHIP_H / 2, Q_LABEL[q], 8.5,
+                   bold=True, color="#FFFFFF", anchor="mm")
+        y = cy + CHIP_H + 1.5
+    return c.out_clipped(20), y
+
+
+
+def render_hf_A2(w=296, h=140, dark=False):
+    """**方案 A2 · 淡底 chip**（与面板标签同一语言）
+
+    面板里的标签用「色 15% 底 + 彩字」（见 weather.dart 的 `_tipRow`：
+    danger 时 `tip.color.withValues(alpha: 0.15)` 底 + 彩色文字）。
+    这里把 A 的实心 chip 换成同一套写法，整体更轻、更贴面板；
+    代价是白底上「淡色底」的色块面积视觉上比实心弱一些。
+    """
+    c = Canvas(w, h, "clear", dark=dark)
+    c.base = Image.new("RGBA", c.base.size, (255, 255, 255, 255))
+    c.layer = Image.new("RGBA", c.base.size, (0, 0, 0, 0))
+    c.d = ImageDraw.Draw(c.layer)
+
+    px, pw = 12, w - 24
+    c.icon("waves", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    bw = 18 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True) + 2
+    ic = [("SFI", HF["sfi"], None),
+          ("Kp", HF["kp"], "good" if int(HF["kp"]) <= 3 else "warn"),
+          ("A", HF["a"], "good" if int(HF["a"]) <= 15 else "warn")]
+    ix = px
+    for lab, val, tone in ic:
+        c.text(ix, y + line_h(11) / 2, lab, 8.5, color=SLATE, anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        col = (QUALITY_COLORS_BASE["Good"] if tone == "good"
+               else QUALITY_COLORS_BASE["Fair"] if tone == "warn" else INK)
+        c.text(ix, y + line_h(11) / 2, val, 11, bold=True, color=col,
+               anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 14
+    y += line_h(11) + 3
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 4
+    BAND_W = 52
+    COL_W = (pw - BAND_W) / 2
+    CHIP_W, CHIP_H = 44, 13
+    c.text(px + BAND_W, y + line_h(8.5) / 2, HF3_DAY, 8.5, color=SLATE,
+           anchor="lm")
+    c.text(px + BAND_W + COL_W, y + line_h(8.5) / 2, HF3_NIGHT, 8.5,
+           color=SLATE, anchor="lm")
+    y += line_h(8.5) + 1
+    for i, (name, day, night) in enumerate(_hf_cells()):
+        if i:
+            c.d.rectangle([round(px * SCALE), round((y - 1) * SCALE),
+                           round((px + pw) * SCALE),
+                           round((y - 1) * SCALE) + SCALE - 1],
+                          fill=rgba(LINE, 1.0))
+        cy = y + 1
+        c.text(px, cy + CHIP_H / 2, name, 9.5, bold=True, color=INK,
+               anchor="lm")
+        for k, q in ((0, day), (1, night)):
+            cx = px + BAND_W + k * COL_W
+            base = QUALITY_COLORS_BASE[q]
+            c.paste(c.rounded(CHIP_W, CHIP_H, 4, base, 0.16), cx, cy)
+            c.text(cx + CHIP_W / 2, cy + CHIP_H / 2, q, 8.5, bold=True,
+                   color=base, anchor="mm")
+        y = cy + CHIP_H + 1.5
+    return c.out_clipped(20), y
+
+
+# ═══ 认真设计的一版（D）═══
+# 诊断（3x 放大后逐条看出来的）：
+#   ① 8 个饱和色块 = 红绿灯墙。颜色用量与信息量不匹配 —— 条件只是「4 档之一」，
+#      不值得给整块饱和色。
+#   ② 指数行的 Kp/A 也染色（绿），与表格的颜色抢注意力 → 干扰。
+#   ③ 字号只有 12/11/9.5/8.5 四级，层级几乎压平 → 看着「平」。
+#   ④ 内边距全是 2~5dp 的「省出来」值 → 没有呼吸感。
+#
+# 设计决策（不是调参）：
+#   · **tonal chip**（Material 3 的状态 chip 做法）：淡色底 10% + 条件色文字，
+#     而不是实心饱和块。对齐的好处（固定宽度、落在同一竖线）保留，颜色用量降到 1/10。
+#   · **指数行去色**：Kp/A 用墨色，颜色只留给「波段条件」这一件事。
+#   · **建立层级**：标题 13/w800 > 指数值 11/w600 > 波段名 10/w600 > 条件 9/w700
+#     > 列头 8/w600 + 字距。
+#   · **呼吸**：行高 14dp、表头与表格之间留 3dp、内边距 8/8。
+def _hf_shell(w, h, dark):
+    c = Canvas(w, h, "clear", dark=dark)
+    c.base = Image.new("RGBA", c.base.size,
+                       hex2rgb(surf(dark)) + (255,))
+    c.layer = Image.new("RGBA", c.base.size, (0, 0, 0, 0))
+    c.d = ImageDraw.Draw(c.layer)
+    return c
+
+
+def _hf_head(c, px, pw, title_size=13, dark=False):
+    """顶栏 + 指数行。指数**不染色** —— 颜色只留给波段条件。"""
+    INK, SLATE = ink_of(dark), slate_of(dark)
+    c.icon("waves", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(title_size, True) / 2, HF["hf_title"],
+           title_size, bold=True, color=INK, anchor="lm")
+    bw = 18 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(title_size, True)
+    # 指数：gray 标签 + 墨色值，用「·」分隔（比留白更紧凑也更像一句注脚）
+    y += 2
+    items = [("SFI", HF["sfi"]), ("Kp", HF["kp"]), ("A", HF["a"])]
+    x = px
+    base = y + line_h(11, True) / 2
+    for i, (lab, val) in enumerate(items):
+        if i:
+            c.text(x, base, "·", 9, color="#C3CCD9", anchor="lm")
+            x += c.measure("·", 9) + 7
+        c.text(x, base, lab, 9, color=SLATE, anchor="lm")
+        x += c.measure(lab, 9) + 4
+        c.text(x, base, val, 11, bold=True, color=INK, anchor="lm")
+        x += c.measure(val, 11, bold=True) + 7
+    return y + line_h(11, True)
+
+
+def render_hf_D(w=296, h=140, dark=False, tonal=True):
+    """**D · 认真设计版**：tonal chip（淡色底 + 条件色文字）。
+
+    [tonal] False 时改为「小圆点 + 条件色文字」（最克制的一档），用于对比取优。
+    """
+    c = _hf_shell(w, h, dark)
+    # 按当前明暗取色（与真机的 values/values-night 对应）。
+    # 函数内赋值会遮蔽模块级常量，所以显式声明即可。
+    INK, SLATE, LINE = ink_of(dark), slate_of(dark), line_of(dark)
+    px, pw = 13, w - 26
+    y = _hf_head(c, px, pw, dark=dark)
+    y += 4
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 5
+    # 列头：与下面 chip 的左边缘**同一 x**（这是上一版最明显的问题）
+    BAND_W = 54
+    COL_W = (pw - BAND_W) / 2
+    CHIP_W, CHIP_H = 46, 14
+    base = y + line_h(8, True) / 2
+    c.text(px + BAND_W, base, HF3_DAY, 8, bold=True, color="#98A3B3",
+           anchor="lm", spacing=0.06)
+    c.text(px + BAND_W + COL_W, base, HF3_NIGHT, 8, bold=True, color="#98A3B3",
+           anchor="lm", spacing=0.06)
+    y += line_h(8, True) + 2
+    for i, (name, day, night) in enumerate(_hf_cells()):
+        if i:
+            c.d.rectangle([round(px * SCALE), round((y - 0.5) * SCALE),
+                           round((px + pw) * SCALE),
+                           round((y - 0.5) * SCALE) + SCALE - 1],
+                          fill=rgba(LINE, 0.75))
+        cy = y + 0.5
+        c.text(px, cy + CHIP_H / 2, name, 10, bold=True, color=INK,
+               anchor="lm")
+        for k, q in ((0, day), (1, night)):
+            cx = px + BAND_W + k * COL_W
+            col = qcol(q, dark)
+            if tonal:
+                c.paste(c.rounded(CHIP_W, CHIP_H, 5, col, 0.11), cx, cy)
+                c.text(cx + CHIP_W / 2, cy + CHIP_H / 2, Q_LABEL[q], 9,
+                       bold=True, color=col, anchor="mm")
+            else:
+                c.paste(c.circle(6, col), cx + 2, cy + CHIP_H / 2 - 3)
+                c.text(cx + 12, cy + CHIP_H / 2, Q_LABEL[q], 9, bold=True,
+                       color=col, anchor="lm")
+        y = cy + CHIP_H
+    return c.out_clipped(20), y
+
+# ═══ F2 · 条件色带（2026-09-18 定稿，取代 D）═══
+# 旧版 D 被判定「还是好难看」，诊断见 tool/gen_app_widget_layouts.py 的 build_hf()。
+# 一句话：8 个同形状的淡色药丸 + 4 行同构 + 中段大片空档 → 像一堆便利贴。
+# F2 解法：每行一条色带横贯列宽（行宽=列宽，空档消失），颜色集中到左端 2.5dp
+# 色标（四行扫下来是一条竖线），档位文字就在色带内左端。
+#
+# ⚠ 本函数的坐标**逐条对应真布局**（android/.../layout/aw_widget_hf.xml），
+#   因为它同时充当「内容放不放得下」的核算：
+#     顶/底内边距 8/9、左右 12、顶栏行盒、指数行（含 6m 格 13dp）、
+#     细线 box(4+1)、列头（margin_top 3）、色带格 20dp、行间 margin_top 1
+def _hf_f2_geometry():
+    """返回真布局的纵向几何（dp）。改布局时这里要一起改 —— 否则预览的数字失真。"""
+    y = 8 + line_h(12, True)              # pad_top + 顶栏
+    y += 3 + max(line_h(11, True), 13)    # 指数行（margin_top 3；6m 格 13dp）
+    y += 4 + 1                            # 细线 box（margin_top 4 + 1dp）
+    y += 3 + line_h(8, True)              # 列头（margin_top 3）
+    y += 2                                # bands（margin_top 2）
+    for i in range(4):
+        y += max(line_h(9.5, True), 20)   # 色带格 20dp
+        if i < 3:
+            y += 1                        # 行间 margin_top 1dp
+    return y + 9                          # pad_bottom
+
+
+def render_hf_F2(w=296, h=140, dark=False):
+    """**F2 · 条件色带**（定稿）：每行一条淡色带 + 左端 2.5dp 色标。"""
+    c = _hf_shell(w, h, dark)
+    INK, SLATE, LINE = ink_of(dark), slate_of(dark), line_of(dark)
+    px, pw = 12, w - 24
+    QCOL = Q_COLOR[bool(dark)]
+    # ① 顶栏
+    c.icon("waves", px, 8 + (line_h(12, True) - 14) / 2, 14, color=INK)
+    c.text(px + 17, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    bw = 15 + 4 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 8 + (line_h(12, True) - 15) / 2, 15)
+    c.text(px + pw - bw + 19, 8 + line_h(12, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True)
+    # ② 指数行 + 右端 6m 格（与指数同高、同一种色带外观）
+    y += 3
+    row_h = max(line_h(11, True), 13)
+    row_bottom = y + row_h
+    ix = px
+    for lab, val in (("SFI", HF["sfi"]), ("Kp", HF["kp"]), ("A", HF["a"])):
+        c.text(ix, row_bottom - line_h(8.5) / 2, lab, 8.5, color=SLATE,
+               anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        c.text(ix, row_bottom - line_h(11, True) / 2, val, 11, bold=True,
+               color=INK, anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 10
+    SIX_W = 48
+    six_x = px + pw - SIX_W
+    # 「6m」标签：一个带色的格子不标出处，用户不知道它在说什么
+    c.text(six_x - 3, row_bottom - line_h(8.5) / 2, "6m", 8.5, color=SLATE,
+           anchor="rm")
+    six_y = row_bottom - 13
+    _track(c, six_x, six_y, SIX_W, 13, QCOL["Band Closed"], "--", 8.5, SLATE,
+           center=True, pad=3)
+    y = row_bottom
+    # ③ 细线
+    y += 4
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 1
+    # ④ 列头：与色带左边缘同一条竖线
+    y += 3
+    BAND_W = 46
+    COL_W = (pw - BAND_W) / 2
+    day_x, night_x = px + BAND_W, px + BAND_W + COL_W
+    c.text(day_x, y + line_h(8, True) / 2, HF3_DAY, 8, bold=True, color=SLATE,
+           anchor="lm", spacing=0.06)
+    c.text(night_x, y + line_h(8, True) / 2, HF3_NIGHT, 8, bold=True,
+           color=SLATE, anchor="lm", spacing=0.06)
+    y += line_h(8, True)
+    # ⑤ 4 行波段：色带铺满列宽（所以「行的宽度 = 列宽」，没有中段空档）
+    y += 2
+    RH = 20
+    for i, (name, day, night) in enumerate(_hf_cells()):
+        c.text(px, y + RH / 2, name, 9.5, bold=True, color=INK,
+               anchor="lm")
+        _track(c, day_x, y, COL_W, RH, QCOL[day], Q_LABEL[day], 9.5, QCOL[day])
+        _track(c, night_x, y, COL_W, RH, QCOL[night], Q_LABEL[night], 9.5,
+               QCOL[night])
+        y += RH
+        if i < 3:
+            y += 1
+    return c.out_clipped(20), _hf_f2_geometry()
+
+
+def _track(c, x, y, w, h, color, text, size, text_color, center=False, pad=8):
+    """一格条件色带（**已废弃的 F2 设计**，保留作对照）：淡色圆角底 +
+    左端 2.5dp 实色色标 + 档位文字。
+
+    ⚠ F2 的 aw_track_* 资源已随 M1 一起删除（真机现在用 aw_seg_* /
+    aw_segday_* / aw_segnight_*），本函数只是把当时的设计画出来备用，
+    不再对应任何真机资源。
+    """
+    c.paste(c.rounded(w - 3, h, 3, color, 0.14), x, y)
+    c.paste(c.rounded(2.5, 9, 1.2, color, 1.0), x, y + (h - 9) / 2)
+    if center:
+        c.text(x + w / 2, y + h / 2, text, size, bold=True, color=text_color,
+               anchor="mm")
+    else:
+        c.text(x + pad, y + h / 2, text, size, bold=True, color=text_color,
+               anchor="lm")
+
+
+# ═══ M1 · 日/夜进度条 + 当前时段游标（2026-09-18 定稿，取代 F2）═══
+#
+# 前两版都没解决两件事：① 波段名被挤掉（「这是哪个波段」是前置信息，没了其余都白搭）；
+# ② 用户还得自己心算「现在该看日间那列还是夜间那列」。
+# M1 把「现在」摆到台面上：每波段一条两段条（左=日间、右=夜间），**当前时段那一段
+# 是实色 + 顶部小白点**，另一段淡底；两端太阳/星光标注语义；右端给当前时段的档位。
+#
+# ⚠ 坐标逐条对应真布局（android/.../layout/aw_widget_hf.xml）；这份几何同时充当
+#   「内容放不放得下」的核算，改布局必须同步改 _hf_m1_geometry()。
+HF_M1_NAME_W = 56        # 波段名列宽（与生成器的 BAND_W 一致）
+HF_M1_SEG_H = 18         # 段高（与生成器的 SEG_H 一致；13→18 让整块更饱满）
+HF_M1_ICON = 10          # 段内太阳/月亮图标
+HF_M1_ICON_PAD = 7       # 图标离条左端
+HF_M1_NOW_W = 48         # 右端档位块宽
+HF_M1_NOW_H = 18         # 档位块高 = 段高
+# 演示用的「现在」时段。真机上由原生按本机时钟判断（见 HfWidgetProvider）。
+HF_M1_NOW_IS_DAY = False
+# 行距（与生成器的 margin_top 一致：波段行 2dp）
+HF_M1_ROW_GAP = 2
+# 演示用的通联提示（真机上由 Dart 的 hfTips 给，与面板同源）
+HF_M1_TIP_LEVEL = "操作提示"
+HF_M1_TIP_COLOR = "#2563EB"
+HF_M1_TIP_TEXT = "地磁较活跃：短波高纬度路径不如平时稳定，建议留出更多呼叫时间"
+
+
+def _mix(hex6, target, t):
+    """把 [hex6] 向 [target] 混 t —— 与生成器的 mix() 同一套算法。
+
+    预览必须**算**而不是手抄色值：色值一改就漂，而预览一漂就失去核对价值。
+    """
+    a = [int(hex6[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(target[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#%02X%02X%02X" % tuple(
+        round(a[k] * (1 - t) + b[k] * t) for k in range(3))
+
+
+def _seg_night_fill(day_fill, dark):
+    """夜晚段的底色：浅色卡片上压向深色，深色卡片上压向卡片底色（变闷）。"""
+    return _mix(day_fill, "#243040" if dark else "#0B1220",
+                0.62 if dark else 0.52)
+
+
+def _hf_m1_geometry():
+    """真布局的纵向几何（dp）。"""
+    y = 8 + line_h(12, True)                  # pad_top + 顶栏
+    y += 2 + max(line_h(11, True), 13)        # 指数行（margin 2；6m 格 13dp）
+    y += 3 + 1                                # 细线 box（margin 3）
+    for _ in range(4):
+        # 行高 = max(波段名行盒, 段高, 档位块)
+        y += HF_M1_ROW_GAP + max(line_h(9, True), HF_M1_SEG_H, HF_M1_NOW_H)
+    # 通联提示行：细线 box(3+1) + 行(margin 3 + max(圆点 6, 级别图 11, 行盒))
+    y += 3 + 1 + 3 + max(6, 11, line_h(9))
+    return y + 9                              # pad_bottom
+
+
+def _seg(c, x, y, w, h, color, is_now, icon):
+    """一段进度条：底色 + 段内太阳/月亮 + 顶部小白点（当前那一段才有）。
+
+    底色由调用处决定：白天段=满色（亮）/ 夜晚段=压暗（暗）——
+    **亮度表达的是时段，不是「现在」**（用户点名的语义）。
+    """
+    c.paste(c.rounded(w, h, 4, color, 1.0), x, y)
+    c.icon(icon, x + HF_M1_ICON_PAD, y + (h - HF_M1_ICON) / 2, HF_M1_ICON,
+           color="#FFFFFF")
+    if is_now:
+        c.paste(c.rounded(6, 3, 1.5, "#FFFFFF", 1.0), x + (w - 6) / 2, y + 2)
+
+
+def render_hf_M1(w=296, h=140, dark=False, now_is_day=None):
+    """**M1 · 日/夜进度条**：左段=日间、右段=夜间，当前时段实色 + 小白点。"""
+    is_day = HF_M1_NOW_IS_DAY if now_is_day is None else now_is_day
+    c = _hf_shell(w, h, dark)
+    INK, SLATE, LINE = ink_of(dark), slate_of(dark), line_of(dark)
+    QCOL = Q_COLOR[bool(dark)]
+    px, pw = 12, w - 24
+    # ① 顶栏
+    c.icon("waves", px, 8 + (line_h(12, True) - 14) / 2, 14, color=INK)
+    c.text(px + 16, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    # 「现在 夜间」在顶栏（标题右侧），与真布局一致
+    slot = HF3_DAY if is_day else HF3_NIGHT
+    c.text(px + 16 + c.measure(HF["hf_title"], 12, True) + 7,
+           8 + line_h(12, True) / 2, f"{HF_NOW} {slot}", 8.5, color=SLATE,
+           anchor="lm")
+    bw = 15 + 3 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 8 + (line_h(12, True) - 15) / 2, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(12, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True)
+    # ② 指数行：SFI / Kp / A ＋ 右端「现在 夜间」＋ 6m 格
+    y += 3
+    row_h = max(line_h(11, True), 13)
+    bottom = y + row_h
+    ix = px
+    for lab, val in (("SFI", HF["sfi"]), ("Kp", HF["kp"]), ("A", HF["a"])):
+        c.text(ix, bottom - line_h(8.5) / 2, lab, 8.5, color=SLATE,
+               anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        c.text(ix, bottom - line_h(11, True) / 2, val, 11, bold=True,
+               color=INK, anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 10
+    # 6m 格（另一件东西：没有日/夜之分，所以不进下面那张表）
+    SIX_W = 46
+    six_x = px + pw - SIX_W
+    # ⚠ 顺序必须是 [现在标签][6m 标签][6m 格]，间距照抄真布局
+    #   （now_tag 无 margin、six_tag margin_start 8dp / margin_end 3dp）。
+    #   我第一版把「现在 X」右对齐到 six_x-11，正好压在 6m 标签上 ——
+    #   预览里显示成「现在 夜间m」。真布局是两个 wrap_content 的 TextView，
+    #   会自然排开；是**预览的 x 算错**，不是布局有问题。
+    six_tag_right = six_x - 3
+    c.text(six_tag_right, bottom - line_h(8.5) / 2, "6m", 8.5, color=SLATE,
+           anchor="rm")
+    c.paste(c.rounded(SIX_W, 13, 4, QCOL["Band Closed"], 0.30), six_x,
+            bottom - 13)
+    c.text(six_x + SIX_W / 2, bottom - 13 / 2, "--", 8.5, bold=True,
+           color=SLATE, anchor="mm")
+    y = bottom
+    # ③ 细线
+    y += 4
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 1
+    # ④ 4 行：名字 + 太阳 + 日间段 + 夜间段 + 星光 + 当前档位
+    for name, day, night in _hf_cells():
+        y += 4
+        rh = max(line_h(9, True), HF_M1_SEG_H, HF_M1_NOW_H)
+        cy = y + (rh - HF_M1_SEG_H) / 2
+        c.text(px, y + rh / 2, name, 9, bold=True, color=INK, anchor="lm")
+        # 图标已挪进条内（不再占条外宽度），两段直接铺满
+        seg_x = px + HF_M1_NAME_W
+        seg_w = (px + pw - HF_M1_NOW_W - 3 - seg_x - 2) / 2
+        # 白天段 = 满色（亮）；夜晚段 = 压暗（暗）—— 与「哪段是现在」无关
+        _seg(c, seg_x, cy, seg_w, HF_M1_SEG_H, QCOL[day], is_day, "wb_sunny")
+        _seg(c, seg_x + seg_w + 2, cy, seg_w, HF_M1_SEG_H,
+             _seg_night_fill(QCOL[night], bool(dark)), not is_day,
+             "nights_stay")
+        # 右端：当前时段的档位（压暗底 + 白字 —— 读值块不跟昼夜明暗走）
+        q = day if is_day else night
+        nx = px + pw - HF_M1_NOW_W
+        c.paste(c.rounded(HF_M1_NOW_W, HF_M1_NOW_H, 4,
+                          _seg_night_fill(QCOL[q], bool(dark)), 1.0), nx,
+                y + (rh - HF_M1_NOW_H) / 2)
+        c.text(nx + HF_M1_NOW_W / 2, y + rh / 2, Q_LABEL[q], 8.5, bold=True,
+               color="#FFFFFF", anchor="mm")
+        y += rh + HF_M1_ROW_GAP
+    # ⑤ 通联提示（一行）：细线 + [圆点][级别图][级别] 一句话
+    y += 4 - HF_M1_ROW_GAP          # 行距已在循环里加过，这里补到 4dp
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 1 + 4
+    ty = y + max(6, 11, line_h(9)) / 2
+    c.paste(c.circle(6, HF_M1_TIP_COLOR), px, ty - 3)
+    c.icon("rss_feed", px + 5, ty - 5.5, 11, color=HF_M1_TIP_COLOR)
+    lx = px + 5 + 11 + 4
+    c.text(lx, ty, HF_M1_TIP_LEVEL, 8.5, bold=True, color=HF_M1_TIP_COLOR,
+           anchor="lm", spacing=0.04)
+    tx = lx + c.measure(HF_M1_TIP_LEVEL, 8.5, True) + 5
+    avail = px + pw - tx
+    lines = wrap(c, HF_M1_TIP_TEXT, 9, avail, 1)
+    c.text(tx, ty, lines[0] if lines else HF_M1_TIP_TEXT, 9, alpha=0.93,
+           color=INK, anchor="lm")
+    y += max(6, 11, line_h(9))
+    return c.out_clipped(20), _hf_m1_geometry()
+
+
+
+def render_hf_B(w=296, h=140, dark=False):
+    """**方案 B · 信号条**（业余无线电仪器感）
+
+    解法：把「质量」画成**长度**而不是文字 + 圆点 —— 4 段小方块，
+    好=4 格、一般=2 格、差=1 格、关闭=0 格，颜色随质量。
+    好处：不依赖读字（对多语言更友好），强弱是**长短**一眼可比；
+    代价：不给文字标签，需要列头 + 一点直觉。
+    """
+    c = Canvas(w, h, "clear", dark=dark)
+    c.base = Image.new("RGBA", c.base.size, (255, 255, 255, 255))
+    c.layer = Image.new("RGBA", c.base.size, (0, 0, 0, 0))
+    c.d = ImageDraw.Draw(c.layer)
+
+    px, pw = 12, w - 24
+    c.icon("waves", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    bw = 18 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True) + 2
+    ic = [("SFI", HF["sfi"], None),
+          ("Kp", HF["kp"], "good" if int(HF["kp"]) <= 3 else "warn"),
+          ("A", HF["a"], "good" if int(HF["a"]) <= 15 else "warn")]
+    ix = px
+    for lab, val, tone in ic:
+        c.text(ix, y + line_h(11) / 2, lab, 8.5, color=SLATE, anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        col = (QUALITY_COLORS_BASE["Good"] if tone == "good"
+               else QUALITY_COLORS_BASE["Fair"] if tone == "warn" else INK)
+        c.text(ix, y + line_h(11) / 2, val, 11, bold=True, color=col,
+               anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 14
+    y += line_h(11) + 3
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 4
+    BAND_W = 52
+    COL_W = (pw - BAND_W) / 2
+    SEG, SEG_GAP, SEG_H = 9, 2, 9
+    c.text(px + BAND_W, y + line_h(8.5) / 2, HF3_DAY, 8.5, color=SLATE,
+           anchor="lm")
+    c.text(px + BAND_W + COL_W, y + line_h(8.5) / 2, HF3_NIGHT, 8.5,
+           color=SLATE, anchor="lm")
+    y += line_h(8.5) + 1
+    for i, (name, day, night) in enumerate(_hf_cells()):
+        if i:
+            c.d.rectangle([round(px * SCALE), round((y - 1) * SCALE),
+                           round((px + pw) * SCALE),
+                           round((y - 1) * SCALE) + SCALE - 1],
+                          fill=rgba(LINE, 1.0))
+        cy = y + 1
+        c.text(px, cy + SEG_H / 2, name, 9.5, bold=True, color=INK,
+               anchor="lm")
+        for k, q in ((0, day), (1, night)):
+            cx = px + BAND_W + k * COL_W
+            filled = {"Good": 4, "Fair": 2, "Poor": 1}.get(q, 0)
+            for s in range(4):
+                col = QUALITY_COLORS_BASE[q] if s < filled else "#DFE4EC"
+                c.paste(c.rounded(SEG, SEG_H, 2, col, 1.0),
+                        cx + s * (SEG + SEG_GAP), cy)
+        y = cy + SEG_H + 2
+    return c.out_clipped(20), y
+
+
+def render_hf_C(w=296, h=140, dark=False):
+    """**方案 C · 每波段一张小卡片**（2×2 网格）
+
+    解法：把「波段」当成一张卡，卡里「日间 / 夜间」两个 chip。
+    好处：分组最清楚、留白最多，看着最「设计感」；
+    代价：卡边框占掉一些空间，4 张卡的信息密度比矩阵低。
+    """
+    c = Canvas(w, h, "clear", dark=dark)
+    c.base = Image.new("RGBA", c.base.size, (255, 255, 255, 255))
+    c.layer = Image.new("RGBA", c.base.size, (0, 0, 0, 0))
+    c.d = ImageDraw.Draw(c.layer)
+
+    px, pw = 12, w - 24
+    c.icon("waves", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(12, True) / 2, HF["hf_title"], 12, bold=True,
+           color=INK, anchor="lm")
+    bw = 18 + c.measure(WEATHER["app_name"], 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, WEATHER["app_name"],
+           10, bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(12, True) + 2
+    ic = [("SFI", HF["sfi"], None),
+          ("Kp", HF["kp"], "good" if int(HF["kp"]) <= 3 else "warn"),
+          ("A", HF["a"], "good" if int(HF["a"]) <= 15 else "warn")]
+    ix = px
+    for lab, val, tone in ic:
+        c.text(ix, y + line_h(11) / 2, lab, 8.5, color=SLATE, anchor="lm")
+        ix += c.measure(lab, 8.5) + 3
+        col = (QUALITY_COLORS_BASE["Good"] if tone == "good"
+               else QUALITY_COLORS_BASE["Fair"] if tone == "warn" else INK)
+        c.text(ix, y + line_h(11) / 2, val, 11, bold=True, color=col,
+               anchor="lm")
+        ix += c.measure(val, 11, bold=True) + 14
+    y += line_h(11) + 3
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 5
+    cells = _hf_cells()
+    CW = (pw - 6) / 2
+    CH = (h - y - 10 - 5) / 2
+    for i, (name, day, night) in enumerate(cells):
+        r, k = divmod(i, 2)
+        cx = px + k * (CW + 6)
+        cy = y + r * (CH + 5)
+        c.paste(c.rounded(CW, CH, 6, "#F5F7FA", 1.0, 0.0), cx, cy)
+        c.text(cx + 7, cy + 4, name, 9.5, bold=True, color=INK)
+        chip_w = (CW - 14 - 5) / 2
+        for j, (lab, q) in enumerate(((HF3_DAY, day), (HF3_NIGHT, night))):
+            gx = cx + 7 + j * (chip_w + 5)
+            # 卡里必须自带「日/夜」标注：不然两个 chip 一样大，
+            # 根本不知道哪个是日间 —— 这是方案 C 原先的真缺陷。
+            c.text(gx + chip_w / 2, cy + 4 + line_h(9.5) + 2, lab, 7.5,
+                   color=SLATE, anchor="mm")
+            gy = cy + 4 + line_h(9.5) + line_h(7.5) + 1
+            c.paste(c.rounded(chip_w, 13, 4, QUALITY_COLORS_BASE[q], 1.0),
+                    gx, gy)
+            c.text(gx + chip_w / 2, gy + 6.5, q, 8, bold=True, color="#FFFFFF",
+                   anchor="mm")
+    return c.out_clipped(20), y + 2 * CH + 5
+
+
+
+
+# ── 系统状态组件（4×2）──────────────────────────────────────────────
+SYS_DEMO = {
+    "call": "BG7LZQ-7", "fix": "已定位", "grid": "OL62XC",
+    "links": [("APRS-IS", "已连接", True), ("TNC", "未启用", False),
+              ("音频", "连接中", None), ("PKWDWPL", "未启用", False)],
+    "rx": "收 1 284", "tx": "发 37", "beacon": "信标 45s", "stations": "台站 213",
+    "recent_label": "最近收到", "recent_call": "BG7LZQ-7", "recent_ago": "45秒前",
+}
+
+
+def render_sys(w=296, h=140, dark=False):
+    """系统状态组件。布局与 aw_widget_sys.xml 一一对应（同一套尺寸令牌）。
+
+    链路点是**三态色**：已连接绿 / 已启用未连上橙 / 未启用灰 ——
+    这是本组件唯一比「连上没连上」多出来的信息，也是它最该被看清的地方。
+    """
+    c = _hf_shell(w, h, dark)
+    INK, SLATE, LINE = ink_of(dark), slate_of(dark), line_of(dark)
+    OK, PENDING, OFF = (qcol("Good", dark), qcol("Fair", dark),
+                        qcol("Band Closed", dark))
+    px, pw = 13, w - 26
+    c.icon("settings", px, 8, 14, color=INK)
+    c.text(px + 18, 8 + line_h(13, True) / 2, "系统状态", 13, bold=True,
+           color=INK, anchor="lm")
+    bw = 18 + c.measure("APRSlocus", 10, bold=True)
+    c.logo(px + pw - bw, 7, 15)
+    c.text(px + pw - bw + 18, 8 + line_h(10, True) / 2, "APRSlocus", 10,
+           bold=True, color=INK, anchor="lm")
+    y = 8 + line_h(13, True) + 3
+    # 身份行
+    base = y + line_h(11, True) / 2
+    c.text(px, base, SYS_DEMO["call"], 11, bold=True, color=INK, anchor="lm")
+    x = px + c.measure(SYS_DEMO["call"], 11, bold=True) + 6
+    for txt in (SYS_DEMO["fix"], SYS_DEMO["grid"]):
+        c.text(x, base, "·", 9, color="#C3CCD9", anchor="lm")
+        x += c.measure("·", 9) + 6
+        c.text(x, base, txt, 9.5, color=SLATE, anchor="lm")
+        x += c.measure(txt, 9.5) + 6
+    y += line_h(11, True) + 3
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 4
+    # 链路 2×2
+    CW = (pw - 10) / 2
+    for i, (name, state, up) in enumerate(SYS_DEMO["links"]):
+        r, k = divmod(i, 2)
+        cx = px + k * (CW + 10)
+        cy = y + r * (5 + line_h(9.5))
+        col = OK if up is True else (PENDING if up is None else OFF)
+        c.paste(c.circle(7, col), cx, cy + line_h(9.5) / 2 - 3.5)
+        c.text(cx + 13, cy + line_h(9.5) / 2, name, 9.5, bold=True, color=INK,
+               anchor="lm")
+        c.text(cx + 13 + c.measure(name, 9.5, bold=True) + 5,
+               cy + line_h(9.5) / 2, state, 9, color=SLATE, anchor="lm")
+    y += 2 * (5 + line_h(9.5)) + 1
+    c.d.rectangle([round(px * SCALE), round(y * SCALE),
+                   round((px + pw) * SCALE), round(y * SCALE) + SCALE - 1],
+                  fill=rgba(LINE, 1.0))
+    y += 4
+    # 计数行
+    base = y + line_h(9.5) / 2
+    c.text(px, base, SYS_DEMO["rx"], 9.5, color=SLATE, anchor="lm")
+    x = px + c.measure(SYS_DEMO["rx"], 9.5) + 12
+    c.text(x, base, SYS_DEMO["tx"], 9.5, color=SLATE, anchor="lm")
+    c.text(px + pw, base, SYS_DEMO["stations"], 9.5, color=SLATE, anchor="rm")
+    bx = px + pw - c.measure(SYS_DEMO["stations"], 9.5) - 12 - \
+        c.measure(SYS_DEMO["beacon"], 9.5)
+    c.text(bx, base, SYS_DEMO["beacon"], 9.5, color=SLATE, anchor="lm")
+    y += line_h(9.5)
+    # 最近收到的台站（左：标签 + 呼号；右：多久前）
+    y += 4
+    rbase = y + line_h(9.5) / 2
+    c.text(px, rbase, SYS_DEMO["recent_label"], 8.5, color=SLATE, anchor="lm")
+    rl = px + c.measure(SYS_DEMO["recent_label"], 8.5) + 5
+    c.text(rl, rbase, SYS_DEMO["recent_call"], 9.5, bold=True, color=INK,
+           anchor="lm")
+    c.text(px + pw, rbase, SYS_DEMO["recent_ago"], 8.5, color=SLATE,
+           anchor="rm")
+    y += line_h(9.5)
+    return c.out_clipped(20), y
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="/tmp/widget_preview.png")
+    args = ap.parse_args()
+
+    # (名称, 渲染函数, 宽dp, 高dp, 内容是否垂直居中)
+    # 居中的档位（4×1 单行）不受底部圆角影响，所以不扣净空 —— 不加区分地
+    # 一律扣会误报，而误报会让人干脆放宽规则。
+    specs = [
+        ("天气组件 4×2 主档", render_tile, 296, 140, False),
+        ("天气组件 4×2（雷雨）", lambda **k: render_tile(kind="storm"),
+         296, 140, False),
+        ("天气组件 2×4 小面板", render_tall, 150, 300, False),
+        ("天气组件 2×2 紧凑档", render_compact, 150, 150, False),
+        ("天气组件 4×1 单行档", render_row, 296, 72, True),
+        # 短波组件：定稿 = M1（日/夜进度条 + 当前时段游标，2026-09-18）。
+        # 两个时段各出一张 —— 游标（实色段 + 小白点）会跟着换边，这是要看的重点。
+        # 探索用的 A/A2/B/C/D/F2 仍在本文件里，默认不打进图里。
+        ("短波传播组件 4×2（现在 · 日间）",
+         lambda: render_hf_M1(now_is_day=True), 296, 140, False),
+        ("短波传播组件 4×2（现在 · 夜间）",
+         lambda: render_hf_M1(now_is_day=False), 296, 140, False),
+        ("系统状态组件 4×2（浅色）", render_sys, 296, 140, False),
+        ("系统状态组件 4×2（夜间）",
+         lambda **k: render_sys(dark=True), 296, 140, False),
+    ]
+    # 圆角净空：卡片圆角越大，底部两侧收得越早。20dp 圆角下，距底边约
+    # 10dp 之内的左右两边已经被切掉，所以内容必须停在 h-10dp 以上。
+    #
+    # **这条是补上的漏洞**：原来只比「内容 vs 卡片高度」，于是 4×2 显示
+    # 「137.3/140，余 2.7dp 放得下」，而真机上最后一行被圆角切了一半 ——
+    # 用户看到的「溢出」就是这么来的。
+    CORNER_CLEARANCE = 10.0
+
+    # ── 4×2 的判据：内容预算，而不是「可用高度 130dp」 ──
+    #
+    # 130dp 是「4 格 × 74 − 16 − 圆角净空」的**假设值**。把它当所有 4×2 组件的
+    # 硬阈值会产生误报，而误报会让人干脆放宽规则（那才是真的没人看这个数字了）。
+    #
+    # 证据：已发布的短波组件真布局是 **135dp**（v1.6.130），而用户反馈它
+    # 「下面有点空」—— 若实际可用只有 130dp，135dp 的内容早该被裁掉、而不是
+    # 显得空。所以真实可用高度 **> 135dp**（当初做短波时按 162dp 估过）。
+    #
+    # 因此 4×2 统一按**内容预算 160dp** 判（已有证据的上界，用来拦住明显过头的
+    # 排布）；每个档位都打印实际用量，便于对照调整。
+    TILE4x2_BUDGET = 160.0
+
+    tiles, overflows = [], []
+    print(f"内容高度 vs 卡片可用高度（已扣掉圆角净空 {CORNER_CLEARANCE:.0f}dp）：")
+    for label, fn, w_dp, h_dp, centered in specs:
+        img, used = fn()
+        if "4×2" in label:
+            # 见 TILE4x2_BUDGET：4×2 只能按内容预算判（可用高度取决于启动器）。
+            over = used - TILE4x2_BUDGET
+            mark = "✓" if over <= 0 else "✗"
+            print(f"  {mark} {label:30} 内容 {used:6.2f}dp / 4×2 预算 "
+                  f"{TILE4x2_BUDGET:.0f}dp（余 {TILE4x2_BUDGET - used:+.2f}dp）")
+            if over > 0:
+                overflows.append(f"{label} 超出 4×2 内容预算 {over:.2f}dp")
+            tiles.append((label, img))
+            continue
+        usable = h_dp if centered else h_dp - CORNER_CLEARANCE
+        over = used - usable
+        if over > 1:
+            overflows.append(f"{label} 超出可用高度 {over:.1f}dp")
+            print(f"  ✗ {label:22} 内容 {used:5.1f}dp / 可用 {usable:5.1f}dp  溢出！")
+        else:
+            print(f"  ✓ {label:22} 内容 {used:5.1f}dp / 可用 {usable:5.1f}dp"
+                  f"（余 {usable - used:.1f}dp）")
+        tiles.append((label, img))
+
+
+    PAD, GAP, LH = 24, 20, 28
+    row1 = tiles[:3]
+    row2 = tiles[3:5]
+    row3 = tiles[5:7]
+    row4 = tiles[7:]
+    W = PAD * 2 + sum(im.width for _, im in row1) + GAP * (len(row1) - 1)
+    row1h = max(im.height for _, im in row1)
+    row2h = max(im.height for _, im in row2)
+    row3h = max((im.height for _, im in row3), default=0)
+    row4h = max((im.height for _, im in row4), default=0)
+    H = (PAD + LH + row1h + GAP + LH + row2h
+         + (GAP + LH + row3h if row3 else 0)
+         + (GAP + LH + row4h if row4 else 0) + PAD)
+    sheet = Image.new("RGB", (W, H), (22, 26, 33))
+    d = ImageDraw.Draw(sheet)
+
+    def blit(items, y0):
+        xx = PAD
+        for name, im in items:
+            d.text((xx, y0), name, font=font(10, True), fill=(214, 223, 238))
+            sheet.paste(im, (xx, y0 + LH), im)
+            xx += im.width + GAP
+    blit(row1, PAD)
+    y2 = PAD + LH + row1h + GAP
+    blit(row2, y2)
+    y3 = y2 + LH + row2h + GAP
+    if row3:
+        blit(row3, y3)
+    if row4:
+        blit(row4, y3 + LH + row3h + GAP)
+
+    sheet.save(args.out)
+    print("预览:", args.out, sheet.size)
+    if overflows:
+        print("\n❌ 有档位内容排不下：", file=sys.stderr)
+        for o in overflows:
+            print(f"  - {o}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

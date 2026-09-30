@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'audio.dart';
 import 'l10n/app_localizations.dart';
 import 'link_test_card.dart';
+import 'material.dart';
+import 'net/audio_export.dart';
 import 'settings_widgets.dart';
 import 'tnc_page.dart';
 import 'state.dart';
@@ -42,8 +48,40 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   bool _supported = true;
   String _wavOut = '';
 
+  /// 最近一次导出的**真实路径**（用于「复制路径」；为空则不显示该按钮）
+  String _savedPath = '';
+
   AppState get st => widget.state;
   AudioLink get audio => widget.state.audio;
+
+  /// 移动端（Android）不能写任意目录：导出走系统下载目录，导入走系统选择器
+  bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+  /// 默认导出文件名：带呼号与时间戳。
+  ///
+  /// 为什么要时间戳：下载目录里会累积很多个导出文件，同名就只能在文件名后面
+  /// 被系统自动加 (1)(2) —— 之后谁也分不清哪个是哪个。
+  String _wavName() {
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final stamp = '${t.year}${two(t.month)}${two(t.day)}'
+        '-${two(t.hour)}${two(t.minute)}${two(t.second)}';
+    return 'APRSlocus_${st.myCall}_$stamp.wav';
+  }
+
+  /// 导出/编码错误码 → 可读文案
+  String _exportErr(AppLocalizations l, String code) {
+    switch (code) {
+      case 'bad-format':
+        return l.tncErrBadFormat;
+      case 'verify-failed':
+        return l.audioWavVerifyFailed;
+      case 'unsupported':
+        return l.tncErrUnsupported;
+      default:
+        return code;
+    }
+  }
 
   @override
   void initState() {
@@ -59,6 +97,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     _csma = TextEditingController(text: '${c.csmaWaitMs}');
     _wavTnc2.text = diagSampleFrame;
     unawaited(_probe());
+    unawaited(_loadDevices());
   }
 
   @override
@@ -77,6 +116,136 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     if (mounted) setState(() => _supported = ok);
   }
 
+  // ─── 音频设备选择（issue #14）───
+  //
+  // 只在 Windows 出现：winmm 是唯一有「按设备序号打开」概念的后端，而
+  // Android/iOS 的音频路由由系统决定 —— 给一个假选择器只会误导用户。
+  //
+  // 这里**不写 `AudioDevice` 这个名字**（那是 net/audio_base.dart 的类型）：
+  // UI 层不该直接依赖平台传输层的类型，`audio.transport` 的返回值用类型推导
+  // 取 id/name 就够了。
+
+  /// 系统默认设备（与 `kAudioDeviceDefault` 同值）。
+  static const int _devDefault = -1;
+
+  /// 设备序号 → 名字（用于行尾显示当前选择）。
+  final Map<int, String> _devNames = {};
+  List<int> _outDevIds = const [];
+  List<int> _inDevIds = const [];
+
+  /// 枚举可用设备；非 Windows 直接返回（选择器也不会出现）。
+  Future<void> _loadDevices() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) return;
+    try {
+      final outs = await audio.transport.listOutputDevices();
+      final ins = await audio.transport.listInputDevices();
+      if (!mounted) return;
+      setState(() {
+        _outDevIds = outs.map((d) => d.id).toList();
+        _inDevIds = ins.map((d) => d.id).toList();
+        _devNames
+          ..clear()
+          ..addEntries(
+              [...outs, ...ins].map((d) => MapEntry(d.id, d.name)));
+      });
+    } catch (_) {
+      // 枚举失败不算错：选择器里至少还有「系统默认」可选项
+    }
+  }
+
+  /// 设备选择行（非 Windows 返回空列表，卡片里就不会多出这一行）。
+  List<Widget> _deviceRows(S s, {required bool output}) {
+    if (defaultTargetPlatform != TargetPlatform.windows) return const [];
+    final cur = output ? audio.config.outDeviceId : audio.config.inDeviceId;
+    final name = cur == _devDefault
+        ? s.audioDeviceDefault
+        : (_devNames[cur] ?? '#${cur + 1}');
+    return [
+      SettingsNavRow(
+        title: output ? s.audioOutDevice : s.audioInDevice,
+        icon: output ? Icons.volume_up_rounded : Icons.mic_none_rounded,
+        color: C.cyan,
+        trailing: name,
+        onTap: () => unawaited(_pickDevice(s, output: output)),
+      ),
+    ];
+  }
+
+  /// 选设备。每次打开都**重新枚举**：USB 声卡常是「先插上、再进设置」，
+  /// 用启动时那份缓存会让用户以为「我的设备没被识别」。
+  Future<void> _pickDevice(S s, {required bool output}) async {
+    await _loadDevices();
+    if (!mounted) return;
+    final ids = output ? _outDevIds : _inDevIds;
+    final cur = output ? audio.config.outDeviceId : audio.config.inDeviceId;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(output ? s.audioOutDevice : s.audioInDevice,
+                  style: ts(13, w: FontWeight.w700)),
+              const SizedBox(height: 6),
+              for (final id in [_devDefault, ...ids])
+                InkWell(
+                  onTap: () => Navigator.pop(ctx, id),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    child: Row(
+                      children: [
+                        Icon(
+                          id == cur
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_off_rounded,
+                          size: 17,
+                          color: id == cur ? C.cyan : C.greyLight,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            id == _devDefault
+                                ? s.audioDeviceDefault
+                                : (_devNames[id] ?? '#${id + 1}'),
+                            style: ts(12, c: C.ink),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (output) {
+        audio.config.outDeviceId = picked;
+        audio.transport.setOutputDevice(picked);
+      } else {
+        audio.config.inDeviceId = picked;
+        audio.transport.setInputDevice(picked);
+      }
+    });
+    await audio.save();
+    if (mounted) _toast(s.audioDeviceHint);
+  }
+
   void _toast(String msg, {Color? color}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +253,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         backgroundColor: color ?? C.ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -151,16 +320,43 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     if (mounted) setState(() => _busy = false);
   }
 
-  /// 解码 WAV 文件（离线收）
+  /// 解码 WAV（离线收）。
+  ///
+  /// Android 不能随便读外部文件，所以走系统文件选择器；桌面沿用路径输入框。
   Future<void> _decodeWav() async {
     final l = AppLocalizations.of(context);
-    final path = _wavPath.text.trim();
-    if (path.isEmpty) {
-      _toast(l.audioWavPath, color: C.orange);
-      return;
-    }
     setState(() => _busy = true);
-    final (lines, err) = await audio.decodeWavFile(path);
+    List<String> lines = const [];
+    String? err;
+    if (_android) {
+      final picked = await pickAudioBytes();
+      if (picked == null) {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _wavOut = l.audioWavCanceled;
+          });
+        }
+        return;
+      }
+      final r = await audio.decodeWavBytes(Uint8List.fromList(picked.$2));
+      lines = r.$1;
+      err = r.$2;
+    } else {
+      final path = _wavPath.text.trim();
+      if (path.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _wavOut = l.audioWavPickHint;
+          });
+        }
+        return;
+      }
+      final r = await audio.decodeWavFile(path);
+      lines = r.$1;
+      err = r.$2;
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
@@ -172,20 +368,36 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     });
   }
 
-  /// 导出报文为 WAV（离线发）
+  /// 导出报文为 WAV（离线发）。
+  ///
+  /// 移动端走系统「保存到下载目录」（应用写不了任意路径，也没权限）；
+  /// 桌面端如果填了路径就写那里，否则写系统「下载」目录。
+  /// 导出前会在内存里**自解一遍**，解不出就直接报错，不会留下一个坏文件。
   Future<void> _exportWav() async {
     final l = AppLocalizations.of(context);
-    final path = _wavPath.text.trim();
-    if (path.isEmpty || _wavTnc2.text.trim().isEmpty) {
-      _toast(l.audioWavPath, color: C.orange);
+    final tnc2 = _wavTnc2.text.trim();
+    if (tnc2.isEmpty) {
+      _toast(l.audioWavTnC2, color: C.orange);
       return;
     }
     setState(() => _busy = true);
-    final err = await audio.encodeWavFile(path, _wavTnc2.text.trim());
+    final typed = _wavPath.text.trim();
+    AudioExportResult r;
+    if (!_android && typed.isNotEmpty) {
+      final err = await audio.encodeWavFile(typed, tnc2);
+      r = err == null
+          ? AudioExportResult.ok(typed)
+          : AudioExportResult.fail(err);
+    } else {
+      r = await audio.exportWav(tnc2, _wavName());
+    }
     if (!mounted) return;
     setState(() {
       _busy = false;
-      _wavOut = err != null ? l.audioWavFailed(err) : l.audioWavWritten(path);
+      _savedPath = r.path ?? '';
+      _wavOut = r.isOk
+          ? l.audioWavSavedTo(r.path!)
+          : l.audioWavFailed(_exportErr(l, r.error ?? ''));
     });
   }
 
@@ -195,13 +407,19 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     return ListenableBuilder(
       listenable: st,
       builder: (context, _) => SettingsPageShell(
+        guideId: 'audio',
+        // state 必须给：SettingsPageShell 靠它读写「引导已读」，只给 guideId 的话
+        // 卡片会**静默不出现**（外壳里那条 `state != null` 判断）——
+        // tool/check_guides.py 现已把这条钉住。
+        state: widget.state,
         title: s.audioSettings,
         subtitle: s.audioSettingsSubtitle,
         icon: Icons.graphic_eq_rounded,
         color: C.cyan,
         body: Column(children: [
-          DataSourceCard(state: st, extra: s.dataSourceSwitchHint),
-          const SizedBox(height: 16),
+          // 「数据来源」卡不在这里重复（只在设置→设备）——这一页专注音频参数。
+          SettingsHint(s.sourceMovedHint),
+          const SizedBox(height: 6),
           _captureCard(s),
           const SizedBox(height: 16),
           _paramsCard(s),
@@ -233,6 +451,8 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           _supported ? audio.backendName : s.audioUnsupported,
           valueColor: _supported ? C.ink : C.orange,
         ),
+        // 采集设备选择（仅 Windows，见 _deviceRows）
+        ..._deviceRows(s, output: false),
         SettingsRow2(
           s.connection,
           audio.connected ? s.connected : s.disconnected,
@@ -257,7 +477,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
               ]),
               const SizedBox(height: 5),
               ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
                 child: LinearProgressIndicator(
                   value: level,
                   minHeight: 7,
@@ -374,6 +594,9 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           if (mounted) setState(() {});
         }),
         SettingsHint(s.audioTxEnabledTip, color: C.orange),
+        // 播放设备选择（仅 Windows）——发时用哪个声卡输出，决定接到电台的
+        // 是哪一路信号（issue #14）
+        ..._deviceRows(s, output: true),
         SettingsSwitch(s.kissRfBeacon, value: audio.config.rfBeacon,
             color: C.orange, onChanged: (v) async {
           audio.config.rfBeacon = v;
@@ -391,6 +614,24 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         SettingsInput(s.kissMaxFrame, _maxFrame,
             tip: s.kissMaxFrameTip,
             onChanged: (_) => unawaited(_collect())),
+        // 发射体检：只在真的发过一次之后显示（没发过时显示 0% 没意义）
+        if (audio.lastTxSeconds > 0) ...[
+          SettingsRow2(
+            s.audioTxLevel,
+            s.audioTxPeak(audio.txPeakPercent,
+                audio.lastTxSeconds.toStringAsFixed(2), audio.lastTxPreamble),
+            valueColor: audio.lastTxClipped
+                ? C.red
+                : (audio.lastTxPeak < 0.15 ? C.orange : C.green),
+          ),
+          if (audio.lastTxClipped)
+            SettingsHint(s.audioTxLevelClip, color: C.red,
+                icon: Icons.warning_amber_rounded),
+          if (audio.lastTxPeak < 0.15)
+            SettingsHint(s.audioTxLevelLow, color: C.orange,
+                icon: Icons.warning_amber_rounded),
+        ],
+        SettingsHint(s.audioTxLevelTip, color: C.grey),
         SettingsSwitch(s.kissAutoAck, value: audio.config.autoAck,
             color: C.cyan, onChanged: (v) async {
           audio.config.autoAck = v;
@@ -437,8 +678,10 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       icon: Icons.folder_open_rounded,
       color: C.indigo,
       children: [
-        SettingsInput(s.audioWavPath, _wavPath, tip: s.audioWavDesc),
         SettingsInput(s.audioWavTnC2, _wavTnc2, tip: s.audioTnc2Tip),
+        // 桌面端保留路径输入（桌面用户本来就习惯填路径）；
+        // Android 藏起来 —— 那边填了也没用（写不了），只会让人以为写错了
+        if (!_android) SettingsInput(s.audioWavPath, _wavPath, tip: s.audioWavDesc),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
           child: Row(children: [
@@ -446,7 +689,9 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
               child: OutlinedButton.icon(
                 onPressed: _busy ? null : _decodeWav,
                 icon: const Icon(Icons.download_rounded, size: 16),
-                label: Text(s.audioWavDecodeAction, style: ts(12)),
+                label: Text(
+                    _android ? s.audioWavImportAction : s.audioWavDecodeAction,
+                    style: ts(12)),
                 style: OutlinedButton.styleFrom(foregroundColor: C.indigo),
               ),
             ),
@@ -455,7 +700,11 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
               child: OutlinedButton.icon(
                 onPressed: _busy ? null : _exportWav,
                 icon: const Icon(Icons.upload_rounded, size: 16),
-                label: Text(s.audioWavExportAction, style: ts(12)),
+                label: Text(
+                    _android
+                        ? s.audioWavExportToDownloads
+                        : s.audioWavExportAction,
+                    style: ts(12)),
                 style: OutlinedButton.styleFrom(foregroundColor: C.green),
               ),
             ),
@@ -470,10 +719,43 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
               color: C.bgSoft,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(_wavOut,
-                style: ts(10.5, c: C.slate, h: 1.4)
-                    .copyWith(fontFamily: 'monospace')),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_wavOut,
+                    style: ts(10, c: C.slate, h: 1.4)
+                        .copyWith(fontFamily: 'monospace')),
+                // 路径很长，让用户可以一键复制去文件管理器/电脑里粘贴
+                if (_savedPath.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(children: [
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                              ClipboardData(text: _savedPath));
+                          _toast(s.audioWavPathCopied, color: C.green);
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 14),
+                        label: Text(s.audioWavCopyPath, style: ts(11)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: C.slate,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          minimumSize: const Size(0, 30),
+                        ),
+                      ),
+                    ]),
+                  ),
+              ],
+            ),
           ),
+        SettingsHint(_android ? s.audioWavMobileHint : s.audioWavPickHint,
+            color: C.indigo),
+        // 发射端最常见的失败不是协议，是音频通路：接线、电平、扬声器频响。
+        // 这条提示同时也是「怎么把问题一分为二」的排查顺序。
+        SettingsHint(s.audioWiringHint, color: C.orange,
+            icon: Icons.cable_rounded),
       ],
     );
   }

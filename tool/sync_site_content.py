@@ -41,8 +41,8 @@ def T(zh, zh_TW, en):
 
 
 # ─────────────────────────── 功能卡片 ───────────────────────────
-# 顺序即展示顺序；图标类名 c1~c14 见 docs/css/style.css。
-# 总数 14：4 列时末行 2 张、2 列时 7 行，两种断点都不会剩孤零零一张。
+# 顺序即展示顺序；图标类名 c1~c18 见 docs/css/style.css。
+# 总数 18：4 列时 4×4+2（末行 2 张）、2 列时 9 行，两种断点都不会剩孤零零一张。
 CARDS = [
     {
         'icon': 'c9', 'fa': 'fa-tower-cell',
@@ -138,12 +138,1313 @@ CARDS = [
                  'zh_TW': ['ADIF', '頻率自訂'],
                  'en': ['ADIF', 'Custom frequency']},
     },
+    {
+        'icon': 'c15', 'fa': 'fa-table-cells-large',
+        'title': T('桌面小组件', '桌面小組件', 'Home-screen Widgets'),
+        'desc': T(
+            'Android 桌面小组件：天气（4 档自适应尺寸）、短波传播、系统状态三套；'
+            '组件不自己联网，由应用单向推送快照，省电可控。',
+            'Android 桌面小組件：天氣（4 種自適應尺寸）、短波傳播、系統狀態三套；'
+            '小組件不自己連線，由應用單向推送快照，省電可控。',
+            'Android home-screen widgets: weather (four adaptive sizes), HF propagation and '
+            'system status. The widgets never open a connection themselves — the app pushes '
+            'a snapshot to them, which keeps them cheap on battery.'),
+        'tags': {'zh': ['Android', '4 档自适应', '不自行联网'],
+                 'zh_TW': ['Android', '4 種自適應', '不自行連線'],
+                 'en': ['Android', '4 adaptive sizes', 'No direct network']},
+    },
+    {
+        'icon': 'c16', 'fa': 'fa-satellite-dish',
+        'title': T('短波与电离层传播', '短波與電離層傳播', 'HF & Ionospheric Propagation'),
+        'desc': T(
+            '短波面板与独立组件：SFI / Kp / A 指数、黑子、X 射线、太阳风，'
+            '四个波段对的「日 / 夜」条件一眼看清；数据来自 hamqsl.com（N0NBH），30 分钟缓存。',
+            '短波面板與獨立元件：SFI / Kp / A 指數、黑子、X 射線、太陽風，'
+            '四個波段對的「日 / 夜」條件一眼看清；資料來自 hamqsl.com（N0NBH），30 分鐘快取。',
+            'An HF panel plus a standalone widget: SFI / Kp / A index, sunspots, X-rays, solar '
+            'wind, and day/night conditions for four band pairs at a glance. Data comes from '
+            'hamqsl.com (N0NBH) with a 30-minute cache.'),
+        'tags': {'zh': ['SFI / Kp / A', '日 · 夜', '30 分钟缓存'],
+                 'zh_TW': ['SFI / Kp / A', '日 · 夜', '30 分鐘快取'],
+                 'en': ['SFI / Kp / A', 'Day / night', '30-min cache']},
+    },
+    {
+        'icon': 'c17', 'fa': 'fa-map-location-dot',
+        'title': T('离线地图', '離線地圖', 'Offline Maps'),
+        'desc': T(
+            '把当前视图整片瓦片下到本机（断点续传、单区域上限 20 万张），断网、无信号也能看；'
+            '四级降级保证地图始终可看可点。',
+            '把當前視圖整片瓦片下載到本機（斷點續傳、單區域上限 20 萬張），斷網、無訊號也能看；'
+            '四級降級保證地圖始終可看可點。',
+            'Download the tiles of the current view to the device (resumable, 200k tiles per '
+            'region) and keep the map with no network at all; a four-step fallback keeps it '
+            'readable and clickable.'),
+        'tags': {'zh': ['按视图下载', '断点续传', '四级降级'],
+                 'zh_TW': ['按視圖下載', '斷點續傳', '四級降級'],
+                 'en': ['Download view', 'Resumable', '4-step fallback']},
+    },
+    {
+        'icon': 'c18', 'fa': 'fa-paintbrush',
+        'title': T('主题与备份', '主題與備份', 'Themes & Backup'),
+        'desc': T(
+            '主题不只是换色：颜色、图标、文字、背景图都能改（17 个颜色令牌），可导出成 JSON 分享；'
+            '设置与数据可整体备份，换机一键导入。',
+            '主題不只是換色：顏色、圖示、文字、背景圖都能改（17 個顏色權杖），可匯出成 JSON 分享；'
+            '設定與資料可整體備份，換機一鍵匯入。',
+            'Themes go beyond colour: icons, text and your own background image (17 colour '
+            'tokens), exported as JSON to share; settings and data back up as one file for a '
+            'one-tap restore.'),
+        'tags': {'zh': ['17 色令牌', 'JSON 分享', '一键备份'],
+                 'zh_TW': ['17 色權杖', 'JSON 分享', '一鍵備份'],
+                 'en': ['17 tokens', 'JSON export', 'One-tap backup']},
+    },
 ]
 
 # ─────────────────────────── 更新日志重点版本 ───────────────────────────
 # new / up / fix 对应页面既有的三个圆点颜色（绿 / 琥珀 / 红）。
 # 只列「重点版本」：中间几十个纯修 bug 的版本归纳进文字说明，完整记录指向 Releases。
 CL = [
+    {
+        'ver': 'v2.0.9', 'date': '2026-09-28',
+        'items': [
+            ('fix',
+             T('**新：生命守护增加「碰撞与摔倒检测」（测试）** —— 用手机加速度判断，检测到就弹提醒（我没事 / 拨打急救 / 向附近台站求助），通知栏也会提示。判据是**两段式**：加速度出现很陡的尖峰**且**之后连续 12 秒几乎没动。只报尖峰的话，过减速带、手机掉桌上都会响，一天几次就没人看了；代价是「轻微碰撞（人还能动）不提醒」——它管的是「人已经动不了了」。它会误报（过减速带+等红灯），所以第一个按钮就是「我没事」，页面上也写明这是启发式判断，不是工程级碰撞检测。',
+               '**新：生命守護增加「碰撞與摔倒偵測」（測試）** —— 用手機加速度判斷，偵測到就彈提醒（我沒事 / 撥打急救 / 向附近臺站求助），通知列也會提示。判據是**兩段式**：加速度出現很陡的尖峰**且**之後連續 12 秒幾乎沒動。只報尖峰的話，過減速帶、手機掉桌上都會響，一天幾次就沒人看了；代價是「輕微碰撞（人還能動）不提醒」——它管的是「人已經動不了了」。它會誤報（過減速帶+等紅燈），所以第一個按鈕就是「我沒事」，頁面上也寫明這是啟發式判斷，不是工程級碰撞偵測。',
+               '**New: crash and fall detection in Life guard (beta)** — judged from the phone accelerometer; it raises an alert (I am fine / call emergency services / ask nearby stations) and also shows in the notification. The test is **two-stage**: a sharp spike **and** then almost no movement for 12 seconds. With the spike alone, speed bumps and a phone dropped on a desk all qualify, and an alert that fires several times a day gets ignored; the trade-off is that a minor impact (where you can still move) will not alert — this is about "I cannot move". It can false-alarm (speed bump plus a red light), so the first button is "I am fine" and the page states it is a heuristic, not engineering-grade crash detection.')),
+            ('fix',
+             T('**修：步数一直显示「请授权」，但其实已授权**。读数为 -1 有三种原因：没有传感器 / 没有活动识别权限 / **还没收到第一个硬件事件**（没权限时系统只是不派发事件、不报错），之前混为一谈，于是「刚授权还没走过路」被显示成「请授权」。现在原生单独上报权限，四态（不支持/需授权/**等待数据**/正常）只留一个判定出口；顺带修掉「计步依赖传感器辅助开关」与「等待数据也显示授权按钮」。**修：生命守护页的开关点了没反应**（`SettingsPageShell.state` 只管引导卡，并不让页面跟随状态刷新）。**修：速度档编辑弹层的「保存」被三大金刚键压住** —— 底部现在同时让出键盘与系统导航栏，取值取 padding 与 viewPadding 的较大者（有些 ROM 只报后者）。',
+               '**修：步數一直顯示「請授權」，但其實已授權**。讀數為 -1 有三種原因：沒有感測器 / 沒有活動辨識權限 / **還沒收到第一個硬體事件**（沒權限時系統只是不派發事件、不報錯），之前混為一談，於是「剛授權還沒走過路」被顯示成「請授權」。現在原生單獨上報權限，四態（不支援/需授權/**等待資料**/正常）只留一個判定出口；順帶修掉「計步依賴感測器輔助開關」與「等待資料也顯示授權按鈕」。**修：生命守護頁的開關點了沒反應**（`SettingsPageShell.state` 只管引導卡，並不讓頁面跟隨狀態刷新）。**修：速度檔編輯彈層的「儲存」被三大金剛鍵壓住** —— 底部現在同時讓出鍵盤與系統導覽列，取值取 padding 與 viewPadding 的較大者（有些 ROM 只報後者）。',
+               '**Fix: steps always showed "permission needed" even after granting it.** A reading of -1 has three causes — no sensor / no activity-recognition permission / **no hardware event yet** (without permission the system just does not dispatch events, with no error). They were conflated, so "granted but has not walked yet" read as "permission needed". The native side now reports the permission separately and steps have four states (unsupported / needs permission / **waiting for data** / ok) behind one decision point; the step counting depending on the sensor-assist switch, and the grant button appearing while merely waiting, were fixed too. **Fix: switches on the Life guard page did nothing** (SettingsPageShell.state only serves the guide card; it does not make the page follow state changes). **Fix: the speed-tier editor Save button was covered by the navigation bar** — the sheet now reserves both the keyboard and the system navigation bar, taking the larger of padding and viewPadding (some ROMs only report the latter).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.8', 'date': '2026-09-28',
+        'items': [
+            ('new',
+             T('**新：运动步数与排行榜** —— 读手机硬件计步传感器，今日步数可随信标附带（`STEPS=`，'
+               '默认关）。设置页荣誉墙上方新增**运动排行榜**：今日步数排行，点一行进台站详情。'
+               '**自己不开上传就看不到榜单** —— 榜上每个数字都是别人主动发出来的，'
+               '只收不发不该白拿别人的。页面上写明这只是「你听得到的邻居」而不是全网排行。',
+               '**新：運動步數與排行榜** —— 讀手機硬體計步感測器，今日步數可隨信標附帶（`STEPS=`，'
+               '預設關）。設定頁榮譽牆上方新增**運動排行榜**：今日步數排行，點一列進臺站詳情。'
+               '**自己不開上傳就看不到榜單** —— 榜上每個數字都是別人主動發出來的，'
+               '只收不發不該白拿別人的。頁面上寫明這只是「你聽得到的鄰居」而不是全網排行。',
+               '**New: step counting and a leaderboard** — steps come from the phone\'s hardware '
+               'counter and can ride along in the beacon (`STEPS=`, off by default). A new '
+               '**activity leaderboard** sits above the honour wall in Settings: today\'s steps, and '
+               'tapping a row opens the station detail. **You cannot see the board without '
+               'contributing** — every number there was sent by someone else, and receiving without '
+               'sending should not get you other people\'s data for free. The page states plainly '
+               'that it ranks the neighbours you can hear, not the whole network.')),
+            ('new',
+             T('**新：「生命守护」页与更新包后台下载**。心率异常告警从「设备 → 心率」搬进独立的'
+               '**生命守护**页，说清它是什么、开启条件、以及「向附近台站求助」的口径，并标注'
+               '这是测试功能（判定只基于心率数值，无医学依据）。更新包下载现在**支持后台**：'
+               '离开页面或切到后台继续下载，通知栏显示进度，可取消；先写 `.part` 再原子改名，'
+               '断掉不会留下一个装不上的包。',
+               '**新：「生命守護」頁與更新包背景下載**。心率異常告警從「裝置 → 心率」搬進獨立的'
+               '**生命守護**頁，說清它是什麼、開啟條件、以及「向附近臺站求助」的口徑，並標註'
+               '這是測試功能（判定只基於心率數值，無醫學依據）。更新包下載現在**支援背景**：'
+               '離開頁面或切到背景繼續下載，通知列顯示進度，可取消；先寫 `.part` 再原子改名，'
+               '中斷不會留下一個裝不上的包。',
+               '**New: a "Life guard" page, and background downloads.** The heart-rate alarm moved '
+               'into its own **Life guard** page that states what it is, the exact trigger '
+               'conditions, and what "ask nearby stations" does — clearly marked as beta (the '
+               'judgement uses the heart-rate number only, with no medical basis). Update downloads '
+               'now **run in the background**: leaving the page or backgrounding the app keeps it '
+               'going, progress shows in the notification, and it can be cancelled. It writes a '
+               '`.part` file and renames atomically, so an interrupted download never leaves an '
+               'uninstallable package behind.')),
+            ('fix',
+             T('**修：心率告警的上/下限改不动** —— 输入框原来只在按回车时才保存，失焦不保存，'
+               '改完随手点别处就等于没改。现在输入即保存，卡片里还会显示「当前生效 40 ~ 150 bpm」。',
+               '**修：心率告警的上/下限改不動** —— 輸入框原來只在按 Enter 時才儲存，失焦不儲存，'
+               '改完隨手點別處就等於沒改。現在輸入即儲存，卡片裡還會顯示「目前生效 40 ~ 150 bpm」。',
+               '**Fix: the heart-rate alarm limits could not be changed** — the fields only saved on '
+               'the keyboard\'s enter key, not on focus loss, so editing and tapping elsewhere saved '
+               'nothing. Input now saves as you type, and the card shows "Currently active 40 ~ 150 '
+               'bpm".')),
+        ],
+    },
+    {
+        'ver': 'v2.0.7', 'date': '2026-09-28',
+        'items': [
+            ('fix',
+             T('**修：沉浸地图一拖就跳回北京**。跟随时用的视野偏移从来没有交给手动模式，'
+               '拖动那一瞬间地图平移到了投影基准点；现在先从当前视野接手再切手动，'
+               '并把地图旋转一并算进去（横屏航向朝上时位移要换算回画布方向）。',
+               '**修：沉浸地圖一拖就跳回北京**。跟隨時用的視野偏移從來沒有交給手動模式，'
+               '拖動那一瞬間地圖平移到了投影基準點；現在先從目前視野接手再切手動，'
+               '並把地圖旋轉一併算進去（橫屏航向朝上時位移要換算回畫布方向）。',
+               '**Fix: dragging the immersive map jumped to Beijing.** The follow-mode viewport '
+               'offset was never handed to manual mode, so a drag snapped the map to the '
+               'projection base point. It now picks up the current viewport first, and the map '
+               'rotation is accounted for (with the heading up, a screen drag must be converted '
+               'back to canvas space).')),
+            ('new',
+             T('**新：上报状态栏可切「详细」** —— 多一行当前触发条件：哪一档、还有多少秒、'
+               '距离打点还差多少米、转弯还差多少度（转弯那两个闸也如实摆出来）。'
+               '**新：心率异常告警** —— 读数越界弹警告并进通知栏，可拨紧急电话或向 100 公里内'
+               '最近的 5 个台站发一条求助；只提醒，不代替你行动。'
+               '**新：外置 GPS 优先时手机 GPS 待机** —— 外置失效自动切回并明说是谁在供位。',
+               '**新：上報狀態列可切「詳細」** —— 多一行目前觸發條件：哪一檔、還剩多少秒、'
+               '距離打點還差多少公尺、轉彎還差多少度（轉彎那兩道閘也如實擺出來）。'
+               '**新：心率異常告警** —— 讀數越界彈警告並進通知列，可撥緊急電話或向 100 公里內'
+               '最近的 5 個臺站發一則求助；只提醒，不代替你行動。'
+               '**新：外接 GPS 優先時手機 GPS 待機** —— 外接失效自動切回並明說是誰在供位。',
+               '**New: a "Detailed" beacon status bar** showing what will actually trigger the '
+               'next report (active tier, seconds left, metres until the distance trigger, degrees '
+               'until the turn trigger). **New: heart-rate alarm** — an out-of-range reading raises '
+               'a warning and a notification, offering an emergency call or a help message to the 5 '
+               'closest stations within 100 km; it only warns, never acts for you. '
+               '**New: idle the phone GPS while an external GPS feeds data**, switching back and '
+               'saying so when the external source goes stale.')),
+            ('fix',
+             T('**修：公告更新后横幅重新出现；纯网络定位可单独选台站图标；2.0 未连接提示会说清'
+               '缺什么；赞助入口挪到「关于」上方**。**更新页三处**：渠道文案跟着当前渠道、'
+               '长日志默认折叠（可展开）、下载完成后按钮变成「安装」。**浮动面板与退出动画**：'
+               '面板高度与底部胶囊改用系统 UI 内边距（某些 ROM 上以前算成 0），'
+               '退出设置子页的「一片纯色然后消失」也修好了。',
+               '**修：公告更新後橫幅重新出現；純網路定位可單獨選臺站圖示；2.0 未連線提示會說清'
+               '缺什麼；贊助入口挪到「關於」上方**。**更新頁三處**：管道文案跟著目前管道、'
+               '長日誌預設摺叠（可展開）、下載完成後按鈕變成「安裝」。**浮動面板與退出動畫**：'
+               '面板高度與底部膠囊改用系統 UI 內距（某些 ROM 上以前算成 0），'
+               '退出設定子頁的「一片純色然後消失」也修好了。',
+               '**Fixes**: the notice banner reappears when the notice changes; network-only '
+               'positioning can use its own station icon; the 2.0 connection banner says what is '
+               'missing; the sponsors entry moved above "About". **Update page**: the channel text '
+               'follows the current channel, long release notes are collapsed by default, and the '
+               'button turns into "Install" after downloading. **Floating panels and the exit '
+               'animation**: panels and the bottom pill now use the system-UI inset (it used to '
+               'compute as 0 on some ROMs), and the "flat colour then gone" exit is fixed.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.6', 'date': '2026-09-28',
+        'items': [
+            ('new',
+             T('**历史轨迹新增心率记录与折线图**。轨迹点开始记心率（来源与信标里的 `HR=` 一致：'
+               '蓝牙心率带或佳明 LiveTrack），历史轨迹详情页多了**心率 / 速度 / 里程**三条折线，'
+               '可逐条开关、也可整块隐藏；播放时有竖起指示线对着当前位置，心率那一栏还显示当天的最低–最高。'
+               '没有心率读数的时间段曲线会**断开**（不连成直线）。一天最多 4 万个点，曲线进页时一次性'
+               '分桶到 240 个点，播放时不掉帧。',
+               '**歷史軌跡新增心率記錄與折線圖**。軌跡點開始記心率（來源與信標裡的 `HR=` 一致：'
+               '藍牙心率帶或 Garmin LiveTrack），歷史軌跡詳情頁多了**心率 / 速度 / 里程**三條折線，'
+               '可逐條開關、也可整塊隱藏；播放時有豎起指示線對著目前位置，心率那一欄還顯示當天的最低–最高。'
+               '沒有心率讀取的時間段曲線會**斷開**（不連成直線）。一天最多 4 萬個點，曲線進頁時一次性'
+               '分桶到 240 個點，播放時不掉格。',
+               '**Heart-rate logging and charts on the history track page.** Track points now record '
+               'heart rate (from the same source as `HR=` in the beacon comment: a BLE chest strap or '
+               'Garmin LiveTrack), and the day detail page gains three polylines — **heart rate / '
+               'speed / distance** — each of which can be toggled, or the whole panel hidden. A vertical '
+               'cursor follows playback, and the heart-rate row shows the day\'s min–max. Gaps with no '
+               'reading are drawn as **breaks**, not straight lines. A day can hold 40,000 points, so '
+               'the curves are bucketed once to 240 points on entry; playback stays smooth.')),
+            ('new',
+             T('**Windows 可选音频设备与发射串口**。音频页现在能选**播放设备 / 采集设备**，'
+               '不再只能用系统默认 —— 这直接决定接到电台的是哪一路信号；TNC 设备页可以选**发射串口**，'
+               '默认仍与接收共用一个口，分成两个口可以避开 Windows 上同一 COM 口读写互相打架的问题。'
+               '（Android / iOS 不显示音频设备选择器：那里音频路由由系统决定，摆一个假开关只会误导人。）',
+               '**Windows 可選音訊裝置與發射串口**。音訊頁現在能選**播放裝置 / 擷取裝置**，'
+               '不再只能用系統預設 —— 這直接決定接到電台的是哪一路訊號；TNC 裝置頁可以選**發射串口**，'
+               '預設仍與接收共用一個埠，分成兩個埠可以避開 Windows 上同一 COM 埠讀寫互相打架的問題。'
+               '（Android / iOS 不顯示音訊裝置選擇器：那裡音訊路由由系統決定，擺一個假開關只會誤導人。）',
+               '**Selectable audio devices and TX serial port on Windows.** The audio page can now pick '
+               'the **playback and capture device** instead of being stuck with the system default — '
+               'which decides what actually feeds your radio. The TNC device page can pick a **separate '
+               'TX serial port**; the default is still one port for both directions, and splitting them '
+               'avoids two handles fighting over one COM port on Windows. (Android/iOS hide the audio '
+               'picker: routing there is the OS\'s job, and a fake switch would only mislead.)')),
+            ('fix',
+             T('**修一轮用户反馈（#12 / #13 / #15 / #16 / #18 / #19）**。'
+               '① 电台身份卡片「更多附加」里的海拔 / 功率 / 天线高度 / 增益设过就删不掉 —— 留空的语义是'
+               '「不发送」，但保存时只是跳过写入，旧值一直留在本地、重启又回来，现在留空会真的把它清掉；'
+               '② 自定义状态会被 15 秒一次的心跳包顶掉，现在填了自定义状态就紧跟着补发一帧；'
+               '③ Android 15 强制 edge-to-edge，三大金刚键压住页面底部按钮，现在滚动内容底部让出导航栏高度；'
+               '④ 设置详情页面板展开 / 收起会闪一下或突然填充，现在高度与透明度一起动；'
+               '⑤ 下载完成后「立即下载」按钮还在（拿文件名里的 `2.0.5` 去比 tag 的 `v2.0.5`，永远不相等），'
+               '现在比较时忽略 `v` 前缀；⑥ 更新渠道默认改为 GitHub（更新页仍可一键切回镜像）。',
+               '**修一輪使用者回報（#12 / #13 / #15 / #16 / #18 / #19）**。'
+               '① 電台身份卡片「更多附加」裡的海拔 / 功率 / 天線高度 / 增益設過就刪不掉 —— 留空的語意是'
+               '「不傳送」，但儲存時只是跳過寫入，舊值一直留在本機、重啟又回來，現在留空會真的把它清掉；'
+               '② 自訂狀態會被 15 秒一次的心跳包頂掉，現在填了自訂狀態就緊跟著補發一幀；'
+               '③ Android 15 強制 edge-to-edge，三大金剛鍵壓住頁面底部按鈕，現在捲動內容底部讓出導覽列高度；'
+               '④ 設定詳情頁面板展開 / 收起會閃一下或突然填充，現在高度與透明度一起動；'
+               '⑤ 下載完成後「立即下載」按鈕還在（拿檔案名稱裡的 `2.0.5` 去比 tag 的 `v2.0.5`，永遠不相等），'
+               '現在比較時忽略 `v` 前綴；⑥ 更新渠道預設改為 GitHub（更新頁仍可一鍵切回鏡像）。',
+               '**A round of user-reported fixes (#12, #13, #15, #16, #18, #19).** (1) The "Advanced" '
+               'extras on the station identity card could not be cleared: empty means "do not send", '
+               'but saving merely skipped the write, so the old value stayed on disk and came back after '
+               'a restart — clearing now removes it. (2) A custom status was overwritten by the '
+               '15-second keep-alive frame; a custom status is now re-sent right after it. (3) Android '
+               '15 forces edge-to-edge, so the navigation bar covered buttons at the bottom of a page — '
+               'scrollable content now reserves that inset. (4) Expand/collapse on settings pages '
+               'flashed or snapped; height and opacity now animate together. (5) The download button '
+               'stayed after finishing (a file-name version `2.0.5` was compared against the tag '
+               '`v2.0.5`, which never matches); the comparison now ignores the `v` prefix. (6) The update '
+               'channel now defaults to GitHub (one tap switches back to the mirror).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.5', 'date': '2026-09-27',
+        'items': [
+            ('fix',
+             T('**修：2.0.4 的 PHG 在第三方侧其实没生效**。2.0.4 发出的报文里，数据扩展被空格分隔'
+               '（`000/000 PHG2130 /A=000033`），用参考实现 aprslib 解出来 `phg` **完全缺失**、'
+               '`PHG2130` 被当成普通备注文字 —— 也就是说第三方地图上看不到覆盖范围，这个功能等于没做。'
+               '根因是**两个独立的坑**：① APRS101 把 PHG / `/A=` / CsT 定义为**固定长度的数据扩展**，'
+               '必须紧贴符号、彼此之间不用空格（真实台站都是 `…ErPHG1460/A=000071` 这样）；'
+               '② CsT 与 PHG 争同一个「注释开头」，解析器先匹配 `^\\d{3}/\\d{3}`，一旦命中就'
+               '**只再看 DF 测向报文，根本不再去找 PHG**，所以哪怕紧贴，只要 `000/000` 在前 PHG 也读不出来。',
+               '**修：2.0.4 的 PHG 在第三方端其實沒生效**。2.0.4 送出的報文裡，資料擴充被空格分隔'
+               '（`000/000 PHG2130 /A=000033`），用參考實作 aprslib 解出來 `phg` **完全缺失**、'
+               '`PHG2130` 被當成普通備註文字 —— 也就是說第三方地圖上看不到涵蓋範圍，這個功能等於沒做。'
+               '根因是**兩個獨立的坑**：① APRS101 把 PHG / `/A=` / CsT 定義為**固定長度的資料擴充**，'
+               '必須緊貼符號、彼此之間不用空格（真實臺站都是 `…ErPHG1460/A=000071` 這樣）；'
+               '② CsT 與 PHG 爭同一個「註解開頭」，解析器先匹配 `^\\d{3}/\\d{3}`，一旦命中就'
+               '**只再看 DF 測向報文，根本不再去找 PHG**，所以哪怕緊貼，只要 `000/000` 在前 PHG 也讀不出來。',
+               '**Fix: 2.0.4\'s PHG never actually took effect for third parties.** In 2.0.4 the data '
+               'extensions were space-separated (`000/000 PHG2130 /A=000033`), and the reference '
+               'implementation (aprslib) reports `phg` as **missing entirely** with `PHG2130` left as '
+               'ordinary comment text — meaning third-party maps showed no coverage and the feature did '
+               'nothing. Two independent traps caused it: (1) APRS101 defines PHG / `/A=` / CsT as '
+               '**fixed-length data extensions** that must be glued to the symbol with no separators '
+               '(real stations look like `…ErPHG1460/A=000071`); (2) CsT and PHG compete for the same '
+               '"start of comment" slot — parsers match `^\\d{3}/\\d{3}` first and, once it hits, **only '
+               'look for a DF report and never search for PHG**, so even glued together PHG stays '
+               'unreadable while `000/000` comes first.')),
+            ('up',
+             T('**修法**：扩展块**整块紧贴**，且**首位让给 PHG** —— 填了 PHG 时 CsT 不再随位置报文发送。'
+               '修好后：`!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%`（空格只出现在扩展块与备注之间）。'
+               '**一个取舍**：同时填了 PHG 的移动台，aprs.fi 上就没有速度/方位角了 —— 两者都要'
+               '「注释开头」这一个位置，无法共存；没填 PHG 的台站一切照旧。'
+               '另把信标报文的第三方兼容性测试纳入 CI，这类「编译过、analyze 绿、第三方读不出」的'
+               '问题从此有测试兜底。',
+               '**修法**：擴充區塊**整塊緊貼**，且**首位讓給 PHG** —— 填了 PHG 時 CsT 不再隨位置報文發送。'
+               '修好後：`!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%`（空格只出現在擴充區塊與備註之間）。'
+               '**一個取捨**：同時填了 PHG 的移動臺，aprs.fi 上就沒有速度/方位角了 —— 兩者都要'
+               '「註解開頭」這一個位置，無法共存；沒填 PHG 的臺站一切照舊。'
+               '另把信標報文的第三方相容性測試納入 CI，這類「編譯過、analyze 綠、第三方讀不出」的'
+               '問題從此有測試把關。',
+               '**The fix**: keep the extension block **glued together** and **give the first slot to '
+               'PHG** — when PHG is present, CsT is no longer sent with the position packet. Afterwards: '
+               '`!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%` (spaces appear only between the block and '
+               'the comment). **One trade-off**: a mobile station that also fills in PHG shows no '
+               'speed/bearing on aprs.fi — both need that single "start of comment" slot and cannot '
+               'coexist; stations without PHG are unaffected. The beacon packet\'s third-party '
+               'compatibility test now runs in CI, so this class of "compiles, analyze is green, '
+               'third parties cannot read it" bug has a guard.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.4', 'date': '2026-09-27',
+        'items': [
+            ('new',
+             T('**位置报文数据扩展（PHG · APRS101 第 9 章）**：电台设置的「台站备注」下多了「高级设置」，'
+               '可填功率（瓦）/ 天线高度（英尺）/ 增益（dB）。填任一项就附上固定 7 字节的 `PHGphgd`，'
+               '留空则完全不发。量化照规范做：功率只取**不超过实际值的最大档**（25 W 报 25、30 W 也只报 25'
+               ' —— 报大了等于虚报覆盖范围），天线高度按 10×2ⁿ 英尺取档；设置页把**真正会被编进报文的'
+               '结果**回显出来（量化过程用户看不见，不摆出来就无从知道到底发了什么）。报文里的位置也照'
+               '规范来：`PHGphgd` **紧跟符号**（`!坐标/符号` 之后，排在 `/A=` 海拔与其它备注文字之前），'
+               '与标准报文 `…:!2216.45N/11113.90ErPHG5950` 形状一致 —— 第三方解析器按「注释开头的数据'
+               '扩展」识别 PHG，插在后面就读不出来。',
+               '**位置報文資料擴充（PHG · APRS101 第 9 章）**：電台設定的「臺站備註」下多了「進階設定」，'
+               '可填功率（瓦）/ 天線高度（英尺）/ 增益（dB）。填任一項就附上固定 7 位元組的 `PHGphgd`，'
+               '留空則完全不送。量化照規範做：功率只取**不超過實際值的最大檔**（25 W 報 25、30 W 也只報 25'
+               ' —— 報大了等於虛報涵蓋範圍），天線高度按 10×2ⁿ 英尺取檔；設定頁把**真正會被編進報文的'
+               '結果**回顯出來（量化過程使用者看不見，不擺出來就無從得知到底送出了什麼）。報文裡的位置也'
+               '照規範來：`PHGphgd` **緊跟符號**（`!座標/符號` 之後，排在 `/A=` 海拔與其它備註文字之前），'
+               '與標準報文 `…:!2216.45N/11113.90ErPHG5950` 形狀一致 —— 第三方解析器依「註解開頭的資料'
+               '擴充」辨識 PHG，插在後面就讀不出來。',
+               '**Position packet data extension (PHG, APRS101 chapter 9)**: under Radio settings → '
+               '"Station comment" there is now an "Advanced" section taking power (W) / antenna height (ft) / '
+               'gain (dB). Filling in any one of them appends the fixed 7-byte `PHGphgd`; leaving them empty '
+               'sends nothing at all. The encoding follows the spec: power uses the **largest step that does '
+               'not exceed the real value** (25 W reports 25, and 30 W still reports 25 — over-reporting '
+               'claims coverage you do not have) and antenna height snaps to 10×2ⁿ feet. The settings page '
+               '**echoes back what will actually be encoded**, since quantisation is invisible and there '
+               'would otherwise be no way to know what went out. In the packet the extension sits where the '
+               'spec puts it: `PHGphgd` comes **immediately after the symbol** (right after `!lat/lon/symbol`, '
+               'ahead of the `/A=` altitude and any other comment text), matching the standard packet '
+               '`…:!2216.45N/11113.90ErPHG5950` — third-party parsers look for PHG as a data extension at the '
+               'start of the comment, and reading it after other fields fails.')),
+            ('new',
+             T('**独立状态报文**：高级设置里可填状态文本，与位置报文共用一个「发射」按钮 —— 哪个有内容'
+               '就发哪个，状态文本留空时发内置的 `APRSlocus CONNECT vX.Y.Z 平台` 在线帧。状态报文是'
+               '**独立一帧**（`>` 开头、不含坐标、不会移动你在 aprs.fi 上的位置），所以没有定位也能发。'
+               '发送时一律直接读输入框当前内容，不依赖输入事件的时序 —— 中文输入法组合输入时曾出现'
+               '「明明填了，却发出默认帧」。此外新增手填海拔：留空跟随定位（默认行为不变），'
+               '设置页显示当前将发出的 `/A=aaaaaa` 片段。',
+               '**獨立狀態報文**：進階設定裡可填狀態文字，與位置報文共用一個「發射」按鈕 —— 哪個有內容'
+               '就送哪個，狀態文字留空時送內建的 `APRSlocus CONNECT vX.Y.Z 平台` 在線幀。狀態報文是'
+               '**獨立一幀**（`>` 開頭、不含座標、不會移動你在 aprs.fi 上的位置），所以沒有定位也能送。'
+               '發射時一律直接讀輸入框目前內容，不依賴輸入事件的時序 —— 中文輸入法組合輸入時曾出現'
+               '「明明填了，卻送出預設幀」。此外新增手填海拔：留空跟隨定位（預設行為不變），'
+               '設定頁會顯示目前將送出的 `/A=aaaaaa` 片段。',
+               '**Standalone status packets**: the Advanced section takes a status text, sharing one '
+               '"Transmit" button with the position packet — whichever has content is sent, and an empty '
+               'status text sends the built-in `APRSlocus CONNECT vX.Y.Z` online frame. A status '
+               'packet is a **frame of its own** (`>`-prefixed, carrying no coordinates, and it does not '
+               'move you on aprs.fi), so it can be sent even without a fix. Transmitting reads the current '
+               'contents of the field directly instead of relying on input-event timing — with an IME '
+               'composing text the app used to send the default frame although the user had typed '
+               'something. A manually entered altitude was added too: empty follows the fix (the default '
+               'is unchanged), and the settings page shows the `/A=aaaaaa` fragment that will be sent.')),
+            ('new',
+             T('**台站详情与地图信息窗**：台站详情多出一行**独立状态报文**（紫色 + 播报图标），与'
+               '「位置备注」分开显示 —— 两者来源不同（频点常写在位置备注里、设备来源常写在状态报文里），'
+               '混成一行就分不出哪个是哪个；此前这类文本只进数据包页的原文，台站详情里彻底看不到。'
+               '地图标记信息窗新增**高度**、**位置备注**、**状态文本**三行，且**按需出现**而不是常驻'
+               '占位 —— 绝大多数台站没有这些字段，常驻只会给出两行 `--`，把「没有」和「没收到」'
+               '显示成同一个样子。',
+               '**臺站詳情與地圖資訊窗**：臺站詳情多出一列**獨立狀態報文**（紫色 + 播報圖示），與'
+               '「位置備註」分開顯示 —— 兩者來源不同（頻點常寫在位置備註裡、裝置來源常寫在狀態報文裡），'
+               '混成一列就分不出哪個是哪個；此前這類文字只進資料封包頁的原文，臺站詳情裡徹底看不到。'
+               '地圖標記資訊窗新增**高度**、**位置備註**、**狀態文字**三列，且**按需出現**而不是常駐'
+               '佔位 —— 絕大多數臺站沒有這些欄位，常駐只會給出兩列 `--`，把「沒有」和「沒收到」'
+               '顯示成同一個樣子。',
+               '**Station details and the map info window**: station details gained a line for the '
+               '**standalone status packet** (purple, with a megaphone icon), shown separately from the '
+               'position comment — the two come from different packets (frequencies usually live in the '
+               'position comment, device provenance in the status packet), and merging them makes it '
+               'impossible to tell which is which. That text used to appear only in the raw packet console '
+               'and never on the station. The map marker info window gained **altitude**, **position '
+               'comment** and **status text** lines, each **appearing only when present** rather than as a '
+               'permanent placeholder — few stations carry these fields, and placeholders would print two '
+               'rows of `--`, making "absent" and "not received" look identical.')),
+            ('fix',
+             T('**本版修正**：①「发射」按钮会**先查链路**，未连接时直接说明「请先连接链路」，不再静默'
+               '只做本地记录；②填了 PHG 却还没有定位时，如实回执「带 PHG 的位置报文没能发出」；'
+               '③状态报文**改用自己的连接文案**（此前只发状态帧，界面却写着「位置已上报」）；'
+               '④地图页「距下次上报」的秒数改为**每秒刷新**（此前没有台站刷新时会停住）；'
+               '⑤设备页「链路自检」不再出现两遍标题与副标题；⑥手机电量开关**保持在信标页'
+               '「信标上报内容」**，默认值不变。',
+               '**本版修正**：①「發射」按鈕會**先查連結**，未連線時直接說明「請先連接連結」，不再靜默'
+               '只做本機記錄；②填了 PHG 卻還沒有定位時，如實回執「帶 PHG 的位置報文沒能送出」；'
+               '③狀態報文**改用自己的連線文案**（此前只送狀態幀，介面卻寫著「位置已上報」）；'
+               '④地圖頁「距下次上報」的秒數改為**每秒刷新**（此前沒有臺站刷新時會停住）；'
+               '⑤裝置頁「連結自檢」不再出現兩遍標題與副標題；⑥手機電量開關**保持在信標頁'
+               '「信標上報內容」**，預設值不變。',
+               '**Fixes in this build**: (1) the Transmit button **checks the link first** and says '
+               '"connect the link first" instead of silently recording locally; (2) PHG without a fix is '
+               'reported honestly — the receipt says the position packet with PHG was not sent; '
+               '(3) status packets **use their own connection text** (previously the banner claimed '
+               '"position beacon sent" when only a status frame had gone out); (4) the countdown for the '
+               'next report on the map page now **ticks every second** (it used to freeze when no station '
+               'update arrived); (5) the link self-test on the device page no longer shows its title and '
+               'subtitle twice; (6) the phone-battery switch **stays on the beacon page** ("Beacon '
+               'contents") with unchanged defaults.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.2', 'date': '2026-09-26',
+        'items': [
+            ('new',
+             T('**新增百度地图 / 百度卫星图源**：百度不是 Web Mercator（BD-09 坐标 + 自有投影、'
+               '瓦片 y 轴朝北），为此把「按图源切换投影」做到全链路 —— 渲染、标记 / 轨迹、沉浸地图、'
+               '跟踪、历史回放、离线下载共用同一套投影，标记与瓦片不再错开。',
+               '**新增百度地圖 / 百度衛星圖源**：百度不是 Web Mercator（BD-09 座標 + 自有投影、'
+               '圖磚 y 軸朝北），為此把「依圖源切換投影」做到全鏈路 —— 渲染、標記 / 軌跡、沉浸地圖、'
+               '追蹤、歷史回放、離線下載共用同一套投影，標記與圖磚不再錯開。',
+               '**New Baidu Map / Baidu Satellite sources**: Baidu is not Web Mercator (BD-09 '
+               'coordinates plus its own projection, tiles with a north-pointing y-axis), so a '
+               'per-source projection now runs through the whole chain — rendering, markers / '
+               'tracks, the immersive map, the tracker, track replay and offline downloads share '
+               'one projection, and markers no longer drift against the tiles.')),
+            ('new',
+             T('**新增「纯网络」定位模式**：只用基站 / Wi-Fi（不注册 GPS），适合没有 GPS 的设备，'
+               '也用于极端省电；自动上报使用专用固定间隔（默认 300 秒、可调），不必再开强制开关，'
+               '也不走智能信标（网络没有可靠速度）。',
+               '**新增「純網路」定位模式**：只用基地台 / Wi-Fi（不註冊 GPS），適合沒有 GPS 的裝置，'
+               '也用於極端省電；自動上報使用專用固定間隔（預設 300 秒、可調），不必再開強制開關，'
+               '也不走智慧信標（網路沒有可靠速度）。',
+               '**New "Network only" location mode**: cell / Wi-Fi only (GPS not registered), for '
+               'devices without GPS and for extreme battery saving; auto-beaconing uses a dedicated '
+               'fixed interval (default 300s, configurable) — no force switch needed, and smart '
+               'beaconing does not apply because network fixes have no reliable speed.')),
+            ('new',
+             T('**公告支持内嵌视频**：应用内公告改为手写 Markdown（简中 / 繁中 / 英文），'
+               '`@video` 标记可在应用内播放（Android / iOS / macOS；Windows / Linux / Web 回退为'
+               '在浏览器打开）。旧版本读到那行只会当普通文字（仍是可点链接）。',
+               '**公告支援內嵌影片**：應用內公告改為手寫 Markdown（簡中 / 繁中 / 英文），'
+               '`@video` 標記可在應用內播放（Android / iOS / macOS；Windows / Linux / Web 回退為'
+               '在瀏覽器開啟）。舊版本讀到那行只會當普通文字（仍是可點連結）。',
+               '**Notices can embed video**: the in-app notice is now hand-written Markdown '
+               '(Simplified Chinese / Traditional Chinese / English) and an `@video` marker plays '
+               'in-app (Android / iOS / macOS; Windows / Linux / Web fall back to the external '
+               'browser). Older versions simply show that line as plain text (still a link).')),
+            ('new',
+             T('**启动检查新版本**：启动后检查一次，有新版时弹提醒（每版本只提醒一次、可稍后）。',
+               '**啟動檢查新版本**：啟動後檢查一次，有新版時彈提醒（每版本只提醒一次、可稍後）。',
+               '**Update check on launch**: the app checks once on start and shows a reminder when '
+               'a new version exists (once per version, dismissible).')),
+            ('fix',
+             T('**修**：地图信息窗仍显示「点击查看」—— 2.0.1 只改了生成的 l10n 产物、漏改 ARB 源，'
+               '构建时被覆盖，现已改到位（六语言）；Windows 构建移除与当前工具链不兼容的 '
+               'webview_windows，改走外部浏览器。',
+               '**修**：地圖資訊窗仍顯示「點選檢視」—— 2.0.1 只改了生成的 l10n 產物、漏改 ARB 源，'
+               '建置時被覆蓋，現已改到位（六語言）；Windows 建置移除與當前工具鏈不相容的 '
+               'webview_windows，改走外部瀏覽器。',
+               '**Fixes**: the map info window still showed "Tap to view" (2.0.1 only changed the '
+               'generated l10n output and missed the ARB source, so the build reverted it; fixed in '
+               'all six languages); the Windows build now drops the webview_windows plugin that is '
+               'incompatible with the current toolchain and opens such links externally.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.0', 'date': '2026-09-25',
+        'items': [
+            ('new',
+             T('**TOUCH SKY · 2.0 正式版**：1.5.8 → 2.0 的 **322 次更新**在这一版合流 —— 全新 UI 2.0（地图基底 + 可拖拽面板、底部胶囊导航、横屏三端统一）、磨砂玻璃与云母材质、沉浸地图与多图源、离线地图与轨迹回放、官方设备库识别、群聊与 7 家翻译、蓝牙 TNC 与声卡 TNC、iGate 与 PKWDWPL、iOS / macOS 原生定位、按转弯与按距离的智能信标、天气与短波传播建议、Android 桌面小组件、ADIF 导出与数据包控制台、佳明分享与蓝牙心率带、6 种界面语言。',
+               '**TOUCH SKY · 2.0 正式版**：1.5.8 → 2.0 的 **322 次更新**在這一版合流 —— 全新 UI 2.0（地圖基底 + 可拖曳面板、底部膠囊導覽、橫向三端統一）、磨砂玻璃與雲母材質、沉浸地圖與多圖源、離線地圖與軌跡回放、官方裝置庫辨識、群組聊天與 7 家翻譯、藍牙 TNC 與音效卡 TNC、iGate 與 PKWDWPL、iOS / macOS 原生定位、按轉彎與按距離的智慧信標、天氣與短波傳播建議、Android 桌面小工具、ADIF 匯出與封包主控台、Garmin 分享與藍牙心率帶、6 種介面語言。',
+               '**TOUCH SKY · 2.0**: the **322 updates** from 1.5.8 to 2.0 land together — the new UI 2.0 (a map-first layout with a draggable sheet, bottom capsule nav, landscape unified across phone / tablet / desktop), frosted-glass and mica materials, the immersive map with many sources, offline maps and track replay, aprs.org device identification, group chat and 7 translation providers, Bluetooth and sound-card TNCs, iGate and PKWDWPL, native iOS / macOS location, smart beaconing by turn and by distance, weather and HF propagation advice, Android home-screen widgets, ADIF export and the packet console, Garmin sharing and BLE heart-rate straps, and six UI languages.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.173', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**佳明页补齐了「自动填充 / 确定按钮 / 状态显示」**（用户实测反馈）：'
+               '① 链接框原来只在页面初始化时读一次，分享进来时页面已经开着就**不会自动填充** —— '
+               '现在跟随状态同步，并显示「已自动填入分享链接」；'
+               '② 原来只有一个含义模糊的开关（标签写着「追踪中」是状态不是动作）—— '
+               '现在是明确的 **[开始追踪] / [停止追踪]** 按钮；'
+               '③ 新增状态卡：未开启追踪 / 追踪中（含已转发点数与最后更新时间）/ 抓取失败（含原因），'
+               '链接框下面还会实时显示「链接有效」。'
+               '分享到达的提示也从 4 秒延长到 8 秒，不容易错过',
+               '**佳明頁補齊了「自動填入 / 確定按鈕 / 狀態顯示」**（使用者實測回饋）：'
+               '① 連結框原來只在頁面初始化時讀一次，分享進來時頁面已經開著就**不會自動填入** —— '
+               '現在跟隨狀態同步，並顯示「已自動填入分享連結」；'
+               '② 原來只有一個含義模糊的開關（標籤寫著「追蹤中」是狀態不是動作）—— '
+               '現在是明確的 **[開始追蹤] / [停止追蹤]** 按鈕；'
+               '③ 新增狀態卡：未開啟追蹤 / 追蹤中（含已轉發點數與最後更新時間）/ 抓取失敗（含原因），'
+               '連結框下面還會即時顯示「連結有效」。'
+               '分享到達的提示也從 4 秒延長到 8 秒，不容易錯過',
+               '**The Garmin page now has auto-fill, a confirm button and a status display** '
+               '(reported from a real device). (1) The URL field used to read the state once at init, '
+               'so a share arriving while the page was already open would never fill it in — it now '
+               'follows the state and says "Share link filled in automatically". (2) There used to be '
+               'only an ambiguous switch (labelled "Tracking", a state rather than an action) — it is '
+               'now explicit **[Start tracking] / [Stop tracking]** buttons. (3) A new status card '
+               'shows Not tracking / Tracking (with forwarded-point count and last update time) / '
+               'Fetch failed (with the reason), and the field shows "Link is valid" live. The share '
+               'toast also lasts 8s instead of 4s so it is not missed.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.172', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**关于页名片卡不再贴着下面板块**：原来名片卡下面**直接**就是「代码贡献」的节标题'
+               '（间距 0），现在留 22（与其它节间距一致）。'
+               '另外**位置来源「听谁的」说清楚了**：界面原来把来源拆成两半说'
+               '（上报页「定位 / 模拟位置」、设备页「手机 GPS / 佳明」），看着像两件事。'
+               '现在判断只有一处（`positionSourceNow`），两处都写明优先级：'
+               '**模拟/手动位置 › 佳明（手表有实时数据时）› 手机 GPS**，'
+               '上报页的选项也改名成「手机 GPS」（与设备页同名），并显示「当前使用：…」',
+               '**關於頁名片卡不再貼著下面板塊**：原來名片卡下面**直接**就是「程式碼貢獻」的節標題'
+               '（間距 0），現在留 22（與其它節間距一致）。'
+               '另外**位置來源「聽誰的」說清楚了**：介面原來把來源拆成兩半說'
+               '（上報頁「定位 / 模擬位置」、裝置頁「手機 GPS / 佳明」），看著像兩件事。'
+               '現在判斷只有一處（`positionSourceNow`），兩處都寫明優先順序：'
+               '**模擬/手動位置 › 佳明（手錶有即時資料時）› 手機 GPS**，'
+               '上報頁的選項也改名成「手機 GPS」（與裝置頁同名），並顯示「目前使用：…」',
+               '**The About page name card no longer touches the section below** — the "Code '
+               'contributions" header used to start immediately after it (0 gap); it now has 22, '
+               'matching the other sections. Also, **"which position source wins?" is now stated**: '
+               'the UI used to describe it in two halves (beacon page "Location / Simulated", '
+               'Devices page "Phone GPS / Garmin"), which read as two different things. There is now '
+               'one decision (`positionSourceNow`) whose priority is written in both places — '
+               '**simulated/manual › Garmin (while the watch has live data) › phone GPS** — and the '
+               'beacon page option is renamed to "Phone GPS" (matching the Devices page), with an '
+               '"In use now: …" line.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.171', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**佳明分享「有时候行有时候不行」修好了**：① 取分享文本只读 `EXTRA_TEXT`，'
+               '而不少应用（部分佳明版本 / 浏览器）把文本放在 `clipData` 里 —— 读到 null 就'
+               '整条静默，这正是「时好时坏」的机制；② 读不到文本时直接静默返回，用户既没提示'
+               '也没日志；③ **冷启动竞态**：应用启动时那次分享可能在界面注册回调**之前**就'
+               '到达，回调为 null 被丢掉（就是「跳转之后还是没有反馈」）—— 现在改成'
+               '「有回调就调、没有就存起来」，界面起来后主动取一次。'
+               '顺带把识别放宽：短链码长度不限 + 大小写不敏感',
+               '**佳明分享「有時候行有時候不行」修好了**：① 取分享文字只讀 `EXTRA_TEXT`，'
+               '而不少應用（部分佳明版本 / 瀏覽器）把文字放在 `clipData` 裡 —— 讀到 null 就'
+               '整條靜默，這正是「時好時壞」的機制；② 讀不到文字時直接靜默返回，使用者既沒提示'
+               '也沒日誌；③ **冷啟動競態**：應用啟動時那次分享可能在介面註冊回呼**之前**就'
+               '到達，回呼為 null 被丟掉（就是「跳轉之後還是沒有回饋」）—— 現在改成'
+               '「有回呼就調、沒有就存起來」，介面起來後主動取一次。'
+               '順帶把識別放寬：短鏈碼長度不限 + 大小寫不敏感',
+               '**Garmin sharing "sometimes works, sometimes doesn\'t" is fixed.** (1) Share text '
+               'was only read from `EXTRA_TEXT`, while plenty of apps (some Garmin versions, '
+               'browsers) put it in `clipData` — a null read made the whole share go silent, which '
+               'is exactly the intermittent mechanism. (2) No text meant a silent return, with '
+               'neither a message nor a log line. (3) A **cold-start race**: the share can arrive '
+               '**before** the UI registers the callback, so the callback is null and the event is '
+               'dropped (the "still no feedback after the hand-off") — it is now "call if present, '
+               'otherwise store", with the UI consuming it once it is up. Link detection was widened '
+               'too: the short code is unbounded in length and case-insensitive.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.170', 'date': '2026-09-24',
+        'items': [
+            ('up',
+             T('**心率会说明来源**（用户要求「如果链接了佳明就提示从佳明追踪获取」）：心率有两个来源'
+               '（BLE 胸带 / 佳明点里的心率）。佳明在供数据时，心率卡与「数据来源」卡的心率行都会写明'
+               '「心率来自佳明 LiveTrack（手表）· 128 bpm」——没插胸带也不会再显示成「未连接」，'
+               '数字是哪来的摆在明面上。'
+               '另外**关于页空隙**（用户反馈「一些组件空隙不够」）：节标题与卡片之间 8→12，'
+               '致谢卡里「测试成员」标签到呼号胶囊 8→11、胶囊之间 8→10，`BA3RZL` 那组标签到胶囊 6→8',
+               '**心率會說明來源**（使用者要求「如果連結了佳明就提示從佳明追蹤獲取」）：心率有兩個來源'
+               '（BLE 胸帶／佳明點裡的心率）。佳明在供資料時，心率卡與「資料來源」卡的心率列都會寫明'
+               '「心率來自佳明 LiveTrack（手錶）· 128 bpm」——沒插胸帶也不會再顯示成「未連線」，'
+               '數字是哪來的擺在明面上。'
+               '另外**關於頁空隙**（使用者回報「一些元件空隙不夠」）：節標題與卡片之間 8→12，'
+               '致謝卡裡「測試成員」標籤到呼號膠囊 8→11、膠囊之間 8→10，`BA3RZL` 那組標籤到膠囊 6→8',
+               '**Heart rate now names its source** (on request): there are two sources (a BLE strap / '
+               'the heart rate carried in Garmin points), so while Garmin is supplying data both the '
+               'heart-rate card and the heart-rate row of the data-sources card say "Heart rate from '
+               'Garmin LiveTrack (watch) · 128 bpm" — no strap required, and it is obvious where the '
+               'number comes from. Also **About page spacing** (reported as too tight): section '
+               'header → card 8 → 12, and inside the credits card the "test members" label → callsign '
+               'chips 8 → 11 with chip gaps 8 → 10, and the BA3RZL group 6 → 8.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.169', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**1.0 布局下「佳明分享」依然毫无反应**：上一版把「分享里没有链接」也做成'
+               '可见提示，但那个回调只注册在 2.0 外壳 —— 用 1.0 的用户分享完还是什么都'
+               '看不到，和「没识别」一模一样。现在 1.0 两个回调都注册：收到链接给提示 +'
+               '「去设置」，没找到链接也如实说一句（**失败也看得见**）',
+               '**1.0 佈局下「佳明分享」依然毫無反應**：上一版把「分享裡沒有連結」也做成'
+               '可見提示，但那個回呼只註冊在 2.0 外殼 —— 用 1.0 的使用者分享完還是什麼都'
+               '看不到，和「沒識別」一模一樣。現在 1.0 兩個回呼都註冊：收到連結給提示 +'
+               '「去設定」，沒找到連結也如實說一句（**失敗也看得見**）',
+               '**Garmin sharing was still silent in the 1.0 layout**: the previous release made '
+               '"the shared content has no link" visible too, but that callback was registered only '
+               'in the 2.0 shell — so on 1.0 sharing still showed nothing, exactly like "not '
+               'recognised". The 1.0 shell now registers both callbacks: a link shows a notice plus '
+               'an "Open settings" action, and a share without a link says so plainly (failures are '
+               'visible too).')),
+        ],
+    },
+    {
+        'ver': 'v1.6.168', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**「位置来源」改成如实的状态行，不再是二选一**（用户实测指出）：没启动追踪时，'
+               '「手机 GPS」照样画着实心选中圆点（其实什么都没在跑），「佳明」那行也能被'
+               '「选中」——只看开关、没看追踪有没有启动。而且佳明与手机 GPS 本来不是二选一：'
+               '手表直播时优先用手表，超过 120s 没新点自动交回手机。现在按实际情况显示：'
+               '「未追踪（未启动定位）」/「追踪中」/「追踪中（手机 GPS 已让位）」/'
+               '「链接有效，但佳明没有新点」；心率那行也显示当前 bpm',
+               '**「位置來源」改成如實的狀態列，不再是二選一**（使用者實測指出）：沒啟動追蹤時，'
+               '「手機 GPS」照樣畫著實心選取圓點（其實什麼都沒在跑），「佳明」那列也能被'
+               '「選取」——只看開關、沒看追蹤有沒有啟動。而且佳明與手機 GPS 本來不是二選一：'
+               '手錶直播時優先用手錶，超過 120s 沒新點自動交回手機。現在按實際情況顯示：'
+               '「未追蹤（未啟動定位）」/「追蹤中」/「追蹤中（手機 GPS 已讓位）」/'
+               '「連結有效，但佳明沒有新點」；心率那列也顯示目前 bpm',
+               '**"Position source" is now an honest status row, not a two-way choice** (pointed '
+               'out from a real device): with tracking not started, "Phone GPS" still showed a '
+               'filled selection dot (nothing was running) and "Garmin" could be "selected" — the '
+               'state only looked at the switch, never at whether tracking was running. Garmin and '
+               'the phone GPS are not a choice at all: while the watch is live it wins, and after '
+               '120s without a fresh point the phone takes over. It now reports reality: "Not '
+               'tracking (location off)" / "Tracking" / "Tracking (phone GPS stepped aside)" / '
+               '"Link set, but Garmin has no fresh points"; the heart-rate row shows the current '
+               'bpm too.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.167', 'date': '2026-09-24',
+        'items': [
+            ('up',
+             T('**佳明接管时的上报 UI 说清了来源**：位置来自手表时，上报横杠显示'
+               '「佳明上报 · 45s · ❤128」（红色），而不是看不出差别的普通倒计时 —— '
+               '两者可能差几十公里。并且**挡住粗定位覆盖手表位置**：佳明断流后手机 GPS '
+               '会接回来，但基站/WiFi 粗点不行（它会拿偏几百米的质心替换手表位置，而横杠'
+               '当时显示的是正常倒计时，用户完全看不出正在发错坐标）。'
+               '另外**佳明/心率成为「数据来源」里的可选来源**（位置来源：手机 GPS / 佳明；'
+               '心率来源：蓝牙心率带），与报文链路分开列；**手动上报的提示现在会列出'
+               '实际附带的内容**（如「网格 FN20xx · 心率 128 bpm」）',
+               '**佳明接管時的上報 UI 說清了來源**：位置來自手錶時，上報橫槓顯示'
+               '「佳明上報 · 45s · ❤128」（紅色），而不是看不出差別的普通倒數 —— '
+               '兩者可能差幾十公里。並且**擋住粗定位覆蓋手錶位置**：佳明斷流後手機 GPS '
+               '會接回來，但基地台/WiFi 粗點不行（它會拿偏幾百公尺的質心替換手錶位置，而橫槓'
+               '當時顯示的是正常倒數，使用者完全看不出正在發錯座標）。'
+               '另外**佳明/心率成為「資料來源」裡的可選來源**（位置來源：手機 GPS / 佳明；'
+               '心率來源：藍牙心率帶），與報文鏈路分開列；**手動上報的提示現在會列出'
+               '實際附帶的內容**（如「網格 FN20xx · 心率 128 bpm」）',
+               '**The beacon UI now says where the position comes from.** While Garmin is live the '
+               'beacon bar shows "Garmin · 45s · ❤128" in red instead of an indistinguishable '
+               'countdown (the two positions can be tens of kilometres apart). A coarse (cell/Wi-Fi) '
+               'fix is now blocked from replacing the watch position: once Garmin goes stale the '
+               'phone GPS rightly takes over, but a cell-tower centroid must not — the bar would '
+               'still show a normal countdown, so nothing on screen reveals a wrong coordinate is '
+               'being transmitted. **Garmin and the strap also became selectable "data sources"** '
+               '(position source: phone GPS / Garmin; heart-rate source: the BLE strap), listed '
+               'separately from the packet links, and **the manual-beacon toast now lists what was '
+               'actually attached** (e.g. "Grid FN20xx · HR 128 bpm").')),
+        ],
+    },
+    {
+        'ver': 'v1.6.166', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**修：佳明 App 分享的短链（`gar.mn/…`）之前根本进不来**。佳明 App 的「分享」给的是'
+               '短链，而应用只认长链（`livetrack.garmin.com/session/…/token/…`）、Android 分享'
+               '入口也只放行那个域名 —— 于是「分享 → 选 APRSlocus」什么都没发生。现在两种链接都认'
+               '（含只复制到 `gar.mn/xxx` 没有 `https://` 的情况），抓取时跟随 301 跳转；'
+               '写日志前把 token 打码 —— 分享链接本身就是读取实时位置的凭据',
+               '**修：佳明 App 分享的短鏈（`gar.mn/…`）之前根本進不來**。佳明 App 的「分享」給的是'
+               '短鏈，而應用只認長鏈（`livetrack.garmin.com/session/…/token/…`）、Android 分享'
+               '入口也只放行那個域名 —— 於是「分享 → 選 APRSlocus」什麼都沒發生。現在兩種連結都認'
+               '（含只複製到 `gar.mn/xxx` 沒有 `https://` 的情況），抓取時跟隨 301 跳轉；'
+               '寫日誌前把 token 打碼 —— 分享連結本身就是讀取即時位置的憑據',
+               '**Fix: the short link the Garmin app shares (`gar.mn/…`) never got through.** '
+               'Garmin\'s Share button produces a short link, but the app only accepted the long '
+               'form and the Android share target only allowed that host — so "Share → APRSlocus" '
+               'did nothing. Both forms are recognised now (including a bare `gar.mn/xxx` with no '
+               'scheme), redirects are followed, and the token is masked before logging, because a '
+               'share link is the credential for reading a live position.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.165', 'date': '2026-09-24',
+        'items': [
+            ('new',
+             T('**蓝牙心率带**（BLE 标准心率服务 0x180D）：信标设置页可搜索/连接/看当前心率，'
+               '新增「信标附带心率」开关（默认开）——位置包备注里加 `HR=nn`，没有读数时**什么都不发**'
+               '（发 HR=0 会被读成「心率 0」）。**与 TNC 的蓝牙通道不冲突**：TNC 走经典蓝牙 SPP、'
+               '心率走 BLE GATT，本来就并行；并且绝不做经典蓝牙发现（那会打断 TNC 的 SPP 连接），'
+               '同一台设备被两条链路抢占时会直接拒绝并说明原因',
+               '**藍牙心率帶**（BLE 標準心率服務 0x180D）：信標設定頁可搜尋／連線／看目前心率，'
+               '新增「信標附帶心率」開關（預設開）——位置包備註裡加 `HR=nn`，沒有讀數時**什麼都不發**'
+               '（發 HR=0 會被讀成「心率 0」）。**與 TNC 的藍牙通道不衝突**：TNC 走經典藍牙 SPP、'
+               '心率走 BLE GATT，本來就並行；並且絕不做經典藍牙發現（那會打斷 TNC 的 SPP 連線），'
+               '同一台裝置被兩條鏈路搶占時會直接拒絕並說明原因',
+               '**Bluetooth heart-rate straps** (standard BLE service 0x180D): the beacon settings '
+               'page can scan/connect and show the current BPM, with a new "Send heart rate in '
+               'beacon" switch (on by default) that adds `HR=nn` to the position comment — and '
+               'sends **nothing** without a reading (HR=0 would read as "pulse 0"). It does not '
+               'fight with the TNC link: TNC uses classic Bluetooth SPP while heart rate uses BLE '
+               'GATT, they run in parallel, classic discovery (which would tear down the SPP '
+               'link) is never used, and a device already held by TNC is rejected with a reason.')),
+            ('new',
+             T('**佳明 LiveTrack**：手表的活动位置可以直接接进来。两条路——① 在佳明 Connect App 里'
+               '「分享」选 APRSlocus（已注册系统分享入口），链接自动填入并开始追踪；② 信标设置页'
+               '的「佳明 LiveTrack」里手动粘贴链接（也可从剪贴板取）。抓公开分享页的 trackPoints，'
+               '取经纬度/海拔/速度/心率；只接受 120 秒内的点、积压超 60 秒跳点、两次转发至少隔 '
+               '10 秒；佳明在跑时手机 GPS 自动让位',
+               '**佳明 LiveTrack**：手錶的活動位置可以直接接進來。兩條路——① 在佳明 Connect App 裡'
+               '「分享」選 APRSlocus（已註冊系統分享入口），連結自動填入並開始追蹤；② 信標設定頁'
+               '的「佳明 LiveTrack」裡手動貼上連結（也可從剪貼簿取）。抓公開分享頁的 trackPoints，'
+               '取經緯度／海拔／速度／心率；只接受 120 秒內的點、積壓超 60 秒跳點、兩次轉發至少隔 '
+               '10 秒；佳明在跑時手機 GPS 自動讓位',
+               '**Garmin LiveTrack**: your watch activity can feed straight in — either share it '
+               'from the Garmin Connect app to APRSlocus (a registered system share target), or '
+               'paste the link on the new "Garmin LiveTrack" page (clipboard button included). It '
+               'reads trackPoints from the public share page (position, altitude, speed, heart '
+               'rate) and accepts only points up to 120s old, skips to the newest past a 60s '
+               'backlog, and forwards at most one point every 10s; while Garmin is live the phone '
+               'GPS steps aside automatically.')),
+            ('up',
+             T('**心率显示在主屏幕**（地图左上第一个胶囊，带 BLE / Garmin 来源标记，没有读数时'
+               '整块不显示）；**佳明接管期间补齐两处**：① 航向——佳明的点没有航向字段，之前会'
+               '沿用手机 GPS 的旧值（指南针停在旧方向），现用前后两点算出来；② 历史台账——之前'
+               '没写而手机 GPS 又正让位，那段历史是空白，现已与 GPS 同一套落盘。'
+               '另外设备页新增「其他数据来源」卡（心率带 + 佳明两个入口），'
+               '与报文链路互不影响、可同时使用',
+               '**心率顯示在主畫面**（地圖左上第一個膠囊，帶 BLE / Garmin 來源標記，沒有讀數時'
+               '整塊不顯示）；**佳明接管期間補齊兩處**：① 航向——佳明的點沒有航向欄位，之前會'
+               '沿用手機 GPS 的舊值（指南針停在舊方向），現用前後兩點算出來；② 歷史台帳——之前'
+               '沒寫而手機 GPS 又正讓位，那段歷史是空白，現已與 GPS 同一套落盤。'
+               '另外裝置頁新增「其他資料來源」卡（心率帶 + 佳明兩個入口），'
+               '與報文鏈路互不影響、可同時使用',
+               '**Heart rate on the main screen** (the first chip in the map top-left column, '
+               'tagged BLE or Garmin, and hidden entirely with no reading). Two gaps while '
+               'Garmin is driving are closed: the heading was not computed at all (Garmin points '
+               'carry none, so the compass froze on the phone GPS last value) and it is now '
+               'derived from the previous point; and the daily history log was not written while '
+               'the phone GPS was standing down, leaving a blank stretch — it now records like '
+               'the GPS path. The device page also gained an "Other data sources" card (strap + '
+               'Garmin), which is independent of the packet links and can run alongside them.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.164', 'date': '2026-09-24',
+        'items': [
+            ('fix',
+             T('**修三处「挤 / 没填满 / 显示不全」**：① 关于页分享弹层的标题与副标题'
+               '原来零间隙地贴在一起，现在留 3px，头部与选项之间 14→18、选项之间 8→10；'
+               '② 关于页封面——原来「容器宽/卡高 > 1.62」就改走 `contain`（怕裁掉火山），'
+               '但卡高有 300 上限、容器宽到 600，于是**任何 ≥600 宽的屏幕上都会走**：'
+               '照片缩成中间一条、两侧各空 75px，横屏时 Logo 卡正坐在左边空白上'
+               '（就是「logo 背景没填满」）；改成 cover + topCenter，铺满并保住雪顶；'
+               '③ 消息页换栏原来按**朝向**判（只要横屏就走双栏），而 2.0 横屏把消息页装进'
+               '≤560 的左面板（手机常 200~280），固定 280 的列表栏把会话区挤成负宽度 —— '
+               '现在只看可用宽度换栏、列表栏宽度跟着容器走，并新增窄容器行内降级'
+               '（呼号可省略 / 群聊操作胶囊换行排，一个都不藏）',
+               '**修三處「擠 / 沒填滿 / 顯示不全」**：① 關於頁分享彈層的標題與副標題'
+               '原來零間隙地貼在一起，現在留 3px，頭部與選項之間 14→18、選項之間 8→10；'
+               '② 關於頁封面——原來「容器寬/卡高 > 1.62」就改走 `contain`（怕裁掉火山），'
+               '但卡高有 300 上限、容器寬到 600，於是**任何 ≥600 寬的畫面上都會走**：'
+               '照片縮成中間一條、兩側各空 75px，橫屏時 Logo 卡正坐在左邊空白上'
+               '（就是「logo 背景沒填滿」）；改成 cover + topCenter，鋪滿並保住雪頂；'
+               '③ 訊息頁換欄原來按**朝向**判（只要橫屏就走雙欄），而 2.0 橫屏把訊息頁裝進'
+               '≤560 的左面板（手機常 200~280），固定 280 的列表欄把會話區擠成負寬度 —— '
+               '現在只看可用寬度換欄、列表欄寬度跟著容器走，並新增窄容器行內降級'
+               '（呼號可省略 / 群聊操作膠囊換行排，一個都不藏）',
+               '**Three layout fixes.** (1) In the About share sheet the title and subtitle sat '
+               'flush against each other (0 gap); now 3px, with 14→18px above the option '
+               'list and 8→10px between options. (2) The About cover switched to `contain` '
+               'whenever "container width / card height > 1.62" — but the card height is '
+               'capped at 300 while the container reaches 600, so that held on **every screen '
+               '600 wide or more**: the photo shrank to a band in the middle with 75px of blank '
+               'space on each side, and in landscape the logo card sat on that left gap (the '
+               '"logo backdrop isn\'t filled" report). It is now cover + topCenter, filling the '
+               'card while keeping the snow-capped summit. (3) The messages page switched '
+               'columns by **orientation** (any landscape screen got two columns), but the '
+               '2.0 landscape shell puts it in the ≤560 left pane (often 200–280 on a phone), '
+               'where the fixed 280 list column squeezed the chat column to a negative width. '
+               'Column switching now looks only at the available width, the list column '
+               'follows its container, and a new narrow-container degradation lets the '
+               'callsign ellipsise and wraps the group action chips onto their own row '
+               '(nothing hidden).')),
+        ],
+    },
+    {
+        'ver': 'v1.6.163', 'date': '2026-09-24',
+        'items': [
+            ('up',
+             T('**网络定位整体降权：粗定位（基站/Wi-Fi）不再自动上报**。'
+               '自动上报是「我在这里」的公开宣告，而粗点常年偏几百米、还会原地漂 —— '
+               '报出去就是个错坐标。地图上报横幅 / 沉浸地图 / 首页 / 设置页都会如实说明'
+               '「网络定位中 · 暂不自动上报」，GPS 一回来立即恢复（手动「立即上报」不受影响）。'
+               '三个门槛同时收紧：GPS 停更 120s→300s 才允许粗点兜底、粗点自身位移上限 '
+               '8km→3km、粗点精度显示下限 150m→300m；粗点也不再推动 APRS-IS 过滤中心'
+               '（过滤串按 0.01° 取整，一动就可能触发整条链路重连）',
+               '**網路定位整體降權：粗定位（基地台／Wi-Fi）不再自動上報**。'
+               '自動上報是「我在這裡」的公開宣告，而粗點長年偏幾百公尺、還會原地漂 —— '
+               '報出去就是個錯座標。地圖上報橫幅 / 沉浸地圖 / 首頁 / 設定頁都會如實說明'
+               '「網路定位中 · 暫不自動上報」，GPS 一回來立即恢復（手動「立即上報」不受影響）。'
+               '三個門檻同時收緊：GPS 停更 120s→300s 才允許粗點兜底、粗點自身位移上限 '
+               '8km→3km、粗點精度顯示下限 150m→300m；粗點也不再推動 APRS-IS 過濾中心'
+               '（過濾字串按 0.01° 取整，一動就可能觸發整條連結重連）',
+               '**Network positioning is de-emphasised overall: coarse (cell/Wi-Fi) fixes are '
+               'never transmitted automatically.** An automatic beacon is a public statement '
+               'of "I am here", and a coarse fix is routinely hundreds of metres off and '
+               'wanders in place — what goes out is a wrong coordinate. The map beacon bar, '
+               'immersive map, home page and settings all say "network fix · auto beacon '
+               'paused", and reporting resumes the moment GPS is back (manual "beacon now" '
+               'is unaffected). Three thresholds were tightened at the same time: a coarse '
+               'fix is only used once GPS has been stale for 300s (was 120s), its self-jump '
+               'limit is 3km (was 8km), and its accuracy floor is 300m (was 150m). Coarse '
+               'fixes no longer move the APRS-IS filter centre either — the filter string is '
+               'rounded to 0.01°, so a drift could trigger a full link reconnect.')),
+            ('fix',
+             T('**横屏在手机 / 平板 / 桌面三端的打磨**：① 面板内的宽度不再按屏幕宽度算 —— '
+               '消息气泡原来取「屏幕宽 × 0.55」，桌面 1920 会算成 1056px，超出面板的部分'
+               '被默默裁掉，长消息读不全（现在按消息区实际宽度）；② 左上统计条在窄地图区'
+               '自动降级为「在线 + 台站」（横屏面板展开时地图区常只剩 200 出头）；'
+               '③「矮横屏」改按顶栏之下的可用高度判断（未连接 / 公告横幅会各占一行），'
+               '不再漏判「工具列最下面的定位按钮被裁掉、点不到」；'
+               '④ 桌面端自绘按钮统一给鼠标手型指针（包一层 ClickCursor —— '
+               'GestureDetector 没有 mouseCursor 参数）',
+               '**橫屏在手機 / 平板 / 電腦三端的打磨**：① 面板內的寬度不再按螢幕寬度算 —— '
+               '訊息氣泡原來取「螢幕寬 × 0.55」，桌面 1920 會算成 1056px，超出面板的部分'
+               '被默默裁掉，長訊息讀不全（現在按訊息區實際寬度）；② 左上統計列在窄地圖區'
+               '自動降級為「線上 + 臺站」（橫屏面板展開時地圖區常只剩 200 出頭）；'
+               '③「矮橫屏」改按頂欄之下的可用高度判斷（未連線 / 公告橫幅會各佔一行），'
+               '不再漏判「工具列最下面的定位按鈕被裁掉、點不到」；'
+               '④ 桌面端自繪按鈕統一給滑鼠手型指標（包一層 ClickCursor —— '
+               'GestureDetector 沒有 mouseCursor 參數）',
+               '**Landscape polish for phone, tablet and desktop.** (1) Widths inside the pane '
+               'are no longer computed from the screen — message bubbles used to take '
+               '"screen width × 0.55", which on a 1920 desktop is 1056px, silently clipped by '
+               'the pane so long messages were cut off (they now use the message area\'s '
+               'actual width). (2) The top-left station chip degrades to "online + stations" '
+               'when the map area is narrow (landscape with the pane open often leaves only '
+               'about 200px). (3) "Short landscape" is now judged by the height actually '
+               'available below the top bar — the disconnected and notice banners each take '
+               'a row — so the clipped, unreachable locate button at the bottom of the tool '
+               'column is no longer missed. (4) Self-drawn buttons on desktop are wrapped in '
+               'ClickCursor (MouseRegion + SystemMouseCursors.click), because GestureDetector '
+               'has no mouseCursor parameter, so a hover shows a hand cursor.')),
+            ('fix',
+             T('**关于页名片卡不再挤**：头部内边距加大、标题与副标题间距 2→4px、'
+               '标题 13.5→14.5、分享行更宽松、官网图标 32→34 并加了悬停说明（桌面端）',
+               '**關於頁名片卡不再擠**：頭部內距加大、標題與副標題間距 2→4px、'
+               '標題 13.5→14.5、分享列更寬鬆、官網圖示 32→34 並加了懸停說明（桌面端）',
+               '**About page: the name card is no longer cramped** — bigger header padding, '
+               'title/subtitle gap 2→4px, title 13.5→14.5, a roomier share row, and the '
+               'website icon went 32→34 with a hover tooltip on desktop.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.162', 'date': '2026-09-23',
+        'items': [
+            ('fix',
+             T('**功能引导与地图浮层的重叠已修**：上一版引导卡硬写 `topBase+46`，正好糊住'
+               '「沉浸地图」入口。先改成同一竖列顺序排布，但按真实几何量过发现它与右上'
+               '图例**只差 1px 就相交**（靠「差一点」压住的布局换个语言/缩放必翻车）—— '
+               '最终**地图页与沉浸地图改用一次性底部弹层**：全屏地图四周都是浮层，浮卡片'
+               '找不到一定不重叠的位置；弹层只在页面真的在前台时才弹',
+               '**功能導覽與地圖浮層的重疊已修**：上一版引導卡硬寫 `topBase+46`，正好'
+               '糊住「沉浸地圖」入口。先改成同一直列順序排布，但按真實幾何量過發現它與'
+               '右上圖例**只差 1px 就相交**（靠「差一點」壓住的佈局換個語言／縮放必翻車）—— '
+               '最終**地圖頁與沉浸地圖改用一次性底部彈層**：全屏地圖四周都是浮層，浮卡片'
+               '找不到一定不重疊的位置；彈層只在頁面真的在前台時才彈',
+               '**Guide/overlay overlap on the map is fixed.** The previous build hard-coded '
+               'the guide card at `topBase+46`, right on top of the immersive-map entry. '
+               'Merging it into the same column fixed that, but measuring the real geometry '
+               'showed it was **one pixel** from intersecting the legend — a layout that '
+               'relies on "it just barely fits" breaks with a longer language or a different '
+               'text scale. So both full-screen map views now use a **one-off bottom sheet**: '
+               'with overlays on every side there is no position where a floating card is '
+               'safe. The sheet only fires when the page is actually in the foreground.')),
+            ('up',
+             T('引导卡做小做安静：底色 8%→6%、描边 22%→16%、图标底托 30→28；右侧 × 改成'
+               '**「知道了」文字按钮**；地图那条文案改短（卡片在地图左侧列里只有约 '
+               '300px 宽，原句会折四行）。另外把 `check_landscape_layout.py` 的判据从'
+               '「数 leftInset 出现次数」改成按结构判 —— 数实现细节会误伤重构（这次就'
+               '报了个假失败）',
+               '引導卡做小做安靜：底色 8%→6%、描邊 22%→16%、圖示底托 30→28；右側 × 改成'
+               '**「知道了」文字按鈕**；地圖那條文案改短（卡片在地圖左側列裡只有約 '
+               '300px 寬，原句會折四行）。另外把 `check_landscape_layout.py` 的判據從'
+               '「數 leftInset 出現次數」改成按結構判 —— 數實作細節會誤傷重構（這次就'
+               '報了個假失敗）',
+               'The card is smaller and quieter: tint 8%→6%, border 22%→16%, icon chip '
+               '30→28, and the lone × became a **"Got it" text button**. The map copy was '
+               'shortened (the card is only ~300px wide there and used to wrap to four '
+               'lines). `check_landscape_layout.py` no longer counts occurrences of '
+               '`leftInset` but judges the structure instead — counting implementation '
+               'details punishes refactoring, and it produced a false failure this time.')),
+        ],
+    },
+    {
+        'ver': 'v1.6.161', 'date': '2026-09-23',
+        'items': [
+            ('new',
+             T('**功能引导**：16 个功能页首次进入时，正文顶部会显示一张可关闭的小提示卡'
+               '（一句话说明这页能干什么、从哪下手）；关掉即记为「已看」，之后不再出现、'
+               '也不占位置。设置类子页顶栏另有「重看本页引导」按钮。覆盖地图、台站列表、'
+               '沉浸地图、消息、数据包、设备、设置、离线地图、日志、备份、轨迹回放、主题、'
+               '翻译、声卡 TNC、蓝牙 TNC、PKWDWPL',
+               '**功能導覽**：16 個功能頁首次進入時，正文頂部會顯示一張可關閉的小提示卡'
+               '（一句話說明這頁能做什麼、從哪裡下手）；關掉即記為「已看」，之後不再出現、'
+               '也不佔位置。設定類子頁頂欄另有「重看本頁導覽」按鈕。涵蓋地圖、臺站列表、'
+               '沉浸地圖、訊息、資料封包、裝置、設定、離線地圖、日誌、備份、軌跡回放、主題、'
+               '翻譯、音效卡 TNC、藍牙 TNC、PKWDWPL',
+               '**Feature guides**: sixteen pages now show a dismissible one-off tip card at '
+               'the top of the body on first visit, saying in one line what the page does and '
+               'where to start. Closing it records "seen", after which it never appears and '
+               'takes up no space. Sub-pages built on the settings shell also gain a "show '
+               'this guide again" button in the app bar. Covered: map, station list, '
+               'immersive map, messages, packets, devices, settings, offline maps, log, '
+               'backup, track replay, theme, translation, sound-card TNC, Bluetooth TNC and '
+               'PKWDWPL')),
+            ('up',
+             T('引导的「已看」记录存进设置并**纳入备份**（换机后不该把看过的提示卡再弹'
+               '一遍）；设置里新增「重新查看功能引导」，确认后清空记录、各页提示卡重新出现。'
+               '新增 `tool/check_guides.py` 静态检查：引导表 ↔ 6 语言文案 ↔ 生成产物 ↔ '
+               '页面接入点四处一一对应（漏任一处都不会编译失败，只会「引导永远不出现」）；'
+               '该检查写完当次就抓出三处真问题',
+               '引導的「已看」記錄存進設定並**納入備份**（換機後不該把看過的提示卡再彈'
+               '一遍）；設定裡新增「重新查看功能導覽」，確認後清空記錄、各頁提示卡重新出現。'
+               '新增 `tool/check_guides.py` 靜態檢查：引導表 ↔ 6 語言文案 ↔ 產生產物 ↔ '
+               '頁面接入點四處一一對應（漏任一處都不會編譯失敗，只會「引導永遠不出現」）；'
+               '該檢查寫完當次就抓出三處真問題',
+               'The "seen" record is stored in settings and **included in backups** (a '
+               'restored device should not replay guides the user already read), and settings '
+               'gained "show all feature guides again", which clears the record. A new static '
+               'check, `tool/check_guides.py`, ties the guide table, the six-locale text, the '
+               'generated l10n output and the page call-sites together — missing any one of '
+               'them breaks neither the build nor the tests, it just means the guide never '
+               'appears. The check caught three real problems the moment it was written')),
+        ],
+    },
+    {
+        'ver': 'v1.6.160', 'date': '2026-09-23',
+        'items': [
+            ('fix',
+             T('关于页名片卡不再**压住封面**：上一版让它上骑 14px 压住照片下缘，实机看'
+               '照片底部被挡掉一条、圆角切在图上，像没对齐；现在退回封面下方、中间留 '
+               '12px 间隙，封面是一张完整的照片',
+               '關於頁名片卡不再**壓住封面**：上一版讓它上騎 14px 壓住照片下緣，實機看'
+               '照片底部被擋掉一條、圓角切在圖上，像沒對齊；現在退回封面下方、中間留 '
+               '12px 間隙，封面是一張完整的照片',
+               'The About page business card no longer **overlaps the hero**: the previous '
+               'build lifted it 14px onto the bottom edge of the photo, which on a real '
+               'device hid a strip of the image and cut the card\'s rounded corners into '
+               'it, looking like a misalignment. The card now sits below the hero with a '
+               '12px gap, leaving the photo intact')),
+        ],
+    },
+    {
+        'ver': 'v1.6.159', 'date': '2026-09-23',
+        'items': [
+            ('new',
+             T('关于页重做：封面从 Logo 底图换成**泰德峰实景照片**，版本号收进右上角玻璃胶囊、'
+               'Logo 与标题落到左下角压在渐变上；封面高度随窗口宽度走'
+               '（`(宽 × 0.64)`，196~300），超宽屏改「整体装入」，不再把火山裁掉；'
+               '桌面宽屏下封面与正文套**同一个限宽容器**（600）',
+               '關於頁重做：封面從 Logo 底圖換成**泰德峰實景照片**，版本號收進右上角玻璃膠囊、'
+               'Logo 與標題落到左下角壓在漸層上；封面高度隨視窗寬度走'
+               '（`(寬 × 0.64)`，196~300），超寬螢幕改「整體裝入」，不再把火山裁掉；'
+               '桌面寬螢幕下封面與正文套**同一個限寬容器**（600）',
+               'About page redesigned: the hero cover is now a **real photograph of Pico del '
+               'Teide** instead of the logo backdrop, with the version in a glass pill at the '
+               'top-right and the logo and title anchored to the lower-left over a gradient. '
+               'The hero height now follows the window width (`width × 0.64`, 196–300) and '
+               'switches to “fit entirely” on ultra-wide screens so the volcano is never '
+               'cropped; the hero and body now share **one width-capped container** (600) on '
+               'desktop')),
+            ('up',
+             T('关于页删掉「功能特性」一节（实时地图 / GPS / 信标 / 消息 / 自动连接 / '
+               '图层过滤 / FMO 七行 —— App 里已经看得见的功能不必再列一遍）；'
+               '「分享」从描边小胶囊改成整行可点的入口，分节标题加淡色底托图标与'
+               '右侧细横线，页脚加分割线并标出封面摄影署名',
+               '關於頁刪掉「功能特性」一節（即時地圖 / GPS / 信標 / 訊息 / 自動連線 / '
+               '圖層過濾 / FMO 七行 —— App 裡已經看得見的功能不必再列一遍）；'
+               '「分享」從描邊小膠囊改成整行可點的入口，分節標題加淡色底托圖示與'
+               '右側細橫線，頁腳加分割線並標出封面攝影署名',
+               'Removed the Features section from the About page (the seven rows for live map, '
+               'GPS, beacon, messages, auto-connect, layer filter and FMO duplicated what the '
+               'app already shows). The share entry became a **full-width tappable** row, '
+               'section headers gained a tinted icon chip and a trailing hairline rule, and the '
+               'footer gained a divider plus a photo credit for the cover')),
+            ('up',
+             T('关于页版式改成**名片式**：封面下缘骑一张名片卡（呼号 · 名字 + 官网图标 + '
+               '整行分享入口），分节从 8 个并成 5 个 —— 「开源致谢 + 许可证声明」并为'
+               '「开源与许可」（四个开源项排 2×2 网格），「测试成员 + AI 算力支持 + '
+               '赞助与鸣谢」并为「致谢名单」（呼号做成可折行的 chip）；**去掉作者个人站 '
+               'theez.top 与「站长」字样**，官网按钮改指 App 官网（用户反馈里本来就有）',
+               '關於頁版式改成**名片式**：封面下緣騎一張名片卡（呼號 · 名字 + 官網圖示 + '
+               '整列分享入口），分節從 8 個併成 5 個 —— 「開源致謝 + 授權宣告」併為'
+               '「開源與授權」（四個開源項目排 2×2 網格），「測試成員 + AI 算力支援 + '
+               '贊助與鳴謝」併為「致謝名單」（呼號做成可折行的 chip）；**移除作者個人站 '
+               'theez.top 與「站長」字樣**，官網按鈕改指 App 官網（使用者回饋裡本來就有）',
+               'About page relaid out as a **business card**: a card now rides the bottom edge '
+               'of the hero (callsign and name, a globe button and a full-width share row), '
+               'and the section count drops from 8 to 5 — "Open source thanks + License" '
+               'became "Open source & licence" (the four projects in a 2×2 grid) and '
+               '"Test members + AI compute support + Sponsor entry" became "Credits" '
+               '(callsigns as wrapping chips). The author\'s personal site `theez.top` and '
+               'the "site owner" label are **removed**, and the globe button now opens the '
+               'app\'s own website (already listed under Feedback)')),
+        ],
+    },
+    {
+        'ver': 'v1.6.158', 'date': '2026-09-23',
+        'items': [
+            ('fix',
+             T('修「退出设置子页时公告横幅闪一下」：转场那份「底」原来用「值到 1 没有」'
+               '判断转场结没结束 —— 而弹出时 `reverse()` 只改状态、**值要下一帧才动**，'
+               '于是底下的页面整整透出一帧（开的材质或背景图时才看得见）',
+               '修「退出設定子頁時公告橫幅閃一下」：轉場那份「底」原來用「值到 1 沒有」'
+               '判斷轉場結沒結束 —— 而彈出時 `reverse()` 只改狀態、**值要下一帧才動**，'
+               '於是底下的頁面整整透出一帧（開材質或背景圖時才看得見）',
+               'Fixed the flash when leaving a Settings sub-page: the transition backdrop '
+               'decided “is the transition over” from the value, but on pop `reverse()` only '
+               'changes the status — the **value moves a frame later** — so the page '
+               'underneath showed through for one full frame (visible only with the material '
+               'or a background image enabled)')),
+            ('up',
+             T('公告入口搬到**设置主页最底下**（备份之后、关于之前）；设置子页里不再放横幅、'
+               '只留开关。入口**点它才联网**，所以开关关着也能用 —— 不妨碍'
+               '「关了就不在后台联网」那个承诺',
+               '公告入口搬到**設定首頁最底下**（備份之後、關於之前）；設定子頁裡不再放橫幅、'
+               '只留開關。入口**點它才連網**，所以開關關著也能用 —— 不妨礙'
+               '「關了就不在後台連網」那個承諾',
+               'The announcement entry moved to the **bottom of the Settings home screen** '
+               '(after Backup, before About); the Settings sub-page no longer shows a banner, '
+               'only the toggle. The entry **only goes online when tapped**, so it still '
+               'works with the toggle off — without breaking the “off means no background '
+               'network requests” promise')),
+        ],
+    },
+    {
+        'ver': 'v1.6.157', 'date': '2026-09-23',
+        'items': [
+            ('new',
+             T('公告横幅挪到**主页**（地图上方，1.0/2.0 都有），设置页也各留一条；'
+               '点开改成**底部弹层**（长文可滚、可拖动关闭），横幅自带**关闭按钮**'
+               '（关掉后设置里再打开即可）',
+               '公告橫幅挪到**主頁**（地圖上方，1.0/2.0 都有），設定頁也各留一條；'
+               '點開改成**底部彈層**（長文可捲、可拖曳關閉），橫幅自帶**關閉按鈕**'
+               '（關掉後設定裡再打開即可）',
+               'The announcement banner moved to the **home screen** (above the map, in both '
+               '1.0 and 2.0) with another copy in Settings; it now opens in a **bottom sheet** '
+               '(scrollable, drag to dismiss) and carries its own **close button** — switch it '
+               'back on in Settings any time')),
+            ('fix',
+             T('修「主界面底图选择面板弹不出来」：那颗按钮的回调**漏了括号**'
+               '（只是返回函数本身、从不调用）—— v1.6.151 起一直如此，'
+               '编译与 analyze 都不会报',
+               '修「主介面底圖選擇面板彈不出來」：那顆按鈕的回呼**漏了括號**'
+               '（只是回傳函式本身、從不呼叫）—— v1.6.151 起一直如此，'
+               '編譯與 analyze 都不會報',
+               'Fixed the base-map panel that would not open: that button\'s callback was '
+               '**missing its parentheses** (returning the function instead of calling it) — '
+               'broken since v1.6.151, and neither the compiler nor analyze reports it')),
+        ],
+    },
+    {
+        'ver': 'v1.6.156', 'date': '2026-09-23',
+        'items': [
+            ('new',
+             T('新增**公告横幅**（设置 → 显示，默认开）：内容直接取自官网首页的公告区，'
+               '改官网就能发通知、不用等新版；应用内渲染 Markdown（标题/列表/表格/图片）'
+               '与超链接，断网时显示上次缓存的那份',
+               '新增**公告橫幅**（設定 → 顯示，預設開）：內容直接取自官網首頁的公告區，'
+               '改官網就能發通知、不用等新版；應用內渲染 Markdown（標題/列表/表格/圖片）'
+               '與超連結，斷網時顯示上次快取的那份',
+               'New **announcement banner** (Settings → Display, on by default): its content '
+               'is taken straight from the website homepage announcement, so publishing a '
+               'notice needs no app release. Markdown (headings, lists, tables, images) and '
+               'hyperlinks are rendered in-app, with the last cached copy shown offline')),
+            ('new',
+             T('智能信标新增**第三路判据：按转弯打点** —— 转过设定角度就补一个点，'
+               '角度每档可自定义（10~180°，0 = 关闭）。盘山路上车速慢、距离门限很久才够，'
+               '而连续发卡弯正是最该有轨迹的地方',
+               '智能信標新增**第三路判據：按轉彎打點** —— 轉過設定角度就補一個點，'
+               '角度每檔可自訂（10~180°，0 = 關閉）。山路上車速慢、距離門檻很久才夠，'
+               '而連續髮夾彎正是最該有軌跡的地方',
+               'Smart beaconing gains a **third trigger: turning** — a point is added once you '
+               'turn past the configured angle, set **per tier** (10–180°, 0 = off). On mountain '
+               'roads you are slow, so the distance threshold takes ages to reach, yet those '
+               'hairpins are exactly where the track matters most')),
+            ('fix',
+             T('「台站备注」现在看得出能输入了：那一行原来是**一片空白**（无边框、无占位提示），'
+               '和静态的「标签 + 值」行长得一样。现在空值有占位提示、输入区有底色与描边、'
+               '聚焦时描边变蓝 —— 全仓 42 处输入行一起受益',
+               '「臺站備註」現在看得出能輸入了：那一行原來是**一片空白**（無邊框、無佔位提示），'
+               '和靜態的「標籤 + 值」行長得一樣。現在空值有佔位提示、輸入區有底色與描邊、'
+               '聚焦時描邊變藍 —— 全倉 42 處輸入行一起受益',
+               'The station comment field now **looks editable**: that row used to be entirely '
+               'blank (no border, no placeholder), indistinguishable from the static '
+               '"label + value" rows. Empty fields now show a placeholder, the input area has a '
+               'fill and border, and the border turns blue on focus — all 42 input rows benefit')),
+        ],
+    },
+    {
+        'ver': 'v1.6.155', 'date': '2026-09-23',
+        'items': [
+            ('fix',
+             T('修「地图上的按钮点了没反应」：图层、缩放那一列按钮原来只有中间那个小图标能点，现在整块都能点',
+               '修「地圖上的按鈕點了沒反應」：圖層、縮放那一列按鈕原來只有中間那個小圖示能點，現在整塊都能點',
+               'Fixed map buttons that “did nothing”: the layers and zoom buttons only responded on the small centre icon — now the whole button works')),
+            ('new',
+             T('未连接提示强化：地图上方会出现一条橙色横幅，整条可点即连，不再只靠右上角那颗小胶囊',
+               '未連線提示強化：地圖上方會出現一條橘色橫幅，整條可點即連，不再只靠右上角那顆小膠囊',
+               'A much clearer offline notice: an orange bar above the map, tappable anywhere to connect — no longer just a tiny pill in the corner')),
+            ('fix',
+             T('进会话自动把面板升到最高档（输入框不再藏在底下）；台站页「在地图查看」会切回地图并收起面板',
+               '進會話自動把面板升到最高檔（輸入框不再藏在底下）；臺站頁「在地圖查看」會切回地圖並收起面板',
+               'Opening a chat now raises the panel by itself (the input box is no longer hidden below the fold); “View on map” from the station list switches back to the map and collapses the panel')),
+        ],
+    },
+    {
+        'ver': 'v1.6.154', 'date': '2026-09-23',
+        'items': [
+            ('new',
+             T('实时轨迹采样从 10 秒细化到 1 秒，拐弯不再被切成斜线；发到服务器去的那些点用橙色小菱形标在轨迹上，数量与间隔一眼可见',
+               '即時軌跡取樣從 10 秒細化到 1 秒，轉彎不再被切成斜線；送到伺服器去的那些點用橘色小菱形標在軌跡上，數量與間隔一眼可見',
+               'Live track sampling refined from 10 s to 1 s so corners are no longer cut into diagonals; the points actually sent to the server are marked with small orange diamonds, so count and spacing are visible at a glance')),
+            ('new',
+             T('智能信标支持「按距离打点」：每档可设「或移动 N 米」，走得快就补点、停下来退回纯定时',
+               '智能信標支援「按距離打點」：每檔可設「或移動 N 公尺」，走得快就補點、停下來退回純定時',
+               'Smart beaconing can now trigger by distance: each tier takes an “or N metres” value, so fast movement adds points while standing still falls back to pure timing')),
+        ],
+    },
+    {
+        'ver': 'v1.6.153', 'date': '2026-09-22',
+        'items': [
+            ('fix',
+             T('修 2.0 卡片面板「下沿被切成直角」：裁口改成底边圆角，半开时也是一张完整的圆角卡',
+               '修 2.0 卡片面板「下沿被切成直角」：裁口改成底邊圓角，半開時也是一張完整的圓角卡',
+               'Fixed the UI 2.0 sheet having its bottom edge cut into right angles: the clip now rounds the bottom corners, so a half-open panel still looks like a complete rounded card')),
+        ],
+    },
+    {
+        'ver': 'v1.6.152', 'date': '2026-09-22',
+        'items': [
+            ('up',
+             T('磨砂玻璃再优化：同一簇浮层共享一次背景采样，只压在壁纸上的壳不再插模糊层 —— 列表滚动更顺，观感逐像素不变',
+               '霧面玻璃再優化：同一簇浮層共享一次背景取樣，只壓在底圖上的外殼不再插模糊層 —— 列表捲動更順，觀感逐像素不變',
+               'Frosted glass optimised again: surfaces over the same backdrop share a single sample, and shells that only sit on the wallpaper no longer blur — smoother list scrolling, pixel-identical looks')),
+        ],
+    },
+    {
+        'ver': 'v1.6.151', 'date': '2026-09-22',
+        'items': [
+            ('fix',
+             T('2.0 横屏收拾五处只有真机才看得出的毛病：左侧竖条压住地图控件、右侧工具列被裁掉「定位」、底部让位把安全区算了两遍等',
+               '2.0 橫向螢幕收拾五處只有真機才看得出的毛病：左側直條壓住地圖控件、右側工具列被裁掉「定位」、底部讓位把安全區算了兩遍等',
+               'UI 2.0 landscape: five defects that only show up on a real device, including the rail covering the map’s controls, the tool column clipping “locate”, and the bottom inset counting the safe area twice')),
+        ],
+    },
+    {
+        'ver': 'v1.6.150', 'date': '2026-09-22',
+        'items': [
+            ('new',
+             T('历史轨迹可点进某一天：地图上回放当天路线（轨迹随播放生长、'
+               '0.5×~4× 倍速、跟随视角；超过 45 秒的停顿自动快进）',
+               '歷史軌跡可點進某一天：地圖上回放當日路線（軌跡隨播放生長、'
+               '0.5×~4× 倍速、跟隨視角；超過 45 秒的停頓自動快進）',
+               'Tap into a day in track history and replay it on the map (the line grows as '
+               'it plays, 0.5×–4× speed, follow view; stops over 45 s are fast-forwarded)')),
+            ('fix',
+             T('网络定位不再让位置飞来飞去：GPS 新鲜时粗定位点一律丢弃，'
+               'GPS 停更 2 分钟以上才允许兜底',
+               '網路定位不再讓位置飛來飛去：GPS 新鮮時粗定位點一律丟棄，'
+               'GPS 停更 2 分鐘以上才允許兜底',
+               'Network fixes no longer make the marker fly around: coarse points are dropped '
+               'while GPS is fresh, and only allowed as a fallback after 2 minutes without an '
+               'GPS update')),
+        ],
+    },
+    {
+        'ver': 'v1.6.149', 'date': '2026-09-22',
+        'items': [
+            ('new',
+             T('去掉台站聚合：矢量地图与自绘地图都回到「一台站一个标记」，低缩放的密度信息交给热力图（开关保留）',
+               '去掉臺站聚合：向量圖與自繪地圖都回到「一台站一個標記」，低縮放的密度資訊交給熱力圖（開關保留）',
+               'Clustering removed: both maps are back to one marker per station, with low-zoom '
+               'density left to the heatmap (its toggle stays)')),
+            ('new',
+             T('轨迹打点更准（Android）：低速时用指南针补航向、用加速度计判断「有没有在动」，默认开启、可关',
+               '軌跡打點更準（Android）：低速時用指南針補航向、用加速度計判斷「有沒有在動」，預設開啟、可關',
+               'More accurate track points (Android): the compass fills in heading at low speed '
+               'and the accelerometer decides whether you are moving; on by default, switchable')),
+            ('new',
+             T('个人历史轨迹：按天保存在本地，设置页里看总里程 / 平均与最高速度 / 移动时长，可按天删除或一键清空',
+               '個人歷史軌跡：按天保存在本機，設定頁裡看總里程 / 平均與最高速度 / 移動時長，可按天刪除或一鍵清空',
+               'Personal track history: saved per day on the device, with total distance, average '
+               'and top speed and moving time in Settings; delete a day or clear all')),
+            ('up',
+             T('去掉「视野内无台站」提示浮条：地图上已有信息条与工具列，不再多挂一条挡内容',
+               '去掉「視野內無臺站」提示浮條：地圖上已有資訊條與工具列，不再多掛一條擋內容',
+               'The "no stations in view" pill is gone: the map already has an info chip and a toolbar')),
+        ],
+    },
+    {
+        'ver': 'v1.6.139', 'date': '2026-09-21',
+        'items': [
+            ('new',
+             T('UI 2.0：以地图为基底的新布局，「显示设置」里可随时切回经典布局',
+               'UI 2.0：以地圖為基底的新佈局，「顯示設定」裡可隨時切回經典佈局',
+               'UI 2.0: a new map-first layout, switchable back to the classic one in Display settings')),
+        ],
+    },
+    {
+        'ver': 'v1.6.138', 'date': '2026-09-20',
+        'items': [
+            ('new',
+             T('界面材质：磨砂玻璃与云母两种材质，「显示设置」里可切换',
+               '介面材質：磨砂玻璃與雲母兩種材質，「顯示設定」裡可切換',
+               'UI materials: frosted glass and mica, switchable in Display settings')),
+        ],
+    },
+    {
+        'ver': 'v1.6.136', 'date': '2026-09-19',
+        'items': [
+            ('new',
+             T('新增「硬件串口」：Android 支持 USB-OTG 串口线接电台，桌面端可调串口参数',
+               '新增「硬體串列埠」：Android 支援 USB-OTG 串列埠線接電臺，桌面端可調串列埠參數',
+               'New "hardware serial": USB-OTG serial on Android to wire a radio, with desktop '
+               'serial parameters you can tune')),
+        ],
+    },
+    {
+        'ver': 'v1.6.135', 'date': '2026-09-19',
+        'items': [
+            ('fix',
+             T('音频发射对方解不出：发射期间拉满音量、暂停麦克风，并给出接线与电平提示',
+               '音訊發射對方解不出：發射期間拉滿音量、暫停麥克風，並給出接線與電平提示',
+               'On-air audio that others could not decode: media volume is maxed and the mic '
+               'muted during TX, with wiring and level hints')),
+        ],
+    },
+    {
+        'ver': 'v1.6.128', 'date': '2026-09-18',
+        'items': [
+            ('new',
+             T('离线地图：把当前视图的瓦片一次下到本机（断点续传、单区域上限 20 万张），断网、无信号也能看',
+               '離線地圖：把當前視圖的瓦片一次下載到本機（斷點續傳、單區域上限 20 萬張），斷網、無訊號也能看',
+               'Offline maps: download the tiles of the current view once (resumable, 200k tiles '
+               'per region) and keep the map with no network at all')),
+        ],
+    },
+    {
+        'ver': 'v1.6.124', 'date': '2026-09-18',
+        'items': [
+            ('new',
+             T('主题：界面的颜色、图标、文字都能自己改，还能导出成 JSON 分享给别人',
+               '主題：介面的顏色、圖示、文字都能自己改，還能匯出成 JSON 分享給別人',
+               'Themes: recolour the UI, replace icons and text, and export the result as JSON to share')),
+            ('new',
+             T('主题可以带背景图，用自己照片当界面底；导出也可带上图片（v1.6.125–126）',
+               '主題可以帶背景圖，用自己照片當介面底；匯出也可帶上圖片（v1.6.125–126）',
+               'Themes can carry a background image — your own photo behind the UI; exports can '
+               'include it too (v1.6.125–126)')),
+        ],
+    },
+    {
+        'ver': 'v1.6.123', 'date': '2026-09-18',
+        'items': [
+            ('new',
+             T('备份与恢复：设置与数据导出成一个 JSON，换机或重装后导入即可',
+               '備份與復原：設定與資料匯出成一個 JSON，換機或重裝後匯入即可',
+               'Backup and restore: settings and data export to a single JSON, import it after a reinstall')),
+        ],
+    },
+    {
+        'ver': 'v1.6.121', 'date': '2026-09-17',
+        'items': [
+            ('new',
+             T('短波组件新增 6m 波段预测；桌面组件支持暗黑模式；新增「系统状态」组件',
+               '短波元件新增 6m 波段預測；桌面元件支援暗黑模式；新增「系統狀態」元件',
+               'The HF widget gained 6 m band forecasts, widgets gained dark mode, and a '
+               'system-status widget was added')),
+        ],
+    },
+    {
+        'ver': 'v1.6.117', 'date': '2026-09-17',
+        'items': [
+            ('new',
+             T('短波与电离层传播：面板新增区块 + 独立桌面组件，SFI / Kp / A 指数与四个波段对的日 / 夜条件一眼看清',
+               '短波與電離層傳播：面板新增區塊 + 獨立桌面元件，SFI / Kp / A 指數與四個波段對的日 / 夜條件一眼看清',
+               'HF and ionospheric propagation: a new panel section plus a standalone widget, '
+               'with SFI / Kp / A and day/night conditions for four band pairs at a glance')),
+        ],
+    },
+    {
+        'ver': 'v1.6.114', 'date': '2026-09-17',
+        'items': [
+            ('new',
+             T('新增 Android 桌面小组件：天气 + 业余无线电提示，4 档尺寸自适应',
+               '新增 Android 桌面小組件：天氣 + 業餘無線電提示，4 種尺寸自適應',
+               'New Android home-screen widgets: weather plus ham-radio tips, in four adaptive sizes')),
+        ],
+    },
+    {
+        'ver': 'v1.6.113', 'date': '2026-09-15',
+        'items': [
+            ('fix',
+             T('修「越用越卡」：APRS-IS 连接被反复重建导致 socket 泄漏，长时间运行不再越来越慢',
+               '修「越用越卡」：APRS-IS 連線被反覆重建導致 socket 洩漏，長時間執行不再越來越慢',
+               'Fixed "the longer it runs the slower it gets": the APRS-IS connection was '
+               'rebuilt repeatedly, leaking sockets')),
+        ],
+    },
     {
         'ver': 'v1.6.109', 'date': '2026-09-15',
         'items': [
@@ -274,6 +1575,17 @@ PATCHES = [
      {'zh_TW': '<span>APRS-IS · TNC · 音訊 · PKWDWPL 四種來源</span>'}),
     ('<span>APRS-IS Auto Connect</span>',
      {'en': '<span>APRS-IS · TNC · Audio · PKWDWPL</span>'}),
+    # v1.6.149 移除了台站聚合 —— 功能卡里还写着「按呼号聚合」，已经不成立
+    ('台站按呼号聚合，也能看轨迹回放。',
+     {'zh': '一台站一个标记（v1.6.149 起去掉聚合），也能看轨迹回放，低缩放密度看热力图。'}),
+    ('臺站按呼號聚合，也能看軌跡回放。',
+     {'zh_TW': '一臺站一個標記（v1.6.149 起去掉聚合），也能看軌跡回放，低縮放密度看熱力圖。'}),
+    ('Stations are grouped by callsign, with trail playback support.',
+     {'en': 'One marker per station (clustering removed in v1.6.149), with trail playback '
+            'support; the heatmap shows density when zoomed out.'}),
+    ('<li>台站聚合</li>', {'zh': '<li>热力图</li>'}),
+    ('<li>臺站聚合</li>', {'zh_TW': '<li>熱力圖</li>'}),
+    ('<li>Station Clustering</li>', {'en': '<li>Heatmap</li>'}),
 ]
 
 
@@ -331,7 +1643,11 @@ def main():
             missing = [l for l in LANGS if not txt.get(l)]
             assert not missing, '%s 的条目缺 %s 文案' % (e['ver'], missing)
             # 半简半繁是上次踩过的坑：繁体文案里不该出现这几个常用简体字
-            bad = [ch for ch in '连发条来设备页题单网络报频率识环钥译对开关机边缘错击码'
+            # 注意：黑名单必须是「简体才有、繁体不同形」的字。
+            # `率` 曾是成员，但它在简繁里同形（`頻率` 的繁体只差 `頻`）—— 
+            # 于是「心率」这种完全正确的繁体写法被误判成混入简体字（v1.6.165 现场踩到）。
+            # 假失败比没有检查更坏：修它的人只会把规则整个删掉。
+            bad = [ch for ch in '连发条来设备页题单网络报频识环钥译对开关机边缘错击码'
                    if ch in txt['zh_TW']]
             assert not bad, '%s 的繁体文案混入简体字：%s' % (e['ver'], bad)
 

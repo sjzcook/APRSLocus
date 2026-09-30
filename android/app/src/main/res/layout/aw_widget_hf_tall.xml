@@ -1,0 +1,595 @@
+<!--
+  桌面小组件 · 短波/电离层传播（4×3+ 加高 · M1 日/夜进度条）
+
+  顶栏    ：[电波图标·墨色] 短波传播  现在 夜间    [logo] APRSlocus
+  指数行  ：SFI 100 · Kp 3 · A 9                        6m [档位]
+  细线    ：C.border（#E5E9F0）
+  4 行波段：80m/40m / 30m/20m / 17m/15m / 12m/10m
+            每行 = [波段名 56dp][太阳][日间段][夜间段][星光][档位块]
+            两段① aw_segday_*（亮 = 日）/ aw_segnight_*（暗 = 夜），
+               段内放太阳/月亮图标；② 顶部白点（aw_dot）标出「现在」在哪段
+  
+  提示行  ：[圆点][级别图][级别] 一句话 —— 与 App 内面板的「业余无线电建议」
+            同源（Dart 复用 hfTips，取排序后的第一条）；此刻没有值得说的
+            时整行收起，不留空行。
+            当前时段那一段用实色 + 小白点，另一段淡底
+            档位块显示**当前时段**的档位（文字 + 条件色）
+  
+  数据来自 hamqsl.com 的 calculatedconditions（业余界标准 HF 传播源），
+  由 Dart 侧 lib/hf.dart 拉取、解析、本地化后推过来 —— 组件不联网。
+  当前时段由原生按本机时钟判断，日间区间由 Dart 随快照下发。
+  
+  ⚠ 硬约束同天气组件：只用白名单控件（不用原生 <View>）、不用 <selector>、
+  不用 styles.xml 主题样式（字号颜色就地写死）。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/aw_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/aw_bg_white">
+    <LinearLayout
+        android:id="@+id/aw_pad"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="11dp"
+        android:paddingBottom="12dp">
+    <LinearLayout
+        android:id="@+id/aw_hf_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_hf_icon"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_waves" />
+    <TextView
+        android:id="@+id/aw_hf_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="13.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_now_tag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="7dp"
+        android:textColor="@color/aw_slate"
+        android:textSize="10sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_spacer"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:textColor="@color/aw_ink"
+        android:textSize="1sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <ImageView
+        android:id="@+id/aw_logo"
+        android:layout_width="17dp"
+        android:layout_height="17dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_logo" />
+    <TextView
+        android:id="@+id/aw_app_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="11.5sp"
+        android:text="APRSlocus"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_idx"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="bottom"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_idx0_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_slate"
+        android:textSize="10sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx0_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="3dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx1_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_slate"
+        android:textSize="10sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx1_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="3dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx2_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_slate"
+        android:textSize="10sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx2_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="3dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_idx_spacer"
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:textColor="@color/aw_ink"
+        android:textSize="1sp"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_six_tag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="3dp"
+        android:layout_marginStart="8dp"
+        android:textColor="@color/aw_slate"
+        android:textSize="10sp"
+        android:text="6m"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_six"
+        android:layout_width="56dp"
+        android:layout_height="17dp"
+        android:gravity="center"
+        android:background="@drawable/aw_segnight_closed"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:paddingStart="3dp"
+        android:paddingEnd="3dp"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_rule1_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="vertical">
+    <TextView
+        android:id="@+id/aw_rule1"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/aw_line" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_band0"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_band0_name"
+        android:layout_width="68dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <FrameLayout
+        android:id="@+id/aw_band0_day"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:background="@drawable/aw_segday_closed">
+    <ImageView
+        android:id="@+id/aw_band0_dayicon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_wb_sunny" />
+    <ImageView
+        android:id="@+id/aw_band0_daypip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/aw_band0_night"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:layout_marginStart="3dp"
+        android:background="@drawable/aw_segnight_closed">
+    <ImageView
+        android:id="@+id/aw_band0_nighticon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_nights_stay" />
+    <ImageView
+        android:id="@+id/aw_band0_nightpip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <TextView
+        android:id="@+id/aw_band0_now"
+        android:layout_width="62dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="3dp"
+        android:gravity="center"
+        android:background="@drawable/aw_segday_closed"
+        android:textColor="#FFFFFF"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_band1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_band1_name"
+        android:layout_width="68dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <FrameLayout
+        android:id="@+id/aw_band1_day"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:background="@drawable/aw_segday_closed">
+    <ImageView
+        android:id="@+id/aw_band1_dayicon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_wb_sunny" />
+    <ImageView
+        android:id="@+id/aw_band1_daypip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/aw_band1_night"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:layout_marginStart="3dp"
+        android:background="@drawable/aw_segnight_closed">
+    <ImageView
+        android:id="@+id/aw_band1_nighticon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_nights_stay" />
+    <ImageView
+        android:id="@+id/aw_band1_nightpip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <TextView
+        android:id="@+id/aw_band1_now"
+        android:layout_width="62dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="3dp"
+        android:gravity="center"
+        android:background="@drawable/aw_segday_closed"
+        android:textColor="#FFFFFF"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_band2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_band2_name"
+        android:layout_width="68dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <FrameLayout
+        android:id="@+id/aw_band2_day"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:background="@drawable/aw_segday_closed">
+    <ImageView
+        android:id="@+id/aw_band2_dayicon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_wb_sunny" />
+    <ImageView
+        android:id="@+id/aw_band2_daypip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/aw_band2_night"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:layout_marginStart="3dp"
+        android:background="@drawable/aw_segnight_closed">
+    <ImageView
+        android:id="@+id/aw_band2_nighticon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_nights_stay" />
+    <ImageView
+        android:id="@+id/aw_band2_nightpip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <TextView
+        android:id="@+id/aw_band2_now"
+        android:layout_width="62dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="3dp"
+        android:gravity="center"
+        android:background="@drawable/aw_segday_closed"
+        android:textColor="#FFFFFF"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_band3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <TextView
+        android:id="@+id/aw_band3_name"
+        android:layout_width="68dp"
+        android:layout_height="wrap_content"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    <FrameLayout
+        android:id="@+id/aw_band3_day"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:background="@drawable/aw_segday_closed">
+    <ImageView
+        android:id="@+id/aw_band3_dayicon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_wb_sunny" />
+    <ImageView
+        android:id="@+id/aw_band3_daypip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/aw_band3_night"
+        android:layout_width="0dp"
+        android:layout_height="24dp"
+        android:layout_weight="1"
+        android:layout_marginStart="3dp"
+        android:background="@drawable/aw_segnight_closed">
+    <ImageView
+        android:id="@+id/aw_band3_nighticon"
+        android:layout_width="15dp"
+        android:layout_height="15dp"
+        android:layout_marginStart="10dp"
+        android:layout_gravity="left|center_vertical"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_nights_stay" />
+    <ImageView
+        android:id="@+id/aw_band3_nightpip"
+        android:layout_width="10dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_gravity="top|center_horizontal"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    </FrameLayout>
+    <TextView
+        android:id="@+id/aw_band3_now"
+        android:layout_width="62dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="3dp"
+        android:gravity="center"
+        android:background="@drawable/aw_segday_closed"
+        android:textColor="#FFFFFF"
+        android:textSize="10.5sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_tip_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="vertical">
+    <TextView
+        android:id="@+id/aw_tip_rule"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/aw_line" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/aw_tip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+    <ImageView
+        android:id="@+id/aw_tip_dot"
+        android:layout_width="6dp"
+        android:layout_height="6dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_dot" />
+    <ImageView
+        android:id="@+id/aw_tip_icon"
+        android:layout_width="11dp"
+        android:layout_height="11dp"
+        android:layout_marginStart="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/aw_ic_rss_feed" />
+    <TextView
+        android:id="@+id/aw_tip_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:singleLine="true"
+        android:includeFontPadding="false" />
+    <TextView
+        android:id="@+id/aw_tip_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="5dp"
+        android:textColor="@color/aw_ink"
+        android:textSize="10.5sp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:includeFontPadding="false" />
+    </LinearLayout>
+    </LinearLayout>
+    <TextView
+        android:id="@+id/aw_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textColor="@color/aw_ink_dim"
+        android:textSize="10sp"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.35"
+        android:visibility="gone"
+        android:includeFontPadding="false" />
+</FrameLayout>

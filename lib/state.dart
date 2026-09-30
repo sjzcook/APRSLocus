@@ -8,12 +8,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'theme.dart';
 import 'models.dart';
 import 'mock_data.dart';
 import 'services.dart';
 import 'aprs_parse.dart';
 import 'aprs_device.dart';
+import 'pos_quality.dart';
+import 'track_log.dart';
+import 'motion.dart';
 import 'adif.dart';
 import 'l10n/app_localizations.dart';
 // 说明：AppLocalizationsZh / AppLocalizationsZhTw / AppLocalizationsEn 是 gen-l10n
@@ -35,6 +37,15 @@ import 'tnc.dart';
 import 'translate.dart';
 import 'early_member.dart';
 import 'achievements.dart';
+// 说明：状态层要用 theme.dart 里的 C（应用材质）与 uiMaterialOf / uiMaterialName。
+// 以前它只经过 theme_store.dart 间接用到主题，改成直接用 theme.dart 之后
+// 新增的这几个名字才能解析 —— CI 的 analyze 就是这么报出来的。
+import 'theme.dart';
+import 'theme_store.dart';
+import 'ble_hr.dart';
+import 'garmin.dart';
+import 'share_in.dart';
+import 'turn_dot.dart';
 
 /// 智能信标速度档：速度 ≥ [minSpeed] km/h 时启用。
 /// 首档 minSpeed==0 为「静止/低速」档（兜底档，不可删除）；
@@ -44,31 +55,63 @@ class SmartBeaconTier {
   int intervalSec; // 上报间隔（秒）
   String symbol; // APRS 符号码（空串 = 默认 mySymbol）
 
+  /// **距离打点**：自上次上报以来移动超过该米数也上报一次（0 = 只用间隔）。
+  ///
+  /// 为什么要有它：定时上报有个先天缺口 —— 两点之间走了多远与「过了多久」无关。
+  /// 堵车时 300s 一个点完全够（根本没动），而 60km/h 的国道上 60s 能走 1km，
+  /// 中间那段路在 aprs.fi 上就是一条直线，拐弯全被抹平。
+  /// 有了距离门限：**走得快就按距离补点**（拐弯不再被切角），
+  /// **停下来就退回纯定时**（不白发报文，不占信道）。
+  int minDistM;
+
+  /// **转弯打点**：航向相对「上次上报时的航向」变化超过该角度（度）也上报一次。
+  /// **逐档可自定义**（设置页里每一档都有这个输入框），0 = 关闭。
+  ///
+  /// 为什么还要它：距离与定时都答不了「这个弯该不该补一个点」。
+  /// 盘山路上车速慢、距离门限很久才够，而连续发卡弯正是最该有轨迹的地方 ——
+  /// 缺了转弯判据，地图上那一段就是一串被拉直的直线（看不出弯）。反过来，
+  /// 直路巡航时航向不变，它一次都不会触发，不占信道。
+  ///
+  /// 取值范围 10°~180°（见 [_normalizeSmartTiers]）：小于 10° 落在 GPS 航向
+  /// 自身的噪声里，会退化成「每个点都发」。
+  int minTurnDeg;
+
   SmartBeaconTier({
     this.minSpeed = 0,
     this.intervalSec = 60,
     this.symbol = '',
+    this.minDistM = 0,
+    this.minTurnDeg = 0,
   });
 
   SmartBeaconTier copy() => SmartBeaconTier(
         minSpeed: minSpeed,
         intervalSec: intervalSec,
         symbol: symbol,
+        minDistM: minDistM,
+        minTurnDeg: minTurnDeg,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'minSpeed': minSpeed, 'intervalSec': intervalSec, 'symbol': symbol};
+  Map<String, dynamic> toJson() => {
+        'minSpeed': minSpeed,
+        'intervalSec': intervalSec,
+        'symbol': symbol,
+        'minDistM': minDistM,
+        'minTurnDeg': minTurnDeg,
+      };
 
   factory SmartBeaconTier.fromJson(Map<String, dynamic> j) => SmartBeaconTier(
         minSpeed: ((j['minSpeed'] as num?) ?? 0).toInt(),
         intervalSec: ((j['intervalSec'] as num?) ?? 60).toInt(),
         symbol: (j['symbol'] as String?) ?? '',
+        minDistM: ((j['minDistM'] as num?) ?? 0).toInt(),
+        minTurnDeg: ((j['minTurnDeg'] as num?) ?? 0).toInt(),
       );
 }
 
 class AppState extends ChangeNotifier {
   /// 应用版本（用于信标备注、APRSlocus 识别）
-  static const appVersion = '1.6.113';
+  static const appVersion = '2.0.9';
   // 我的电台
   String myCall = 'BV2AAA';
   int mySsid = 0; // 0 = 无后缀, 1-15 = -1 到 -15
@@ -79,6 +122,20 @@ class AppState extends ChangeNotifier {
 
   /// 历史版本的内置默认备注。升级时若仍是这个值（用户从未改过）则视为空。
   static const _legacyDefaultComment = 'APRSlocus 移动台';
+
+  /// 独立状态报文（`>` 开头）的文本，随「发送」写进信息字段的方括号里。
+  ///
+  /// 为什么单独存一份而不是复用 [myComment]：两者是**两种不同的 APRS 报文**——
+  /// 备注跟在**位置报文**里（会被 aprs.fi 当位置注释显示），状态报文是**独立一帧**
+  /// （不含坐标，第三方地图显示为台站状态）。共用一份文本会让用户以为
+  /// 「改了备注就连状态一起改了」，而实际两者互不影响。
+  ///
+  /// 留空表示不发自定义文本，改发内置的 `APRSlocus CONNECT vX.Y.Z 平台` 在线帧。
+  String aprsStatusText = '';
+
+  /// 状态报文的文本上限（字符，APRS101 规定状态信息字段最长 62 个字符）。
+  /// 这里按 60 留 2 个字符余量，且截断在**发送时**做，输入框不硬拦。
+  static const int statusMaxLen = 60;
 
   /// 在线判定时长（分钟）：台站最后上报距今超过该值即视为离线。
   /// 原先是写死的 5 分钟，现改为用户可配置（步进见设置页）。
@@ -136,6 +193,220 @@ class AppState extends ChangeNotifier {
   double? mySpeed, myCourse;
   String locStatus = '未定位';
 
+  /// 最近一次实时定位的**水平精度**（米，1σ）；0 表示平台没给这个值。
+  /// 用来：① 界面如实显示「±40 m」；② 太差的点不写轨迹；③ 给地图上的「我」
+  /// 画不确定圈。以前这个值在 Dart 侧被丢掉（原生算了但没人读）。
+  /// 自己位置的精度（米）。粗定位时不是系统原值，见 [_kCoarseAccuracyFloorM]
+  double myAccuracy = 0;
+
+  /// 当前这个定位是不是粗定位（网络/基站/被动）。
+  ///
+  /// 界面上要如实告知：粗点会把「我」放在几百米开外，不说清楚用户会以为
+  /// GPS 坏了。切换/退出时靠 [_resetSelfFix] 复位。
+  bool myFixCoarse = false;
+
+  /// 蓝牙心率（bpm）：最近一次收到的读数（心率带通知 / 佳明点）。
+  /// null = 还没有过读数（此时**不发** HR=，而不是发一个 0）。
+  int? myHr;
+
+  /// 蓝牙心率带服务（扫描/连接/订阅标准心率服务 0x180D）。
+  final BleHrService bleHr = BleHrService.instance;
+
+  /// 佳明 LiveTrack 轨迹服务（抓公开分享页，把新点转换成本地定位）。
+  final GarminTrackService garmin = GarminTrackService.instance;
+
+  /// 「分享给 APRSlocus」入口（佳明 App 分享 LiveTrack 链接进来）。
+  final ShareInService shareIn = ShareInService.instance;
+
+  /// 记住的心率带（地址 + 名字）：只用于「上次那台」的一键重连；
+  /// 开机不自动连 —— 蓝牙权限/设备不在身边时静默失败反而更让人困惑。
+  String bleHrId = '';
+  String bleHrName = '';
+
+  /// 上一个佳明点：只用来算航向（佳明的点没有航向字段，见 [bearingDeg]）。
+  GarminPoint? _lastGarminPoint;
+
+  /// 佳明 LiveTrack 的分享链接与开关状态。
+  String garminUrl = '';
+  bool garminOn = false;
+
+  /// 收到「分享进来的佳明链接」时回调（外壳用来提示并把用户带到设置页）。
+  void Function(String url)? onGarminShared;
+
+  /// 分享内容里**没有**佳明链接时回调（外壳用来如实提示，而不是静默什么都不做）。
+  void Function()? onGarminShareNoLink;
+
+  /// 冷启动时外壳还没注册回调 —— 把「收到分享」这件事先存这里，等外壳 initState 取走。
+  ///
+  /// 必须是**存状态**而不是只调回调：`AppState` 在 `_AppState` 的字段初始化时就构造了
+  /// （早于外壳 initState），而 `ensureInit()` 里那次 `takePendingSharedText` 的平台往返
+  /// 可能比外壳注册回调**更早**返回 —— 那一瞬间回调还是 null，用户点完分享
+  /// **界面上什么都不会发生**（用户实测报的「跳转之后还是没有反馈」）。
+  String? _shareNotice;
+  bool _shareNoticeNoLink = false;
+
+  /// 外壳启动时取走待提示的分享事件（取走即清空，不会重复弹）。
+  ({String? url, bool noLink})? consumeShareNotice() {
+    if (_shareNotice == null && !_shareNoticeNoLink) return null;
+    final r = (url: _shareNotice, noLink: _shareNoticeNoLink);
+    _shareNotice = null;
+    _shareNoticeNoLink = false;
+    return r;
+  }
+
+  /// 把「收到分享」交给 UI：**有回调就立即用**，否则**存起来**等外壳来取。
+  void _deliverShareNotice({String? url, bool noLink = false}) {
+    if (noLink) {
+      final cb = onGarminShareNoLink;
+      if (cb != null) {
+        cb();
+        return;
+      }
+      _shareNoticeNoLink = true;
+      return;
+    }
+    final cbu = onGarminShared;
+    if (cbu != null) {
+      cbu(url ?? '');
+      return;
+    }
+    _shareNotice = url;
+  }
+
+  /// 佳明 LiveTrack 的新点 → 当作「自己」的一次定位。
+  ///
+  /// 为什么不让它走 _onFix：那条路径围着**手机定位**的一堆特性转（粗定位闸、
+  /// 静止防抖滑窗、缓存点闸门、精度门限），而佳明点自带「手表测出来的
+  /// 经纬度/速度/心率」，是另一类东西 —— 硬塞进去反而要层层特判。
+  /// 这里只做三件必须做的事：更新位置、写轨迹（同一套抽稀）、跟随过滤中心。
+  void _onGarminPoint(GarminPoint p) {
+    if (_disposed) return;
+    final first = !myHasFix;
+    myLat = p.lat;
+    myLng = p.lng;
+    myHasFix = true;
+    myFixCoarse = false; // 手表 GPS，不是粗定位
+    myAccuracy = 0; // 佳明页面不给精度 → 0 = 未知（不画精度圈）
+    if (p.altM != null) myAlt = p.altM;
+    if (p.speedMps != null) mySpeed = p.speedMps! * 3.6;
+    if (p.hr != null && p.hr! > 0) {
+      myHr = p.hr;
+      _checkHrAlarm();
+    }
+    _checkCrash();
+    // 航向：佳明的点里没有这个字段，用**前后两点**算（见 bearingDeg 的注释）。
+    // 没有上一个点（首个点）时不改 —— 保留手机 GPS 的最后已知航向，比瞎指北好。
+    final prev = _lastGarminPoint;
+    if (prev != null) {
+      final b = bearingDeg(prev.lat, prev.lng, p.lat, p.lng);
+      if (b != null) myCourse = b;
+    }
+    _lastGarminPoint = p;
+    // 转弯打点的航向样本（见 lib/turn_dot.dart）。佳明的点比手机 GPS 稀得多
+    // （十几秒到一分钟一个），而那道物理门的阈值是**按 dt 折算**的（40°/秒），
+    // 所以这里可以放心直接喂：稀疏序列不会被误杀，只是也不受它保护。
+    if ((mySpeed ?? 0) >= _kTurnMinSpeedKmh) {
+      _turnDot.onCourse(myCourse, DateTime.now());
+    }
+    locStatus = '佳明 LiveTrack';
+    // 跳变守卫的参照点也要跟着走：否则手机 GPS 接回来的那一刻会被误判成跳变
+    _lastFixLat = p.lat;
+    _lastFixLng = p.lng;
+    _lastFixTime = DateTime.now();
+    _hadLiveFix = true;
+    // 轨迹：与 GPS 同一套「按速度自适应抽稀」，但不受静止防抖影响
+    // （佳明的点本身就是干净的；静止时手表也会给点，画出来才对）。
+    final last = myTrack.isEmpty ? null : myTrack.last;
+    final minDistM =
+        PosQuality.trackMinDistM(speedKmh: (p.speedMps ?? 0) * 3.6);
+    final movedM = last == null
+        ? double.infinity
+        : haversine(last.lat, last.lng, p.lat, p.lng) * 1000;
+    if (last == null || movedM > minDistM) {
+      myTrack.add(TrackPt(p.lat, p.lng, DateTime.now()));
+      if (myTrack.length > maxTrackPts) {
+        myTrack.removeRange(0, myTrack.length - maxTrackPts);
+      }
+      // 历史台账（按天落盘）：GPS 那条路径写在同一个条件里，佳明这条也必须写 ——
+      // 不写的话「佳明接管期间」在历史记录里是**一段空白**（而手机 GPS 正好被让位，
+      // 两边都不记，用户回头看会觉得那一段路凭空消失）。
+      TrackLogStore.instance.record(
+        lat: p.lat,
+        lng: p.lng,
+        speedKmh: (p.speedMps ?? 0) * 3.6,
+        course: myCourse,
+        alt: p.altM,
+        accuracyM: 0,
+        // 佳明轨迹点自带心率，上面已经把有效值写进 [myHr]（issue #17）
+        hr: myHr,
+      );
+      // 佳明接管期间的里程也要记，否则那段路在里程里是空白（与台账一致）
+      if (last != null) _addMileage(movedM / 1000.0);
+    }
+    if (filterFollow) {
+      filterLat = p.lat;
+      filterLng = p.lng;
+    }
+    if (first) {
+      _log(
+        LogLevel.info,
+        '佳明',
+        'LiveTrack 首个点 ${p.lat.toStringAsFixed(5)}, ${p.lng.toStringAsFixed(5)}',
+      );
+    }
+    _notify();
+    _updateNotification();
+  }
+
+  /// 收到分享进来的文本（佳明 App 的 LiveTrack 链接）。
+  ///
+  /// 不信任输入：整段分享文案里只有匹配 LiveTrack 链接的那部分才有意义
+  /// （见 extractLiveTrackUrl），匹配不上就安静丢掉。
+  void _onSharedIncoming(String text) {
+    if (_disposed) return;
+    final url = extractLiveTrackUrl(text);
+    if (url == null) {
+      // **失败必须可见**：以前这里直接 return —— 用户分享完什么都没发生、
+      // 也没有任何解释，只能来问「为什么没识别」。
+      // 日志里带上原文前 120 字（去掉换行），否则无从判断到底是佳明改了格式，
+      // 还是分享过来的根本不是链接。
+      final brief = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      _log(
+        LogLevel.warn,
+        '佳明',
+        '分享内容里没有找到 LiveTrack 链接（前 120 字）：'
+            '${brief.length > 120 ? '${brief.substring(0, 120)}…' : brief}',
+      );
+      _deliverShareNotice(noLink: true);
+      _notify();
+      return;
+    }
+    garminUrl = url;
+    _log(LogLevel.info, '佳明', '收到分享的 LiveTrack 链接，开始追踪');
+    unawaited(garmin.start(url));
+    garminOn = true;
+    persist();
+    _deliverShareNotice(url: url);
+    _notify();
+  }
+
+  /// **现在是谁在供位置** —— 位置来源的唯一出口。
+  ///
+  /// 用户问过「如果选了佳明定位来源，定位上报页那个定位来源不重复了吗？听谁的？」
+  /// —— 代码里的优先级一直只有一处（`_onFix` 开头那两道 return），但界面把它拆成
+  /// 两半说（上报页说「定位 / 模拟位置」、设备页说「手机 GPS / 佳明」），
+  /// 于是「定位」和「手机 GPS」看着像两件事、佳明又只在一边出现。
+  /// 现在两处都读这一个 getter，并在界面上把优先级写明。
+  ///
+  /// 优先级（与 `_onFix` 完全一致，不要在这里另立一套）：
+  ///   `sim`（模拟/手动）＞ `garmin`（手表有实时数据时）＞ `phone`（手机 GPS）
+  PositionSourceNow get positionSourceNow {
+    if (useSimLocation) return PositionSourceNow.sim;
+    if (garmin.on && garmin.fresh) return PositionSourceNow.garmin;
+    if (myHasFix || loc.running) return PositionSourceNow.phone;
+    return PositionSourceNow.none;
+  }
+
   /// 手动设置我的位置（模拟位置 / Windows 无定位服务时的备用）
   void setMyPosition(double lat, double lng, {double? alt}) {
     myLat = lat;
@@ -144,6 +415,9 @@ class AppState extends ChangeNotifier {
     myHasFix = true;
     useSimLocation = true;
     loc.stop();
+    // 换到模拟位置：复位 GPS 侧的全部状态，免得切回真实定位时拿着手动坐标
+    // 当历史、把位置粘在旧点上。
+    _resetSelfFix();
     locStatus = '模拟位置';
     _syncFilterToPosition(); // 过滤中心跟随我的位置（filterFollow 时）
     persist();
@@ -164,7 +438,28 @@ class AppState extends ChangeNotifier {
   // 信标
   bool beaconEnabled = true;
   int beaconInterval = 60; // 秒（APRS-IS 建议移动站不低于 60 秒）
+
+  /// 纯网络定位模式下的**专用上报间隔**（秒）。
+  ///
+  /// 为什么单独一个：纯网络拿不到可靠速度，智能信标的「按速度分档 / 距离 /
+  /// 转弯」全都不可用（见 [beaconMinDistNow] / [beaconMinTurnNow]）。用户明确
+  /// 选了纯网络，就该有一个**可预期**的固定节奏；默认 300s（比移动站的 60s
+  /// 保守 —— 基站/Wi-Fi 本来就粗，不该频繁占用信道）。
+  int beaconNetInterval = 300;
   DateTime _lastBeacon = DateTime.now();
+
+  /// 上一次信标发出的**位置**：智能信标的「距离打点」用它算「自上次上报以来
+  /// 走了多远」（见 [beaconDistMovedM]）。与 [_lastBeacon]（时间）成对更新。
+  double? _lastBeaconLat;
+  double? _lastBeaconLng;
+
+  /// 转弯打点的航向过滤层（见 lib/turn_dot.dart）：只把「物理上不可能的一帧航向」
+  /// 丢掉，基准航向与判据都在它内部（[beaconTurnDeg] 读的就是它）。
+  ///
+  /// 以前这里是一个裸的 `_lastBeaconCourse`，判据直接拿 `myCourse` 去减它 ——
+  /// 于是多径/低速下那种「一帧跳 60°」的野值会被当成一次真实转向：直路上凭空
+  /// 多发点，而且野值被钉成新基准之后还会再触发一次。
+  final TurnDotDetector _turnDot = TurnDotDetector();
   int beaconsSent = 0;
 
   /// 是否已询问过“连接后是否自动上报位置”（只问一次，记住选择）
@@ -177,7 +472,429 @@ class AppState extends ChangeNotifier {
   bool beaconIncludeSpeed = true; // 速度
   bool beaconIncludeCourse = true; // 方位角
   bool beaconIncludeBattery = true; // 手机电量
+  /// 信标备注里是否带上**心率**（HR=nn）。
+  ///
+  /// 心率可能来自两个地方，共用这一个开关：
+  ///   * 蓝牙心率带（BLE 标准心率服务，见 lib/ble_hr.dart）；
+  ///   * 佳明 LiveTrack 轨迹点里的 heartRateBeatsPerMin（见 lib/garmin.dart）。
+  /// APRS 没有心率的正式字段，`HR=nn` 是业界通行写法（参考
+  /// garmin-livetrack-aprs-openwrt 的报文示例），第三方地图会把它当备注显示。
+  bool beaconIncludeHr = true;
+
+  /// 信标备注里是否带上**本次里程**（`TRV:`，从本次开启信标起累计）。
+  ///
+  /// 与速度/电量不同，`TRV:`/`ODO:` 是**非标准** APRS 备注字段，会把备注
+  /// 撑长、也会显示在第三方地图的备注里，所以**默认关**，由用户按需开启。
+  bool beaconIncludeTripMileage = false;
+
+  /// 信标备注里是否带上**累计总里程**（`ODO:`，跨重启累计）。
+  bool beaconIncludeTotalMileage = false;
+
+  /// 本应用的 tocall（官方注册标识）：APRSlocus 用户的台站用它在报文头上区分自己。
+  static const String apalocToCall = 'APALOC';
+
+  /// 今日运动排行榜（issue #22-3）。
+  ///
+  /// 数据来源只有一处可能：**本机收到的位置报文**里 `STEPS=` 那个非标准备注字段
+  /// （见 [_beaconComment] 里附带步数的实现）。所以这个列表的语义是
+  /// 「我听得到的、且开了步数上报的 APRSlocus 邻居」，**不是全网排行** ——
+  /// 这一条必须如实写在页面上，否则用户会以为自己在跟全中国比。
+  ///
+  /// 只认 `toCall == APALOC`（其它设备即使备注里凑巧有 STEPS= 也不该进榜），
+  /// 且只取**最后一次**报文里的值 —— 旧值没有意义（人一直在走）。
+  List<(Station, int)> sportRank({int limit = 50}) {
+    final out = <(Station, int)>[];
+    for (final s in stations) {
+      if (s.toCall != apalocToCall) continue;
+      final m = RegExp(r'STEPS=(\d+)').firstMatch(s.comment ?? '');
+      if (m == null) continue;
+      final n = int.tryParse(m.group(1)!) ?? 0;
+      if (n <= 0) continue;
+      out.add((s, n));
+    }
+    out.sort((a, b) => b.$2.compareTo(a.$2));
+    return out.length > limit ? out.sublist(0, limit) : out;
+  }
+
+  /// 通知栏的**附加行**（更新包下载进度等）。
+  ///
+  /// 为什么不直接调 `loc.updateNotification()`：常驻通知的文字由
+  /// [_updateNotification] 整体拼装（连接状态 / 台站数 / 信标倒计时…），
+  /// 15 秒一次的保活刷新会把它覆盖掉。放在这里当一段「额外信息」，
+  /// 由拼装函数统一带上，才不会被顶掉（issue #22-5）。
+  String notifExtra = '';
+
+  void setNotifExtra(String v) {
+    if (notifExtra == v) return;
+    notifExtra = v;
+    _updateNotification();
+  }
+
+  /// 地图页上报状态栏的样式（issue #21-2）。
+  ///
+  /// * true（默认）= **详细**：多一行判据（当前档位 / 还差多少秒·多少米 /
+  ///   转弯还差多少度），并每秒刷新一次；
+  /// * false = **经典**：单行（状态文案 + 立即上报），不挂秒级刷新。
+  ///
+  /// 默认详细：用户提这条反馈时说的就是「想看到当前触发的是哪个条件」；
+  /// 不想要的人可以切回经典（与旧版观感一致）。
+  // ─── 计步（issue #22-2）───
+  //
+  // 数据来源：Android 的 TYPE_STEP_COUNTER（硬件/协处理器计数，比加速度计积分猜
+  // 步数准、也省电）。它是**开机以来**的累计值，所以这里必须自己减基线：
+  //
+  //   * 基线按**本地日期**切分（跨天重置，与「今天走了多少」的语义一致）；
+  //   * 设备重启会让硬件的累计值回到 0 —— 这时**不能**让今天的步数跟着回退，
+  //     所以把已经攒下的那部分挪进 [_stepsCarry]（当天累计的「重启前」部分）。
+  //
+  // 与信标的关系：`STEPS=` 是**非标准** APRS 备注字段（和 `TRV:`/`ODO:` 同类），
+  // 会把备注撑长、也只在 APRSlocus 自己的运动排行榜里有意义，所以**默认关**。
+  bool beaconIncludeSteps = false;
+
+  /// 今日步数（0 = 还没读到或确实没走）。
+  int stepsToday = 0;
+
+  /// 今日步数里「设备重启之前」已经攒下的部分（见上）。
+  int _stepsCarry = 0;
+
+  /// 基线：当天第一次读到硬件累计值时的那个值。
+  int _stepsBaseline = -1;
+
+  /// 基线是哪一天建立的（`yyyy-MM-dd`）。
+  String _stepsDayKey = '';
+
+  /// 最近一次硬件原始累计值；-1 = 读不到（无传感器/无权限）。
+  int stepsRaw = -1;
+
+  /// 设备上有没有计步传感器（决定界面说「不支持」还是给授权按钮）。
+  bool hasStepSensor = false;
+
+  /// 有没有读计步器所需的权限（Android 10+ 的 ACTIVITY_RECOGNITION）。
+  ///
+  /// 与 [stepsRaw] **必须分开**：没权限时系统只是不派发事件，所以「没权限」
+  /// 「没传感器」「还没收到第一个事件」在读数上都表现为 -1。之前把后者当成
+  /// 前者，用户明明授权了却一直看到「请授权」（issue #23）。
+  bool stepsPermission = false;
+
+  /// 步数在界面上该怎么呈现。
+  ///
+  /// 抽成枚举而不是让每个页面自己 if：运动排行榜与信标设置两处**已经**各写了一遍
+  /// 判断，结果其中一处漏了「有权限但还没数据」这一档（issue #23 的现场）。
+  /// 判定只留这一个出口。
+  StepsStatus get stepsStatus {
+    if (!hasStepSensor) return StepsStatus.unsupported;
+    if (!stepsPermission) return StepsStatus.needPermission;
+    if (stepsRaw < 0) return StepsStatus.waiting;
+    return StepsStatus.ok;
+  }
+
+  void setBeaconIncludeSteps(bool v) {
+    beaconIncludeSteps = v;
+    persist();
+    _notify();
+  }
+
+  /// 请求计步权限（Android 10+ 的 ACTIVITY_RECOGNITION），并顺手刷一次读数。
+  Future<bool> requestStepsPermission() async {
+    final ok = await MotionService.instance.requestActivityPermission();
+    if (ok) {
+      // 授权成功后原生侧会重新注册监听；这里再拉一次，界面不用等下一个定位点
+      await MotionService.instance.refresh();
+      _syncSteps();
+    }
+    _notify();
+    return ok;
+  }
+
+  /// 用最近一次采样更新「今日步数」。很便宜：只在值真的变了时 `_notify()`。
+  ///
+  /// 调用点：每次定位回调（那里已经拉过一次采样，见 `_onFix`）——
+  /// 刻意**不**放进 1Hz tick：那会让每秒多一次平台通道往返，而步数本身
+  /// 也不需要秒级精度。
+  void _syncSteps() {
+    final smp = MotionService.instance.sample;
+    hasStepSensor = smp.hasSteps;
+    stepsPermission = smp.stepsPermission;
+    final raw = smp.steps;
+    if (raw < 0) {
+      // 读不到：保留上一次的今日步数与传感器能力，只是不更新（显示层会说原因）
+      stepsRaw = -1;
+      return;
+    }
+    stepsRaw = raw;
+    final today = TrackLogStore.dayKey(DateTime.now());
+    if (_stepsDayKey != today) {
+      // 跨天：基线重取，今日归零（与历史轨迹按天切分同一套日期口径）
+      _stepsDayKey = today;
+      _stepsBaseline = raw;
+      _stepsCarry = 0;
+      stepsToday = 0;
+      persist();
+      return;
+    }
+    if (_stepsBaseline < 0 || raw < _stepsBaseline) {
+      // ① 今天第一次读到；② 设备重启（累计值回到 0）—— 两者都是「重新取基线」，
+      //    区别是重启时要把已经攒下的部分接住，否则今日步数会凭空少一截。
+      if (_stepsBaseline >= 0) _stepsCarry = stepsToday;
+      _stepsBaseline = raw;
+      persist();
+    }
+    // ⚠ 不能用 `.clamp()`：`int.clamp` 的返回类型是 **num**（它声明在 num 上），
+    // 赋给 int 字段会报 argument_type_not_assignable/类型不匹配 —— CI 才看得出来。
+    var delta = raw - _stepsBaseline;
+    if (delta < 0) delta = 0;
+    final v = _stepsCarry + delta;
+    if (v != stepsToday) {
+      stepsToday = v;
+      _notify();
+    }
+  }
+
+  /// 外置 GPS（佳明 LiveTrack）新鲜期间，把**手机 GPS 停下来**（issue #21-4）。
+  ///
+  /// 用户的原话是「在有外置 GPS 信息输入的时候，不激活手机的 GPS；当外置 GPS
+  /// 失效时才激活手机 GPS 并替代，并发通知给用户，说明外置 GPS 失效」。
+  ///
+  /// 这里做成一个**可关的开关**，理由要说清楚：位置的优先级本来就已实现
+  /// （sim > garmin > phone，见 [positionSourceNow]），手机点根本抢不走手表的
+  /// 位置；这个开关多管一步 —— 干脆不让手机侧去点 GPS（省电）。
+  /// 而它带来的额外风险是「手表数据静默断供时，手机也没在定位」，所以
+  /// ① 默认开但可关；② 状态栏与日志都会明说现在是谁在供位（见 [_syncPhoneGps]）。
+  bool extGpsStandby = true;
+
+  /// 是否正因为外置 GPS 而停着手机定位（内部状态，不持久化）
+  bool _phoneGpsPaused = false;
+
+  void setExtGpsStandby(bool v) {
+    extGpsStandby = v;
+    persist();
+    _notify();
+  }
+
+  /// 每秒 tick 调一次：把手机定位的启停与外置源的鲜度对齐。
+  ///
+  /// 很便宜：只在**状态翻转**时才做事（不翻转时就是两次判断）。
+  void _syncPhoneGps() {
+    if (useSimLocation) return;
+    final ext = garmin.on && garmin.fresh;
+    if (extGpsStandby && ext && !_phoneGpsPaused) {
+      _phoneGpsPaused = true;
+      loc.stop();
+      locStatus = '外置 GPS 供位 · 手机 GPS 已待机';
+      _log(LogLevel.info, '定位', '外置 GPS（佳明）接管，手机 GPS 已待机');
+      return;
+    }
+    if (_phoneGpsPaused && (!ext || !extGpsStandby)) {
+      _phoneGpsPaused = false;
+      // 外置失效（或用户关掉了这个开关）：把手机 GPS 接回来，并**明确告诉用户**
+      // —— 否则「位置突然换了一批点」会被当成漂移故障。
+      locStatus = ext ? '手机 GPS 已接管' : '外置 GPS 已失效 · 改用手机 GPS';
+      _log(LogLevel.info, '定位',
+          ext ? '手机 GPS 已接管' : '外置 GPS 已失效，改用手机 GPS');
+      unawaited(startTracking());
+    }
+  }
+
+  // ─── 碰撞 / 摔倒检测（issue #26）───
+  //
+  // 用户需求：「生命守护支持车祸与摔落检测提醒（测试），通过手机加速度判断」。
+  //
+  // 判定在原生侧（它才有连续的加速度流，见 MotionManager.checkImpact 的两段式
+  // 判据：冲击 + 随后静止）。这里只负责**把事件变成一次告警**：
+  //   * 靠 [MotionSample.crashSeq] 的序号变化发现「又发生了一次」——
+  //     用布尔标志会在「事件发生时用户不在这一页、回来后又读到 true」时重复弹窗；
+  //   * 冷却时间在原生侧（一次事故后会连续出现多个尖峰）。
+  //
+  // 默认**开**：这是生命守护里的安全功能，藏起来等于没有。但它会误报
+  // （过减速带 + 随后停车这类组合），所以弹窗第一按钮是「我没事」，并且
+  // 界面上如实写明这是**启发式**判断、不是工程级碰撞检测。
+  bool crashDetectEnabled = true;
+
+  /// 当前未处理的碰撞告警（null = 没有）。
+  String? crashAlarm;
+
+  /// 告警序号：界面靠它区分「同一次告警不要反复弹窗」。
+  int crashAlarmSeq = 0;
+
+  /// 原生侧「检测到冲击、正在观察」——只用于界面显示，不触发告警。
+  bool impactPending = false;
+
+  /// 设备上有没有加速度计（碰撞检测的前提）。
+  bool hasCrashSensor = false;
+
+  /// 已经处理过的原生事件序号（见 [MotionSample.crashSeq]）。
+  int _crashSeqSeen = 0;
+
+  /// 碰撞检测的轮询节拍（见 tick）
+  int _crashPollTick = 0;
+
+  /// 首次采样时把序号对齐，避免把「进应用之前发生的事」当成新事件。
+  bool _crashSeqInited = false;
+
+  void setCrashDetectEnabled(bool v) {
+    crashDetectEnabled = v;
+    if (!v) clearCrashAlarm();
+    if (loc.running) {
+      // 打开时要把加速度计接上（它可能在传感器辅助关闭时是停着的）
+      unawaited(MotionService.instance.start(motion: _needMotion));
+    }
+    persist();
+    _notify();
+  }
+
+  void clearCrashAlarm() {
+    if (crashAlarm == null) return;
+    crashAlarm = null;
+    _notify();
+  }
+
+  /// 每次采样之后调（与 [_checkHrAlarm] 同一时机）。
+  void _checkCrash() {
+    final smp = MotionService.instance.sample;
+    hasCrashSensor = smp.hasCrashSensor;
+    impactPending = smp.impactPending;
+    if (!_crashSeqInited) {
+      _crashSeqInited = true;
+      _crashSeqSeen = smp.crashSeq;
+      return;
+    }
+    if (smp.crashSeq == _crashSeqSeen) return;
+    _crashSeqSeen = smp.crashSeq;
+    if (!crashDetectEnabled) return;
+    crashAlarm = 'crash';
+    crashAlarmSeq++;
+    _log(LogLevel.warn, '生命守护', '检测到疑似碰撞/摔倒（冲击后持续静止）');
+    _notify();
+  }
+
+  // ─── 心率异常告警（issue #21-8）───
+  //
+  // 只做「发现异常 → 把入口摆到用户面前」，**不做任何自动拨号/自动发报**：
+  // 紧急电话与向附近台站发信息都必须由用户亲手按。理由：误报的代价不对称 ——
+  // 静默不动只是错过一次提醒，而自动发出去的 SOS 会让一群人真的出动。
+  bool hrAlarmEnabled = true;
+
+  /// 阈值（bpm）。这两条线是「明显不正常」，不是运动区间。
+  int hrAlarmHigh = 150;
+  int hrAlarmLow = 40;
+
+  /// 告警时建议拨的号码（issue #21-8）。默认 120。
+  ///
+  /// 做成可改而不是写死：不同地区/场景的急救号码并不相同（112 是多数 GSM 网络的
+  /// 通用紧急号码，也有人想把队友或家庭医生的号码放这里）。
+  String emergencyTel = '120';
+
+  void setEmergencyTel(String v) {
+    emergencyTel = v.trim().isEmpty ? '120' : v.trim();
+    persist();
+    _notify();
+  }
+
+  void setHrAlarmEnabled(bool v) {
+    hrAlarmEnabled = v;
+    if (!v) clearHrAlarm();
+    persist();
+    _notify();
+  }
+
+  void setHrAlarmThresholds({int? high, int? low}) {
+    if (high != null) hrAlarmHigh = high.clamp(80, 240);
+    if (low != null) hrAlarmLow = low.clamp(20, 100);
+    persist();
+    _notify();
+  }
+
+  /// 当前未关闭的告警读数（bpm）；null = 无告警。界面用它弹警告。
+  int? hrAlarm;
+
+  /// 告警序号：界面靠它区分「同一次告警不要反复弹窗」。
+  int hrAlarmSeq = 0;
+
+  DateTime _lastHrAlarm = DateTime.fromMillisecondsSinceEpoch(0);
+
+  static const Duration _kHrAlarmCooldown = Duration(minutes: 3);
+
+  void clearHrAlarm() {
+    if (hrAlarm == null) return;
+    hrAlarm = null;
+    _notify();
+  }
+
+  /// 每次心率读数更新后调。两个必须的抑制条件：
+  ///   * **刚才报过**（[_kHrAlarmCooldown] 内）不再报；
+  ///   * 读数**不新鲜**时不报（读数带没连、佳明没推时 [myHr] 会被清空，
+  ///     拿一个过期读数去报警比不报更糟）。
+  void _checkHrAlarm() {
+    if (!hrAlarmEnabled) return;
+    final b = myHr;
+    if (b == null || b <= 0) return;
+    final bool bad = b >= hrAlarmHigh || b <= hrAlarmLow;
+    if (!bad) {
+      // 恢复正常：把告警收起来（但**不**重置冷却，避免「刚到 150 又 149」
+      // 这种在阈值上下抖动时反复弹窗）。
+      if (hrAlarm != null) {
+        hrAlarm = null;
+        _notify();
+      }
+      return;
+    }
+    final now = DateTime.now();
+    if (now.difference(_lastHrAlarm) < _kHrAlarmCooldown) return;
+    _lastHrAlarm = now;
+    hrAlarm = b;
+    hrAlarmSeq++;
+    _log(LogLevel.warn, '心率', '心率异常：$b bpm（阈值 $hrAlarmLow~$hrAlarmHigh）');
+    _notify();
+  }
+
+  /// 我附近（[radiusKm] 内）的台站，按距离升序，最多 [limit] 条。
+  ///
+  /// 供「向附近台站发求助」用（issue #21-8）。与地图筛选不同：这里不看图层隐藏
+  /// 与接收国别 —— 那些是**显示**偏好，而求助要看的是「附近到底有谁」。
+  List<Station> nearbyStations(double radiusKm, {int limit = 5}) {
+    if (!myHasFix || myLat == null || myLng == null) return const [];
+    final lat = myLat!, lng = myLng!;
+    final out = <Station>[];
+    for (final s in stations) {
+      if (s.call == myFullCall) continue;
+      if (s.distKm(lat, lng) <= radiusKm) out.add(s);
+    }
+    out.sort((a, b) => a.distKm(lat, lng).compareTo(b.distKm(lat, lng)));
+    return out.length > limit ? out.sublist(0, limit) : out;
+  }
+
+  bool beaconBarDetailed = true;
+
+  void setBeaconBarDetailed(bool v) {
+    beaconBarDetailed = v;
+    persist();
+    _notify();
+  }
+
+  /// 本次里程（公里）：从**本次开启信标**（或本次启动）起走过的距离。
+  double tripMileageKm = 0;
+
+  /// 累计总里程（公里）：跨重启累计，持久化在 [SharedPreferences]。
+  double totalMileageKm = 0;
+
+  /// 累计里程落盘节流：定位回调约 1Hz，每次都写盘会让存储抖动。
+  DateTime _lastMileageSave = DateTime.fromMillisecondsSinceEpoch(0);
+
   int _battery = -1; // 电量百分比（-1 未知）
+
+  /// **强制接受网络定位自动上报**（默认关）。
+  ///
+  /// 关着时（默认）：粗定位（网络 / 基站 / 被动）期间自动上报暂停（见 [canAutoBeacon]）。
+  /// 这是 v1.6.163 按用户反馈加的，理由是粗点常年偏几百米、发出去的是个错坐标。
+  ///
+  /// 打开后：粗点也能触发自动上报。给的是「**手里这台设备没有 GPS**」那类场景
+  /// （平板 / 只有网络定位的机器、长期室内）—— 对他们来说可选的位置只剩网络定位，
+  /// 一律不发等于自动上报这个功能整个不存在。
+  ///
+  /// ⚠ 它**只放开「自动上报」这一道闸**，不动任何位置质量闸（GPS 新鲜度 / 跳变 /
+  /// 静止防抖滑窗 / 轨迹与过滤中心仍然把粗点当噪声，见 [_onFix]）—— 也就是说
+  /// 这个开关不会让地图与轨迹重新乱跳，它只决定「粗点能不能被发出去」。
+  bool beaconForceCoarse = false;
 
   // ─── 智能信标（按速度分档：不同速度 → 不同上报间隔 + 信标图标）───
   bool smartBeaconEnabled = false;
@@ -186,11 +903,21 @@ class AppState extends ChangeNotifier {
 
   /// 默认分档方案：
   /// 静止(<5km/h)→300s；步行(≥5)→120s 人形；城市(≥20)→60s 汽车；高速(≥70)→30s 汽车。
+  /// 距离档的取值口径：约等于「这一档速度在一个上报间隔内走的路程」，
+  /// 也就是「该发下一个点了」的自然位置 —— 比按面积/拍脑袋好解释，
+  /// 用户看到「步行 120s / 250m 或」时直觉也对得上（1.4m/s × 120s ≈ 170m）。
   static List<SmartBeaconTier> defaultSmartTiers() => [
-        SmartBeaconTier(minSpeed: 0, intervalSec: 300, symbol: ''),
-        SmartBeaconTier(minSpeed: 5, intervalSec: 120, symbol: '['),
-        SmartBeaconTier(minSpeed: 20, intervalSec: 60, symbol: '>'),
-        SmartBeaconTier(minSpeed: 70, intervalSec: 30, symbol: '>'),
+        // 静止/步行档的转弯阈值留 0（关闭）：低速时 GPS 航向本身就不稳
+        // （见 _applySelfFix 里「低速用指南针补航向」那段），按角度判会乱触发。
+        // 每一档都可以在设置页里自己改（0 = 关，10~180°）。
+        SmartBeaconTier(minSpeed: 0, intervalSec: 300, symbol: '', minDistM: 200),
+        SmartBeaconTier(minSpeed: 5, intervalSec: 120, symbol: '[', minDistM: 250),
+        // 城市 45°：每个路口都是 90°，45° 只抓真正的转向，不会每个路口都发。
+        SmartBeaconTier(
+            minSpeed: 20, intervalSec: 60, symbol: '>', minDistM: 400, minTurnDeg: 45),
+        // 高速 30°：出口匝道、大弯这类「航向连续变化」才是要补的点。
+        SmartBeaconTier(
+            minSpeed: 70, intervalSec: 30, symbol: '>', minDistM: 700, minTurnDeg: 30),
       ];
 
   void _ensureSmartTiers() {
@@ -209,6 +936,19 @@ class AppState extends ChangeNotifier {
       final t = smartTiers[i];
       if (t.minSpeed < 1) t.minSpeed = 1;
       if (t.intervalSec < 5) t.intervalSec = 5;
+    }
+    // 距离打点：0 = 关闭；否则夹到 20m~20km（低于 20m 比 GPS 噪声还小，
+    // 会退化成「每个点都发」，白占信道；上限只是防手输多打一个零）
+    for (final t in smartTiers) {
+      if (t.minDistM != 0) {
+        t.minDistM = t.minDistM < 20 ? 20 : (t.minDistM > 20000 ? 20000 : t.minDistM);
+      }
+      // 转弯打点：0 = 关；否则 10°~180°（小于 10° 落在 GPS 航向噪声里，
+      // 会退化成「每个点都发」；超过半圈没有意义）
+      if (t.minTurnDeg != 0) {
+        t.minTurnDeg =
+            t.minTurnDeg < 10 ? 10 : (t.minTurnDeg > 180 ? 180 : t.minTurnDeg);
+      }
     }
     smartTiers.sort((a, b) => a.minSpeed.compareTo(b.minSpeed));
   }
@@ -236,7 +976,8 @@ class AppState extends ChangeNotifier {
     for (final t in smartTiers) {
       if (t.minSpeed >= next) next = t.minSpeed + 10;
     }
-    smartTiers.add(SmartBeaconTier(minSpeed: next, intervalSec: 60, symbol: ''));
+    smartTiers.add(SmartBeaconTier(
+        minSpeed: next, intervalSec: 60, symbol: '', minDistM: 400, minTurnDeg: 45));
     _normalizeSmartTiers();
     persist();
     _notify();
@@ -275,17 +1016,107 @@ class AppState extends ChangeNotifier {
     return hit ?? smartTiers.first;
   }
 
-  /// 实际生效的上报间隔：智能信标按速度取档，否则用固定间隔
-  int get beaconIntervalNow => activeSmartTier?.intervalSec ?? beaconInterval;
+  /// 实际上报间隔（秒）：纯网络用专用固定间隔；智能信标按速度取档；否则固定间隔
+  int get beaconIntervalNow => locationMode == 'network'
+      ? beaconNetInterval
+      : (activeSmartTier?.intervalSec ?? beaconInterval);
+
+  /// 实际生效的**距离打点**门限（米）：0 = 只用定时。
+  /// 只有智能信标才有这一项 —— 固定间隔模式与**纯网络模式**都保持「纯定时」。
+  int get beaconMinDistNow =>
+      locationMode == 'network' ? 0 : (activeSmartTier?.minDistM ?? 0);
+
+  /// 实际生效的**转弯打点**阈值（度）：0 = 只用定时/距离。
+  /// 纯网络下航向不可靠，同样不用。
+  int get beaconMinTurnNow =>
+      locationMode == 'network' ? 0 : (activeSmartTier?.minTurnDeg ?? 0);
+
+  /// 自上次**真的发出去**以来，航向变化了多少度（0~180，最小夹角）。
+  ///
+  /// 两个容易写错的地方，都在 [TurnDotDetector] 里收口：
+  ///  * **角度要环绕**：359° → 1° 是转了 2°，不是 358°。直接相减会让「几乎没转」
+  ///    判成「转了大半圈」，于是每个点都触发（见 `fold180`）。
+  ///  * **没有航向/没发过 → 返回 0**（不触发）：宁可少补一个点，也不要在航向
+  ///    未知时乱发。
+  ///
+  /// v1.6.174 起这个值取自 [TurnDotDetector]，多了一道**物理门**：一帧就跳
+  /// 40°/秒以上（多径反射、地库出口那个量级）的航向不会参与判断，也不会被钉成
+  /// 新基准。理由与实测数据见 lib/turn_dot.dart 的文件头。
+  double get beaconTurnDeg => _turnDot.deviationDeg;
+
+  // ─── 上报状态栏（详细档）要用的几个量（issue #21-2）───
+  //
+  // 「还有一个判据离触发差多少」必须由 state 算，UI 不能自己拿门限去减：
+  // 门限有两个来源（智能档 / 固定间隔 / 纯网络），谁生效由 state 决定；
+  // 界面再算一遍就迟早会出现「显示还差 10 秒，实际永远不会发」那种漂移
+  // （本仓库在 beaconPhase 上已经踩过一次）。
+
+  /// 距上次**真的发出去**过了多少秒（没发过时返回 0）。
+  int get beaconSecsSinceLast {
+    final s = DateTime.now().difference(_lastBeacon).inSeconds;
+    return s > 0 ? s : 0;
+  }
+
+  /// 距离判据还差多少米（0 = 没开距离打点，或已经达到）。
+  double get beaconDistToGoM {
+    final need = beaconMinDistNow;
+    if (need <= 0 || !myHasFix) return 0;
+    final d = need - beaconDistMovedM;
+    return d > 0 ? d : 0;
+  }
+
+  /// 转弯判据的两个「闸」—— 在详细状态栏里要如实摆出来，否则用户会以为
+  /// 转个弯就发，而实际上低速（<5 km/h）与刚发过（<20s）时它根本不参与判断。
+  static const int turnGateSpeedKmh = 5;
+  static const int turnGateSec = 20;
+
+  /// 转弯判据的距离？不是 —— 是它距「可以参与判断」还差多少秒（0 = 已就绪）。
+  int get beaconTurnGateSecLeft {
+    final left = turnGateSec - beaconSecsSinceLast;
+    return left > 0 ? left : 0;
+  }
+
+  /// 自上次**真的发出去**以来移动了多远（米）。
+  ///
+  /// 与 `_lastBeacon`（时间）成对：两者都在发送成功后更新，所以这个距离
+  /// 就是「本次要不要因为『走够了』再发一个」的判据。
+  /// 还没发过（或没有定位）时返回 0 —— 此时时间判据会先行，不会漏报。
+  double get beaconDistMovedM {
+    final la = _lastBeaconLat;
+    final ln = _lastBeaconLng;
+    if (la == null || ln == null || !myHasFix) return 0;
+    return haversine(la, ln, myLat!, myLng!) * 1000;
+  }
+
+  /// 纯网络定位模式下使用的台站符号（issue #21-6）；空串 = 仍用 [mySymbol]。
+  ///
+  /// 为什么单独一个：网络点与 GPS 点精度差一个量级，而**符号是唯一能让别人
+  /// （与自己回头看轨迹时）分辨「这个位是网络标的」的字段**。
+  /// 默认空串 = 完全保持旧行为，不动老用户的报文。
+  String networkSymbol = '';
+
+  void setNetworkSymbol(String v) {
+    networkSymbol = v;
+    persist();
+    _notify();
+  }
 
   /// 实际生效的信标符号：智能档指定了符号则用之，否则用「我的符号」
   String get beaconSymbolNow {
     final tier = activeSmartTier;
     if (tier != null && tier.symbol.isNotEmpty) return tier.symbol;
+    // 纯网络定位时可以单独指定一个符号（issue #21-6）：网络点可能偏几百米到
+    // 几公里，用与 GPS 档不同的符号能让别人（与自己看历史轨迹时）一眼分出来
+    // 「这是网络定位标的位」。留空 = 仍然用 mySymbol（旧行为）。
+    if (locationMode == 'network' && networkSymbol.isNotEmpty) {
+      return networkSymbol;
+    }
     return mySymbol;
   }
 
   void setBeaconEnabled(bool v) {
+    // 开启信标 = 开始新一次上报会话 → 本次里程从零重新累计
+    if (v && !beaconEnabled) _resetTripMileage();
     beaconEnabled = v;
     persist();
     _notify();
@@ -293,6 +1124,13 @@ class AppState extends ChangeNotifier {
 
   void setBeaconInterval(int seconds) {
     beaconInterval = seconds < 5 ? 5 : seconds;
+    persist();
+    _notify();
+  }
+
+  /// 纯网络模式的专用上报间隔（见 [beaconNetInterval]）
+  void setBeaconNetInterval(int seconds) {
+    beaconNetInterval = seconds < 30 ? 30 : seconds;
     persist();
     _notify();
   }
@@ -309,10 +1147,192 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 设置独立状态报文的文本（见 [aprsStatusText]）。不发送，只存。
+  void setAprsStatusText(String v) {
+    aprsStatusText = v;
+    persist();
+    _notify();
+  }
+
   void setBeaconIncludeBattery(bool v) {
     beaconIncludeBattery = v;
     persist();
     _notify();
+  }
+
+  // ─── 位置报文的数据扩展（功率 / 天线高度 / 增益）───
+  //
+  // 由用户在「电台设置 → 台站备注」下方填写，**留空即不发送那一项**
+  // （不是发 0）：空值发出去等于向全网宣告一个假的「0 瓦」，
+  // 比不发更糟 —— 对方无法区分「没填」和「真的是 0」。
+  //
+  // 高度（`/A=`）**不在这里**：它跟随定位的海拔自动发送（见 `_beaconComment`）。
+  // 下面这个 `beaconAntennaHeightFt` 是**另一个量**，务必别混
+  // （规范原文特意强调 "not above ground or sea level"）：
+  //   * `/A=`（自动）→ 台站**海拔**；
+  //   * [beaconAntennaHeightFt] → PHG 的 h 码位：天线高于**当地平均地面**多少英尺。
+
+  /// 发射功率（瓦），PHG 的 p 码位。null = 不发 PHG。
+  double? beaconPowerW;
+
+  /// 天线有效高度（英尺，高于当地平均地面），PHG 的 h 码位。
+  ///
+  /// 为什么没有独立开关：PHG 是**一个** 7 字节字段，四个码位必须同时给。
+  /// 用户填了功率与增益、却没填天线高度时，这里按 0 档（10 英尺）编码，
+  /// 并在设置页把该档实际值回显出来，不静默编造。
+  double? beaconAntennaHeightFt;
+
+  /// 天线增益（dB），PHG 的 g 码位。
+  double? beaconGainDb;
+
+  /// 手填海拔（米），**覆盖**定位海拔；null = 用定位的（默认）。
+  ///
+  /// 为什么需要覆盖：定位给的海拔在不少机型上不可用（无气压计、室内、
+  /// 只有网络定位时干脆没有），而台站的实际海拔是用户查得到的确定值。
+  /// 语义刻意做成「留空 = 跟着定位走」：默认行为与改动前完全一致，
+  /// 想手填的人填了就生效，不必在两个开关之间做选择。
+  double? beaconAltOverrideM;
+
+  /// 方向性（PHG 的 d 码位）**刻意不做成设置项**：它描述定向天线的朝向，
+  /// 而本应用面向的是移动/固定台站，绝大多数是全向天线；多一个「朝向」
+  /// 下拉只是增加误填的机会。编码时固定用 0（全向）。
+  /// 将来若要支持定向台站，在这里加一个字段并把
+  /// `AprsPhg.directivityCode(isOmni: false, deg: …)` 接上即可。
+
+  /// 手填海拔（null = 恢复跟随定位）
+  void setBeaconAltOverride(double? m) {
+    beaconAltOverrideM = m;
+    persist();
+    _notify();
+  }
+
+  void setBeaconPower(double? w) {
+    beaconPowerW = w;
+    persist();
+    _notify();
+  }
+
+  void setBeaconAntennaHeight(double? ft) {
+    beaconAntennaHeightFt = ft;
+    persist();
+    _notify();
+  }
+
+  void setBeaconGain(double? db) {
+    beaconGainDb = db;
+    persist();
+    _notify();
+  }
+
+  /// 三个 PHG 输入项（功率 / 天线高度 / 增益）是否**任一**已填。
+  ///
+  /// 单一出口：设置页回显、位置报文组装与「发射」按钮都读它 —— 三处各写
+  /// 一份条件必然漂，而本功能的约定就是「填任一项即附上固定 7 字节的
+  /// `PHGphgd`」。
+  bool get hasPhg =>
+      beaconPowerW != null ||
+      beaconAntennaHeightFt != null ||
+      beaconGainDb != null;
+
+  /// 设置页的回显：实际会被编进报文的 `PHGphgd`（四个码位一起给）。
+  ///
+  /// 由 [AprsPhg] 的量化表反推，而不是另写一份 —— 两处各写一份必然漂。
+  String get phgPreview {
+    if (!hasPhg) return '';
+    return AprsPhg.encode(
+      watts: beaconPowerW ?? 0,
+      heightFeet: beaconAntennaHeightFt ?? 0,
+      gainDb: beaconGainDb ?? 0,
+    );
+  }
+
+  /// 实际用于 `/A=` 的海拔（米）：手填优先，否则用定位的；都没有则 null。
+  ///
+  /// 单一出口：[_beaconComment] 与设置页回显都读它，不会出现
+  /// 「显示的是一个值、发出去的是另一个」。
+  double? get effectiveAltM => beaconAltOverrideM ?? myAlt;
+
+  /// 当前将发出的 `/A=` 片段（没有可用海拔时为空串）。
+  String get autoAltExtension {
+    final a = effectiveAltM;
+    if (a == null || a < 0) return '';
+    final ft = (a / 0.3048).round().clamp(0, 999999);
+    return '/A=${ft.toString().padLeft(6, '0')}';
+  }
+
+  /// 信标是否带上心率（见 [beaconIncludeHr]）。
+  void setBeaconIncludeHr(bool v) {
+    beaconIncludeHr = v;
+    persist();
+    _notify();
+  }
+
+  /// 信标是否带上本次里程（见 [beaconIncludeTripMileage]）。
+  void setBeaconIncludeTripMileage(bool v) {
+    beaconIncludeTripMileage = v;
+    persist();
+    _notify();
+  }
+
+  /// 信标是否带上累计总里程（见 [beaconIncludeTotalMileage]）。
+  void setBeaconIncludeTotalMileage(bool v) {
+    beaconIncludeTotalMileage = v;
+    persist();
+    _notify();
+  }
+
+  /// 强制接受网络定位自动上报（见 [beaconForceCoarse]）。
+  ///
+  /// 两个方向都记一条日志：这是**知情选择**，事后排查「轨迹怎么偏了几百米」时
+  /// 日志里必须能看出「那一刻起用的就是网络定位」—— 否则只能靠猜。
+  void setBeaconForceCoarse(bool v) {
+    beaconForceCoarse = v;
+    _log(
+      LogLevel.warn,
+      '信标',
+      v
+          ? '已打开「强制接受网络定位自动上报」：粗定位期间也会自动发射'
+          : '已关闭「强制接受网络定位自动上报」：粗定位期间自动上报暂停',
+    );
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 记住心率带（连接成功后调用）：换机/重启后能一键重连同一台。
+  void setBleHrDevice(String id, String name) {
+    bleHrId = id;
+    bleHrName = name;
+    persist();
+    _notify();
+  }
+
+  /// 忘掉心率带。
+  void clearBleHrDevice() {
+    bleHrId = '';
+    bleHrName = '';
+    bleHr.forget();
+    persist();
+    _notify();
+  }
+
+  /// 开启/关闭佳明 LiveTrack 追踪（链接无效时返回 false，由 UI 提示）。
+  Future<bool> setGarminOn(bool v) async {
+    if (!v) {
+      garmin.stop();
+      garminOn = false;
+      persist();
+      _notify();
+      return true;
+    }
+    final url = extractLiveTrackUrl(garminUrl);
+    if (url == null) return false;
+    final ok = await garmin.start(url);
+    garminOn = ok;
+    if (ok) garminUrl = url;
+    persist();
+    _notify();
+    return ok;
   }
 
   /// 更新 APRS-IS 接收范围过滤
@@ -450,6 +1470,28 @@ class AppState extends ChangeNotifier {
     if (stations.length >= 500) {
       AchievementCenter.instance.reach('flowerWorld', stations.length); // 花花世界
     }
+  }
+
+  /// 功能引导：**已看过**的引导 id 集合（见 lib/guide.dart）。
+  ///
+  /// 只记「看过」，文案与顺序都由代码给（l10n），所以这里不需要版本号：
+  /// 改文案不会让用户重看一遍，改 id 才会。
+  final Set<String> guideSeen = {};
+
+  /// 这条引导是否已看过
+  bool isGuideSeen(String id) => guideSeen.contains(id);
+
+  /// 记下「已看过」（关闭提示卡时调）
+  void markGuideSeen(String id) {
+    if (!guideSeen.add(id)) return;
+    persist();
+  }
+
+  /// 重置全部引导（设置里的「重新查看功能引导」）
+  void resetGuides() {
+    if (guideSeen.isEmpty) return;
+    guideSeen.clear();
+    persist();
   }
 
   /// 按国家接收列表（国家代码）
@@ -719,6 +1761,14 @@ class AppState extends ChangeNotifier {
   /// 送到射频。**会真实发射**，所以默认关闭，需用户显式打开。
   bool igateTwoWay = false;
 
+  /// 射频上收到的报文总数（无论网关开不开都计）。
+  ///
+  /// 为什么需要它：网关统计全是 0 时，用户无法区分下面两种完全不同的情况 ——
+  ///   * 射频根本没收到报文（TNC 没连上 / 线速不对 / 静噪？）= 链路问题；
+  ///   * 收到了但一条都没转递（被拒 / 去重）= 网关问题。
+  /// 没有这个分子，界面上只有一连串 0，排查只能靠猜。
+  int igateRfSeen = 0;
+
   /// 网关已转递到 APRS-IS 的报文数
   int igateGated = 0;
 
@@ -834,8 +1884,38 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// 网关是否具备工作条件：既要有射频来源，又要有 APRS-IS
+  /// 网关是否具备工作条件（**配置层面**）：勾了至少一个射频来源。
+  ///
+  /// 注意这是「配了没有」，不是「通不通」—— 真正能不能转递要看 [igateActive]。
+  /// 两者必须分开：勾选状态用来提示「去勾 TNC/音频」，连通状态用来提示
+  /// 「链路没连上」，两者混成一个判断会让提示指向错误的方向。
   bool get igateReady => tncOn || audioOn;
+
+  /// 射频来源是否**真的有链路在收**（与 [_gateRfToIs] 的真条件一致）。
+  bool get igateRfUp => (tncOn && isUp(srcTnc)) || (audioOn && isUp(srcAudio));
+
+  /// 网关此刻是否真的在转递：开关开着 + 射频在收 + APRS-IS 连着。
+  ///
+  /// [_gateRfToIs] 的守卫就是这三个条件，界面用它来判断「统计该不该涨」。
+  bool get igateActive => igateEnabled && igateRfUp && isUp(srcAprsIs);
+
+  /// 网关开了、条件却没齐时，返回**没齐的那一项**（界面直接显示）。
+  ///
+  /// 空字符串 = 条件齐了（此时统计不涨只能是因为没有射频流量或被拒，
+  /// 那由 igateRfSeen / igateBlocked 两个数说明）。
+  String get igateIdleReason {
+    if (!igateEnabled) return '';
+    if (igateActive) {
+      // 条件齐了还一条都没转出去，只可能是**全被环路防护拒收** ——
+      // 那是「在正确工作」，但用户看到 0 仍然会以为坏了，所以照样要说。
+      return (igateRfSeen > 0 && igateGated == 0 && igateBlocked > 0)
+          ? 'all-rejected'
+          : '';
+    }
+    if (!igateReady) return 'no-rf-source';
+    if (!igateRfUp) return 'rf-down';
+    return 'is-down';
+  }
 
   /// 按来源取射频中继路径
   String rfPathOf(String src) =>
@@ -924,6 +2004,15 @@ class AppState extends ChangeNotifier {
         dataSource =
             enabledSources.firstWhere(canTransmit, orElse: () => dataSource);
       }
+    }
+    if (s0 == srcTnc || s0 == srcAudio) {
+      // 射频链路的去重表与「听到过」列表都是**跨会话累积**的：换了设备、
+      // 线速或频段之后，旧表会把新链路上的**首次**报文当成重复丢掉，
+      // 表现正是「网关统计一直是 0」（连「重复丢弃」也不涨时最难查）。
+      // 表该清；但**统计不该清** —— 用户正需要它来对比「换配置之前 / 之后」
+      // 到底有没有好转，清了就再也比不出来。
+      _igateDedupe.clear();
+      _heard.clear();
     }
     _reconcileSources();
     persist();
@@ -1133,6 +2222,11 @@ class AppState extends ChangeNotifier {
   // 顶栏天气组件（和风天气：当前位置天气 + 温度）
   bool weatherEnabled = true;
 
+  /// **公告横幅**（设置 → 显示）。默认**开**：用户要的是「用户可以打开」，
+  /// 而默认关等于没人看得见 —— 公告的意义就在于被看到。不想要的人可以关掉，
+  /// 关掉后**不再发起网络请求**（见 notice_banner.dart）。
+  bool noticeBanner = true;
+
   /// 切换顶栏天气组件
   void setWeatherEnabled(bool v) {
     weatherEnabled = v;
@@ -1140,8 +2234,53 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  // 公告的开关与「关掉的是哪一条」（noticeIdentity）放在一起 —— 见下方
+  // setNoticeBanner / onNoticeLoaded：两处各写一遍持久化必然漂。
+
   // 界面语言：'' = 跟随系统；'zh' 中文；'en' English
   String locale = '';
+
+  // ─── 界面材质（磨砂玻璃 / 云母）───
+  //
+  // 存字符串（'' = 关闭）而不是 bool：材质是**多档**的，将来加一档
+  // （例如「亚克力」或「跟随系统」）不需要改存储格式，也不会让旧值变成乱码。
+  // 认不出的值一律回落「关闭」（见 uiMaterialOf）。
+  String uiMaterial = '';
+
+  /// 切换界面材质。
+  ///
+  /// 切完必须调 [applySavedTheme]：材质写在 C 这个全局调色板上，它不在
+  /// ThemeData 里，所以除了重算没有别的生效路径（否则表现就是「点了没反应」，
+  /// 要退出重进才生效）。
+  void setUiMaterial(String v) {
+    final n = uiMaterialOf(v);
+    uiMaterial = uiMaterialName(n);
+    applySavedTheme();
+    persist();
+    _notify();
+  }
+
+  /// 当前材质的枚举形式（界面直接读这个）
+  UiMaterial get uiMaterialValue => uiMaterialOf(uiMaterial);
+
+  // ─── 界面布局（v1.6.139 的「UI 2.0」）───
+  //
+  // 同为显示偏好，与材质独立可组合：'' = 1.0 经典布局，'sheet' = 2.0 地图为基底。
+  // 认不出的值一律回落 1.0 —— 布局选错会让人找不到导航，比颜色错严重得多。
+  String uiLayout = '';
+
+  /// 切换界面布局。
+  ///
+  /// 切完同样要 [applySavedTheme]（布局写在 C 这个全局调色板上，除了重算没有
+  /// 别的生效路径）；App 侧的 `_onThemeChange` 会发现 uiLayout 变了并重建。
+  void setUiLayout(String v) {
+    uiLayout = uiLayoutName(uiLayoutOf(v));
+    applySavedTheme();
+    persist();
+    _notify();
+  }
+
+  UiLayout get uiLayoutValue => uiLayoutOf(uiLayout);
 
   /// 切换界面语言
   void setLocale(String lang) {
@@ -1178,15 +2317,24 @@ class AppState extends ChangeNotifier {
   /// 切换深色模式
   void setDarkMode(bool v) {
     darkMode = v;
-    C.applyTheme(isDark: v, primary: themeColorValue);
+    applySavedTheme();
     persist();
     _notify();
   }
 
   /// 设置自定义主题色
   void setThemeColor(String hex) {
-    themeColor = hex.trim().replaceAll('#', '');
-    C.applyTheme(isDark: darkMode, primary: themeColorValue);
+    final v = hex.trim().replaceAll('#', '').toUpperCase();
+    themeColor = v;
+    // 当前主题已经把主色固定下来时，同步改主题里的那一项 ——
+    // 否则用户在「显示」里点颜色会毫无反应（被主题覆写盖住），像功能坏了。
+    final tc = ThemeController.instance;
+    final a = tc.active;
+    if (a.overridesColor('primary') && !a.builtin) {
+      a.colors['primary'] = v;
+      tc.upsert(a);
+    }
+    applySavedTheme();
     persist();
     _notify();
   }
@@ -1200,10 +2348,24 @@ class AppState extends ChangeNotifier {
     return Color(0xFF000000 | v);
   }
 
-  /// 应用已保存的主题（App 启动时调用）
+  /// 应用已保存的主题（App 启动时调用）。
+  ///
+  /// 颜色来源分两层：**主题的令牌覆写优先，其次才是旧版的单一 themeColor**。
+  /// 保留第二层是有意的：老用户只存过 `themeColor`，升级后颜色必须原样不变。
   void applySavedTheme() {
-    C.applyTheme(isDark: darkMode, primary: themeColorValue);
+    // 材质与布局要在 applyColors **之后**写：后者会重算整套调色板（并且自己也读
+    // C.materialOn 来决定页面底色透不透），所以两者必须先落定，
+    // 否则换主题那一下会用上一档材质算出一套错的 alpha。
+    C.material = uiMaterialValue;
+    C.layout = uiLayoutValue;
+    ThemeController.instance.applyColors(
+      isDark: darkMode,
+      legacyPrimary: themeColorValue,
+    );
   }
+
+  /// 主题版本号：主题页改动后它 +1，App 据此重建 MaterialApp（不动导航栈）
+  int get themeRevision => ThemeController.instance.revision;
 
   // 定位来源：false = 系统 GPS；true = 模拟位置（手动坐标）
   bool useSimLocation = false;
@@ -1211,6 +2373,8 @@ class AppState extends ChangeNotifier {
   void setUseSimLocation(bool v) {
     useSimLocation = v;
     if (v) {
+      // 切到模拟位置：没有真实位移可判，传感器监听一并停掉（省电）
+      unawaited(MotionService.instance.stop());
       // 切换到模拟：不再需要 GPS，但需要前台服务保活（见 startTracking）
       unawaited(startTracking());
       if (myLat == null || myLng == null) {
@@ -1230,11 +2394,11 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
-  // 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助
+  // 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助；'network' = 纯网络
   String locationMode = 'gps_network';
 
   void setLocationMode(String v) {
-    if (v != 'gps' && v != 'gps_network') return;
+    if (v != 'gps' && v != 'gps_network' && v != 'network') return;
     locationMode = v;
     loc.setMode(v); // 运行中立即生效
     persist();
@@ -1250,13 +2414,82 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  // ─── 离线地图 ───
+  /// 浏览地图时把瓦片写入本机磁盘缓存（默认开；关掉则完全不落盘）
+  bool tileCacheOn = true;
+
+  void setTileCacheOn(bool v) {
+    tileCacheOn = v;
+    persist();
+    _notify();
+  }
+
+  /// 仅离线模式：只用已缓存/已下载的瓦片，一个网络请求都不发（野外省流量）
+  bool offlineOnly = false;
+
+  void setOfflineOnly(bool v) {
+    offlineOnly = v;
+    persist();
+    _notify();
+  }
+
   // 更新渠道：'gitcode' / 'github'
-  String updateChannel = 'gitcode';
+  //
+  // 默认 **GitHub**：GitCode 的 release API 在境外/部分网络下不稳定，而且
+  // 镜像站可能滞后或缺少资产 —— 默认指向「官方发布的地方」更不容易出现
+  // 「检查更新永远失败/永远没有新版」。想用镜像的用户仍可在更新页一键切换
+  // （选择会写进 prefs，不会被这里的默认值覆盖）。
+  String updateChannel = 'github';
 
   void setUpdateChannel(String c) {
     updateChannel = c;
     persist();
     _notify();
+  }
+
+  // ─── 公告横幅：关闭的是哪一条（issue #21-5）───
+  //
+  // 用户要的是：**公告更新了，横幅要重新出现**。
+  //
+  // 光有一个开关做不到这件事：关掉 = `noticeBanner = false`，而“又发生了一条新公告”
+  // 与“用户就是不想看”是两件事（一个开关管两件事，就一定会顺此失彼）。
+  // 所以再加一个轻量的“已关闭的是哪一条”：存公告正文的指纹；指纹不同 = 来了新的，
+  // 就**自动把开关重新打开一次**（用户会再看到一次横幅，而不是永远错过）。
+  //
+  // 指纹不看时间戳：时间戳只说明“什么时候拉的”，正文才是内容本身
+  // （同一条公告重拉一次不应又把横幅弹出来）。
+  String noticeIdentity = '';
+
+  String _noticeDismissedIdentity = '';
+
+  void setNoticeBanner(bool v) {
+    noticeBanner = v;
+    if (!v) _noticeDismissedIdentity = noticeIdentity;
+    persist();
+    _notify();
+  }
+
+  /// 公告拉到（或缓存命中）时调。只存指纹；上次关掉的不是这一条 → 把开关短开。
+  void onNoticeLoaded(String body) {
+    if (body.trim().isEmpty) return;
+    noticeIdentity = _noticeIdentityOf(body);
+    if (noticeIdentity == _noticeDismissedIdentity) return;
+    if (!noticeBanner) {
+      noticeBanner = true;
+      _log(LogLevel.info, '公告', '公告已更新，横幅重新显示');
+    }
+    persist();
+    _notify();
+  }
+
+  /// 公告正文 → 指纹（FNV-1a，32 位）。只用来比“是不是同一条”，不是密码学哈希。
+  static String _noticeIdentityOf(String body) {
+    var h = 0x811c9dc5;
+    final t = body.trim();
+    for (final b in utf8.encode(t)) {
+      h = ((h ^ b) * 0x01000193) & 0xffffffff;
+    }
+    return '${t.length}-${h.toRadixString(16)}';
   }
 
   // ─── ADIF 导出选项 ───
@@ -1319,10 +2552,34 @@ class AppState extends ChangeNotifier {
   // 实验室：允许手机横屏显示
   bool labLandscape = false;
 
+  /// 传感器辅助定位：用加速度计判断是否真的在移动、用指南针补正低速航向。
+  /// 仅 Android 生效（见 lib/motion.dart），其它平台上开关无效、不影响使用。
+  bool sensorAssist = true;
+
   void setLabLandscape(bool v) {
     labLandscape = v;
     persist();
     _applyOrientation();
+    _notify();
+  }
+
+  /// 要不要监听「在不在动 / 航向」这一类传感器。
+  ///
+  /// ⚠ 与「要不要步数」**不是**一件事：计步器与加速度计同属一个原生监听器，
+  /// 而它无论用户怎么设都必须注册（否则关掉传感器辅助的人连步数都没了 ——
+  /// issue #23 的现场）。这个 getter 只决定加速度计/旋转矢量/磁力计要不要开；
+  /// 顺带把碰撞检测也算进来（它也要加速度计，见 [crashDetectEnabled]）。
+  bool get _needMotion => sensorAssist || crashDetectEnabled;
+
+  /// 传感器辅助开关：打开时若正在定位就立刻启动传感器监听，
+  /// 关闭时**只关掉运动那一部分**（计步器继续跑，见 [_needMotion]）。
+  void setSensorAssist(bool v) {
+    if (sensorAssist == v) return;
+    sensorAssist = v;
+    if (loc.running) {
+      unawaited(MotionService.instance.start(motion: _needMotion));
+    }
+    persist();
     _notify();
   }
 
@@ -1423,6 +2680,28 @@ class AppState extends ChangeNotifier {
   /// 我的位置轨迹（最近 N 个定位点）
   final List<TrackPt> myTrack = [];
 
+  /// **真正发到服务器去的那些点**（信标点），画在地图上与轨迹区分开。
+  ///
+  /// 为什么不从 [myTrack] 里挑：轨迹点会被抽稀、封顶（[maxTrackPts]）、
+  /// 确认跳变时还会整条清空 —— 那是「屏幕上这条线好看」的语义。而「这个点
+  /// 我发出去了」是个**事实**，不该被抽稀或封顶吃掉，也不该因为随后跳变
+  /// 确认而消失（aprs.fi 上确实已经收到了）。所以另存一份，且只在
+  /// **真的发出去**（connected）时记。
+  ///
+  /// 上限 [maxBeaconMarks]：只用于地图标注，不需要全量历史 ——
+  /// 全量在按天的台账里（见 TrackLogStore）。
+  final List<TrackPt> beaconMarks = [];
+  static const int maxBeaconMarks = 200;
+
+  /// 「转弯打点」的最低速度（km/h）：低于它的航向变化一律不算转弯。
+  /// 静止时 GPS 航向是噪声、指南针也会被身边铁器带偏，不设这道闸
+  /// 就会出现「停着不动也一直上报」。
+  static const double _kTurnMinSpeedKmh = 5;
+
+  /// 「转弯打点」两次之间的最小间隔（秒）：防止连续弯道上把信道刷满。
+  /// 30° 阈值在发卡弯上几秒就能满足一次，而 APRS 是共享信道。
+  static const double _kTurnMinGapSec = 20;
+
   Station? get myStation => myHasFix
       ? Station(
           call: myCall,
@@ -1464,6 +2743,8 @@ class AppState extends ChangeNotifier {
       beaconEnabled = p.getBool('beacon') ?? beaconEnabled;
       beaconAutoAsked = p.getBool('beaconAutoAsked') ?? beaconAutoAsked;
       beaconInterval = p.getInt('beaconInterval') ?? beaconInterval;
+      beaconNetInterval =
+          p.getInt('beaconNetInterval') ?? beaconNetInterval;
       smartBeaconEnabled =
           p.getBool('smartBeaconOn') ?? smartBeaconEnabled;
       final smartJson = p.getString('smartTiers');
@@ -1484,12 +2765,68 @@ class AppState extends ChangeNotifier {
           p.getBool('beaconIncludeCourse') ?? beaconIncludeCourse;
       beaconIncludeBattery =
           p.getBool('beaconIncludeBattery') ?? beaconIncludeBattery;
+      // 手填的数据扩展：键不存在时保持 null（= 不发），不能回落成 0 ——
+      // 回落成 0 会让「从没填过」变成「填了 0」，一升级就多发一项假数据。
+      // （用户清空输入框时 _writePrefs 会把键 remove 掉，所以「删掉」
+      //  重启后确实会回到「不发送」，不会又被旧值填回来。）
+      beaconPowerW = p.getDouble('beaconPowerW');
+      beaconAntennaHeightFt = p.getDouble('beaconAntennaHeightFt');
+      beaconGainDb = p.getDouble('beaconGainDb');
+      beaconAltOverrideM = p.getDouble('beaconAltOverrideM');
+      aprsStatusText = p.getString('aprsStatusText') ?? aprsStatusText;
+      beaconIncludeHr = p.getBool('beaconIncludeHr') ?? beaconIncludeHr;
+      beaconBarDetailed =
+          p.getBool('beaconBarDetailed') ?? beaconBarDetailed;
+      networkSymbol = p.getString('networkSymbol') ?? networkSymbol;
+      extGpsStandby = p.getBool('extGpsStandby') ?? extGpsStandby;
+      hrAlarmEnabled = p.getBool('hrAlarmEnabled') ?? hrAlarmEnabled;
+      hrAlarmHigh = p.getInt('hrAlarmHigh') ?? hrAlarmHigh;
+      hrAlarmLow = p.getInt('hrAlarmLow') ?? hrAlarmLow;
+      crashDetectEnabled =
+          p.getBool('crashDetectEnabled') ?? crashDetectEnabled;
+      emergencyTel = p.getString('emergencyTel') ?? emergencyTel;
+      beaconIncludeSteps =
+          p.getBool('beaconIncludeSteps') ?? beaconIncludeSteps;
+      // 计步基线：跨重启必须留着，否则重启后「今日步数」会从 0 重新数
+      _stepsBaseline = p.getInt('stepsBaseline') ?? _stepsBaseline;
+      _stepsDayKey = p.getString('stepsDayKey') ?? _stepsDayKey;
+      _stepsCarry = p.getInt('stepsCarry') ?? _stepsCarry;
+      beaconIncludeTripMileage =
+          p.getBool('beaconIncludeTripMileage') ?? beaconIncludeTripMileage;
+      beaconIncludeTotalMileage = p.getBool('beaconIncludeTotalMileage') ??
+          beaconIncludeTotalMileage;
+      totalMileageKm = p.getDouble('totalMileageKm') ?? totalMileageKm;
+      beaconForceCoarse =
+          p.getBool('beaconForceCoarse') ?? beaconForceCoarse;
+      bleHrId = p.getString('bleHrId') ?? bleHrId;
+      bleHrName = p.getString('bleHrName') ?? bleHrName;
+      // 只恢复「记住的是哪台」，不自动连（权限/设备不在身边时静默失败更困惑）
+      if (bleHrId.isNotEmpty) {
+        bleHr.deviceId = bleHrId;
+        bleHr.deviceName = bleHrName;
+      }
+      // 佳明：恢复链接，但**不自动开跑** —— 分享链接是有时效的（活动结束后
+      // 页面就没点了），开机自动去抓一个过期链接只会刷错误日志。
+      garminUrl = p.getString('garminUrl') ?? garminUrl;
+      garminOn = false;
       coordDatum = p.getString('coordDatum') ?? coordDatum;
       darkMode = p.getBool('darkMode') ?? darkMode;
       weatherEnabled = p.getBool('weatherEnabled') ?? weatherEnabled;
+      noticeBanner = p.getBool('noticeBanner') ?? noticeBanner;
       locale = p.getString('locale') ?? locale;
       themeColor = p.getString('themeColor') ?? themeColor;
-      uiScale = p.getDouble('uiScale') ?? uiScale;      mapType = p.getString('mapType') ?? mapType;
+      uiScale = p.getDouble('uiScale') ?? uiScale;
+      // 界面材质：认不出的值（改坏 / 将来新增档位）一律回落「关闭」
+      uiMaterial = uiMaterialName(
+        uiMaterialOf(p.getString('uiMaterial') ?? uiMaterial),
+      );
+      uiLayout = uiLayoutName(
+        uiLayoutOf(p.getString('uiLayout') ?? uiLayout),
+      );
+      mapType = p.getString('mapType') ?? mapType;
+      // 离线地图：缓存开关与「仅离线」模式
+      tileCacheOn = p.getBool('tileCacheOn') ?? tileCacheOn;
+      offlineOnly = p.getBool('offlineOnly') ?? offlineOnly;
       updateChannel = p.getString('updateChannel') ?? updateChannel;
       adifMode = p.getString('adifMode') ?? adifMode;
       adifSubMode = p.getBool('adifSubMode') ?? adifSubMode;
@@ -1518,7 +2855,13 @@ class AppState extends ChangeNotifier {
             ..addAll(ctr);
       } catch (_) {}
       receiveOthers = p.getBool('receiveOthers') ?? receiveOthers;
+      // 功能引导已读集合（见 lib/guide.dart）
+      try {
+        final gseen = p.getStringList('guideSeen');
+        if (gseen != null) guideSeen..clear()..addAll(gseen);
+      } catch (_) {}
       labLandscape = p.getBool('labLandscape') ?? labLandscape;
+      sensorAssist = p.getBool('sensorAssist') ?? sensorAssist;
       oobeDone = p.getBool('oobeDone') ?? oobeDone;
       aprs.server = p.getString('server') ?? aprs.server;
       aprs.port = p.getInt('port') ?? aprs.port;
@@ -1611,6 +2954,8 @@ class AppState extends ChangeNotifier {
       // 加载收藏/手动联系人
       _loadStations(p);
       // 应用保存的主题（深色/自定义色）——必须在 initialized 前，避免先渲染默认皮肤
+      // 主题要在 applySavedTheme 之前加载：后者会读当前主题的令牌覆写
+      await ThemeController.instance.load(p);
       applySavedTheme();
       initialized = true;
       _applyOrientation();
@@ -1625,90 +2970,166 @@ class AppState extends ChangeNotifier {
 
   /// 保存当前设置到本地（重启后保留）
   void persist() {
-    SharedPreferences.getInstance()
-        .then((p) {
-          p.setString('myCall', myCall);
-          p.setInt('mySsid', mySsid);
-          p.setString('mySymbol', mySymbol);
-          p.setString('myComment', myComment);
-          p.setBool('beacon', beaconEnabled);
-          p.setBool('beaconAutoAsked', beaconAutoAsked);
-          p.setInt('beaconInterval', beaconInterval);
-          _ensureSmartTiers();
-          p.setBool('smartBeaconOn', smartBeaconEnabled);
-          p.setString(
-              'smartTiers',
-              jsonEncode(smartTiers.map((t) => t.toJson()).toList()));
-          p.setBool('beaconIncludeSpeed', beaconIncludeSpeed);
-          p.setBool('beaconIncludeCourse', beaconIncludeCourse);
-          p.setBool('beaconIncludeBattery', beaconIncludeBattery);
-          p.setString('coordDatum', coordDatum);
-          p.setBool('darkMode', darkMode);
-          p.setBool('weatherEnabled', weatherEnabled);
-          p.setString('locale', locale);
-          p.setString('themeColor', themeColor);
-          p.setDouble('uiScale', uiScale);
-          p.setString('mapType', mapType);
-          p.setString('updateChannel', updateChannel);
-          p.setString('adifMode', adifMode);
-          p.setBool('adifSubMode', adifSubMode);
-          p.setString('adifBand', adifBand);
-          p.setString('adifFreq', adifFreq);
-          p.setBool('adifStripSsid', adifStripSsid);
-          p.setString('locationMode', locationMode);
-          p.setBool('useSimLocation', useSimLocation);
-          p.setDouble('filterLat', filterLat);
-          p.setDouble('filterLng', filterLng);
-          p.setInt('filterRadius', filterRadius);
-          p.setInt('maxStations', maxStations);
-          p.setInt('maxPackets', maxPackets);
-          p.setInt('onlineWindowMin', onlineWindowMin);
-          p.setInt('maxTrackPts', maxTrackPts);
-          p.setBool('filterFollow', filterFollow);
-          p.setStringList('receiveCountries', receiveCountries);
-          p.setBool('receiveOthers', receiveOthers);
-          p.setBool('labLandscape', labLandscape);
-          p.setBool('oobeDone', oobeDone);
-          p.setString('server', aprs.server);
-          p.setInt('port', aprs.port);
-          p.setString('passcode', aprs.passcode);
-          p.setString('dataSource', dataSource);
-          p.setStringList('enabledSources', enabledSources.toList());
-          p.setBool('igateEnabled', igateEnabled);
-          p.setBool('igateTwoWay', igateTwoWay);
-          if (myHasFix && myLat != null && myLng != null) {
-            p.setDouble('myLat', myLat!);
-            p.setDouble('myLng', myLng!);
-          }
-          // 保存消息
-          final msgsJson = jsonEncode(messages.map((m) => m.toJson()).toList());
-          p.setString('messages', msgsJson);
-          // 保存群聊
-          final groupsJson = jsonEncode(
-            chatGroups.map((g) => g.toJson()).toList(),
-          );
-          p.setString('chatGroups', groupsJson);
-        })
-        .catchError((_) {});
+    unawaited(persistNow());
     _notify();
+  }
+
+  /// 保存当前设置并**等到写入调用完成**。
+  ///
+  /// 与 [persist] 的区别：那个是「调用即返回」的顺手保存，适合 UI 上的每次改动；
+  /// 这个可以被 await —— 备份导出前必须用它。SharedPreferences 的 setX 会同步
+  /// 更新内存缓存（磁盘写入才是异步的），所以 await 到这里，导出读到的就一定是新值。
+  /// 少了这一步，刚改完设置就导出会**静默导出旧值**——比报错难发现得多。
+  Future<void> persistNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await _writePrefs(p);
+    } catch (_) {}
+  }
+
+  /// [persistNow] 的真正写入口（抽出来是为了让「导出前落盘」与「顺手保存」共用同一份键列表）
+  Future<void> _writePrefs(SharedPreferences p) async {
+    await p.setString('myCall', myCall);
+    await p.setInt('mySsid', mySsid);
+    await p.setString('mySymbol', mySymbol);
+    await p.setString('myComment', myComment);
+    await p.setBool('beacon', beaconEnabled);
+    await p.setBool('beaconAutoAsked', beaconAutoAsked);
+    await p.setInt('beaconInterval', beaconInterval);
+    await p.setInt('beaconNetInterval', beaconNetInterval);
+    _ensureSmartTiers();
+    await p.setBool('smartBeaconOn', smartBeaconEnabled);
+    await p.setString(
+        'smartTiers',
+        jsonEncode(smartTiers.map((t) => t.toJson()).toList()));
+    await p.setBool('beaconIncludeSpeed', beaconIncludeSpeed);
+    await p.setBool('beaconIncludeCourse', beaconIncludeCourse);
+    await p.setBool('beaconIncludeBattery', beaconIncludeBattery);
+    // 手填的位置报文数据扩展（留空 = 不发）
+    //
+    // ⚠ 留空时必须**删掉键**，不能只是「跳过写入」：跳过等于把上一次的值
+    // 永久留在磁盘上 —— 用户清空输入框、重启后旧值又回来了，看起来就是
+    // 「这些附加项一旦设过就删不掉」（用户报的就是这个）。
+    // null 在 SharedPreferences 里没有对应类型，所以用 remove 表达
+    // 「没有这一项」；[SharedPreferences.remove] 对不存在的键是安全的。
+    if (beaconPowerW != null) {
+      await p.setDouble('beaconPowerW', beaconPowerW!);
+    } else {
+      await p.remove('beaconPowerW');
+    }
+    if (beaconAntennaHeightFt != null) {
+      await p.setDouble('beaconAntennaHeightFt', beaconAntennaHeightFt!);
+    } else {
+      await p.remove('beaconAntennaHeightFt');
+    }
+    if (beaconGainDb != null) {
+      await p.setDouble('beaconGainDb', beaconGainDb!);
+    } else {
+      await p.remove('beaconGainDb');
+    }
+    if (beaconAltOverrideM != null) {
+      await p.setDouble('beaconAltOverrideM', beaconAltOverrideM!);
+    } else {
+      await p.remove('beaconAltOverrideM');
+    }
+    await p.setString('aprsStatusText', aprsStatusText);
+    await p.setBool('beaconIncludeHr', beaconIncludeHr);
+    await p.setBool('beaconBarDetailed', beaconBarDetailed);
+    await p.setString('networkSymbol', networkSymbol);
+    await p.setBool('extGpsStandby', extGpsStandby);
+    await p.setBool('hrAlarmEnabled', hrAlarmEnabled);
+    await p.setInt('hrAlarmHigh', hrAlarmHigh);
+    await p.setInt('hrAlarmLow', hrAlarmLow);
+    await p.setBool('crashDetectEnabled', crashDetectEnabled);
+    await p.setString('emergencyTel', emergencyTel);
+    await p.setBool('beaconIncludeSteps', beaconIncludeSteps);
+    await p.setInt('stepsBaseline', _stepsBaseline);
+    await p.setString('stepsDayKey', _stepsDayKey);
+    await p.setInt('stepsCarry', _stepsCarry);
+    await p.setBool('beaconIncludeTripMileage', beaconIncludeTripMileage);
+    await p.setBool('beaconIncludeTotalMileage', beaconIncludeTotalMileage);
+    await p.setDouble('totalMileageKm', totalMileageKm);
+    await p.setBool('beaconForceCoarse', beaconForceCoarse);
+    await p.setString('bleHrId', bleHrId);
+    await p.setString('bleHrName', bleHrName);
+    await p.setString('garminUrl', garminUrl);
+    await p.setString('coordDatum', coordDatum);
+    await p.setBool('darkMode', darkMode);
+    await p.setBool('weatherEnabled', weatherEnabled);
+    await p.setBool('noticeBanner', noticeBanner);
+    await p.setString('locale', locale);
+    await p.setString('themeColor', themeColor);
+    await p.setDouble('uiScale', uiScale);
+    await p.setString('uiMaterial', uiMaterial);
+    await p.setString('uiLayout', uiLayout);
+    await p.setString('mapType', mapType);
+    await p.setBool('tileCacheOn', tileCacheOn);
+    await p.setBool('offlineOnly', offlineOnly);
+    await p.setString('updateChannel', updateChannel);
+    await p.setString('adifMode', adifMode);
+    await p.setBool('adifSubMode', adifSubMode);
+    await p.setString('adifBand', adifBand);
+    await p.setString('adifFreq', adifFreq);
+    await p.setBool('adifStripSsid', adifStripSsid);
+    await p.setString('locationMode', locationMode);
+    await p.setBool('useSimLocation', useSimLocation);
+    await p.setDouble('filterLat', filterLat);
+    await p.setDouble('filterLng', filterLng);
+    await p.setInt('filterRadius', filterRadius);
+    await p.setInt('maxStations', maxStations);
+    await p.setInt('maxPackets', maxPackets);
+    await p.setInt('onlineWindowMin', onlineWindowMin);
+    await p.setInt('maxTrackPts', maxTrackPts);
+    await p.setBool('filterFollow', filterFollow);
+    await p.setStringList('receiveCountries', receiveCountries);
+    await p.setStringList('guideSeen', guideSeen.toList());
+    await p.setBool('receiveOthers', receiveOthers);
+    await p.setBool('labLandscape', labLandscape);
+    await p.setBool('sensorAssist', sensorAssist);
+    await p.setBool('oobeDone', oobeDone);
+    await p.setString('server', aprs.server);
+    await p.setInt('port', aprs.port);
+    await p.setString('passcode', aprs.passcode);
+    await p.setString('dataSource', dataSource);
+    await p.setStringList('enabledSources', enabledSources.toList());
+    await p.setBool('igateEnabled', igateEnabled);
+    await p.setBool('igateTwoWay', igateTwoWay);
+    if (myHasFix && myLat != null && myLng != null) {
+      p.setDouble('myLat', myLat!);
+      p.setDouble('myLng', myLng!);
+    }
+    // 保存消息
+    final msgsJson = jsonEncode(messages.map((m) => m.toJson()).toList());
+    await p.setString('messages', msgsJson);
+    // 保存群聊
+    final groupsJson = jsonEncode(
+      chatGroups.map((g) => g.toJson()).toList(),
+    );
+    await p.setString('chatGroups', groupsJson);
+    // 主题（含用户自建的全部主题与当前激活项）
+    await ThemeController.instance.saveTo(p);
   }
 
   /// 仅保存消息列表到本地
   void _saveMessages() {
-    SharedPreferences.getInstance()
-        .then((p) {
-          final json = jsonEncode(messages.map((m) => m.toJson()).toList());
-          p.setString('messages', json);
-          final readJson = jsonEncode(
-            _readAt.map((k, v) => MapEntry(k, v.millisecondsSinceEpoch)),
-          );
-          p.setString('readAt', readJson);
-          final groupReadJson = jsonEncode(
-            _groupReadAt.map((k, v) => MapEntry(k, v.millisecondsSinceEpoch)),
-          );
-          p.setString('groupReadAt', groupReadJson);
-        })
-        .catchError((_) {});
+    unawaited(_saveMessagesNow());
+  }
+
+  /// 消息列表 + 两套已读时间点落盘（可 await，供备份导出前强制刷新）
+  Future<void> _saveMessagesNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final json = jsonEncode(messages.map((m) => m.toJson()).toList());
+      p.setString('messages', json);
+      final readJson = jsonEncode(
+        _readAt.map((k, v) => MapEntry(k, v.millisecondsSinceEpoch)),
+      );
+      p.setString('readAt', readJson);
+      final groupReadJson = jsonEncode(
+        _groupReadAt.map((k, v) => MapEntry(k, v.millisecondsSinceEpoch)),
+      );
+      p.setString('groupReadAt', groupReadJson);
+    } catch (_) {}
   }
 
   /// 初始化官方 APRS 设备识别库：内置快照/本地缓存先行，随后静默拉取官方更新。
@@ -1763,6 +3184,35 @@ class AppState extends ChangeNotifier {
     _wireTnc();
     _wireAudio();
     _wirePkwdwpl();
+    // 蓝牙心率带：状态变化只影响 UI 与信标备注，通知一次即可。
+    bleHr.onChanged = () {
+      if (_disposed) return;
+      // **必须把读数同步到 `myHr`**：地图上的心率胶囊、上报横杠上的 ❤、以及信标
+      // 备注里的 `HR=` 读的都是 `myHr`；而设置页那张卡直接读 `bleHr.bpm`。
+      // 这里如果只 `_notify()`，就会出现「设置页显示已连接、也有读数，**主屏幕却
+      // 一直没有心率、信标也不带 HR**」—— 用户实测报的就是这个（同步漏了一处）。
+      //
+      // 优先级：胸带（BLE）比手表准，所以**它有读数时优先用它**；没有读数且已断开时，
+      // 若佳明没在供数据就清空（避免主屏一直显示一个过期读数）。
+      final b = bleHr.bpm;
+      if (b != null && b > 0) {
+        myHr = b;
+      } else if (!bleHr.connected && !(garmin.on && garmin.fresh)) {
+        myHr = null;
+      }
+      _checkHrAlarm();
+      _checkCrash();
+      _notify();
+    };
+    // 佳明 LiveTrack：每个新点都当作一次「自己」的定位（见 _onGarminPoint）。
+    garmin.onPoint = _onGarminPoint;
+    garmin.onChanged = () {
+      if (_disposed) return;
+      _notify();
+    };
+    // 「分享给 APRSlocus」：佳明 App 把 LiveTrack 链接分享进来 → 存下并直接开跑。
+    shareIn.onShared = _onSharedIncoming;
+    unawaited(shareIn.ensureInit());
     _simTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (devMode) _simTick();
     });
@@ -1770,16 +3220,53 @@ class AppState extends ChangeNotifier {
       if (_disposed) return;
       // 自动定时上报仅在链路可用时进行；未连接不发送（避免误以为在上报）。
       // TNC 模式下还需用户显式开启「射频信标」（见 canAutoBeacon）。
-      if (canAutoBeacon &&
-          myHasFix &&
-          DateTime.now().difference(_lastBeacon).inSeconds >=
-              beaconIntervalNow) {
-        _sendBeaconNow();
+      // 上报判据：**定时到了，或者走够了**（智能信标的距离打点）。
+      //   * 定时那条是老行为，保证「哪怕原地不动也定期报个平安」；
+      //   * 距离那条专治「走得快时两点之间被拉成直线、拐弯全被抹平」——
+      //     走得快就按距离补点，停下来距离不动、自然退回纯定时。
+      // 两条都不成立时什么都不做（不空转、不 notify）。
+      if (canAutoBeacon && myHasFix) {
+        final sinceSec =
+            DateTime.now().difference(_lastBeacon).inSeconds.toDouble();
+        final dueByTime = sinceSec >= beaconIntervalNow;
+        final minDistM = beaconMinDistNow;
+        final dueByDist = minDistM > 0 && beaconDistMovedM >= minDistM;
+        final minTurn = beaconMinTurnNow;
+        // 转弯那条额外两道闸（缺一个都会变成「每个点都发」）：
+        //   * **行驶中才算**（≥5 km/h）：停着不动时航向本来就是噪声，
+        //     而指南针/多普勒在低速下的抖动足以越过 45°；
+        //   * **距上次至少 20 秒**：连续发卡弯上 30° 阈值可能几秒就满足一次，
+        //     不设最小间隔会把信道刷满 —— 各家智能信标都带速率上限正是这个原因。
+        final dueByTurn = minTurn > 0 &&
+            sinceSec >= _kTurnMinGapSec &&
+            (mySpeed ?? 0) >= _kTurnMinSpeedKmh &&
+            beaconTurnDeg >= minTurn;
+        if (dueByTime || dueByDist || dueByTurn) _sendBeaconNow();
       }
       // 台站“有效状态”翻转（如超 5 分钟变离线、移动→静止）时才推进版本并通知，
       // 否则不触发任何页面重建；无翻转只刷新秒级 UI（tick）。
       if (_bumpStatusVersionIfChanged()) _notify();
       _checkStationAchievement();
+      // 碰撞/摔倒（issue #26）：它**不能**只挂在定位回调上 —— 事件可能在没开定位、
+      // 或定位很慢（静止后系统常常不再给点）的时候发生，而那正是这个功能要管的场景。
+      //
+      // 每 2 秒拉一次原生快照：`refresh()` 是一次平台通道往返，每秒一次没必要
+      // （判据里「静止 12 秒」的粒度本来就粗），而 2 秒足够让告警在十几秒内出来。
+      if (crashDetectEnabled) {
+        // 没在跑就起一个：碰撞检测不该依赖「用户是否开了定位」
+        if (!MotionService.instance.running) {
+          unawaited(MotionService.instance.start(motion: true));
+        }
+        if (++_crashPollTick >= 2) {
+          _crashPollTick = 0;
+          unawaited(MotionService.instance.refresh().then((_) {
+            if (!_disposed) _checkCrash();
+          }));
+        }
+      }
+      // 外置 GPS（佳明）与手机 GPS 的启停对齐（issue #21-4）：很便宜，
+      // 只在状态翻转时做事，不需要再开一个定时器。
+      _syncPhoneGps();
       // 每秒刷新：只通知“秒级 UI”（信标倒计时/收包速率），
       // 不再全量 _notify() 重建整个页面树
       tick.value++;
@@ -1800,6 +3287,19 @@ class AppState extends ChangeNotifier {
       final raw =
           '$myFullCall>APALOC,TCPIP*:>APRSlocus CONNECT v$appVersion $platformTag';
       aprs.send(raw);
+      // 用户填了自定义状态文本时，紧跟着**补发一帧**自定义状态报文：
+      // 保活帧会把 aprs.fi 上「台站状态」那一栏改写成内置的 CONNECT 文本，
+      // 不补一帧的话，用户自己的状态每 15 秒就被顶掉一次（看起来就是
+      // 「状态根本设不住」）。
+      //
+      // 这里**不走 [sendStatus]**：那条路会改连接状态、写日志、_notify()，
+      // 于是界面每 15 秒弹一次「状态已发送」—— 保活是后台行为，不该打扰用户。
+      final custom = aprsStatusText.trim();
+      if (custom.isNotEmpty) {
+        var txt = custom.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
+        if (txt.length > statusMaxLen) txt = txt.substring(0, statusMaxLen);
+        aprs.send('$myFullCall>$_destHeader:>$txt');
+      }
       _lastTx = DateTime.now();
       _updateNotification(); // 定期刷新通知内容（台站数/收包数）
     });
@@ -1883,6 +3383,10 @@ class AppState extends ChangeNotifier {
     unawaited(audio.disconnect(manual: false));
     if (_stationsDirty) _saveStations();
     persist();
+    // 个人历史台账也要落盘：手动「退出应用」是原生直接结束进程，
+    // dispose() **不会被调用** —— 台账的落盘节流是 8 秒，不在这里 flush，
+    // 最后一段轨迹就丢了。
+    await TrackLogStore.instance.flush();
     // 留出时间让 SharedPreferences / 台站文件写入落盘
     await Future.delayed(const Duration(milliseconds: 400));
   }
@@ -1898,6 +3402,8 @@ class AppState extends ChangeNotifier {
     tick.dispose();
     _stationsCtrl.close();
     loc.stop();
+    // 把内存里攒着、还没到节流时间的台账落盘（退出后不丢最后几个点）
+    unawaited(TrackLogStore.instance.flush());
     aprs.disconnect();
     // 射频链路也要收尾（原先只释放了 APRS-IS）：
     // pkwdwpl 的传输层持有一个 EventChannel 订阅，不释放会一直挂在平台通道上；
@@ -1996,6 +3502,15 @@ class AppState extends ChangeNotifier {
   /// 「取条件 → 去重 → 发送 → 计账」。**去重是必须的**：同一帧会经不同
   /// 中继路径多次到达，不去重会让互联网上出现多条一模一样的报文。
   void _gateRfToIs(String line) {
+    // 先记账再判条件：射频到底有没有收到报文，与网关开不开、IS 通不通无关。
+    // 这是「统计恒为 0」时唯一能自证的数字（见 [igateRfSeen] 的注释）。
+    //
+    // 但「链路没连上」这一条必须排在记账之前：射频链路是断的却还在冒数，
+    // 只能说明**有别的链路在往同一条管线里灌**（同时绑了同一台设备、
+    // APRS-IS 被当成射频…）。那时这个数就是假的 —— 而“假的自证数字”
+    // 比“没有数字”更糟：用户会拿它去证明「射频没问题」，然后往错的方向查。
+    if (!igateRfUp) return;
+    igateRfSeen++;
     if (!igateEnabled || !isUp(srcAprsIs)) return;
     final d = Igate.toIs(tnc2: line, myFullCall: myFullCall);
     if (!d.ok) {
@@ -2005,6 +3520,11 @@ class AppState extends ChangeNotifier {
         if (igateBlocked++ % 20 == 1) {
           _log(LogLevel.debug, '网关', '拒绝转递（${d.reason}）：${_trunc(line)}');
         }
+      } else if (_igateRejectLog++ % 50 == 1) {
+        // 其余拒绝（own-packet / malformed / empty-body）原先完全不留痕：
+        // 网关一条都没转，日志里却什么也看不到，只能靠猜。
+        _log(LogLevel.debug, '网关',
+            '未转递（${d.reason}）· 射频已收 $igateRfSeen 条：${_trunc(line)}');
       }
       return;
     }
@@ -2030,6 +3550,10 @@ class AppState extends ChangeNotifier {
   /// 累计被拒的 RF→IS 转递数（含环路拒收），仅用于日志节流与诊断
   int igateBlocked = 0;
   int _packetsGatedLog = 0;
+
+  /// RF→IS 的「未转递」日志节流计数（与 IS→RF 的 [_gateRejectLog] 分开：
+  /// 合用一个的话，两个方向的报文会互相抢节流额度）
+  int _igateRejectLog = 0;
 
   /// IS → RF：把 APRS-IS 上发往「刚在射频上听到过」的台站的消息送到射频。
   ///
@@ -2122,13 +3646,32 @@ class AppState extends ChangeNotifier {
     igateEnabled = v;
     if (!v) igateTwoWay = false; // 网关关了就不该还留着「往射频转」的开关
     if (v) {
+      // 三种「开了也白开」的情形要分开说：只报「没勾选」是不够的 ——
+      // 勾了但链路没连上（线速不对 / 设备没开机 / IS 掉线）同样转不了，
+      // 而那时的界面与日志与「已正常工作」完全一样（统计一直是 0）。
       if (!igateReady) {
         _log(LogLevel.warn, '网关',
             '未启用射频来源（TNC / 音频），网关没有可转递的射频链路');
-      } else if (!aprsIsOn) {
+      } else if (!igateRfUp) {
         _log(LogLevel.warn, '网关',
-            '未启用 APRS-IS，网关没有可转递的目标网络');
+            '射频来源已勾选但链路未连上（TNC / 音频），网关暂时转递不了任何报文');
       }
+      if (!aprsIsOn) {
+        _log(LogLevel.warn, '网关', '未启用 APRS-IS，网关没有可转递的目标网络');
+      } else if (!isUp(srcAprsIs)) {
+        _log(LogLevel.warn, '网关',
+            'APRS-IS 未连上，网关暂时没有可转递的目标网络');
+      }
+      if (igateActive) {
+        _log(LogLevel.info, '网关', '网关条件已齐：射频接收 → APRS-IS 开始转递');
+      }
+      // 这里**刻意不清空统计**。
+      //
+      // 清空统计是 [resetIgateStats] 的职责（按钮，以及切换数据来源时）。
+      // 若这里也清一遍，「统计一直是 0」就会被这个开关本身制造出来：
+      // 数字不涨 → 用户把网关关了再开（最自然的第一反应）→ 数字归零 →
+      // 再开回来也永远看不到它曾经涨过。诊断路径被自己的界面堵死，
+      // 而且看起来像是「网关重新开始工作但依然什么都不转」。
       _igateDedupe.clear();
       _heard.clear();
     }
@@ -2158,6 +3701,9 @@ class AppState extends ChangeNotifier {
     igateGated = 0;
     igateToRf = 0;
     igateDupDropped = 0;
+    igateRfSeen = 0;
+    igateBlocked = 0;
+    igateLastReject = '';
     _igateDedupe.clear();
     _notify();
   }
@@ -2298,9 +3844,30 @@ class AppState extends ChangeNotifier {
     _updateNotification();
   }
 
-  /// 是否允许自动周期上报（射频来源需用户显式开启「射频信标」）
+  /// 是否允许**自动**周期上报。
+  ///
+  /// 「会不会真的自动发出去」只有这一个出口 —— 散在两处必然漂移（见
+  /// [beaconPhase] 的注释）。四个条件缺一不可：
+  ///
+  ///   ① 链路可用（[connected]）；
+  ///   ② 信标开着（[beaconEnabled]）；
+  ///   ③ **当前定位不是粗定位**（[myFixCoarse]）；
+  ///   ④ 射频来源（TNC/音频）还需用户显式开启「射频信标」。
+  ///
+  /// ── 为什么粗定位（网络/基站/被动）不自动上报（v1.6.163）──
+  ///
+  /// 自动上报是「我在这里」的公开宣告，而粗点常年偏几百米、还会原地漂 ——
+  /// 报出去的是个错坐标，收端（igate / 其他台站）看到的是一条乱跳的轨迹。
+  /// 网络定位从此只用来「在地图上给个大概位置」，不进入信道；GPS 一回来
+  /// 就自动恢复（倒计时按 [_lastBeacon] 算，所以那一刻会立刻补报一次）。
+  /// **手动「立即上报」不受影响**：那是用户的显式动作，知情且即时。
+  ///
+  /// 唯一的例外是 [beaconForceCoarse]：用户明确选择了「就要发网络定位」
+  /// （没有 GPS 的设备）时才放开这一道闸 —— 它是**用户自己的决定**，
+  /// 而不是代码替他默认。
   bool get canAutoBeacon => connected &&
       beaconEnabled &&
+      (!myFixCoarse || beaconForceCoarse || locationMode == 'network') &&
       (!usingRf || (usingTnc ? tnc.config.rfBeacon : audio.config.rfBeacon));
 
   /// 连接**所有已启用**来源（多选）。
@@ -2610,6 +4177,56 @@ class AppState extends ChangeNotifier {
     return comma < 0 ? p : p.substring(0, comma);
   }
 
+  /// 发送一帧**独立状态报文**（DTI `>`），返回整条报文原文（供 UI 回显）。
+  ///
+  /// 状态报文与位置报文是两种东西，这里必须分清楚：
+  ///   * 位置报文带上坐标 → 会移动你在 aprs.fi 等地图上的位置；
+  ///   * 状态报文不含坐标 → 只更新「台站状态」那一栏。
+  ///
+  /// 所以这个方法是**安全的**：即使在没有定位（`myHasFix == false`）时也能发，
+  /// 不会把台站扔到某个坐标上；这也是 [LinkDiag.testFrame] 当初选状态包做链路
+  /// 自检的原因，这里沿用同一形状。
+  ///
+  /// 文本留空时发内置的 APRSlocus 在线帧（`>APRSlocus CONNECT vX.Y.Z 平台`）——
+  /// 那正是连接成功时自动发的那一帧，用户手动发一次等价于「重新宣告我在线」。
+  ///
+  /// 超过 [statusMaxLen] 会被截断而不是拒发：APRS101 限 62 字符，截断能保住
+  /// 「状态可见」，而拒发只会让用户以为按钮坏了。
+  String sendStatus() {
+    var text = aprsStatusText.trim();
+    if (text.isEmpty) {
+      text = 'APRSlocus CONNECT v$appVersion $platformTag';
+    }
+    if (text.length > statusMaxLen) {
+      text = text.substring(0, statusMaxLen);
+    }
+    // 信息字段以 `>` 开头；换行会破坏 TNC2 单行结构，一律换成空格
+    text = text.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
+    final raw = '$myFullCall>$_destHeader:>$text';
+    _pushPacket(Packet(
+      raw,
+      myFullCall,
+      'APRS',
+      'status',
+      DateTime.now(),
+      info: text,
+    ));
+    _sendRaw(raw);
+    _lastTx = DateTime.now();
+    _log(LogLevel.info, '状态', '已发出状态报文：${_trunc(text)}');
+    // 状态报文有自己的三档：这条帧不含坐标，写成「位置已上报」会骗人
+    // （用户会以为位置包也发出去了）。
+    setConnStatus(
+      usingTnc
+          ? ConnPhase.statusSentTnc
+          : (usingAudio ? ConnPhase.statusSentAudio : ConnPhase.statusSent),
+      arg: myCall,
+    );
+    _notify();
+    _updateNotification();
+    return raw;
+  }
+
   /// 是否自动回复 ack。TNC 模式下可由用户在设备页关闭 ——
   /// 射频信道上每个 ack 都是一次真实发射，共用信道时需要能关掉。
   bool get _autoAckEnabled =>
@@ -2622,6 +4239,12 @@ class AppState extends ChangeNotifier {
 
   /// 当前数据来源下单条消息的长度上限；0 表示不限
   int get msgLenLimit => usingRf ? tncMaxMsgLen : 0;
+
+  /// 当前射频来源的 AX.25 单帧字节上限（TNC / 音频各自可配）。
+  ///
+  /// 手写报文（数据包控制台）也要按它提示 —— 超限在射频上是直接拒发，
+  /// 而 APRS-IS 那边是按 512 字节整行算，两者的限制不是一回事。
+  int get rfMaxFrame => usingTnc ? tnc.config.maxFrame : audio.config.maxFrame;
 
   /// 群聊是否可用。射频模式下禁用（见 [sendGroupMessage] 的说明）
   bool get groupChatAllowed => !usingRf;
@@ -2770,49 +4393,333 @@ class AppState extends ChangeNotifier {
       _notify();
     } else {
       _log(LogLevel.info, '定位', '定位服务已启动');
+      // 传感器与定位同生共死：没有定位就不需要判「在不在动」
+      // 计步与碰撞检测都要这个监听器，所以**无论传感器辅助开没开**都要起：
+      // motion 参数只决定加速度计/指南针那部分要不要注册（issue #23）。
+      unawaited(MotionService.instance.start(motion: _needMotion));
+      // 起来之后立刻拉一次：界面不必等到下一次定位回调才有步数/权限状态
+      unawaited(MotionService.instance.refresh().then((_) {
+        if (!_disposed) _syncSteps();
+      }));
     }
     return ok;
   }
 
   void stopTracking() {
     loc.stop();
+    // 监听器**不无条件停**：碰撞/摔倒检测（issue #26）是安全网，它不该因为
+    // 「用户关了定位」就一起失效 —— 关定位往往正是为了省电出门骑车。
+    // 其余情况照旧停掉（传感器是真实耗电项，用户关了定位就该安静下来）。
+    if (crashDetectEnabled) {
+      unawaited(MotionService.instance.start(motion: true));
+    } else {
+      unawaited(MotionService.instance.stop());
+    }
     myHasFix = false;
+    _resetSelfFix();
     locStatus = '定位已停止';
     _log(LogLevel.info, '定位', '定位已停止');
     _notify();
   }
 
-  void _onFix(
+  Future<void> _onFix(
     double lat,
     double lng,
     double alt,
     double speed,
     double bearing,
-  ) {
+    bool lastKnown,
+    double accuracy,
+    String source,
+  ) async {
     if (_disposed) return;
     if (useSimLocation) return; // 模拟位置模式下忽略 GPS 数据
+    // ── 佳明 LiveTrack 在跑且还新鲜时，**手机 GPS 让位** ──
+    //
+    // 两路同时在更新「我的位置」会互相打架：手表比手机准，而手机一侧随时可能
+    // 给出隧道/城市峡谷里的漂移点，把标记从手表的位置上拽走又拽回来。
+    // 只在「佳明还新鲜」（120 秒内有新点）时让位：活动结束、手机没网、
+    // 分享链接过期等情况下手机会自动接回来，不至于彻底没有位置。
+    if (garmin.on && garmin.fresh) return;
+
+    // ── 第一道（也是最后一道）闸：粗定位点 ──
+    //
+    // 症状（用户报的）：开着「GPS + 网络辅助」时，地图上的「我」会**飞来飞去**。
+    //
+    // 为什么原有的两道闸都拦不住它：
+    //   ① 精度门控（原生 150m / 网络 80m）看的是**系统自报的 accuracy**，而
+    //      基站/Wi-Fi 定位的精度字段经常报得很乐观（自报 20~40m，实际偏 200m+）；
+    //   ② 跳变守卫的阈值是 30km —— 那是给「缓存点跨城市」调的，而网络粗点的
+    //      漂移是 200m~3km，**整个落在阈值以下**，等于完全没被拦。
+    //
+    // 所以要按**来源**判，而不是只看精度：
+    //   * 非 GPS（网络/基站/被动）的点，在「GPS 刚更新过」时一律丢弃 ——
+    //     这才是「飞来飞去」的真正成因：GPS 在城市峡谷里一闪一断，
+    //     粗点就在缝里把标记拉走再拉回，来回横跳；
+    //   * GPS 真的停了 [_kCoarseHoldSec] 秒以上（室内/隧道）才允许粗点推动标记
+    //     —— 宁可把它当「最后的保底」，也不能让它参与每一次抖动；
+    //   * 粗点绝不进入静止防抖的滑窗、绝不推参照点、绝不写轨迹与历史台账、
+    //     **绝不自动上报**（见 canAutoBeacon）、也不推动 APRS-IS 过滤中心。
+    //
+    // 也就是说：粗点的全部作用就是「GPS 真的没了时，地图上还给个大概位置」。
+    // 它不产生任何对外的影响（信道、链路、轨迹、历史）。
+    //
+    // 还有一条容易漏的：闸必须在**传感器采样之前** —— 被丢掉的点没必要
+    // 多跑一次平台通道。
+    final coarse = !lastKnown && (source == 'network' || source == 'passive');
+    // ── 粗定位点绝不许覆盖「佳明给的位置」──
+    //
+    // ⚠ 这一条必须写在 `coarse` **声明之后**：第一版我把它插在 `_onFix` 开头
+    // （紧挨着「佳明让位」那条），本机 `dart format` 看不出问题，CI 的 analyze
+    // 直接报 `referenced_before_declaration` + `read_potentially_unassigned_final`
+    // —— 用到的变量要先声明，这种错误只能靠编译发现，别凭印象插代码。
+    //
+    // 为什么要挡：佳明**不新鲜**（活动结束 / 链接过期）时手机 GPS 会接回来，这是对的；
+    // 但**粗定位**不行 —— 它会拿一个偏几百米的基站质心去替换手表给的位置，而此刻
+    // 上报横杠多半显示着正常的倒计时（beaconPhase = counting），
+    // 用户完全看不出「正在发一个错坐标」。宁可保持上一个（手表的）位置，等真 GPS 接回来。
+    if (coarse && garmin.on) return;
+    if (coarse) {
+      final gapSec = _lastFixTime == null
+          ? 1 << 30
+          : DateTime.now().difference(_lastFixTime!).inSeconds;
+      final jumpKm = _lastFixLat == null
+          ? 0.0
+          : haversine(_lastFixLat!, _lastFixLng!, lat, lng);
+      // ① GPS 仍新鲜 → 粗点是噪声（**这就是「飞来飞去」的主因**）
+      // ② GPS 已停更很久，而粗点自己一口气跳出去 [_kCoarseJumpKm] 以上 →
+      //    不是一个可信的「原地兜底」，而是换个 Wi-Fi 就跳到街对面基站去了
+      if (gapSec < _kCoarseHoldSec || jumpKm > _kCoarseJumpKm) {
+        _log(
+          LogLevel.debug,
+          '定位',
+          '忽略粗定位点（来源 $source）：'
+          '距上次 GPS ${gapSec}s / 位移 ${jumpKm.toStringAsFixed(2)}km',
+        );
+        _notify();
+        return;
+      }
+    }
+
+    // 传感器辅助：拉一次最新的加速度计/指南针状态。
+    // 同一次定位只拉这一次 —— 后面的静止判定与航向补正共用它，
+    // 不为「用两次」而做两次平台通道往返。
+    final motion = sensorAssist
+        ? await MotionService.instance.refresh()
+        : MotionSample.unknown;
+    // 计步（issue #22-2）：步数不是「传感器辅助」的一部分 —— 它不参与定位判定，
+    // 但同一次采样里就有，所以在这里顺带同步一次。
+    // ⚠ 必须**在 sensorAssist 之外**也拿：关掉传感器辅助的用户同样会想要步数。
+    // 这里 await 掉（而不是 unawaited）是为了**确定性**：不 await 的话 `_syncSteps()`
+    // 读到的还是上一次的采样，步数会慢一拍（观感上像「计步不灵」）。
+    if (!sensorAssist) await MotionService.instance.refresh();
+    _syncSteps();
+
+    // ── 位置跳变守卫：不要用「瞬移的点」污染轨迹 ──
+    //
+    // 症状（用户报的）：轨迹每隔一会儿跳回一个旧位置、再跳回当前位置，来回横画。
+    // 根因在 Android 侧（系统缓存的位置被当成实时定位、每 10 秒上报一次），已在那里
+    // 修掉；这里守的是同一类问题的**其它来源**（网络定位漂移、IP 定位、跨平台差异）。
+    //
+    // 判据是「**短时间内**跨很远」：距上一轨迹点不到 [_kFixJumpWindowSec]、位移又超过
+    // [_kFixJumpKm] 才算可疑 —— 单看距离会误伤「停车几小时后开出去」这种合法位移。
+    // 可疑点先**只更新标记、不写轨迹**，连续 [_kFixConfirmNeed] 次都落在同一处
+    // （彼此相距 < [_kFixConfirmKm]）才认账。
+    //
+    // 为什么用「连续确认」而不是直接丢弃：真的换了地方也必须能恢复，否则轨迹会永远
+    // 卡在旧位置。确认后**清空轨迹从新位置重画**，而不是画一条横跨两地的直线 ——
+    // 那条线是假的，比没有轨迹更误导。
+    // 参照点是**上一次被接受的实时定位**，不是 `myTrack.last`：
+    //   * 静止时不再写轨迹点 → myTrack.last 可能已经是几小时前的点，那时
+    //     gapSec 必然超窗、守卫**整个失效**（正是本次改动引入的回归）；
+    //   * myTrack 为空时（刚启动、清空数据、刚确认过跳变）原本完全没有守卫。
+    if (!lastKnown && !coarse && _lastFixLat != null) {
+      final dKm = haversine(_lastFixLat!, _lastFixLng!, lat, lng);
+      // 「短时间内」跨很远才算跳变：中间本来就隔了很久的话，多半是合法位移
+      // （设备刚开、GPS 丢了一阵），那种情况宁可画一条跨越空档的线，也别把轨迹清掉。
+      final gapSec = DateTime.now().difference(_lastFixTime!).inSeconds;
+      if (dKm > _kFixJumpKm && gapSec < _kFixJumpWindowSec) {
+        final nearPending = _pendingFixLat != null &&
+            haversine(_pendingFixLat!, _pendingFixLng!, lat, lng) < _kFixConfirmKm;
+        if (nearPending) {
+          _pendingFixCount++;
+        } else {
+          _pendingFixLat = lat;
+          _pendingFixLng = lng;
+          _pendingFixCount = 1;
+        }
+        if (_pendingFixCount < _kFixConfirmNeed) {
+          _log(
+            LogLevel.info,
+            '定位',
+            '疑似跳变，暂不记录：距上次可信位置 ${dKm.toStringAsFixed(1)}km'
+                '（第 $_pendingFixCount 次，连续 $_kFixConfirmNeed 次一致才接受）',
+          );
+          // 标记也不动：先按「上一次可信位置」显示，避免地图上的「我」乱跳
+          _notify();
+          return;
+        }
+        _log(
+          LogLevel.info,
+          '定位',
+          '位置确认已变化（${_pendingFixCount} 次一致）：轨迹从新位置重新开始',
+        );
+        myTrack.clear();
+        _pendingFixLat = null;
+        _pendingFixLng = null;
+        _pendingFixCount = 0;
+      } else {
+        // 正常位移：清掉疑似计数
+        _pendingFixLat = null;
+        _pendingFixLng = null;
+        _pendingFixCount = 0;
+      }
+    }
+
+    // ── 最后一道闸：缓存位置只在「还没有过实时定位」时用 ──
+    //
+    // 原生侧在服务运行期间也会挡缓存点（Android 的 hasLiveFix），但**前台服务
+    // 重启后那个标记会归零**（比如系统回收、切回前台重连），于是它可能再次放行
+    // 一个几分钟前的缓存位置；而上层如果照收，标记就会被拉回旧位置 ——
+    // 症状正是用户报过的「轨迹跳回初始点」。这里记住「已经有过实时定位」，把这条
+    // 路径彻底封掉：缓存点此后只用来保证「有东西可显示」，不再改标记。
+    if (lastKnown && _hadLiveFix) {
+      _log(LogLevel.debug, '定位', '已有实时定位，忽略系统缓存位置');
+      return;
+    }
+
+    // ── 静止防抖（A+B）：见 lib/pos_quality.dart 的 [SelfFixFilter] ──
+    //
+    // 定位**源头**只负责「把明显不可信的点丢掉」（Android 侧 150m 精度门控、
+    // 网络点只在 GPS 停更时兜底、缓存点只在无实时定位时用）；而「可信但抖」
+    // 的点一直没人管 —— 静止时 GPS 在 20~150m 之间飘是常态，轨迹会被画成一小团
+    // 毛线球，信标上报的坐标也跟着哆嗦。这里做的就是把「可信但抖」修平。
+    //
+    // 只对**实时定位**做防抖：缓存位置（lastKnown）不是实时点，IP 定位是城市级
+    // 粗点 —— 两者都不该进滑动窗口（会把中位数拉跑），也不该影响静止判定。
+    final out = (lastKnown || coarse)
+        ? (lat, lng, false)
+        : _selfFilter.feed(
+            lat,
+            lng,
+            speed * 3.6,
+            accuracy,
+            sensorMoving: motion.moving,
+          );
+    final outLat = out.$1;
+    final outLng = out.$2;
+    final still = out.$3;
+
     final first = !myHasFix;
-    myLat = lat;
-    myLng = lng;
+    myLat = outLat;
+    myLng = outLng;
     myAlt = alt;
     myHasFix = true;
+    myFixCoarse = coarse;
+    // 粗定位的精度**不能照抄系统自报值**：它常报 20~40m 却实际偏几百米，
+    // 于是精度圈画得像 GPS 一样小，反而更骗人。给一个诚实的下限。
+    myAccuracy = coarse
+        ? (accuracy > _kCoarseAccuracyFloorM ? accuracy : _kCoarseAccuracyFloorM)
+        : (accuracy > 0 ? accuracy : 0);
+    if (!lastKnown && !coarse) {
+      // 只有实时 **GPS** 才推进参照点与「有过实时定位」标记；
+      // 缓存位置与粗定位都不算数（否则粗点会成为后续跳变判断的基准，
+      // 把「GPS 回来时归位」也误判成一次跳变）。
+      _lastFixLat = outLat;
+      _lastFixLng = outLng;
+      _lastFixTime = DateTime.now();
+      _hadLiveFix = true;
+    }
     // 速度 m/s → km/h；方位角度。
     // 静止时 GPS 也返回 speed=0/bearing=0，正常上报（000/000 表示静止）
-    mySpeed = speed * 3.6;
-    if (bearing >= 0) myCourse = bearing;
-    locStatus = '已定位';
-    // 记录我的轨迹（上限 maxTrackPts，间隔 >20m 才记录避免冗余）
+    //
+    // 粗定位**不更新速度与航向**：基站/Wi-Fi 定位没有多普勒，speed 常为 0、
+    // bearing 常为 0（或上一次的残值）。照收会让信标误报「静止/朝北」，
+    // 也会把沉浸页的航向朝上判定带偏。宁可沿用上一次 GPS 的值。
+    if (!coarse) {
+      mySpeed = speed * 3.6;
+      // 航向：低速时 GPS 的 course 不可信（多普勒解不出方向，常为 0 或不更新），
+      // 用指南针补正；正常行驶时仍用 GPS —— 磁力计在城里靠近铁/电机时会被干扰，
+      // 高速下反而是 GPS 更可靠。阈值 3km/h：步行/推车/慢骑覆盖，跑步以上交给 GPS。
+      if (bearing >= 0) myCourse = bearing;
+      if (motion.hasCompass &&
+          motion.heading >= 0 &&
+          motion.moving &&
+          mySpeed! < 3.0) {
+        myCourse = motion.heading;
+      }
+      // 转弯打点的航向样本（见 lib/turn_dot.dart）：只喂**真的在行驶**时的航向 ——
+      // 停着不动时 course 是噪声（多普勒解不出方向），喂进去等于给那道物理门送野值。
+      // 上报那一刻还有一道独立的速度闸（见 _tickTimer 里的判断），这里先用同一个
+      // 门限把样本筛掉 —— 两者是同一个常量，不会漂移。
+      if ((mySpeed ?? 0) >= _kTurnMinSpeedKmh) {
+        _turnDot.onCourse(myCourse, DateTime.now());
+      }
+    }
+    locStatus = coarse ? '网络定位（粗）' : (still ? '静止' : '已定位');
+    // 记录我的轨迹
+    //
+    // 三道门（缺一道就会出问题）：
+    //   ① `lastKnown` 不写 —— 缓存点可能几小时前、甚至在另一个城市；
+    //   ② **静止不写** —— 否则 GPS 抖动会被画成一团毛线球（这正是本次要修的）；
+    //   ③ 精度太差（> [SelfFixFilter.trackAccuracyLimitM]）不写 ——
+    //      弱信号下的点没信息量，只会把轨迹拉得东倒西歪。
+    // 抽稀门限**按速度自适应**（见 PosQuality.trackMinDistM）：固定 20m 在步行时
+    // 太粗、在高速时又太细。注意这只管**自己**的轨迹 —— 接收台站回到固定 20m
+    // 的朴素行为（见 _upsertStation 顶部说明）。
+    //
+    // 落点判据是**两条任一**（见 PosQuality 里那两个常量）：
+    //   * 位移 > 速度门限  → 拐弯不会被切角；
+    //   * 距上个点 ≥ 最大间隔且确实挪了  → 慢速也有稳定密度。
+    // 只有前一条时，速度越低点越疏（步行 8m 要 5.8s），而慢速正是用户最想
+    // 看清细节的时候 —— 那条「保底」就是为此加的。
     final last = myTrack.isEmpty ? null : myTrack.last;
-    if (last == null || haversine(last.lat, last.lng, lat, lng) > 0.02) {
-      myTrack.add(TrackPt(lat, lng, DateTime.now()));
-      if (myTrack.length > maxTrackPts) {
-        myTrack.removeRange(0, myTrack.length - maxTrackPts);
+    if (!lastKnown &&
+        !coarse &&
+        !still &&
+        accuracy <= SelfFixFilter.trackAccuracyLimitM) {
+      final minDistM = PosQuality.trackMinDistM(speedKmh: speed * 3.6);
+      final movedM = last == null
+          ? double.infinity
+          : haversine(last.lat, last.lng, outLat, outLng) * 1000;
+      final gapSec = last == null
+          ? double.infinity
+          : DateTime.now().difference(last.time).inSeconds.toDouble();
+      final keepAlive = gapSec >= PosQuality.trackMaxGapSec &&
+          movedM >= PosQuality.trackMinMoveM;
+      if (last == null || movedM > minDistM || keepAlive) {
+        myTrack.add(TrackPt(outLat, outLng, DateTime.now()));
+        if (myTrack.length > maxTrackPts) {
+          myTrack.removeRange(0, myTrack.length - maxTrackPts);
+        }
+        // 个人历史台账（按天落盘）与屏幕轨迹分开写：只在「确实在动」时
+        // 记，并带上速度/航向/精度，供事后按天统计里程与速度；
+        // 有心率读数（心率带 / 佳明）就一并记下，供事后画心率折线（issue #17）。
+        TrackLogStore.instance.record(
+          lat: outLat,
+          lng: outLng,
+          speedKmh: speed * 3.6,
+          course: myCourse,
+          alt: alt,
+          accuracyM: accuracy,
+          hr: myHr,
+        );
+        // 里程与轨迹点同门限累计（见 _addMileage）：只在有上一个点时才有位移
+        if (last != null) _addMileage(movedM / 1000.0);
       }
     }
     // 过滤中心跟随我的位置
-    if (filterFollow) {
-      filterLat = lat;
-      filterLng = lng;
+    //
+    // **粗定位不推动过滤中心**（v1.6.163）：过滤串按 0.01°（约 1.1km）取整，
+    // 粗点漂移几百米到 1km 就可能越过一条边界，而过滤串一变就会触发
+    // [reconnect]（见 [_refreshFilter]）—— 拿一个几百米精度的点去换一次整条
+    // 链路的重连，代价与收益完全不成比例。
+    if (filterFollow && !coarse) {
+      // 必须用**防抖后**的坐标：写成 `lng`（原始值）会让 APRS-IS 过滤中心
+      // 拿「平滑过的纬度 + 未平滑的经度」去算，两轴不同步 —— 过滤中心自己
+      // 就会抖，而它会触发重连（见 _refreshFilter）。
+      filterLat = outLat;
+      filterLng = outLng;
     }
     if (first) {
       _log(
@@ -2833,6 +4740,18 @@ class AppState extends ChangeNotifier {
 
   // ─── 信标（定位上传） ───
   /// 手动“立即上报”：无论自动信标是否开启都会发送一次
+  /// 手动上报提示里的「实际附带了什么」。
+  ///
+  /// 用户问过「手动上报…没有附带心率？」—— 而提示那时只说网格，看不出带了什么。
+  /// 这里如实列出：心率（有读数且开关开）／未附带心率（开关关或没读数）。
+  String get beaconAttachedDetail {
+    final l = l10n;
+    if (beaconIncludeHr && myHr != null && myHr! > 0) {
+      return l.beaconAttachedHr('$myHr bpm');
+    }
+    return l.beaconAttachedNone;
+  }
+
   void sendBeacon() {
     _sendBeaconNow(force: true);
   }
@@ -2865,6 +4784,21 @@ class AppState extends ChangeNotifier {
     if (connected) {
       _sendRaw(raw);
       _lastTx = DateTime.now();
+      // 记下「这个点真的发出去了」并交给地图标注（见 [beaconMarks]）。
+      // 放在 connected 分支内：未连接时只是本地记录，不算「发送到服务器的点」。
+      final mark = TrackPt(lat, lng, DateTime.now());
+      final prev = beaconMarks.isEmpty ? null : beaconMarks.last;
+      // 同一位置反复发（静止档 300s 一次）不必堆重叠标记，隔开才有信息量
+      if (prev == null ||
+          haversine(prev.lat, prev.lng, lat, lng) * 1000 >= 5) {
+        beaconMarks.add(mark);
+        if (beaconMarks.length > maxBeaconMarks) {
+          beaconMarks.removeRange(0, beaconMarks.length - maxBeaconMarks);
+        }
+      } else if (beaconMarks.isNotEmpty) {
+        // 位置没动：把旧标记的时间刷新成最近一次，避免它看起来「很旧」
+        beaconMarks[beaconMarks.length - 1] = mark;
+      }
       setConnStatus(
         usingTnc
             ? ConnPhase.positionSentTnc
@@ -2878,6 +4812,10 @@ class AppState extends ChangeNotifier {
     }
     beaconsSent++;
     _lastBeacon = DateTime.now();
+    _lastBeaconLat = lat;
+    _lastBeaconLng = lng;
+    // 基准航向 ← 本次发出去时的**可信**航向，判据归零（见 lib/turn_dot.dart）。
+    _turnDot.markSent();
     AchievementCenter.instance.bump('sendCoord'); // 坐标发送·请求打击
     _log(
       LogLevel.info,
@@ -2890,12 +4828,75 @@ class AppState extends ChangeNotifier {
     _updateNotification();
   }
 
-  /// 组装信标备注：高度(/A=英尺) + 速度/方位角 + 电量 + 自定义备注 + 版本号
+  /// 累加里程（公里）。只在**确实写了轨迹点**的两条路径（手机 GPS / 佳明）
+  /// 调用 —— 与按天台账同源、同门限，静止抖动不会把里程越加越大。
+  void _addMileage(double dKm) {
+    if (!dKm.isFinite || dKm <= 0) return;
+    tripMileageKm += dKm;
+    totalMileageKm += dKm;
+    _saveMileageThrottled();
+  }
+
+  /// 累计里程落盘节流（≥20s 一次）：定位回调约 1Hz，每次都写盘会抖动。
+  void _saveMileageThrottled() {
+    final now = DateTime.now();
+    if (now.difference(_lastMileageSave).inSeconds < 20) return;
+    _lastMileageSave = now;
+    unawaited(_persistTotalMileage());
+  }
+
+  Future<void> _persistTotalMileage() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setDouble('totalMileageKm', totalMileageKm);
+    } catch (_) {}
+  }
+
+  /// 本次里程归零（新一次信标上报会话开始时调用）。
+  void _resetTripMileage() {
+    tripMileageKm = 0;
+  }
+
+  /// 里程字段格式：<100km 保留 1 位小数，≥100km 取整
+  /// （`TRV:12.3km` / `ODO:1234km`）。不带空格，避免把备注切得太碎。
+  String _fmtMileageField(double km) {
+    final k = km < 0 ? 0.0 : km;
+    return k >= 100 ? '${k.round()}km' : '${k.toStringAsFixed(1)}km';
+  }
+
+  /// 组装信标备注：高度(/A=英尺) + 速度/方位角 + 电量 + 心率 + 里程 + 自定义备注
   String _beaconComment() {
-    final parts = <String>[];
-    // 标准 course/speed 格式：ddd/sss（度/节，各3位）
-    // 必须位于备注最前（APRS101 规定），否则 aprs.fi 等第三方地图
-    // 不会解析，会把速度/方位角当作普通备注文字显示。
+    // ── APRS 标准数据扩展：**整块紧贴，内部不得有空格** ──
+    //
+    // APRS101 第 9 章把这些字段规定为「固定长度的数据扩展」，直接拼在符号之后、
+    // **彼此之间不用空格分隔**。现网样本也正是这样：
+    //   `!3155.21N/12016.69ErPHG1460/A=000071`
+    //   `!2155.17N/11052.40Eb000/000/A=000033`
+    //   `!2305.90N/11318.59ErPHG4430 GuangZhou APRS Digi …`
+    //
+    // 一旦在扩展内部插了空格（如用户实测的 `000/000 PHG2130 /A=000033`），
+    // 第三方解析器只认得出它前面那一段，**PHG 会被当成普通备注文字丢掉**：
+    // 用参考实现 aprslib 解那条报文，结果里 `phg` 完全缺失、`PHG2130` 落进
+    // comment；而本机 6 万余条现网报文里「扩展内部带空格」的样本是 **0 条**。
+    // 回归测试见 test/beacon_format_test.dart「数据扩展必须整块紧贴」。
+    final ext = StringBuffer();
+    // 1) CsT：标准 course/speed 格式 ddd/sss（度/节，各 3 位）。
+    // 必须位于扩展块**最前**（APRS101 规定），否则 aprs.fi 等第三方地图
+    // 不会解析速度/方位角，会把它们当作普通备注文字显示（v1.6.119 踩过）。
+    //
+    // ⚠ **PHG 在场时 CsT 必须让位**（所以这里只算不写，写入在下面的 PHG 分支）：
+    // 「最前」只有一个位置，而解析器只认最前面那一个字段 —— 参考实现 aprslib
+    // 的 `parse_data_extentions()` 先匹配 `^\d{3}/\d{3}`，**一旦命中就只再看
+    // DF report，根本不再去找 PHG**。实测（aprslib 0.7.2）：
+    //   `…Eb000/000PHG2130/A=000033` → `phg` 缺失、`PHG2130` 落进 comment；
+    //   `…EbPHG2130/A=000033`        → `phg=2130`、4 W / 6.1 m / omni ✓
+    // 注意本函数开头那条「整块紧贴不插空格」并不能救「CsT 在前」这种 ——
+    // 那是另一个独立的坑，两个都得满足才行。
+    //
+    // 取舍（写在这里是因为它是个**真实的功能损失**）：同时开了 PHG 的移动台，
+    // aprs.fi 上就没有速度/方位角了。PHG 描述的是固定天线安装，与 CsT（移动台
+    // 的速度/方位角）本就不是同一类台站；想要速度/方位角被解析，只能不填 PHG。
+    String? cst;
     if (beaconIncludeSpeed &&
         beaconIncludeCourse &&
         myCourse != null &&
@@ -2906,15 +4907,67 @@ class AppState extends ChangeNotifier {
           .clamp(0, 999)
           .toString()
           .padLeft(3, '0');
-      parts.add('$crs/$kt');
+      cst = '$crs/$kt';
     }
-    // 高度：APRS 标准 /A=ffffff（英尺）
-    if (myAlt != null && myAlt! >= 0) {
-      final ft = (myAlt! / 0.3048).round().clamp(0, 999999);
-      parts.add('/A=${ft.toString().padLeft(6, '0')}');
+    // PHG 数据扩展（**固定 7 字节**）：功率 / 天线有效高度 / 增益 / 方向性。
+    //
+    // ⚠ **位置**：PHG 属于数据扩展块，必须与 CsT、`/A=` **紧贴**（无空格）地
+    // 排在符号之后。标准报文形如
+    //   `BI7KZM-13>APAVT7,WIDE1-1,qAS,BI7KZM-10:!2216.45N/11113.90ErPHG5950`
+    // —— `!坐标/符号` 之后**紧接着**就是 `PHG5950`。第三方解析器（aprs.fi /
+    // aprslib）只在「注释开头的数据扩展」位置上认 PHG，中间插空格或备注文字
+    // 都会让 PHG 读不出来（用户报的「PHG 格式不规范」即此）。
+    //
+    // 为什么三项里填任一项就得连高度、方向性一起发：`PHGphgd` 在规范里是
+    // **一个**字段，四个码位不可拆 —— 没有「只报功率」的写法。所以只要
+    // [hasPhg] 成立，就按 [AprsPhg] 的量化表把四位一次编全；未填的项落在
+    // 0 档（功率 0 W、高度 10 英尺），设置页会把该档实际值回显出来。
+    if (hasPhg) {
+      // PHG 占扩展块首位 —— 这是第三方唯一认它的位置（CsT 已在上面让位）。
+      ext.write(AprsPhg.encode(
+        watts: beaconPowerW ?? 0,
+        heightFeet: beaconAntennaHeightFt ?? 0,
+        gainDb: beaconGainDb ?? 0,
+      ));
+    } else if (cst != null) {
+      ext.write(cst);
     }
+    // 高度：数据扩展 `/A=aaaaaa`（**英尺**，APRS101 第 6 章原文：
+    // "The comment may contain an altitude value, in the form /A=aaaaaa,
+    //  where aaaaaa is the altitude in feet"）。
+    //
+    // 取 [effectiveAltM]：手填海拔优先，否则跟随定位 —— 单一出口，
+    // 与设置页的回显同源，不会「显示一个值、发另一个」。
+    final alt = effectiveAltM;
+    if (alt != null && alt >= 0) {
+      final ft = (alt / 0.3048).round().clamp(0, 999999);
+      ext.write('/A=${ft.toString().padLeft(6, '0')}');
+    }
+
+    // 扩展块整块作为**第一段**，之后才是可读备注（APRS 没有标准字段的那些：
+    // 电量 / 心率 / 里程 / 用户备注）—— 它们之间照常用空格分隔。
+    final parts = <String>[];
+    if (ext.isNotEmpty) parts.add(ext.toString());
     if (beaconIncludeBattery && _battery >= 0) {
       parts.add('Bat:$_battery%');
+    }
+    // 心率：HR=nn。APRS 没有正式字段，`HR=` 是通行写法（第三方地图当备注显示）。
+    // 只在**真有读数**时发：没读数时发 HR=0 会让收端以为「心率 0」而不是「没测」。
+    if (beaconIncludeHr && myHr != null && myHr! > 0) {
+      parts.add('HR=$myHr');
+    }
+    // 里程：TRV=本次（信标本次开启起）、ODO=累计总里程。非标准 APRS 字段，
+    // 默认关；用户开启后才附上（见 beaconIncludeTripMileage / ...TotalMileage）。
+    if (beaconIncludeTripMileage) {
+      parts.add('TRV:${_fmtMileageField(tripMileageKm)}');
+    }
+    if (beaconIncludeTotalMileage) {
+      parts.add('ODO:${_fmtMileageField(totalMileageKm)}');
+    }
+    // 步数：非标准字段（与 TRV/ODO 同类），默认关。只在**真的有步数**时发 ——
+    // 发 `STEPS=0` 会让收端以为「他一步没走」，而实际可能只是没授权/没传感器。
+    if (beaconIncludeSteps && stepsToday > 0) {
+      parts.add('STEPS=$stepsToday');
     }
     if (myComment.trim().isNotEmpty) {
       parts.add(myComment.trim());
@@ -3021,41 +5074,25 @@ class AppState extends ChangeNotifier {
         }
         return; // 注释/服务器消息
       }
-      final sep = line.indexOf('>');
-      final bodySep = line.indexOf(':');
-      if (sep < 0 || bodySep < 0) return;
-      final src = line.substring(0, sep).trim();
-      final body = line.substring(bodySep + 1);
+      // 拆报文头 → 源 / 信息体 / 路径 / 目的呼号，并解第三方包（DTI `}`）。
+      // 共用一个出口：解包与否直接决定类型判定、消息归属与台站名。
+      final hdr = _unwrapThirdParty(_splitTnc2Header(line));
+      if (hdr.src.isEmpty) return;
+      final src = hdr.src;
+      final body = hdr.body;
+      final path = hdr.path;
+      final toCall = hdr.toCall;
+      final relay = hdr.relay;
       // 射频上听到的台站记入「听到过」列表 —— 双向网关据此判断
-      // 一条互联网消息值不值得占用射频时隙
+      // 一条互联网消息值不值得占用射频时隙。
+      // 记的是**外层发射台**：第三方包里的台站不是射频上直接听到的，
+      // 拿它去判断「值不值得转发」会让网关把消息发在没人听的链路上。
       if (rf) _noteHeard(line);
-      // 提取路径（src>dest,digi1,digi2:body），识别多跳转发链路
-      String path = '';
-      String toCall = ''; // 目的呼号（路径首段，APxxxx），设备识别依据
-      if (bodySep > sep + 1) {
-        path = line.substring(sep + 1, bodySep).trim();
-        final first = path.split(RegExp(r'[, ]')).first.trim().toUpperCase();
-        // APRS/TCPIP*/BEACON 等通用目的呼号无设备识别价值，不入库
-        if (first.isNotEmpty &&
-            first != 'APRS' &&
-            first != 'TCPIP*' &&
-            first != 'BEACON' &&
-            first != 'MAIL') {
-          toCall = first;
-        }
-      }
-      var type = 'position';
+      // 类型判定与「手动注入」共用同一个出口（见 _packetType）：
+      // 两处各写一份 DTI 表必然走偏 —— 已经偏过一次（同一个包，注入显示
+      // 「未知」、真机显示「消息」，v1.6.175 的测试当场抓到）。
+      final type = _packetType(body);
       var info = body;
-      if (body.startsWith(':')) type = 'message';
-      if (body.startsWith('@') ||
-          body.startsWith('=') ||
-          body.startsWith('/') ||
-          body.startsWith("'") ||
-          body.startsWith('`')) {
-        type = 'position';
-      }
-      if (body.startsWith('_')) type = 'weather';
-      if (body.startsWith('>')) type = 'status';
       // 多跳转发识别：记录转发路径（如 WIDE1-1,WIDE2-1 或数字中继）
       if (path.isNotEmpty &&
           path.toUpperCase() != 'APRS' &&
@@ -3066,7 +5103,26 @@ class AppState extends ChangeNotifier {
 
       // APRSlocus 状态包：>APRSlocus CONNECT vX.Y.Z 平台
       // （版本号自 v1.6.80 起从位置包移到这里，见 _mergeApStatus）
-      if (body.startsWith('>')) _mergeApStatus(src, body);
+      if (body.startsWith('>')) {
+        // 独立状态报文（DTI `>`）的文本落进台站，供台站详情 / 地图信息窗显示。
+        //
+        // 为什么必须单独一段：此前**只有**「APRSlocus 自己的」与「路径含 APFMO 的」
+        // 状态包会被提取，其余（如中继台的 `Powered by W0CHP-PiStar-Dash`）虽然
+        // 在数据包页看得到原文，却在台站详情里彻底看不到 —— Station 上根本没有
+        // 存放状态文本的字段。这里补上那个落点。
+        //
+        // 台站还不存在（只发状态、位置包还没到）时不建台站：没有坐标的台站会被
+        // 画到 (0,0)，比不显示更糟；该台站的位置包到达后更新的自然是最新状态。
+        final stText = _statusTextOf(body);
+        if (stText != null) {
+          final si = stations.indexWhere((s) => s.call == src);
+          if (si >= 0) {
+            stations[si].statusText = stText;
+            _stationsDirty = true;
+          }
+        }
+        _mergeApStatus(src, body);
+      }
 
       // FMO 状态包：>地区,状态,在线/峰值,描述（路径含 APFMO）
       if (body.startsWith('>') && line.contains('APFMO')) {
@@ -3128,12 +5184,7 @@ class AppState extends ChangeNotifier {
       // 解码位置数据包 → 更新/添加台站到地图
       // 注意：呼号可带 ssid 后缀（如 BV2AAA-9），必须解析
       // 位置包：!/=/（含压缩、非压缩）+ /@（带时间戳）+ '`（Mic-E，纬度编码在目的呼号）
-      if (body.startsWith('!') ||
-          body.startsWith('=') ||
-          body.startsWith('/') ||
-          body.startsWith('@') ||
-          body.startsWith("'") ||
-          body.startsWith('`')) {
+      if (_isPositionBody(body)) {
         final p = parseAprsPosition(body, dest: toCall);
         if (p != null) {
           _upsertStation(
@@ -3153,6 +5204,12 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // 第三方包：把「谁转递的」补进信息栏。放在最后统一加 —— 上面几个分支
+      // （消息 / 位置 / FMO）都会重写 info，加早了会被冲掉。
+      // 信息栏有 80 字上限，长报文的这行说明会被截掉，所以**完整原文**
+      // 始终留在 `raw` 里（长按复制 / 原始模式可见）。
+      if (relay.isNotEmpty) info = '$info  ·  [转递 $relay]';
+
       _pushPacket(
         Packet(
           line.trim(),
@@ -3166,6 +5223,127 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       _log(LogLevel.debug, '解析', '数据包处理异常: $e');
     }
+  }
+
+  /// 位置包的 DTI：`!` `=` 无时间戳、`/` `@` 带时间戳、`'` `` ` `` Mic-E
+  /// （Mic-E 的纬度编在目的呼号里，故解析时要一并传 dest）
+  static bool _isPositionBody(String body) =>
+      body.startsWith('!') ||
+      body.startsWith('=') ||
+      body.startsWith('/') ||
+      body.startsWith('@') ||
+      body.startsWith("'") ||
+      body.startsWith('`');
+
+  /// 按信息字段首字符（DTI）判类型。
+  ///
+  /// **接收路径与「手动注入」共用这一个出口**：以前两处各写一份，同一个包
+  /// 在注入时显示「未知」、在真机上显示「消息」—— 排查时最容易被带偏。
+  ///
+  /// 兜底是 `position`：数据包页只有五个筛选条，没有「其它」，不认识的 DTI
+  /// 与解析失败的位置包都落到这里（与此前行为一致）。
+  static String _packetType(String body) {
+    if (body.startsWith(':')) return 'message';
+    if (body.startsWith('_')) return 'weather';
+    if (body.startsWith('>')) return 'status';
+    // 对象报告（APRS101 §11）：不分类的话它落到「位置」，数据包页的
+    // 「对象」筛选就永远筛不出东西（对象包全被当成了位置）。
+    if (body.startsWith(';')) return 'object';
+    return 'position';
+  }
+
+  /// APRS 状态报文的时间戳形式：`DDHHMMz` / `HHMMSSh` / `DDHHMM/`，共 7 字符。
+  static final RegExp _statusTimeRe = RegExp(r'^\d{6}[zZhH/]');
+
+  /// 从状态报文信息字段（`>` 开头）里取出**可读的状态文本**。
+  ///
+  /// 两种形态（APRS101 §16）：
+  ///   * `>文本` —— 无时间戳；
+  ///   * `>DDHHMMz文本` —— 带 7 字符时间戳，时间戳不属于状态内容，要剥掉；
+  ///     否则详情页会显示成 `071430zPowered by ...` 这种读不通的样子。
+  ///
+  /// 返回 null 表示这条状态报文没有可显示的内容（只有 `>` 或只有时间戳）。
+  static String? _statusTextOf(String body) {
+    var t = body.substring(1); // 去掉 DTI '>'
+    if (_statusTimeRe.hasMatch(t)) t = t.substring(7);
+    t = t.trim();
+    if (t.isEmpty) return null;
+    // 详情页是一行文本，换行会把布局撑破；状态文本里本来也不该有换行
+    return t.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
+  }
+
+  /// 拆一条 TNC2 报文的头：`SRC>DEST,DIGI1,DIGI2:info`
+  /// → (src, body, path, toCall)。
+  ///
+  /// 目的呼号（路径首段）只在能识别设备时才取：`APRS` / `TCPIP*` / `BEACON` /
+  /// `MAIL` 这类通用 tocall 没有识别价值，不入库。它是 Mic-E 位姿解码的依据
+  /// （纬度数字编在目的呼号里），取错会让整条报文解成另一个位置。
+  ///
+  /// 格式不合法时返回空 src —— 调用方据此判「这条不是 TNC2」。
+  ({String src, String body, String path, String toCall}) _splitTnc2Header(
+    String line,
+  ) {
+    final sep = line.indexOf('>');
+    final bodySep = line.indexOf(':');
+    if (sep <= 0 || bodySep < sep) {
+      return (src: '', body: '', path: '', toCall: '');
+    }
+    final src = line.substring(0, sep).trim();
+    final body = line.substring(bodySep + 1);
+    var path = '';
+    var toCall = '';
+    if (bodySep > sep + 1) {
+      path = line.substring(sep + 1, bodySep).trim();
+      final first = path.split(RegExp(r'[, ]')).first.trim().toUpperCase();
+      if (first.isNotEmpty &&
+          first != 'APRS' &&
+          first != 'TCPIP*' &&
+          first != 'BEACON' &&
+          first != 'MAIL') {
+        toCall = first;
+      }
+    }
+    return (src: src, body: body, path: path, toCall: toCall);
+  }
+
+  /// 第三方包（DTI `}`）的解包层数上限。规范只允许一层，套娃只可能来自
+  /// 畸形报文 —— 设上限是为了「绝不会递归失控」这件事不依赖运气。
+  static const int _maxThirdPartyDepth = 3;
+
+  /// 解第三方包（DTI `}`）：信息字段里是**另一条完整的报文**
+  /// `SRC>DEST,PATH:info`，最多解 [_maxThirdPartyDepth] 层。
+  ///
+  /// 为什么必须解：iGate 把互联网上收到的报文转到射频、中继台之间互转时
+  /// 大量使用这种封装，所以射频上遇到的并不都是「一条报文明文」。
+  /// 不解包时（v1.6.174 用户反馈）：内层的 `:收件人:文本` 落到默认类型
+  /// 「位置」—— 数据包页把消息显示成「位置」，消息一条也进不了消息页；
+  /// 内层是位置包时更彻底：台站根本不上图。
+  ///
+  /// 解包后**整条流水线按内层走**（类型判定、消息与 ack、台站、轨迹全用
+  /// 内层），外层只留下 [relay]（发射它的那一跳）供信息栏说明「绕了一手」。
+  ///
+  /// 每层都要求内层确实是 TNC2（否则原样保留外层）：既不会把
+  /// 「正文里恰好以 `}` 开头」的正常报文吃掉，也不会为了套娃去猜。
+  ({String src, String body, String path, String toCall, String relay})
+      _unwrapThirdParty(
+    ({String src, String body, String path, String toCall}) outer,
+  ) {
+    var h = outer;
+    var relay = '';
+    for (var depth = 0; depth < _maxThirdPartyDepth; depth++) {
+      if (!h.body.startsWith('}')) break;
+      final inner = _splitTnc2Header(h.body.substring(1).trim());
+      if (inner.src.isEmpty || inner.body.isEmpty) break;
+      relay = relay.isEmpty ? h.src : relay; // 第一层外层的 src = 转递台
+      h = inner;
+    }
+    return (
+      src: h.src,
+      body: h.body,
+      path: h.path,
+      toCall: h.toCall,
+      relay: relay,
+    );
   }
 
   /// 解析收到的 APRS 消息体 `:TO  :text{id_`
@@ -3550,6 +5728,17 @@ class AppState extends ChangeNotifier {
 
   /// 将解码后的位置更新/添加到台站列表（地图/列表实时可见）
   /// raw 为原始数据包（用于识别 FMO 等特殊台站字段）
+  /// ⚠ 这里**故意不做任何“位置质量/防抖”处理**（去重、时序判旧帧、速度门控、
+  /// 自适应抽稀），也不画不确定圈/推测位置/平滑轨迹。
+  ///
+  /// v1.6.145 加过这一整套，v1.6.147 按用户反馈**全部撤掉**：接收侧那些判据每帧
+  /// 都要跑（平滑每次重绘重建列表、推测定位每秒对每个可见台站算三角函数、
+  /// 那一层还每秒强制重绘），而它们改善的是“别人的点准不准”—— 代价与收益不成比例。
+  /// 用户的原话是「不要给别人加防抖，浪费」。
+  ///
+  /// 因此接收台站回到「收到就更新，位移超过 20m 记一个轨迹点」的朴素行为；
+  /// **自己**的位置防抖（`SelfFixFilter`）与精度显示仍保留 —— 那才是每天看得见的东西。
+  /// 若将来想重做这一层，请先回答“它能省下多少帧”再动手。
   void _upsertStation(String call, ParsedPos p,
       {String? raw, String? path, String? toCall}) {
     // 国家/地区接收筛选：未选择国家时不限制；
@@ -3754,6 +5943,84 @@ class AppState extends ChangeNotifier {
       _scheduleStationsSave();
     }
   }
+  /// ── 位置跳变守卫的状态（见 [_onFix]）──
+  /// 单步位移超过这个公里数、**且**距上一轨迹点不到 [_kFixJumpWindowSec] 时才视为可疑。
+  /// 30km 这个数的依据：正常的 TNC/GPS 采样间隔是 10 秒级，10 分钟内跨 30km 意味着
+  /// 平均 180km/h 以上，而民用移动（含高铁 350km/h —— 10 分钟也有 58km）里只有
+  /// 飞机能到这量级；反过来，缓存位置/网络漂移常跨几十上百公里。
+  /// 阈值取大一点的好处：**不会误伤「停车几小时后开出去」这种合法位移**
+  /// （那种情况距上一轨迹点已经很久，由时间窗排除）。
+  static const double _kFixJumpKm = 30.0;
+
+  /// 粗定位（网络/基站/被动）推动标记前，GPS 必须已经停更这么多秒。
+  ///
+  /// 为什么不用原生那个 20s：原生那个是**传输层**的「别刷屏」门槛，而这里是
+  /// **策略层**的「什么时候才允许用粗点换掉 GPS」决定。城市峡谷里 GPS 断十几秒
+  /// 是常事，一断就拿基站质心顶上，标记就会在 50m 与 800m 之间来回横跳 ——
+  /// 用户看到的正是「飞来飞去」。
+  ///
+  /// v1.6.163 从 120s 提到 300s（用户要求「降低网络定位的权重」）：2 分钟的缝
+  /// 在城市峡谷/高架/室内仍然太常见，GPS 一断一续粗点就顶上来；而粗点现在
+  /// **不再触发自动上报**（见 [canAutoBeacon]），所以它唯一的作用就是「GPS
+  /// 真的没了，至少给个大概位置」—— 那本来就是分钟级的兜底，等得起。
+  static const int _kCoarseHoldSec = 300;
+
+  /// 粗定位点自己一口气跳出去的公里数上限。
+  ///
+  /// GPS 停了很久（比如刚出隧道）时允许粗点兜底，但如果它一上来就离上一可信
+  /// 位置十几公里，那多半不是「我们移动了」，而是换了个 Wi-Fi/基站质心 ——
+  /// 这种点宁可不要（没有位置比错位置好，地图会退化成「未定位」但不会骗人）。
+  ///
+  /// v1.6.163 从 8.0 收到 3.0：基站/Wi-Fi 的单跳误差本来就在公里级，8km 相当于
+  /// 不设防（那种「换个 Wi-Fi 就跳到街对面」的点会照收）。
+  static const double _kCoarseJumpKm = 3.0;
+
+  /// 粗定位的精度显示下限（米）。
+  ///
+  /// 系统自报的 accuracy 对 Wi-Fi/基站点常常过于乐观（报 20~40m，实际偏几百米）。
+  /// 照抄会让精度圈画得跟 GPS 一样小 —— 比不画更骗人。
+  /// v1.6.163 从 150 提到 300：基站质心实际常在几百米到公里级，150 仍然偏乐观。
+  static const double _kCoarseAccuracyFloorM = 300.0;
+  /// 「短时间内」的定义（秒）：超过它就认为中间本来就有空档，多大的位移都可能是真的
+  static const int _kFixJumpWindowSec = 600;
+  /// 两次可疑点相距小于这个公里数，视为「落在同一处」
+  static const double _kFixConfirmKm = 1.0;
+  /// 连续这么多次都落在同一处，才承认位置真的变了
+  static const int _kFixConfirmNeed = 3;
+  double? _pendingFixLat;
+  double? _pendingFixLng;
+  int _pendingFixCount = 0;
+
+  /// 自己位置的静止防抖滤波器（见 lib/pos_quality.dart 的 [SelfFixFilter]）
+  final SelfFixFilter _selfFilter = SelfFixFilter();
+
+  /// 是否已经有过**实时**定位（系统缓存位置不算）。缓存点只在它为 false 时
+  /// 允许更新标记 —— 原生前台服务重启会让它那边的 hasLiveFix 归零，这里再挡一道。
+  bool _hadLiveFix = false;
+
+  /// 上一次**被接受**的实时定位：跳变守卫的参照点。
+  /// 不能用 `myTrack.last` —— 静止时不写轨迹点（可能已是几小时前的点），
+  /// 且 myTrack 为空时原本完全没有守卫。
+  double? _lastFixLat, _lastFixLng;
+  DateTime? _lastFixTime;
+
+  /// 复位「自己位置」的全部状态：防抖窗口、跳变守卫、缓存点闸门、精度。
+  /// 停止定位 / 切到模拟位置 / 清空数据时调用 —— 否则切回真实定位时
+  /// 会拿着旧状态（手动坐标、缓存的窗口）当历史。
+  void _resetSelfFix() {
+    _selfFilter.reset();
+    _hadLiveFix = false;
+    _lastFixLat = null;
+    _lastFixLng = null;
+    _lastFixTime = null;
+    _pendingFixLat = null;
+    _pendingFixLng = null;
+    _pendingFixCount = 0;
+    myAccuracy = 0;
+    myFixCoarse = false;
+  }
+
+  // 接收侧不再有任何质量层状态（见 _upsertStation 顶部的说明）。
 
   DateTime? _lastStationsSave;
   bool _saveQueued = false;
@@ -3849,31 +6116,34 @@ class AppState extends ChangeNotifier {
 
   /// 保存台站列表到本地
   void _saveStations() {
-    SharedPreferences.getInstance()
-        .then((p) {
-          final json = stations
-              .map(
-                (s) => {
-                  'call': s.call,
-                  'symbol': s.symbol,
-                  'lat': s.lat,
-                  'lng': s.lng,
-                  'lastHeard': s.lastHeard.millisecondsSinceEpoch,
-                  'status': s.status.index,
-                  'comment': s.comment,
-                  'favorite': s.favorite,
-                  'manual': s.manual,
-                  if (s.path != null) 'path': s.path,
-                  if (s.toCall != null && s.toCall!.isNotEmpty)
-                    'toCall': s.toCall,
-                  if (s.fmo != null) 'fmo': s.fmo,
-                  if (s.aprslocus != null) 'aprslocus': s.aprslocus,
-                },
-              )
-              .toList();
-          p.setString('stations', jsonEncode(json));
-        })
-        .catchError((_) {});
+    unawaited(_saveStationsNow());
+  }
+
+  /// 台站列表（收藏/手动联系人/备注）落盘（可 await，供备份导出前强制刷新）
+  Future<void> _saveStationsNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final json = stations
+          .map(
+            (s) => {
+              'call': s.call,
+              'symbol': s.symbol,
+              'lat': s.lat,
+              'lng': s.lng,
+              'lastHeard': s.lastHeard.millisecondsSinceEpoch,
+              'status': s.status.index,
+              'comment': s.comment,
+              'favorite': s.favorite,
+              'manual': s.manual,
+              if (s.path != null) 'path': s.path,
+              if (s.toCall != null && s.toCall!.isNotEmpty) 'toCall': s.toCall,
+              if (s.fmo != null) 'fmo': s.fmo,
+              if (s.aprslocus != null) 'aprslocus': s.aprslocus,
+            },
+          )
+          .toList();
+      p.setString('stations', jsonEncode(json));
+    } catch (_) {}
   }
 
   /// 加载台站列表（含收藏和手动添加的）
@@ -3942,6 +6212,37 @@ class AppState extends ChangeNotifier {
         }
       }
     } catch (_) {}
+  }
+
+  // ─── 备份 / 恢复 ───
+
+  /// 备份导出前的强制落盘：把只在内存里、还没写进偏好的东西先写下去。
+  ///
+  /// 不加这一步，用户「刚加完收藏就点导出」时导出的会是旧快照 —— 备份功能里
+  /// 这种静默缺失最致命：用户以为备份里有，直到恢复那天才发现没有。
+  Future<void> flushForBackup() async {
+    await persistNow();
+    await _saveMessagesNow();
+    await _saveStationsNow();
+    await _saveChatGroupsNow();
+  }
+
+  /// 导入备份并写回偏好之后，就地重载内存状态。
+  ///
+  /// 从偏好恢复的列表（消息/群聊/台站/已读点）必须先清空再 [_loadPrefs]：
+  /// 那些读取函数是「追加」语义，直接重载会得到重复台站/重复消息。
+  /// 注意：成就、翻译、服务器连接这些在各自单例里只加载一次，需重启才完全生效，
+  /// 所以导入完成后仍要提示用户重启。
+  Future<void> reloadFromPrefs() async {
+    messages.clear();
+    chatGroups.clear();
+    stations.clear();
+    _readAt.clear();
+    _groupReadAt.clear();
+    await _loadPrefs();
+    _recalcUnread();
+    _bumpStationsVersion();
+    _notify();
   }
 
   // ─── 消息 ───
@@ -4464,10 +6765,7 @@ class AppState extends ChangeNotifier {
   String _lastFilter = ''; // 上次连接使用的过滤器，避免无效重连
 
   void _saveChatGroups() {
-    SharedPreferences.getInstance().then((p) {
-      final json = jsonEncode(chatGroups.map((g) => g.toJson()).toList());
-      p.setString('chatGroups', json);
-    });
+    unawaited(_saveChatGroupsNow());
     // 群组变更 → 仅在过滤器实际变化时更新并重连
     if (connected) {
       final newFilter = filterString;
@@ -4479,22 +6777,83 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// 群聊列表落盘（可 await，供备份导出前强制刷新）
+  Future<void> _saveChatGroupsNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final json = jsonEncode(chatGroups.map((g) => g.toJson()).toList());
+      p.setString('chatGroups', json);
+    } catch (_) {}
+  }
+
   /// 立即持久化群聊并通知刷新（群管理面板操作后调用）
   void saveGroupNow() {
     _saveChatGroups();
     _notify();
   }
 
-  void sendPacket(String raw) {
-    if (raw.trim().isEmpty) return;
-    final src = raw.contains('>') ? raw.split('>').first : myCall;
-    _pushPacket(Packet(raw, src, 'APRS', 'message', DateTime.now(), info: raw));
-    packetsTx++;
-    if (connected) {
-      _sendRaw(raw);
+  /// 校验一条手写 TNC2 报文能否发送；返回 null 表示格式可以。
+  ///
+  /// 判据与 `Ax25.encodeTnc2` 一致，但**在发送前**给出可本地化的错误码 ——
+  /// 手写报文最常见的问题就是漏了 `>` 或 `:`，而这两种情况在旧实现里是
+  /// 静默失败（界面照旧显示「已发送」）。
+  String? validateTnc2(String raw) {
+    final line = raw.trim();
+    if (line.isEmpty) return 'bad-format';
+    final gt = line.indexOf('>');
+    if (gt <= 0) return 'bad-format';
+    final rest = line.substring(gt + 1);
+    final colon = rest.indexOf(':');
+    if (colon < 0) return 'bad-format';
+    if (rest.substring(0, colon).trim().isEmpty) return 'bad-format';
+    return null;
+  }
+
+  /// 手动注入并发送一条原始报文（数据包控制台用）。
+  ///
+  /// 返回 null 表示已交给链路，否则是错误码（界面用 `linkErrorText` 本地化）。
+  ///
+  /// 与信标/消息/测试帧保持一致：**先校验 → 再计数 → 如实返回错误**。
+  /// 旧实现不管发没发出去都自增发包计数、也没有任何返回 —— 射频（TNC/音频）
+  /// 下格式写错或链路没连上时，界面显示如常，用户只能干等（实为静默失败）。
+  String? sendPacket(String raw) {
+    final line = raw.trim();
+    final bad = validateTnc2(line);
+    if (bad != null) {
+      _log(LogLevel.warn, '发送',
+          '手动注入被拒绝（格式应为 SRC>DEST,PATH:info）：${_trunc(line)}');
+      return bad;
+    }
+    // 射频上不能带 TCPIP*/TCPXX*（那是 APRS-IS 的路径）：Ax25 会剔掉它们，
+    // 但用户手写时多半是复制了 IS 上的报文，值得提醒一句
+    if (usingRf && line.toUpperCase().contains('TCPIP')) {
+      _log(LogLevel.warn, '发送', '报文含 TCPIP*：射频上会被自动剔除（那是 APRS-IS 的路径）');
+    }
+    if (!connected) {
+      _log(LogLevel.warn, '发送',
+          '未连接（${_sourceName(dataSource)}），未发送：${_trunc(line)}');
+      return 'not-connected';
+    }
+    // 手动注入是我们**自己发出**的包：只进列表与发包计数。
+    // 不能走 _pushPacket —— 那条路自增收包数、还会计入「世界聆听者」成就
+    // （把「我发的」当成「我收到的」）。
+    final src = line.substring(0, line.indexOf('>')).trim();
+    packets.insert(
+      0,
+      Packet(line, src.isEmpty ? myCall : src, 'APRS', 'unknown',
+          DateTime.now(), info: line),
+    );
+    if (packets.length > maxPackets) packets.removeLast();
+    final err = _sendVia(dataSource, line);
+    if (err == null) {
+      packetsTx++;
       _lastTx = DateTime.now();
+      _log(LogLevel.info, '发送', '手动注入已发出：${_trunc(line)}');
+    } else {
+      _log(LogLevel.warn, '发送', '手动注入发送失败（$err）：${_trunc(line)}');
     }
     _notify();
+    return err;
   }
 
   // ─── 开发者工具 ───
@@ -4504,9 +6863,10 @@ class AppState extends ChangeNotifier {
   String injectRawPacket(String raw) {
     if (raw.trim().isEmpty) return '输入为空';
     try {
-      final sep = raw.indexOf('>');
-      final bodySep = raw.indexOf(':');
-      if (sep < 0 || bodySep < 0) {
+      // 与射频/网络来包共用同一套拆头 + 解第三方包：注入工具的结果必须与
+      // 真实报文一致，否则「注入能解析、真机不解析」这种偏差查不出来。
+      final hdr = _unwrapThirdParty(_splitTnc2Header(raw));
+      if (hdr.src.isEmpty) {
         _pushPacket(
           Packet(
             raw.trim(),
@@ -4520,20 +6880,9 @@ class AppState extends ChangeNotifier {
         _notify();
         return '格式异常：缺少 > 或 :';
       }
-      final src = raw.substring(0, sep).trim();
-      final body = raw.substring(bodySep + 1);
-      String toCall = '';
-      if (bodySep > sep + 1) {
-        final pathSeg = raw.substring(sep + 1, bodySep).trim();
-        final first = pathSeg.split(RegExp(r'[, ]')).first.trim().toUpperCase();
-        if (first.isNotEmpty &&
-            first != 'APRS' &&
-            first != 'TCPIP*' &&
-            first != 'BEACON' &&
-            first != 'MAIL') {
-          toCall = first;
-        }
-      }
+      final src = hdr.src;
+      final body = hdr.body;
+      final toCall = hdr.toCall;
       if (body.startsWith('!') ||
           body.startsWith('=') ||
           body.startsWith('/') ||
@@ -4561,11 +6910,23 @@ class AppState extends ChangeNotifier {
               ' 网格 ${maidenhead(p.lat, p.lng)}';
         }
       }
+      // 类型判定与接收路径共用同一个出口（见 _packetType）
+      final type = _packetType(body);
+      var info = body;
+      // 消息：与接收路径一样进会话列表 —— 本工具就是「手动模拟接收」，
+      // 不这么做的话「注入一条消息」在消息页什么都看不到（测试当场抓到）。
+      if (body.startsWith(':')) {
+        final parsed = _parseIncomingMessage(src, body);
+        if (parsed != null) info = parsed.$1;
+      }
+      // 第三方包：标记文案与接收路径**逐字一致**，否则同一个包在数据包页
+      // 会显示成两种样子（转发路径那段只有接收路径有：注入没有「路径」概念）
+      if (hdr.relay.isNotEmpty) info = '$info  ·  [转递 ${hdr.relay}]';
       _pushPacket(
-        Packet(raw.trim(), src, 'APRS', 'unknown', DateTime.now(), info: body),
+        Packet(raw.trim(), src, 'APRS', type, DateTime.now(), info: info),
       );
       _notify();
-      return '已加入数据包，但未识别为位置（$src）';
+      return '已加入数据包（$src · $type）';
     } catch (e) {
       return '解析异常：$e';
     }
@@ -4578,9 +6939,26 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 只清除**台站列表**（收到的台站及其各自的轨迹）。
+  ///
+  /// 与 [clearAllData] 的区别：这里**不动**消息 / 群聊 / 日志 / 数据包，
+  /// 也**不动**「我的轨迹」与信标点 —— 那些是「我的位置」，不属于台站列表。
+  void clearStations() {
+    stations.clear();
+    _bumpStationsVersion();
+    _saveStations();
+    _notify();
+  }
+
   /// 清除所有本地数据
   void clearAllData() {
     stations.clear();
+    // 自己的轨迹不在 stations 里，以前清空数据后会残留一条自己的线
+    myTrack.clear();
+    // 信标标记与轨迹同属「我的位置」这一组：清了轨迹却留着标记，
+    // 地图上会剩下一串没有轨迹穿过的孤点。
+    beaconMarks.clear();
+    _resetSelfFix();
     _bumpStationsVersion();
     messages.clear();
     chatGroups.clear();
@@ -4622,6 +7000,25 @@ class AppState extends ChangeNotifier {
   void focusOnMap(Station s) {
     mapFocus = s;
     mapFocusSeq++;
+    _notify();
+  }
+
+  /// 「把外壳的内容面板展开到最高档」的请求序号（见 [requestSheetExpand]）。
+  int sheetExpandSeq = 0;
+
+  /// 请求外壳把内容面板展开到最高档。
+  ///
+  /// 为什么需要它：2.0 的面板**按最高档高度布局、只裁出可视区**（治「拖动卡」
+  /// 的设计，见 shell2），于是半屏档下页面只显示上半部分。而聊天页的输入框
+  /// 在页面的最底部 —— 正好落在裁切线之下，**半屏时根本看不见它**，
+  /// 用户必须先手动把面板拉到最高才能打字。
+  ///
+  /// 为什么走状态而不是回调：发起方是**面板里的页面**（消息页），执行方是
+  /// **外壳**（它管面板高度），中间隔着两层 widget。逐个把回调透传下去要改
+  /// 四层构造函数；而 `focusOnMap` / `pickSeq` 已经是「页面 → 外壳」的同一类
+  /// 请求，这里沿用它 —— 一致性比「省一个字段」重要。
+  void requestSheetExpand() {
+    sheetExpandSeq++;
     _notify();
   }
 
@@ -4693,6 +7090,20 @@ class AppState extends ChangeNotifier {
     // 这一类 bug 的根因是把「是否会发射」判断散落在两处，所以此处必须与
     // canAutoBeacon 用同一个条件（rfBeaconEnabled）。
     if (!rfBeaconEnabled) return BeaconPhase.rfDisabled;
+    // **顺序有讲究**：佳明优先于粗定位 —— 位置来自手表时，粗定位那条已经不生效
+    // （佳明新鲜时手机 GPS 整个让位，见 _onFix），显示「网络定位中」会是错的。
+    if (garmin.on && garmin.fresh) return BeaconPhase.garmin;
+    // 粗定位（网络/基站）**不自动上报**（见 [canAutoBeacon]），所以也不能显示一个
+    // 照走的倒计时 —— 那正是「倒计时结束什么也没发生」的老症状。
+    //
+    // 开了强制开关时它**确实会发射**，所以这里必须给出倒计时；但绝不能退回到
+    // 普通的 counting —— 那会让界面显示成一个正常的绿色倒计时，用户就再也看不出
+    // 「现在发出去的是网络定位」。单独一档，由 UI 用颜色与文案说清。
+    if (myFixCoarse && locationMode != 'network') {
+      return beaconForceCoarse
+          ? BeaconPhase.coarseForced
+          : BeaconPhase.coarseFix;
+    }
     if (!myHasFix) return BeaconPhase.waitingFix;
     return beaconSecondsLeft > 0 ? BeaconPhase.counting : BeaconPhase.imminent;
   }
@@ -4707,6 +7118,15 @@ class AppState extends ChangeNotifier {
         return l.beaconNotConnected;
       case BeaconPhase.rfDisabled:
         return l.beaconRfBeaconOff;
+      case BeaconPhase.coarseFix:
+        return l.beaconCoarseFix;
+      case BeaconPhase.coarseForced:
+        // 与 counting 一样给**真实倒计时**（它确实会发射）。「这是网络定位」
+        // 由引用它的界面用颜色 / 附加文案说明，不塞进倒计时字符串 ——
+        // 这个 getter 有三个界面与通知栏在读，塞进去会让同一句话各处长不一样。
+        return '${beaconSecondsLeft}s';
+      case BeaconPhase.garmin:
+        return l.beaconGarminSource;
       case BeaconPhase.waitingFix:
         return l.beaconWaitingFix;
       case BeaconPhase.imminent:
@@ -4720,6 +7140,15 @@ class AppState extends ChangeNotifier {
   void _updateNotification() {
     final l = l10n;
     final parts = <String>[];
+    // 心率异常告警也要进**系统通知**（issue #21-8 的「系统通知弹出警告」）：
+    // 弹窗在用户没看屏幕时是看不见的，而通知栏会一直挂着。
+    final hr = hrAlarm;
+    if (hr != null) parts.add('⚠ ${l.hrAlarmNotif('$hr')}');
+    // 碰撞/摔倒（issue #26）：与心率告警同理 —— 用户没看屏幕时只有通知栏能说话。
+    if (crashAlarm != null) parts.add('⚠ ${l.crashNotif}');
+    // 更新包下载进度（issue #22-5）：放在最前 —— 它是「正在发生的事」，
+    // 也是用户切到后台后唯一能确认「还在跑」的地方。
+    if (notifExtra.isNotEmpty) parts.add(notifExtra);
     if (connected) {
       // TNC 模式：明确标出「射频」，否则用户会以为走的是网络，
       // 从而忽略「发射要在自己呼号/执照下操作」这件事。
@@ -4766,6 +7195,31 @@ class AppState extends ChangeNotifier {
   }
 }
 
+/// **当前在供位置的那个来源**（见 [AppState.positionSourceNow]）。
+///
+/// 抽成枚举而不是字符串：界面要按它选文案/颜色，用中文串比较必然漂
+/// （本仓库在 [BeaconPhase] 上已经踩过一次）。
+enum PositionSourceNow { sim, garmin, phone, none }
+
+/// 步数在界面上的四种状态（issue #23）。
+///
+/// 「读数 = -1」有三种完全不同的原因（没有传感器 / 没有权限 / 还没收到硬件事件），
+/// 而界面要给出**不同的话和不同的按钮** —— 判定只留 [AppState.stepsStatus] 一个出口，
+/// 免得像之前那样两个页面各写一遍、其中一处漏档。
+enum StepsStatus {
+  /// 这台设备没有计步传感器
+  unsupported,
+
+  /// 有传感器，但没给 ACTIVITY_RECOGNITION 权限（Android 10+）→ 给授权按钮
+  needPermission,
+
+  /// 有权限，但还没收到硬件事件 → **不是**「请授权」，而是「等一下就有的」
+  waiting,
+
+  /// 有数据
+  ok,
+}
+
 /// 自动上报阶段（结构化，供 UI 本地化；见 [AppState.beaconPhase]）
 enum BeaconPhase {
   off,
@@ -4774,6 +7228,18 @@ enum BeaconPhase {
   /// 射频来源（TNC / 音频）未打开「射频信标」——此时不会自动发射，
   /// UI 必须显示原因并提供一键开启，而不是继续倒计时。
   rfDisabled,
+  /// 当前是**粗定位**（网络/基站/被动）——自动上报已暂停（见 [canAutoBeacon]），
+  /// UI 必须说明原因，而不是继续倒计时。
+  coarseFix,
+  /// 当前是粗定位，但用户开了**强制接受网络定位自动上报**
+  /// （[AppState.beaconForceCoarse]）—— 会照常倒计时并真的发射。
+  /// 必须与 [counting] 分开：界面要如实告诉用户「发出去的是网络定位（粗）」，
+  /// 否则一个正常的绿色倒计时会让人以为发的是 GPS 位置（两者常差几百米）。
+  coarseForced,
+  /// 位置来自**佳明 LiveTrack**（手表比手机准，手机 GPS 会让位）。
+  /// 这一档不是「不能上报」，而是「要告诉用户**上报的是手表的位置**」——
+  /// 否则用户看着倒计时会以为发的是手机定位，而两者可能差几十公里。
+  garmin,
   waitingFix,
   counting,
   imminent,
@@ -4805,9 +7271,21 @@ enum ConnPhase {
   linkLostTnc,
   linkLostAudio,
   manual,
+
+  /// 位置报文已发送（三档按当前发射来源分）。
+  ///
+  /// ⚠ **只用于位置报文**。状态报文是另一种帧（DTI `>`、不含坐标），
+  /// 它有自己的 `statusSent*` 三档 —— 混用会让主横幅在「只发了状态帧」时
+  /// 显示「位置已上报」，而一个位置包都没发。
   positionSent,
   positionSentTnc,
   positionSentAudio,
+
+  /// 状态报文已发送（三档按当前发射来源分；见 [ConnPhase.positionSent]）。
+  statusSent,
+  statusSentTnc,
+  statusSentAudio,
+
   demoBeacon,
 }
 
@@ -4894,6 +7372,12 @@ class ConnStatus {
         return l.connTncPositionSent(arg);
       case ConnPhase.positionSentAudio:
         return l.connAudioPositionSent(arg);
+      case ConnPhase.statusSent:
+        return l.connStatusSent(arg);
+      case ConnPhase.statusSentTnc:
+        return l.connTncStatusSent(arg);
+      case ConnPhase.statusSentAudio:
+        return l.connAudioStatusSent(arg);
       case ConnPhase.demoBeacon:
         return l.connDemoBeacon;
     }

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import 'hf.dart';
 import 'theme.dart';
 import 'state.dart';
 import 'widgets.dart';
@@ -583,7 +584,7 @@ class WeatherBadge extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: col.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: col.withValues(alpha: 0.35)),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -703,15 +704,15 @@ List<Color> _fxGradient(_FxKind k, bool dark, {double rain = 0}) {
 }
 
 /// 建议级别：安全警示 > 注意 > 通联机会 > 操作提示
-enum _TipLevel { danger, warn, good, tip }
+enum TipLevel { danger, warn, good, tip }
 
 /// 单条火腿建议（带级别，便于分级配色与分级排序）
-class _HamTip {
+class HamTip {
   final IconData icon;
   final String text;
   final Color color;
-  final _TipLevel level;
-  const _HamTip(this.icon, this.text, this.color, this.level);
+  final TipLevel level;
+  const HamTip(this.icon, this.text, this.color, this.level);
 }
 
 /// "HH:mm" 是否落在当前时刻 ±[win] 分钟内（用于灰线判定）
@@ -730,7 +731,7 @@ bool _nearClock(String hhmm, int nowMin, {int win = 60}) {
 /// 覆盖：雷电与浪涌防护、降水与馈线防水、结冰与低温电池、大风加固、高温降额、
 /// 高湿绝缘、沙尘/污染、低气压预警、大气波导与灰线/夜间等传播机会、露点结露、紫外线。
 /// 返回结果按级别排序：安全警示 → 注意 → 通联机会 → 操作提示。
-List<_HamTip> _hamTips(WeatherCenter wc, AppLocalizations s) {
+List<HamTip> hamTips(WeatherCenter wc, AppLocalizations s) {
   final w = wc.now;
   if (w == null) {
     return const [];
@@ -764,102 +765,120 @@ List<_HamTip> _hamTips(WeatherCenter wc, AppLocalizations s) {
   final nowD = DateTime.now();
   final nowMin = nowD.hour * 60 + nowD.minute;
 
-  final danger = <_HamTip>[];
-  final warn = <_HamTip>[];
-  final good = <_HamTip>[];
-  final tip = <_HamTip>[];
+  final danger = <HamTip>[];
+  final warn = <HamTip>[];
+  final good = <HamTip>[];
+  final tip = <HamTip>[];
 
   // ── 安全警示：雷电是最优先事项 ──
   if (isThunder) {
-    danger.add(_HamTip(Icons.flash_on_rounded, s.hamStorm1, cDanger, _TipLevel.danger));
-    danger.add(_HamTip(Icons.power_off_rounded, s.hamStorm3, cDanger, _TipLevel.danger));
-    warn.add(_HamTip(Icons.warning_amber_rounded, s.hamStorm2, cWarn, _TipLevel.warn));
-    warn.add(_HamTip(Icons.graphic_eq_rounded, s.hamStorm4, cWarn, _TipLevel.warn));
+    danger.add(HamTip(Icons.flash_on_rounded, s.hamStorm1, cDanger, TipLevel.danger));
+    danger.add(HamTip(Icons.power_off_rounded, s.hamStorm3, cDanger, TipLevel.danger));
+    warn.add(HamTip(Icons.warning_amber_rounded, s.hamStorm2, cWarn, TipLevel.warn));
+    warn.add(HamTip(Icons.graphic_eq_rounded, s.hamStorm4, cWarn, TipLevel.warn));
   }
   if (isExtreme) {
-    danger.add(_HamTip(Icons.water_rounded, s.hamExtreme, cDanger, _TipLevel.danger));
+    danger.add(HamTip(Icons.water_rounded, s.hamExtreme, cDanger, TipLevel.danger));
   }
   if (wind >= 6) {
-    danger.add(_HamTip(Icons.air_rounded, s.hamGale('$wind'), cDanger, _TipLevel.danger));
+    danger.add(HamTip(Icons.air_rounded, s.hamGale('$wind'), cDanger, TipLevel.danger));
   }
 
   // ── 天气本身的防护 ──
   if (isRain && !isShower) {
-    tip.add(_HamTip(Icons.umbrella_rounded, s.hamRain, cTip, _TipLevel.tip));
+    tip.add(HamTip(Icons.umbrella_rounded, s.hamRain, cTip, TipLevel.tip));
   }
   if (isShower) {
-    tip.add(_HamTip(Icons.umbrella_rounded, s.hamShower, cTip, _TipLevel.tip));
+    tip.add(HamTip(Icons.umbrella_rounded, s.hamShower, cTip, TipLevel.tip));
   }
   if ((n >= 300 && n < 400) && (n >= 310 || n == 301 || n == 307)) {
-    tip.add(_HamTip(Icons.wifi_tethering_rounded, s.hamRainFade, cTip, _TipLevel.tip));
+    tip.add(HamTip(Icons.wifi_tethering_rounded, s.hamRainFade, cTip, TipLevel.tip));
   }
   if (isSnow || t <= 2) {
-    warn.add(_HamTip(Icons.ac_unit_rounded, s.hamCold, cCold, _TipLevel.warn));
+    warn.add(HamTip(Icons.ac_unit_rounded, s.hamCold, cCold, TipLevel.warn));
   }
   if (isSnow) {
-    warn.add(_HamTip(Icons.icecream_rounded, s.hamIce, cCold, _TipLevel.warn));
+    warn.add(HamTip(Icons.icecream_rounded, s.hamIce, cCold, TipLevel.warn));
   }
   if (t <= 0) {
-    warn.add(_HamTip(
-        Icons.device_thermostat_rounded, s.hamFrost, cCold, _TipLevel.warn));
+    warn.add(HamTip(
+        Icons.device_thermostat_rounded, s.hamFrost, cCold, TipLevel.warn));
   }
   if (wind >= 5 && wind < 6) {
-    warn.add(_HamTip(Icons.air_rounded, s.hamWind('$wind'), cWarn, _TipLevel.warn));
+    warn.add(HamTip(Icons.air_rounded, s.hamWind('$wind'), cWarn, TipLevel.warn));
   }
   if (wind == 4) {
-    tip.add(_HamTip(Icons.flag_rounded, s.hamWindExtra('$wind'), cWarn, _TipLevel.tip));
+    tip.add(HamTip(Icons.flag_rounded, s.hamWindExtra('$wind'), cWarn, TipLevel.tip));
   }
   if (t >= 35) {
-    warn.add(_HamTip(Icons.local_fire_department_rounded, s.hamHot('$t'), cWarn, _TipLevel.warn));
-    warn.add(_HamTip(Icons.thermostat_rounded, s.hamHeat2, cWarn, _TipLevel.warn));
+    warn.add(HamTip(Icons.local_fire_department_rounded, s.hamHot('$t'), cWarn, TipLevel.warn));
+    warn.add(HamTip(Icons.thermostat_rounded, s.hamHeat2, cWarn, TipLevel.warn));
   } else if (t >= 33) {
-    tip.add(_HamTip(Icons.local_fire_department_rounded, s.hamHot('$t'), cWarn, _TipLevel.tip));
+    tip.add(HamTip(Icons.local_fire_department_rounded, s.hamHot('$t'), cWarn, TipLevel.tip));
   }
   if (hum >= 85) {
-    tip.add(_HamTip(Icons.water_drop_rounded, s.hamHumid('$hum'), cTip, _TipLevel.tip));
+    tip.add(HamTip(Icons.water_drop_rounded, s.hamHumid('$hum'), cTip, TipLevel.tip));
   }
   if (vis < 3) {
-    warn.add(_HamTip(Icons.blur_on_rounded, s.hamFog(w.vis), cViolet, _TipLevel.warn));
+    warn.add(HamTip(Icons.blur_on_rounded, s.hamFog(w.vis), cViolet, TipLevel.warn));
   }
   if (isDust) {
-    warn.add(_HamTip(Icons.grain_rounded, s.hamDust, cViolet, _TipLevel.warn));
+    warn.add(HamTip(Icons.grain_rounded, s.hamDust, cViolet, TipLevel.warn));
   }
   if (aqi > 150 || isHaze) {
-    warn.add(_HamTip(Icons.masks_rounded, s.hamAir, cViolet, _TipLevel.warn));
+    warn.add(HamTip(Icons.masks_rounded, s.hamAir, cViolet, TipLevel.warn));
   }
   // 露点差很小 → 接近饱和，易结露
   if (dew != null && (t - dew) <= 3) {
-    tip.add(_HamTip(Icons.opacity_rounded,
-        s.hamDew((t - dew).toStringAsFixed(0)), cTip, _TipLevel.tip));
+    tip.add(HamTip(Icons.opacity_rounded,
+        s.hamDew((t - dew).toStringAsFixed(0)), cTip, TipLevel.tip));
   }
   if (uv >= 8) {
-    tip.add(_HamTip(Icons.wb_sunny_rounded, s.hamUV('$uv'), cWarn, _TipLevel.tip));
+    tip.add(HamTip(Icons.wb_sunny_rounded, s.hamUV('$uv'), cWarn, TipLevel.tip));
   }
 
   // ── 气压预警 / 传播机会 ──
   if (pressure > 0 && pressure <= 1000) {
-    warn.add(_HamTip(Icons.trending_down_rounded, s.hamLowPressure(w.pressure), cWarn, _TipLevel.warn));
+    warn.add(HamTip(Icons.trending_down_rounded, s.hamLowPressure(w.pressure), cWarn, TipLevel.warn));
   }
   if (pressure >= 1020) {
-    good.add(_HamTip(Icons.waves_rounded, s.hamHighPressure(w.pressure), cGood, _TipLevel.good));
+    good.add(HamTip(Icons.waves_rounded, s.hamHighPressure(w.pressure), cGood, TipLevel.good));
   }
   // 灰线：日出/日落 ±1h
   if (wc.daily.isNotEmpty) {
     final d0 = wc.daily.first;
     if (_nearClock(d0.sunrise, nowMin) || _nearClock(d0.sunset, nowMin)) {
-      good.add(_HamTip(Icons.wb_twilight_rounded, s.hamGrayLine, cGood, _TipLevel.good));
+      good.add(HamTip(Icons.wb_twilight_rounded, s.hamGrayLine, cGood, TipLevel.good));
     }
   }
   // 夜间低波段
   if (nowD.hour >= 20 || nowD.hour < 5) {
-    good.add(_HamTip(Icons.nightlight_round, s.hamNight, cGood, _TipLevel.good));
+    good.add(HamTip(Icons.nightlight_round, s.hamNight, cGood, TipLevel.good));
   }
   // 天气良好：适合架台
   if (danger.isEmpty && warn.isEmpty && !isRain && !isSnow && vis >= 3) {
-    good.add(_HamTip(Icons.rss_feed_rounded, s.hamGood, cGood, _TipLevel.good));
+    good.add(HamTip(Icons.rss_feed_rounded, s.hamGood, cGood, TipLevel.good));
   }
 
   return [...danger, ...warn, ...good, ...tip];
+}
+
+/// 天气类建议 + 短波/电离层传播类建议，按级别归并。
+///
+/// 两个维度都要看：安全（雷电/大风）与传播（SFI/地磁）互不替代。
+///
+/// 归并**按级别分组**，而不是把两个列表首尾相接 —— 后者会把传播类的
+/// 「通联机会」插到天气类的「操作提示」前面，破坏「安全警示永远在最上」
+/// 这个既定顺序（安全永远优先，是 `hamTips` 里刻意的分级）。
+List<HamTip> allHamTips(WeatherCenter wc, AppLocalizations s) {
+  final merged = <HamTip>[
+    ...hamTips(wc, s),
+    ...hfTips(HfCenter.instance.now, s),
+  ];
+  return <HamTip>[
+    for (final lv in TipLevel.values)
+      ...merged.where((t) => t.level == lv),
+  ];
 }
 
 /// ─── 天气动态背景（轻量：不引入任何 3D 引擎 / 重型动画库）───
@@ -1298,6 +1317,7 @@ class _FxPainter extends CustomPainter {
       old.kind != kind || old.intensity != intensity || old.dark != dark;
 }
 
+
 /// 打开天气浮动面板（底部弹层）：天气 + 火腿建议 + 特效背景
 Future<void> showWeatherPanel(BuildContext context, AppState state) async {
   final sim = WeatherCenter.instance.simulating;
@@ -1306,6 +1326,9 @@ Future<void> showWeatherPanel(BuildContext context, AppState state) async {
   if (!sim && hasPos) {
     WeatherCenter.instance.load(state.myLat!, state.myLng!);
   }
+  // 短波/电离层与位置无关，打开面板就拉一次（HfCenter 内部有 30 分钟 TTL
+  // 与 _busy 守卫，重复调用会直接返回，不会打太多请求）
+  HfCenter.instance.load();
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -1369,7 +1392,7 @@ const List<Shadow> _kTextShadow = [
 ];
 
 /// 空气质量等级文字（按 AQI 数值本地化，避免直接使用接口返回的单一语言）
-String _airLabel(int aqi, AppLocalizations s) {
+String airLabel(int aqi, AppLocalizations s) {
   if (aqi < 0) return '--';
   if (aqi <= 50) return s.airExcellent;
   if (aqi <= 100) return s.airGood;
@@ -1401,15 +1424,15 @@ String _dayLabel(int i, DateTime? d, AppLocalizations s) {
 }
 
 /// 建议级别文字
-String _levelLabel(_TipLevel l, AppLocalizations s) {
+String hamLevelLabel(TipLevel l, AppLocalizations s) {
   switch (l) {
-    case _TipLevel.danger:
+    case TipLevel.danger:
       return s.hamLevelDanger;
-    case _TipLevel.warn:
+    case TipLevel.warn:
       return s.hamLevelWarn;
-    case _TipLevel.good:
+    case TipLevel.good:
       return s.hamLevelGood;
-    case _TipLevel.tip:
+    case TipLevel.tip:
       return s.hamLevelTip;
   }
 }
@@ -1507,9 +1530,14 @@ class _WeatherPanelState extends State<_WeatherPanel>
         margin: const EdgeInsets.all(10),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(24)),
-        child: ValueListenableBuilder<int>(
-          valueListenable: WeatherCenter.instance.version,
-          builder: (context, _, _) {
+        // 同时监听天气与短波两个数据源：短波是独立的一条链（hamqsl），
+        // 它回来时面板也要重画，否则要等下一次天气变化才看到传播信息。
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            WeatherCenter.instance.version,
+            HfCenter.instance.version,
+          ]),
+          builder: (context, _) {
             final wc = WeatherCenter.instance;
             final kind = (wc.now != null) ? _fxKindOf(wc.now!) : _FxKind.cloudy;
             final intensity = (wc.now != null) ? weatherIntensity(wc.now!) : 0.0;
@@ -1646,7 +1674,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
       const SizedBox(width: 12),
       Expanded(
         child: Text(msg,
-            style: ts(12.5, c: Colors.white.withValues(alpha: 0.9), h: 1.55)),
+            style: ts(12, c: Colors.white.withValues(alpha: 0.9), h: 1.55)),
       ),
     ]);
   }
@@ -1697,7 +1725,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
                   Padding(
                     padding: const EdgeInsets.only(top: 5),
                     child: Text('°',
-                        style: ts(24,
+                        style: ts(26,
                             w: FontWeight.w700,
                             c: Colors.white.withValues(alpha: 0.85))),
                   ),
@@ -1725,18 +1753,18 @@ class _WeatherPanelState extends State<_WeatherPanel>
           child: Row(children: [
             if (d0 != null) ...[
               Text('${s.weatherToday} ${d0.tempMin}° ~ ${d0.tempMax}°',
-                  style: ts(11.5,
+                  style: ts(11,
                       w: FontWeight.w600,
                       c: Colors.white.withValues(alpha: 0.86))),
               Text('  ·  ',
-                  style: ts(11.5, c: Colors.white.withValues(alpha: 0.35))),
+                  style: ts(11, c: Colors.white.withValues(alpha: 0.35))),
             ],
             Text(s.weatherFeels(now.feelsLike),
-                style: ts(11.5, c: Colors.white.withValues(alpha: 0.7))),
+                style: ts(11, c: Colors.white.withValues(alpha: 0.7))),
             Text('  ·  ',
-                style: ts(11.5, c: Colors.white.withValues(alpha: 0.35))),
+                style: ts(11, c: Colors.white.withValues(alpha: 0.35))),
             Text(s.weatherObserved(now.obsTimeShort),
-                style: ts(11.5, c: Colors.white.withValues(alpha: 0.7))),
+                style: ts(11, c: Colors.white.withValues(alpha: 0.7))),
           ]),
         ),
         const SizedBox(height: 12),
@@ -1775,7 +1803,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.20),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1786,10 +1814,10 @@ class _WeatherPanelState extends State<_WeatherPanel>
         ),
         const SizedBox(width: 6),
         Text('${s.weatherAir} $aqi',
-            style: ts(10.5, w: FontWeight.w700, c: Colors.white)),
+            style: ts(10, w: FontWeight.w700, c: Colors.white)),
         const SizedBox(width: 5),
-        Text(_airLabel(aqi, s),
-            style: ts(10.5, c: Colors.white.withValues(alpha: 0.68))),
+        Text(airLabel(aqi, s),
+            style: ts(10, c: Colors.white.withValues(alpha: 0.68))),
       ]),
     );
   }
@@ -1813,6 +1841,12 @@ class _WeatherPanelState extends State<_WeatherPanel>
         children: [
           // 业余无线电建议排在三天预报之前（更贴近「架台/通联决策」的场景）
           _hamCard(wc, s),
+          // 短波/电离层紧跟在建议之后：建议里已经含传播类结论，
+          // 这里给出「为什么」——逐波段条件与太阳指数。
+          if (HfCenter.instance.now != null) ...[
+            const SizedBox(height: 18),
+            _hfCard(HfCenter.instance.now!, s),
+          ],
           const SizedBox(height: 18),
           _sectionTitle(Icons.calendar_month_rounded, s.weatherForecast3),
           const SizedBox(height: 4),
@@ -1826,7 +1860,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
           const SizedBox(height: 12),
           Center(
             child: Text(s.weatherPowered,
-                style: ts(9.5, c: Colors.white.withValues(alpha: 0.5))),
+                style: ts(9, c: Colors.white.withValues(alpha: 0.5))),
           ),
         ],
       ),
@@ -1838,7 +1872,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
         Icon(ic, size: 13, color: Colors.white.withValues(alpha: 0.62)),
         const SizedBox(width: 6),
         Text(text,
-            style: ts(11.5,
+            style: ts(11,
                 w: FontWeight.w700, c: Colors.white.withValues(alpha: 0.8), ls: 0.8)),
       ]);
 
@@ -1848,12 +1882,12 @@ class _WeatherPanelState extends State<_WeatherPanel>
       color: Colors.transparent,
       child: InkWell(
         onTap: () => showDaily15Sheet(context),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           height: 44,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
           ),
           child: Row(
@@ -1881,7 +1915,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: Text(wc.loading ? s.weatherPanelSub : s.weatherUnavail,
-              style: ts(11.5, c: Colors.white.withValues(alpha: 0.65))),
+              style: ts(11, c: Colors.white.withValues(alpha: 0.65))),
         ),
       ];
     }
@@ -1911,7 +1945,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(_dayLabel(i, d.date, s),
-                  style: ts(12.5, w: FontWeight.w700, c: Colors.white)),
+                  style: ts(12, w: FontWeight.w700, c: Colors.white)),
               const SizedBox(height: 1),
               Text(d.date == null ? '' : _md(d.date!),
                   style: ts(10, c: Colors.white.withValues(alpha: 0.5))),
@@ -1956,7 +1990,7 @@ class _WeatherPanelState extends State<_WeatherPanel>
 
   /// 火腿建议卡片（按级别排序，可展开全部）
   Widget _hamCard(WeatherCenter wc, AppLocalizations s) {
-    final all = _hamTips(wc, s);
+    final all = allHamTips(wc, s);
     const maxCollapsed = 4;
     final showToggle = all.length > maxCollapsed;
     final shown =
@@ -1976,11 +2010,11 @@ class _WeatherPanelState extends State<_WeatherPanel>
                 size: 15, color: Colors.white.withValues(alpha: 0.85)),
             const SizedBox(width: 7),
             Text(s.hamTitle,
-                style: ts(12.5, w: FontWeight.w800, c: Colors.white)),
+                style: ts(12, w: FontWeight.w800, c: Colors.white)),
             const Spacer(),
             if (all.isNotEmpty)
               Text('${all.length}',
-                  style: ts(10.5,
+                  style: ts(10,
                       w: FontWeight.w700,
                       c: Colors.white.withValues(alpha: 0.45))),
           ]),
@@ -2006,8 +2040,8 @@ class _WeatherPanelState extends State<_WeatherPanel>
   }
 
   /// 单条建议：色点 + 「级别」小标签 + 正文；危险项仅用淡色底，不加描边方框
-  Widget _tipRow(_HamTip tip, AppLocalizations s) {
-    final danger = tip.level == _TipLevel.danger;
+  Widget _tipRow(HamTip tip, AppLocalizations s) {
+    final danger = tip.level == TipLevel.danger;
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 9),
       decoration: BoxDecoration(
@@ -2031,8 +2065,8 @@ class _WeatherPanelState extends State<_WeatherPanel>
                 Row(children: [
                   Icon(tip.icon, size: 12, color: tip.color),
                   const SizedBox(width: 5),
-                  Text(_levelLabel(tip.level, s),
-                      style: ts(9.5,
+                  Text(hamLevelLabel(tip.level, s),
+                      style: ts(9,
                           w: FontWeight.w800, c: tip.color, ls: 0.7)),
                 ]),
                 const SizedBox(height: 4),
@@ -2123,9 +2157,168 @@ class _WeatherPanelState extends State<_WeatherPanel>
     return Column(children: rows);
   }
 
+  /// 短波 / 电离层传播卡片：汇总指数 + **逐波段日间/夜间条件**。
+  ///
+  /// 数据来自 hamqsl.com（业余界标准的 HF 传播源），由 [HfCenter] 拉取并缓存。
+  /// 没有数据时**整块不显示** —— 宁可少一块，也不要摆个空壳占掉半屏。
+  Widget _hfCard(HfNow hf, AppLocalizations s) {
+    final pairs = <(String, String)>[
+      (s.hfSfi, hf.sfi),
+      (s.hfKp, hf.kIndex),
+      (s.hfAIndex, hf.aIndex),
+      (s.hfSunspots, hf.sunspots),
+      (s.hfXray, hf.xray),
+      (s.hfSolarWind, '${hf.solarWind} km/s'),
+      (s.hfGeomag, hf.geomag),
+      (s.hfNoise, hf.noise),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(Icons.waves_rounded, s.hfTitle),
+        const SizedBox(height: 6),
+        // 汇总指数：复用 _details 同款的两列 label/value 布局
+        for (var i = 0; i < pairs.length; i += 2) ...[
+          if (i > 0) _hairline(),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(children: [
+              Expanded(child: _kvPair(pairs[i].$1, pairs[i].$2)),
+              const SizedBox(width: 20),
+              Expanded(
+                child: i + 1 < pairs.length
+                    ? _kvPair(pairs[i + 1].$1, pairs[i + 1].$2)
+                    : const SizedBox.shrink(),
+              ),
+            ]),
+          ),
+        ],
+        _hfBandHead(s),
+        for (final b in hf.bands) _hfBandRow(b, s),
+        // 6m 单独一段：它的传播机理与 HF 波段**完全不同**（Es / 极光 / F2），
+        // 塞进上面那张「日间-夜间」表会误导 —— 6m 没有「日间/夜间」之分。
+        if (hf.vhf.hasData) ..._hfSixRows(hf, s),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(s.hfPowered,
+              style: ts(9, c: Colors.white.withValues(alpha: 0.5))),
+        ),
+      ],
+    );
+  }
+
+
+  /// 6m 波段展望：分项列出三条通路，再给一个合成结论。
+  ///
+  /// 为什么单独一段而不并进上面的表：6m 的成因是 Es / 极光 / F2，
+  /// 与 HF 的「日间-夜间」电离层吸收是两回事，硬并会让「6m 日间 P」这种
+  /// 组合读起来像是同一个机理。
+  List<Widget> _hfSixRows(HfNow hf, AppLocalizations s) {
+    final six = hfSixMeter(hf);
+    // 三通路的**细节只在有戏时才展开**。
+    //
+    // 缘由：偶发 E 层不开通才是常态（开通是例外），所以绝大多数时候三条通路
+    // 全是「未开通」—— 连列三行同一个词，占了版面却不增加任何信息。
+    // 而一旦某条开通，**是哪条**就变得关键（Es 与极光的上机策略完全不同：
+    // Es 打远方、极光要朝高纬），那时才值得展开三行。
+    //
+    // 所以：全部关闭（或数据缺失）时只留标题行 + 结论，有开通才展开。
+    final allClosed = six.quality == HfQuality.closed ||
+        six.quality == HfQuality.unknown;
+    return [
+      _hairline(),
+      Padding(
+        padding: EdgeInsets.only(top: 8, bottom: allClosed ? 6 : 2),
+        child: Row(children: [
+          Text(s.hfSixMeter,
+              style: ts(12, w: FontWeight.w700, c: Colors.white)),
+          const Spacer(),
+          _hfQualityCell(six.quality, s, end: true),
+        ]),
+      ),
+      if (allClosed) const SizedBox.shrink() else Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 6),
+        child: Row(children: [
+          // 同组件侧：six.es / six.aurora 是源数据**原始串**，必须过
+          // hfQualityLabel 才本地化（否则中文界面露英文 'Band Closed'）。
+          Expanded(child: _kvPair(s.hfEs,
+              hfQualityLabel(hfQualityOf(six.es), s))),
+          const SizedBox(width: 20),
+          Expanded(child: _kvPair(s.hfAurora,
+              hfQualityLabel(hfQualityOf(six.aurora), s))),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          Expanded(child: _kvPair(s.hfF2, six.f2 ? s.hfQGood : HfNow.none)),
+          const SizedBox(width: 20),
+          const Expanded(child: SizedBox.shrink()),
+        ]),
+      ),
+    ];
+  }
+
+  /// 逐波段表的表头：波段 / 日间 / 夜间（小号 + 低透明度，与面板其它小标题一致）
+  Widget _hfBandHead(AppLocalizations s) {
+    final st = ts(10, c: Colors.white.withValues(alpha: 0.58));
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: Row(children: [
+        Expanded(flex: 11, child: Text(s.hfBand, style: st)),
+        Expanded(flex: 10, child: Text(s.hfDay, style: st)),
+        Expanded(
+          flex: 11,
+          child: Text(s.hfNight, style: st, textAlign: TextAlign.end),
+        ),
+      ]),
+    );
+  }
+
+  /// 一行波段：左侧波段名，右侧日间/夜间两格条件（圆点 + 文字同色）
+  Widget _hfBandRow(HfBand b, AppLocalizations s) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(children: [
+          Expanded(
+            flex: 11,
+            child: Text(b.label,
+                style: ts(12, w: FontWeight.w700, c: Colors.white)),
+          ),
+          Expanded(flex: 10, child: _hfQualityCell(hfQualityOf(b.day), s)),
+          Expanded(
+            flex: 11,
+            child: _hfQualityCell(hfQualityOf(b.night), s, end: true),
+          ),
+        ]),
+      );
+
+  /// 一格传播条件。颜色用 `hfQualityColor`（好=绿 / 一般=橙 / 差=红 / 关闭=灰），
+  /// 与面板的级别色同一套取向，也与组件上的圆点同色。
+  Widget _hfQualityCell(HfQuality q, AppLocalizations s, {bool end = false}) {
+    final col = hfQualityColor(q);
+    return Row(
+      mainAxisAlignment:
+          end ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: col, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(hfQualityLabel(q, s),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ts(11, w: FontWeight.w700, c: col)),
+        ),
+      ],
+    );
+  }
+
   Widget _kvPair(String label, String value) => Row(children: [
         Text(label,
-            style: ts(10.5, c: Colors.white.withValues(alpha: 0.58))),
+            style: ts(10, c: Colors.white.withValues(alpha: 0.58))),
         const SizedBox(width: 8),
         Expanded(
           child: Text(value,
@@ -2221,7 +2414,7 @@ class _Daily15SheetState extends State<_Daily15Sheet>
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(s.weatherDaily15Title,
-                                style: ts(14.5,
+                                style: ts(13,
                                         w: FontWeight.w800, c: Colors.white)
                                     .copyWith(shadows: _kTextShadow)),
                           ),
@@ -2285,7 +2478,7 @@ class _Daily15SheetState extends State<_Daily15Sheet>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_dayLabel(i, d.date, s),
-                    style: ts(12.5, w: FontWeight.w700, c: Colors.white)),
+                    style: ts(12, w: FontWeight.w700, c: Colors.white)),
                 const SizedBox(height: 1),
                 Text(d.date == null ? '' : _md(d.date!),
                     style: ts(10, c: Colors.white.withValues(alpha: 0.5))),
@@ -2337,7 +2530,7 @@ class _Daily15SheetState extends State<_Daily15Sheet>
                 Text('${d.precip}mm',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: ts(9.5, c: Colors.white.withValues(alpha: 0.5))),
+                    style: ts(9, c: Colors.white.withValues(alpha: 0.5))),
               ],
             ),
           ),

@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 
+import 'material.dart';
 import 'net/tnc.dart';
 import 'settings_widgets.dart';
 import 'state.dart';
@@ -40,6 +43,10 @@ class _TncDevicePageState extends State<TncDevicePage> {
   late final TextEditingController _initString;
   late final TextEditingController _initDelay;
 
+  /// 串口线速（bd）。只对 USB-OTG / 桌面串口有意义 ——
+  /// 蓝牙 SPP 没有波特率概念，所以绑的是蓝牙设备时这一项会被忽略。
+  late final TextEditingController _baud;
+
   bool _scanning = false;
   bool _supported = true;
   bool _busy = false;
@@ -64,6 +71,7 @@ class _TncDevicePageState extends State<TncDevicePage> {
     _hwVal = TextEditingController(text: '${c.hardwareVal}');
     _initString = TextEditingController(text: c.initString);
     _initDelay = TextEditingController(text: '${c.initDelayMs}');
+    _baud = TextEditingController(text: '${c.serialBaud}');
     unawaited(_probe());
   }
 
@@ -72,6 +80,7 @@ class _TncDevicePageState extends State<TncDevicePage> {
     for (final c in [
       _txDelay, _txTail, _persistence, _slotTime,
       _channel, _maxFrame, _path, _hwCmd, _hwVal, _initString, _initDelay,
+      _baud,
     ]) {
       c.dispose();
     }
@@ -90,9 +99,105 @@ class _TncDevicePageState extends State<TncDevicePage> {
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         backgroundColor: color ?? C.ink,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  /// 是否桌面串口场景（决定要不要显示「发射串口」选择器）。
+  bool get _desktopSerial =>
+      defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.macOS;
+
+  /// 可枚举到的串口列表（选发射串口时用）。
+  List<TncDevice> _serials = const [];
+
+  Future<void> _loadSerials() async {
+    if (!_desktopSerial) return;
+    try {
+      // 走 TncLink.scan()（= 平台传输层的 listDevices）而不是自己枚举：
+      // 桌面串口的枚举方式（PowerShell CIM / mode）已经在那里实现好了。
+      await tnc.scan();
+      if (!mounted) return;
+      setState(() => _serials = tnc.devices.where((d) => d.needsBaud).toList());
+    } catch (_) {}
+  }
+
+  String _txSerialLabel(S s) {
+    final id = tnc.config.txSerialId;
+    if (id.isEmpty) return s.tncTxSerialDefault;
+    for (final d in _serials) {
+      if (d.id == id) return d.label;
+    }
+    return id;
+  }
+
+  /// 选发射串口：选项 = 「与接收同一个」+ 当前枚举到的串口（issue #14）。
+  ///
+  /// 每次打开都重新枚举 —— USB 转串口线常常是「先插上、再进设置」。
+  Future<void> _pickTxSerial(S s) async {
+    await _loadSerials();
+    if (!mounted) return;
+    final cur = tnc.config.txSerialId;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(s.tncTxSerial, style: ts(13, w: FontWeight.w700)),
+              const SizedBox(height: 6),
+              for (final opt in <(String, String)>[
+                ('', s.tncTxSerialDefault),
+                for (final d in _serials) (d.id, d.label),
+              ])
+                InkWell(
+                  onTap: () => Navigator.pop(ctx, opt.$1),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    child: Row(
+                      children: [
+                        Icon(
+                          opt.$1 == cur
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_off_rounded,
+                          size: 17,
+                          color: opt.$1 == cur ? C.indigo : C.greyLight,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            opt.$2,
+                            style: ts(12, c: C.ink),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => tnc.config.txSerialId = picked);
+    await tnc.persistConfig();
+    _toast(s.tncTxSerialHint);
   }
 
   int _intOf(TextEditingController c, int fallback) =>
@@ -113,6 +218,9 @@ class _TncDevicePageState extends State<TncDevicePage> {
     c.hardwareVal = _intOf(_hwVal, c.hardwareVal).clamp(0, 255);
     c.initString = _initString.text;
     c.initDelayMs = _intOf(_initDelay, c.initDelayMs).clamp(0, 5000);
+    final newBaud = _intOf(_baud, c.serialBaud).clamp(1200, 1000000);
+    _baud.text = '$newBaud';
+    c.serialBaud = newBaud;
     await tnc.persistConfig();
   }
 
@@ -123,6 +231,13 @@ class _TncDevicePageState extends State<TncDevicePage> {
       return;
     }
     tnc.applyKiss();
+    // 串口线速改了要重开链路才生效（KISS 参数帧走的是同一条串口，
+    // 但波特率是打开设备时定的）—— 否则用户会以为「设了没反应」。
+    // 蓝牙没有波特率概念，不必重连。
+    if (tnc.device?.needsBaud == true) {
+      await tnc.disconnect();
+      await tnc.connect();
+    }
     _toast(S.of(context).kissParamsSent, color: C.green);
     setState(() {});
   }
@@ -226,6 +341,8 @@ class _TncDevicePageState extends State<TncDevicePage> {
     return ListenableBuilder(
       listenable: st,
       builder: (context, _) => SettingsPageShell(
+        guideId: 'tncDevice',
+        state: widget.state,
         title: s.tncDeviceTitle,
         subtitle: s.tncDeviceDesc,
         icon: Icons.settings_input_antenna_rounded,
@@ -442,6 +559,25 @@ class _TncDevicePageState extends State<TncDevicePage> {
         SettingsInput(s.tncInitDelay, _initDelay,
             tip: s.tncInitDelayTip,
             onChanged: (_) => unawaited(_collect())),
+        // 串口线速：只对 USB-OTG / 桌面串口有意义（蓝牙 SPP 无此概念）
+        SettingsInput(s.tncSerialBaud, _baud,
+            tip: s.tncSerialBaudTip,
+            onEditingComplete: () => unawaited(_collect())),
+        // 发射串口（issue #14）：默认与接收同一个。Windows 的 COM 口是独占
+        // 设备，而不少用户是一个口收、另一个口发 —— 只在桌面串口场景显示。
+        if (_desktopSerial)
+          SettingsNavRow(
+            title: s.tncTxSerial,
+            subtitle: s.tncTxSerialHint,
+            icon: Icons.call_made_rounded,
+            color: C.indigo,
+            trailing: _txSerialLabel(s),
+            onTap: () => unawaited(_pickTxSerial(s)),
+          ),
+        if (tnc.device?.needsBaud == true)
+          SettingsHint(s.tncSerialBaudHint, color: C.orange)
+        else
+          SettingsHint(s.tncSerialBaudBluetooth, color: C.grey),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
           child: SizedBox(

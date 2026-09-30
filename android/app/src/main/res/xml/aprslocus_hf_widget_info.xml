@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  APRSlocus 短波 / 电离层传播 桌面小组件（4×2）
+
+  **为什么固定尺寸**（`resizeMode="none"`）：
+  这个组件的内容是一张**表**（波段 × 昼夜）。表不像列表那样能优雅降级 ——
+  挤到 2×2 就只剩波段名而没有条件值，等于把最有用的信息砍掉。与其提供一个
+  会被用户拖坏的组件，不如老实声明「它就是这个尺寸」。
+  （天气组件能自适应 4 档，是因为它的内容是「可以少给几条」的列表。）
+
+  尺寸口径与天气组件一致：
+  - `targetCellWidth/Height` 是给 API 31+ 的正式声明（4 格宽 2 格高）；
+  - `minWidth/minHeight` 给旧版本兜底，按 (74×格子数 − 16) 换算，4×2 ≈ 280×132dp。
+
+  `updatePeriodMillis` 取系统允许的最小值 30 分钟：它**不联网**
+  （组件不持有数据源，见 lib/hf_widget.dart），只是重渲染已有快照，
+  顺带让组件在存储/数据异常后能自愈。真正的刷新由 App 侧推送。
+-->
+<!-- 缩放适配（说明写在标签之外：XML 注释不能出现在属性之间）
+  ⚠ **minResizeHeight 必须 ≤ minHeight**：minResize* 是「用户最少能拖到多小」，
+  比组件自己的默认尺寸还大的话，等于宣告「默认的 4×2 低于下限」——
+  启动器会拒绝落到 4×2、或强行撑到那个下限（v1.6.133 就是这样把 4×2 弄没的）。
+  这里取 105dp（略低于默认 110dp），保证 4×2 始终可达。
+
+  宽度下限 200dp：波段名 56 + 两段 + 档位块 48 + 内边距与缝，再窄就先牺牲波段名。
+
+  高度到 240dp（≈4 格）以上换 aw_widget_hf_tall：条更粗、字号上一档、提示给两行
+  —— 多出来的高度都用在信息量上。（3 格标称只有 206dp，放不下加高布局的 232dp，
+  所以判档阈值按**内容需要的高度**取，而不是按「几格」。）
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:minResizeWidth="200dp"
+    android:minResizeHeight="105dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/aw_widget_hf"
+    android:previewLayout="@layout/aw_widget_hf"
+    android:description="@string/app_widget_hf_desc"
+    android:widgetCategory="home_screen" />

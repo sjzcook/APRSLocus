@@ -1,17 +1,28 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'state.dart';
 import 'models.dart';
 import 'widgets.dart';
 import 'settings_widgets.dart';
+import 'garmin_page.dart';
+import 'hr_card.dart';
 import 'log_page.dart';
 import 'tile_map.dart';
 import 'audio_page.dart';
 import 'device_page.dart';
+import 'platform_caps.dart';
 import 'pkwdwpl_device_page.dart';
 import 'tnc_page.dart';
 import 'early_member.dart';
+import 'offline_map_page.dart';
 import 'weather.dart';
+import 'theme_store.dart';
+import 'markdown_view.dart';
+import 'material.dart';
+import 'notice.dart';
 
 /// ─── 电台设置 ───
 class StationSettingsPage extends StatefulWidget {
@@ -24,6 +35,17 @@ class StationSettingsPage extends StatefulWidget {
 class _StationSettingsPageState extends State<StationSettingsPage> {
   late final TextEditingController _call;
   late final TextEditingController _comment;
+  late final TextEditingController _status;
+  // 手填的数据扩展（海拔覆盖 / 功率 / 天线高度 / 增益），都在「高级设置」里。
+  // 注意「天线高度」与 `/A=` 的海拔是两个量：前者是 PHG 里
+  // 「高于当地平均地面」的高度，不能互相替代。
+  late final TextEditingController _alt;
+  late final TextEditingController _power;
+  late final TextEditingController _height;
+  late final TextEditingController _gain;
+
+  /// 高级设置是否展开。默认收起（那些项平时不改）。
+  bool _advOpen = false;
 
   AppState get st => widget.state;
 
@@ -32,13 +54,193 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
     super.initState();
     _call = TextEditingController(text: st.myCall);
     _comment = TextEditingController(text: st.myComment);
+    _status = TextEditingController(text: st.aprsStatusText);
+    _alt = TextEditingController(text: _fmtNum(st.beaconAltOverrideM));
+    _power = TextEditingController(text: _fmtNum(st.beaconPowerW));
+    _height = TextEditingController(text: _fmtNum(st.beaconAntennaHeightFt));
+    _gain = TextEditingController(text: _fmtNum(st.beaconGainDb));
   }
 
   @override
   void dispose() {
     _call.dispose();
     _comment.dispose();
+    _status.dispose();
+    _alt.dispose();
+    _power.dispose();
+    _height.dispose();
+    _gain.dispose();
     super.dispose();
+  }
+
+  /// 数值 → 输入框文本。null（= 不发送该项）显示为空，而不是 0。
+  static String _fmtNum(double? v) {
+    if (v == null) return '';
+    return v == v.roundToDouble()
+        ? v.toInt().toString()
+        : v.toString();
+  }
+
+  /// 输入框文本 → 数值并写回状态。**空串解析成 null**，即「不发送这一项」；
+  /// 无法解析的输入（用户打到一半的「-」之类）同样按 null 处理，
+  /// 免得把半截输入当成 0 发出去。
+  void _num(String raw, void Function(double?) apply) {
+    final t = raw.trim();
+    if (t.isEmpty) {
+      apply(null);
+      return;
+    }
+    apply(double.tryParse(t));
+  }
+
+  /// 一个发射按钮：位置报文与状态报文**哪个有内容就发哪个**。
+  ///
+  /// 之所以合并成一个而不是两个按钮：用户要的是「把我填的东西发出去」这一件事。
+  /// 分成两个按钮会逼他先判断「我这几项属于哪个报文」—— 而它们其实分属两种
+  /// 报文（PHG 跟在位置报文里，状态文本是独立一帧），这个区分对用户
+  /// 没有任何操作意义。
+  ///
+  /// ⚠ **一律直接读输入框当前内容**，不依赖 `onChanged` 是否已经把值写回 state：
+  /// 中文输入法的组合输入、以及「打完字直接点按钮」这类路径下，`onChanged`
+  /// 未必来得及写入，于是会出现「明明填了，却发出默认的 APRSlocus 在线帧」——
+  /// 这正是用户报过的现象。边输边存只作为兜底，发送时以输入框为准。
+  ///
+  /// ── 留空是正常用法，不是错误 ──
+  ///
+  /// 台站备注 / 高度 / 功率 / 天线高度 / 增益 / 独立状态报文**全部允许留空**：
+  ///   * 位置报文那一侧本来就按「哪项有值拼哪项」组装，全空时不带这些扩展，合法；
+  ///   * 状态报文那一侧，文本留空时 [AppState.sendStatus] 会自动发内置的
+  ///     `APRSlocus CONNECT vX.Y.Z 平台` 在线帧。
+  ///
+  /// 所以这里**没有「没有可发送的内容」这条拦截**：什么都不填时仍然发一帧
+  /// 内置在线帧 —— 那也正是「宣告我在线」最有用的默认动作。
+  void _transmit(BuildContext context) {
+    final s = S.of(context);
+    // ── 链接检查（用户要求）──
+    //
+    // 这个「发射」按钮是本页新增的入口，最容易被理解成「按了就发出去」——
+    // 而链路没连上时 [AppState.sendBeacon] / [AppState.sendStatus] 只做本地
+    // 记录、并不会真的发射。所以先判连通性：没连就**直说**，别让用户以为
+    // 信号已经上天了（文案与链路自检里「发射测试帧」用同一句
+    // [S.testTxNeedsConnect]：「请先连接链路」）。
+    if (!st.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.testTxNeedsConnect),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: C.red,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+    // 先把各输入框的现值同步进 state（发送的一瞬间取值）
+    _num(_power.text, st.setBeaconPower);
+    _num(_height.text, st.setBeaconAntennaHeight);
+    _num(_gain.text, st.setBeaconGain);
+    _num(_alt.text, st.setBeaconAltOverride);
+    st.myComment = _comment.text.trim();
+    st.setAprsStatusText(_status.text);
+
+    // 位置报文的数据扩展只要 PHG 三项里有任一项就带上（功率 / 天线高度 /
+    // 增益**都**属于同一个 `PHGphgd`，见 [AppState.hasPhg]）；没有扩展就不发
+    // 位置报文 —— 位置包的价值就在那段随包扩展上。
+    final hasExt = st.hasPhg;
+    // 「填了 PHG 却没定位」要**明说**：`sendBeacon()` 内部被 `!myHasFix`
+    // 直接挡回（没坐标不能发位置包），这么一来只发出一帧状态报文。
+    // 不提示的话用户会以为 PHG 已经上天了 —— 只看流量、看不到一条位置帧。
+    final noFix = hasExt && !st.myHasFix;
+    final sent = <String>[];
+    if (hasExt && st.myHasFix) {
+      st.sendBeacon();
+      sent.add(s.txPartPosition);
+    }
+    // 状态报文总是发：文本为空时 sendStatus 内部改用内置在线帧
+    st.sendStatus();
+    sent.add(s.txPartStatus);
+    final parts = sent.join(' + ');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(noFix ? s.txNoFixKeptStatus(parts) : s.txSent(parts)),
+        behavior: SnackBarBehavior.floating,
+        // 没定位时用橙色：提示这是「发了一半」，与纯成功的绿色区分开
+        backgroundColor: noFix ? C.orange : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  /// ── 高级设置：默认折叠的一张子卡 ──
+  ///
+  /// 收纳平时不改的东西：高度覆盖、PHG（功率/天线高度/增益）、独立状态报文。
+  /// 用自绘的标题行而不是 [SettingsFold]，是因为这里要放在**已有卡片的子级**
+  /// （缩进一层），而 SettingsFold 的外框是给整卡用的。
+  ///
+  /// ⚠ **手机电量开关不在这里**：它属于「信标上报内容」，仍在信标页那一节
+  /// （见 `_BeaconSettingsPageState`）。用户明确要求不要把它搬过来，
+  /// 也不要改它的默认值 —— 别再合并第二次。
+  Widget _advancedMenu(BuildContext context, AppState st) {
+    final s = S.of(context);
+    return Column(children: [
+      // 标题行（整行可点）
+      InkWell(
+        onTap: () => setState(() => _advOpen = !_advOpen),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+              border: Border(
+                  top: BorderSide(color: C.border, width: 0.4),
+                  bottom: BorderSide(
+                      color: C.border, width: _advOpen ? 0.4 : 0.0))),
+          child: Row(children: [
+            Icon(_advOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                size: 18, color: C.purple),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(s.advancedMenu,
+                  style: ts(12, c: C.purple, w: FontWeight.w700)),
+            ),
+          ]),
+        ),
+      ),
+      // 展开/收起走 SettingsExpandable：尺寸与淡入淡出一起做。
+      // 这里原本是裸的 `if (_advOpen) ...[...]` —— 内容瞬间进出，
+      // 也就是 issue #16 说的「突然填充 / 突然闪一下」。
+      // （折叠态下子控件仍在树上、只是被裁切，这是淡出动画需要的。）
+      SettingsExpandable(
+        open: _advOpen,
+        children: [
+          // ── 高度：手填优先，留空跟随定位 ──
+          SettingsInput(s.beaconAltLabel, _alt,
+              tip: s.beaconAltTip,
+              onChanged: (v) => _num(v, st.setBeaconAltOverride)),
+          // 回显当前实际会发出的 /A=：手填了就显示手填值，否则显示定位来的，
+          // 两者都没有时明说「没有」—— 不摆出来用户无从知道到底发了什么。
+          SettingsHint(
+              st.autoAltExtension.isEmpty
+                  ? s.beaconAltNone
+                  : '${s.beaconAltWillSend}  ${st.autoAltExtension}',
+              color: st.autoAltExtension.isEmpty ? C.grey : C.purple),
+          // ── PHG：功率 / 天线高度 / 增益（填任一即整组编码）──
+          SettingsInput(s.beaconPowerLabel, _power,
+              tip: s.beaconPhgTip,
+              onChanged: (v) => _num(v, st.setBeaconPower)),
+          SettingsInput(s.beaconAntHeightLabel, _height,
+              tip: s.beaconPhgTip,
+              onChanged: (v) => _num(v, st.setBeaconAntennaHeight)),
+          SettingsInput(s.beaconGainLabel, _gain,
+              tip: s.beaconPhgTip,
+              onChanged: (v) => _num(v, st.setBeaconGain)),
+          if (st.phgPreview.isNotEmpty)
+            SettingsHint(s.beaconPhgPreview(st.phgPreview), color: C.purple),
+          // ── 独立状态报文：与上面那行备注是两种 APRS 报文 ──
+          SettingsInput(s.aprsStatus, _status,
+              tip: s.aprsStatusHint,
+              onChanged: (v) => st.setAprsStatusText(v)),
+        ],
+      ),
+    ]);
   }
 
   @override
@@ -69,10 +271,41 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
             _defaultBadgeRow(),
             SettingsInput(S.of(context).callComment, _comment,
                 tip: S.of(context).callCommentHint,
+                // 这一行**默认就是空的**（v1.6.80 起备注默认清空），而它又是
+                // 自由文本 —— 用户反馈「都不知道那里是可以输入的」正是指这一行。
+                // 所以给它一句比通用提示更直白的占位文案。
+                hint: S.of(context).callCommentEmpty,
                 onChanged: (v) {
               st.myComment = v.trim();
               st.persist();
             }),
+            // ── 高级设置（默认折叠）──
+            //
+            // 为什么折叠：这些项（高度覆盖 / PHG 三项 / 状态报文）平时根本不改，
+            // 常驻展开会把「台站备注」这一张卡片撑得很长，而它上面才是用户
+            // 天天要动的呼号与备注。默认收起、点标题才展开。
+            _advancedMenu(context, st),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  // 未连接时**不发**，只在下面 `_transmit` 里给一句
+                  // 「请先连接链路」——按钮本身不禁用，否则用户不知道
+                  // 为什么点了没反应。
+                  onPressed: () => _transmit(context),
+                  icon: const Icon(Icons.campaign_rounded, size: 16),
+                  label: Text(S.of(context).txButton,
+                      style: ts(12, c: Colors.white, w: FontWeight.w700)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: C.purple,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
         SizedBox(height: 16),
@@ -133,21 +366,44 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
-            child: Row(children: [
-              Icon(Icons.star_rounded, size: 16, color: C.yellow),
-              SizedBox(width: 8),
-              Text(S.of(context).homeBadgeLabel, style: ts(12, c: C.slate)),
-              Spacer(),
-              if (cur != null)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(cur.icon, size: 15, color: cur.color),
-                  SizedBox(width: 4),
-                  Text(cur.label,
-                      style: ts(12, c: cur.color, w: FontWeight.w700)),
-                ]),
-              SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
-            ]),
+            // 与 LabelValueRow 同一套做法：**被限宽的一端自然宽、另一端用
+            // Expanded 吸剩余**。不用「两个 Flexible + Spacer」是因为那样三方
+            // 各分 1/3，会把本来放得下的徽标名挤成省略号。
+            child: LayoutBuilder(
+              builder: (ctx, c) => Row(children: [
+                Icon(Icons.star_rounded, size: 16, color: C.yellow),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    S.of(context).homeBadgeLabel,
+                    style: ts(12, c: C.slate),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (cur != null) ...[
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: c.maxWidth * 0.45),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(cur.icon, size: 15, color: cur.color),
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          cur.label,
+                          style: ts(12, c: cur.color, w: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ]),
+                  ),
+                ],
+                SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+              ]),
+            ),
           ),
         );
       },
@@ -196,7 +452,7 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
                         Icon(h.icon, size: 20, color: h.color),
                         const SizedBox(width: 12),
                         Text(h.labelOf(honorLangOf(context)),
-                            style: ts(14, w: FontWeight.w700)),
+                            style: ts(13, w: FontWeight.w700)),
                         const Spacer(),
                         if (cur == h.key)
                           Icon(Icons.check_circle_rounded, size: 20, color: h.color),
@@ -221,56 +477,60 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          decoration: BoxDecoration(
-            color: C.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 36, height: 4, decoration: BoxDecoration(
-                color: C.greyLight, borderRadius: BorderRadius.circular(2))),
-            SizedBox(height: 14),
-            Text(S.of(context).chooseSsidSuffix, style: ts(16, w: FontWeight.w700)),
-            SizedBox(height: 4),
-            Text(S.of(context).ssidDesc,
-                style: ts(11, c: C.grey), textAlign: TextAlign.center),
-            SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: [
-                for (final val in [0, ...List.generate(15, (i) => i + 1)])
-                  GestureDetector(
-                    onTap: () {
-                      setState(() => st.mySsid = val);
-                      st.persist();
-                      setModalState(() {});
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: 64,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: st.mySsid == val ? C.blue : C.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: st.mySsid == val ? C.blue : C.border),
-                      ),
-                      child: Text(val == 0 ? S.of(context).none : '-$val',
-                          textAlign: TextAlign.center,
-                          style: ts(13,
-                              c: st.mySsid == val ? Colors.white : C.slate,
-                              w: st.mySsid == val
-                                  ? FontWeight.w700
-                                  : FontWeight.w500)),
-                    ),
-                  ),
-              ],
+        builder: (ctx, setModalState) => MaterialSurface(
+          radius: 24,
+          topOnly: true,
+          child: Container(
+            decoration: BoxDecoration(
+              color: C.sheetFill,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            const SizedBox(height: 10),
-          ]),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 36, height: 4, decoration: BoxDecoration(
+                  color: C.greyLight, borderRadius: BorderRadius.circular(2))),
+              SizedBox(height: 14),
+              Text(S.of(context).chooseSsidSuffix, style: ts(16, w: FontWeight.w700)),
+              SizedBox(height: 4),
+              Text(S.of(context).ssidDesc,
+                  style: ts(11, c: C.grey), textAlign: TextAlign.center),
+              SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final val in [0, ...List.generate(15, (i) => i + 1)])
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => st.mySsid = val);
+                        st.persist();
+                        setModalState(() {});
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 64,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: st.mySsid == val ? C.blue : C.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: st.mySsid == val ? C.blue : C.border),
+                        ),
+                        child: Text(val == 0 ? S.of(context).none : '-$val',
+                            textAlign: TextAlign.center,
+                            style: ts(13,
+                                c: st.mySsid == val ? Colors.white : C.slate,
+                                w: st.mySsid == val
+                                    ? FontWeight.w700
+                                    : FontWeight.w500)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ]),
+          ),
         ),
       ),
     );
@@ -324,82 +584,86 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.48,
-        decoration: BoxDecoration(
-          color: C.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(children: [
-          Container(
-            margin: const EdgeInsets.only(top: 10),
-            width: 36, height: 4,
-            decoration: BoxDecoration(
-                color: C.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2)),
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.48,
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-            child: Row(children: [
-              Text(S.of(context).chooseSymbol, style: ts(15, w: FontWeight.w700)),
-              Spacer(),
-              IconButton(
-                icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ]),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(S.of(context).callSymbolDesc, style: ts(11, c: C.slate)),
-          ),
-          SizedBox(height: 12),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              childAspectRatio: 0.85,
-              children: [
-                for (final s in syms)
-                  _symTile(ctx, s),
-              ],
+          child: Column(children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                  color: C.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2)),
             ),
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: C.border, width: 0.4))),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pop(ctx);
-                _showAllSymbols();
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: C.bgSoft,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: C.border),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: Row(children: [
+                Text(S.of(context).chooseSymbol, style: ts(16, w: FontWeight.w700)),
+                Spacer(),
+                IconButton(
+                  icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
+                  onPressed: () => Navigator.pop(ctx),
                 ),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.grid_view_rounded, size: 15, color: C.blue),
-                  SizedBox(width: 6),
-                  Text(S.of(context).moreSymbols,
-                      style: ts(12, c: C.blue, w: FontWeight.w600)),
-                  SizedBox(width: 4),
-                  Icon(Icons.chevron_right_rounded, size: 16, color: C.blue),
-                ]),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(S.of(context).callSymbolDesc, style: ts(11, c: C.slate)),
+            ),
+            SizedBox(height: 12),
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 4,
+                shrinkWrap: true,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                childAspectRatio: 0.85,
+                children: [
+                  for (final s in syms)
+                    _symTile(ctx, s),
+                ],
               ),
             ),
-          ),
-        ]),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: C.border, width: 0.4))),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAllSymbols();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: C.bgSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: C.border),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.grid_view_rounded, size: 15, color: C.blue),
+                    SizedBox(width: 6),
+                    Text(S.of(context).moreSymbols,
+                        style: ts(12, c: C.blue, w: FontWeight.w600)),
+                    SizedBox(width: 4),
+                    Icon(Icons.chevron_right_rounded, size: 16, color: C.blue),
+                  ]),
+                ),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -461,69 +725,73 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: BoxDecoration(
-          color: C.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(children: [
-          Container(
-            margin: const EdgeInsets.only(top: 10),
-            width: 36, height: 4,
-            decoration: BoxDecoration(
-                color: C.grey.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2)),
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-            child: Row(children: [
-              Text(S.of(context).allAprsSymbols, style: ts(15, w: FontWeight.w700)),
-              Spacer(),
-              IconButton(
-                icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ]),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                for (final cat in _symCategories(S.of(context))) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
-                    child: Row(children: [
-                      Container(
-                        width: 3, height: 14,
-                        decoration: BoxDecoration(
-                          color: C.blue,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      SizedBox(width: 6),
-                      Text(cat.$1,
-                          style: ts(13, c: C.blue, w: FontWeight.w700)),
-                    ]),
-                  ),
-                  GridView.count(
-                    crossAxisCount: 4,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 0.85,
-                    children: [
-                      for (final s in cat.$2)
-                        _symTile(ctx, s),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                ],
-              ],
+          child: Column(children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                  color: C.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2)),
             ),
-          ),
-        ]),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              child: Row(children: [
+                Text(S.of(context).allAprsSymbols, style: ts(16, w: FontWeight.w700)),
+                Spacer(),
+                IconButton(
+                  icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ]),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  for (final cat in _symCategories(S.of(context))) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                      child: Row(children: [
+                        Container(
+                          width: 3, height: 14,
+                          decoration: BoxDecoration(
+                            color: C.blue,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Text(cat.$1,
+                            style: ts(13, c: C.blue, w: FontWeight.w700)),
+                      ]),
+                    ),
+                    GridView.count(
+                      crossAxisCount: 4,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 0.85,
+                      children: [
+                        for (final s in cat.$2)
+                          _symTile(ctx, s),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                ],
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -700,30 +968,141 @@ class BeaconSettingsPage extends StatefulWidget {
 
 class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
   late final TextEditingController _interval;
+  late final TextEditingController _netInterval;
   late final TextEditingController _myLat;
   late final TextEditingController _myLng;
   final _intervalFocus = FocusNode();
+  final _netIntervalFocus = FocusNode();
   bool _manualOpen = false;
   int? _fastApproved; // 已确认的低间隔值（避免同值重复弹窗）
 
   AppState get st => widget.state;
 
+  /// 选「纯网络定位时用的符号」（issue #21-6）。
+  ///
+  /// 与「我的符号」那张卡共用同一张符号表（`_symCategories`），但**多一项**
+  /// 「跟随我的符号」：那一项是 [AppState.networkSymbol] 为空串的语义，
+  /// 也是默认值（保持旧行为）。
+  Future<void> _pickNetSymbol() async {
+    final cats = _symCategories(S.of(context));
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(S.of(ctx).netSymbol, style: ts(16, w: FontWeight.w800)),
+                const SizedBox(height: 4),
+                Text(S.of(ctx).netSymbolHint,
+                    style: ts(11, c: C.grey, h: 1.4)),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () => Navigator.pop(ctx, ''),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Row(children: [
+                      Icon(
+                        st.networkSymbol.isEmpty
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        size: 17,
+                        color: st.networkSymbol.isEmpty ? C.orange : C.greyLight,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(S.of(ctx).netSymbolFollow, style: ts(12)),
+                    ]),
+                  ),
+                ),
+                for (final cat in cats) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 2),
+                    child: Text(cat.$1, style: ts(11, c: C.grey, w: FontWeight.w700)),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final sym in cat.$2)
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx, sym.$1),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: st.networkSymbol == sym.$1
+                                  ? C.orange.withValues(alpha: 0.14)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: st.networkSymbol == sym.$1
+                                      ? C.orange
+                                      : C.border),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              // 这里**不调 `_symIcon`**：它是「我的符号」那张卡
+                              // （_StationSettingsPageState）的私有方法，本页拿不到；
+                              // 网络符号只需要「看得出是哪个图标」。
+                              Icon(
+                                sym.$2,
+                                size: 15,
+                                color: st.networkSymbol == sym.$1
+                                    ? C.orange
+                                    : C.grey,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(symName(S.of(ctx), sym.$1), style: ts(11)),
+                            ]),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    st.setNetworkSymbol(picked);
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     _interval = TextEditingController(text: '${st.beaconInterval}');
+    _netInterval = TextEditingController(text: '${st.beaconNetInterval}');
     _myLat = TextEditingController(text: st.myLat?.toString() ?? '');
     _myLng = TextEditingController(text: st.myLng?.toString() ?? '');
     // 失焦时统一校验（避免逐字符输入就弹窗）
     _intervalFocus.addListener(() {
       if (!_intervalFocus.hasFocus) _applyIntervalInput();
     });
+    _netIntervalFocus.addListener(() {
+      if (!_netIntervalFocus.hasFocus) _applyNetIntervalInput();
+    });
   }
 
   @override
   void dispose() {
     _intervalFocus.dispose();
+    _netIntervalFocus.dispose();
     _interval.dispose();
+    _netInterval.dispose();
     _myLat.dispose();
     _myLng.dispose();
     super.dispose();
@@ -744,6 +1123,16 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
     }
   }
 
+  /// 纯网络模式专用间隔：读取输入并应用（非法回退当前值）
+  void _applyNetIntervalInput() {
+    final n = int.tryParse(_netInterval.text.trim());
+    if (n == null || n < 30) {
+      _netInterval.text = '${st.beaconNetInterval}';
+      return;
+    }
+    st.setBeaconNetInterval(n);
+  }
+
   /// 信标间隔 < 60 秒 → 强提示（APRS-IS 建议移动站不低于 60 秒）
   Future<void> _confirmFastInterval(int n) async {
     if (_fastApproved == n) {
@@ -759,7 +1148,7 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
           SizedBox(width: 8),
           Expanded(
             child: Text(S.of(context).beaconWarnTitle,
-                style: ts(15, w: FontWeight.w700)),
+                style: ts(16, w: FontWeight.w700)),
           ),
         ]),
         content: Text(S.of(context).beaconWarnBody,
@@ -808,7 +1197,9 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
               child: Row(children: [
                 Expanded(
                   child: _locSourceCard(
-                    title: S.of(context).location,
+                    // 「定位」→「手机 GPS」：与设备页的「位置来源」用**同一个名字**，
+                    // 否则用户会以为这是两件不同的事（用户的疑问正是这个）。
+                    title: S.of(context).posSrcPhone,
                     icon: Icons.gps_fixed_rounded,
                     desc: S.of(context).useDeviceLocation,
                     selected: !st.useSimLocation,
@@ -826,6 +1217,22 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   ),
                 ),
               ]),
+            ),
+            SettingsSwitch(S.of(context).sensorAssist,
+                value: st.sensorAssist, color: C.green,
+                enabled: motionPlatformSupported,
+                onChanged: st.setSensorAssist),
+            // 传感器仅 Android 有原生实现：不支持时置灰并把说明标成警示色
+            SettingsHint(S.of(context).sensorAssistDesc,
+                color: motionPlatformSupported ? null : C.orange),
+            // **优先级说明**（用户问「如果选了佳明，这里不重复了吗？听谁的？」）：
+            // 这一页只管「手机 GPS / 模拟位置」二选一，佳明在「设置 → 设备 → 位置来源」，
+            // 而两者同时可用时的顺序是**一处判断**（AppState.positionSourceNow），
+            // 不在这里另立一套。把「现在实际在用谁」也一并显示，避免用户靠猜。
+            SettingsHint(S.of(context).posSourcePrecedence, color: C.slate),
+            SettingsRow2(
+              S.of(context).locationSource,
+              S.of(context).posSourceUsing(_posSourceLabel(st, S.of(context))),
             ),
             SizedBox(height: 10),
           ],
@@ -953,30 +1360,60 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-                child: Row(children: [
-                  Expanded(
-                    child: _locSourceCard(
-                      title: S.of(context).locModeGps,
-                      icon: Icons.gps_fixed_rounded,
-                      desc: S.of(context).locModeGpsDesc,
-                      selected: st.locationMode == 'gps',
-                      onTap: () => st.setLocationMode('gps'),
-                      color: C.cyan,
-                    ),
+                child: Column(children: [
+                  _locSourceCard(
+                    title: S.of(context).locModeGps,
+                    icon: Icons.gps_fixed_rounded,
+                    desc: S.of(context).locModeGpsDesc,
+                    selected: st.locationMode == 'gps',
+                    onTap: () => st.setLocationMode('gps'),
+                    color: C.cyan,
                   ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: _locSourceCard(
-                      title: S.of(context).locModeGpsNetwork,
-                      icon: Icons.wifi_tethering_rounded,
-                      desc: S.of(context).locModeGpsNetworkDesc,
-                      selected: st.locationMode == 'gps_network',
-                      onTap: () => st.setLocationMode('gps_network'),
-                      color: C.cyan,
-                    ),
+                  SizedBox(height: 8),
+                  _locSourceCard(
+                    title: S.of(context).locModeGpsNetwork,
+                    icon: Icons.wifi_tethering_rounded,
+                    desc: S.of(context).locModeGpsNetworkDesc,
+                    selected: st.locationMode == 'gps_network',
+                    onTap: () => st.setLocationMode('gps_network'),
+                    color: C.cyan,
+                  ),
+                  SizedBox(height: 8),
+                  // 纯网络：只用基站 / Wi-Fi。给没有 GPS 的设备，也用于极端省电
+                  _locSourceCard(
+                    title: S.of(context).locModeNetwork,
+                    icon: Icons.network_cell_rounded,
+                    desc: S.of(context).locModeNetworkDesc,
+                    selected: st.locationMode == 'network',
+                    onTap: () => st.setLocationMode('network'),
+                    color: C.cyan,
                   ),
                 ]),
               ),
+              // 诚实说清「网络辅助」的取舍：有用户报过「开了网络定位后位置
+              // 飞来飞去」—— 那不是 bug，而是基站/Wi-Fi 定位本来就有几百米误差。
+              // 说不清楚用户就会以为是应用坏了。纯网络模式下换一条更贴切的说明。
+              if (st.locationMode == 'network')
+                SettingsHint(S.of(context).locModeNetworkHint)
+              else
+                SettingsHint(S.of(context).locModeNetHint),
+              // 纯网络定位时的台站图标（issue #21-6）：只在纯网络模式下出现 ——
+              // 其它模式这个设置没有任何作用，摆出来只会让人以为是坏的。
+              if (st.locationMode == 'network')
+                SettingsNavRow(
+                  title: S.of(context).netSymbol,
+                  subtitle: S.of(context).netSymbolHint,
+                  icon: Icons.emoji_emotions_rounded,
+                  color: C.orange,
+                  trailing: st.networkSymbol.isEmpty
+                      ? S.of(context).netSymbolFollow
+                      : st.networkSymbol,
+                  onTap: () => unawaited(_pickNetSymbol()),
+                ),
+              // 外置 GPS 优先时让手机 GPS 待机（issue #21-4）
+              SettingsSwitch(S.of(context).extGpsStandby,
+                  value: st.extGpsStandby, onChanged: st.setExtGpsStandby),
+              SettingsHint(S.of(context).extGpsStandbyTip),
               SizedBox(height: 10),
             ],
           ),
@@ -990,19 +1427,63 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
           children: [
             SettingsSwitch(S.of(context).beaconEnabled, value: st.beaconEnabled,
                 onChanged: st.setBeaconEnabled),
-            // 固定间隔：仅在关闭智能信标时作为兜底使用
-            if (!st.smartBeaconEnabled)
-              SettingsInput(S.of(context).beaconInterval, _interval,
-                  tip: S.of(context).beaconIntervalTip,
-                  focusNode: _intervalFocus,
+            // 上报状态栏样式：经典（单行）/ 详细（多一行判据，每秒刷新）。
+            // 放在信标这一节里：它描述的就是「信标什么时候会发」。（issue #21-2）
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(S.of(context).beaconBarStyle,
+                        style: ts(12, c: C.slate, w: FontWeight.w600)),
+                  ),
+                  SegmentedButton<bool>(
+                    showSelectedIcon: false,
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: WidgetStatePropertyAll(ts(11)),
+                    ),
+                    segments: [
+                      ButtonSegment(
+                          value: false,
+                          label: Text(S.of(context).beaconBarClassic)),
+                      ButtonSegment(
+                          value: true,
+                          label: Text(S.of(context).beaconBarDetailedOption)),
+                    ],
+                    selected: {st.beaconBarDetailed},
+                    onSelectionChanged: (v) =>
+                        st.setBeaconBarDetailed(v.first),
+                  ),
+                ],
+              ),
+            ),
+            SettingsHint(S.of(context).beaconBarStyleTip),
+            // 纯网络模式：没有可靠速度 → 智能信标 / 距离 / 转弯都不适用，
+            // 改用**专用固定间隔**（见 AppState.beaconNetInterval）。
+            if (st.locationMode == 'network')
+              SettingsInput(S.of(context).beaconNetInterval, _netInterval,
+                  tip: S.of(context).beaconNetIntervalTip,
+                  focusNode: _netIntervalFocus,
                   onEditingComplete: () {
-                    // 回车=确认：立即收起键盘并校验
-                    _intervalFocus.unfocus();
-                    _applyIntervalInput();
-                  }),
-            SettingsSwitch(S.of(context).smartBeacon,
-                value: st.smartBeaconEnabled, onChanged: st.setSmartBeaconOn),
-            if (st.smartBeaconEnabled) _smartTierArea(),
+                    _netIntervalFocus.unfocus();
+                    _applyNetIntervalInput();
+                  })
+            else ...[
+              // 固定间隔：仅在关闭智能信标时作为兜底使用
+              if (!st.smartBeaconEnabled)
+                SettingsInput(S.of(context).beaconInterval, _interval,
+                    tip: S.of(context).beaconIntervalTip,
+                    focusNode: _intervalFocus,
+                    onEditingComplete: () {
+                      // 回车=确认：立即收起键盘并校验
+                      _intervalFocus.unfocus();
+                      _applyIntervalInput();
+                    }),
+              SettingsSwitch(S.of(context).smartBeacon,
+                  value: st.smartBeaconEnabled, onChanged: st.setSmartBeaconOn),
+              if (st.smartBeaconEnabled) _smartTierArea(),
+            ],
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
               child: Column(
@@ -1020,11 +1501,74 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                       onChanged: st.setBeaconIncludeSpeed),
                   SettingsMiniSwitch(S.of(context).bearing, value: st.beaconIncludeCourse,
                       onChanged: st.setBeaconIncludeCourse),
+                  // 手机电量：**留在本页**（用户要求）。它是「信标上报内容」
+                  // 的一项，与上面几项同源；默认开（与 2.0.2 一致）。
                   SettingsMiniSwitch(S.of(context).phoneBattery, value: st.beaconIncludeBattery,
                       onChanged: st.setBeaconIncludeBattery),
+                  SettingsMiniSwitch(S.of(context).beaconTripMileage,
+                      value: st.beaconIncludeTripMileage,
+                      onChanged: st.setBeaconIncludeTripMileage),
+                  SettingsMiniSwitch(S.of(context).beaconTotalMileage,
+                      value: st.beaconIncludeTotalMileage,
+                      onChanged: st.setBeaconIncludeTotalMileage),
+                  // 步数（issue #22-2）：非标准字段（同 TRV/ODO 一类），默认关。
+                  SettingsMiniSwitch(S.of(context).beaconIncludeSteps,
+                      value: st.beaconIncludeSteps,
+                      onChanged: st.setBeaconIncludeSteps),
                 ],
               ),
             ),
+            // 步数状态：读到了就显示今日步数；读不到时**说清是哪种读不到** ——
+            // 「这台设备没有计步传感器」与「有传感器但没授权」要给不同的动作，
+            // 混成一句「无数据」等于让用户没法处理。
+            // 四态（见 StepsStatus）：判定只走 st.stepsStatus 一个出口 ——
+            // 以前这里与排行榜页各写一遍「读数为 -1 怎么显示」，两处都漏了
+            // 「有权限但还没数据」这一档，于是授权了也一直显示「请授权」（#23）。
+            SettingsRow2(
+              S.of(context).stepsTodayLabel,
+              switch (st.stepsStatus) {
+                StepsStatus.ok => S.of(context).stepsCount('${st.stepsToday}'),
+                StepsStatus.waiting => S.of(context).stepsWaiting,
+                StepsStatus.needPermission => S.of(context).stepsNeedPermission,
+                StepsStatus.unsupported => S.of(context).stepsUnsupported,
+              },
+              valueColor: switch (st.stepsStatus) {
+                StepsStatus.ok => C.green,
+                StepsStatus.waiting => C.slate,
+                StepsStatus.needPermission => C.orange,
+                StepsStatus.unsupported => C.grey,
+              },
+            ),
+            // 只有**确实没授权**时才给授权按钮：有权限但还没数据时按钮没用，
+            // 摆出来反而让用户以为「再点一次就好了」。
+            if (st.stepsStatus == StepsStatus.needPermission)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final ok = await st.requestStepsPermission();
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok
+                            ? S.of(context).stepsGranted
+                            : S.of(context).stepsDenied),
+                        behavior: SnackBarBehavior.floating,
+                      ));
+                    },
+                    icon: const Icon(Icons.directions_walk_rounded, size: 16),
+                    label: Text(S.of(context).stepsGrant),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.orange,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      textStyle: ts(12, w: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+            if (st.hasStepSensor)
+              SettingsHint(S.of(context).stepsHint, color: C.grey),
             SettingsRow2(S.of(context).locationStatus,
                 localizedLocationStatus(context, st.locStatus)),
             SettingsRow2(S.of(context).beaconsSent,
@@ -1068,6 +1612,30 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   ],
                 ),
               ),
+            // 粗定位（网络/基站）期间不自动上报：与「射频信标未开启」一样，把原因
+            // 说出来 —— 否则用户只会看到一个不走的倒计时，以为信标坏了。
+            // 除了等 GPS 回来（或手动上报一次），用户还能**明确打开**下面那个开关。
+            if (st.beaconPhase == BeaconPhase.coarseFix)
+              SettingsHint(S.of(context).beaconCoarseHint,
+                  color: C.orange, icon: Icons.gps_off_rounded),
+            // ── 强制接受网络定位自动上报（默认关）──
+            //
+            // 放这一页而不是设备/连接页：它改的是**上报行为**，而用户遇到
+            // 「倒计时不走」时人就在这一页 —— 开关必须坐在「原因」旁边才找得到。
+            SettingsSwitch(S.of(context).beaconForceCoarse,
+                value: st.beaconForceCoarse,
+                color: C.orange,
+                onChanged: st.setBeaconForceCoarse),
+            // 说明常驻（不只在打开时才显示）：它是一句取舍，用户得先读到再决定；
+            // 打开后用橙色，让人一眼看到「现在处于非默认状态」。
+            SettingsHint(S.of(context).beaconForceCoarseHint,
+                color: st.beaconForceCoarse ? C.orange : C.slate,
+                icon: Icons.warning_amber_rounded),
+            // 开着强制且**当前就是粗点**：发出去的就是网络定位，必须点明 ——
+            // 不然这一行倒计时看起来与 GPS 正常时一模一样。
+            if (st.beaconPhase == BeaconPhase.coarseForced)
+              SettingsHint(S.of(context).beaconCoarseForcedNote,
+                  color: C.orange, icon: Icons.gps_off_rounded),
             // 模拟位置模式：不显示 GPS 启动按钮，改为提示
             if (st.useSimLocation)
               Padding(
@@ -1211,6 +1779,18 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
 
   Widget _tierRow(int index) {
     final t = st.smartTiers[index];
+    // 上报条件那一行：只按时 / 按时·或按距离。
+    // 先算好再插值（而不是在字符串里嵌 `${S.of(context).xxx('${...}')}`）：
+    // 嵌套插值里再嵌一层引号，读的人要数括号，写的人也容易漏。
+    final every = S.of(context).everyNSeconds('${t.intervalSec}');
+    // 三路判据拼成一行：「每 60 秒 · 或移动 400 m · 或转 45°」。
+    // 只显示真正开着的那些（0 = 关），否则一行里全是「或…」反而看不出重点。
+    final parts = <String>[
+      every,
+      if (t.minDistM > 0) S.of(context).orMoveM('${t.minDistM}'),
+      if (t.minTurnDeg > 0) S.of(context).orTurnDeg('${t.minTurnDeg}'),
+    ];
+    final whenReport = parts.join(' · ');
     return GestureDetector(
       onTap: () => _editTierSheet(index),
       child: Container(
@@ -1235,8 +1815,7 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
               ],
             ),
           ),
-          Text(S.of(context).everyNSeconds('${t.intervalSec}'),
-              style: ts(11, c: C.blue, w: FontWeight.w700)),
+          Text(whenReport, style: ts(11, c: C.blue, w: FontWeight.w700)),
           SizedBox(width: 4),
           Icon(Icons.chevron_right_rounded, size: 16, color: C.grey),
         ]),
@@ -1260,6 +1839,8 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
     final isIdle = index == 0;
     final thCtrl = TextEditingController(text: '${tiers[index].minSpeed}');
     final ivCtrl = TextEditingController(text: '${tiers[index].intervalSec}');
+    final dsCtrl = TextEditingController(text: '${tiers[index].minDistM}');
+    final tnCtrl = TextEditingController(text: '${tiers[index].minTurnDeg}');
     final symNotifier = ValueNotifier<String>(tiers[index].symbol);
     await showModalBottomSheet<void>(
       context: context,
@@ -1267,157 +1848,200 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
       isScrollControlled: true,
       builder: (ctx) {
         void close() => Navigator.pop(ctx);
-        return Container(
-          decoration: BoxDecoration(
-            color: C.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: EdgeInsets.fromLTRB(20, 10, 20,
-              MediaQuery.of(ctx).viewInsets.bottom + 10),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: C.grey.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                SizedBox(height: 12),
-                Row(children: [
-                  Icon(Icons.speed_rounded, size: 18, color: C.blue),
-                  SizedBox(width: 8),
-                  Text(isIdle
-              ? S.of(context).tierIdleTitle
-              : S.of(context).tierSpeedTitle,
-                      style: ts(15, w: FontWeight.w700)),
-                  Spacer(),
-                  IconButton(
-                    icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
-                    onPressed: close,
-                  ),
-                ]),
-                if (!isIdle)
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: thCtrl,
-                        keyboardType: TextInputType.number,
-                        style: ts(13, w: FontWeight.w600),
-                        decoration: _tierFieldDeco(S.of(context).minSpeedKmh),
-                      ),
+        return MaterialSurface(
+          radius: 24,
+          topOnly: true,
+          child: Container(
+            decoration: BoxDecoration(
+              color: C.sheetFill,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            // 底部要让出**两块**：键盘（输入时）与系统导航栏（三大金刚键/手势条）。
+            // 只让键盘的话，键盘收起时「保存」正好压在三大金刚键底下 ——
+            // 用户点不到，而且看不出来是被挡住了（issue #25）。
+            padding: EdgeInsets.fromLTRB(
+              20,
+              10,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom +
+                  sysBottomInset(ctx) +
+                  10,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: C.grey.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2)),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: ivCtrl,
-                        keyboardType: TextInputType.number,
-                        style: ts(13, w: FontWeight.w600),
-                        decoration: _tierFieldDeco(S.of(context).intervalSeconds),
-                      ),
-                    ),
-                  ])
-                else
+                  ),
+                  SizedBox(height: 12),
                   Row(children: [
-                    Text(S.of(context).idleTierDesc,
-                        style: ts(11, c: C.slate)),
-                    Spacer(),
-                    Text(S.of(context).intervalLabel, style: ts(11, c: C.slate)),
+                    Icon(Icons.speed_rounded, size: 18, color: C.blue),
                     SizedBox(width: 8),
-                    SizedBox(
-                      width: 84,
-                      child: TextField(
-                        controller: ivCtrl,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.right,
-                        style: ts(13, w: FontWeight.w700),
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 8),
-                          border: InputBorder.none,
+                    Text(isIdle
+                ? S.of(context).tierIdleTitle
+                : S.of(context).tierSpeedTitle,
+                        style: ts(16, w: FontWeight.w700)),
+                    Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, size: 20, color: C.grey),
+                      onPressed: close,
+                    ),
+                  ]),
+                  if (!isIdle)
+                    Row(children: [
+                      Expanded(
+                        child: TextField(
+                          controller: thCtrl,
+                          keyboardType: TextInputType.number,
+                          style: ts(13, w: FontWeight.w600),
+                          decoration: _tierFieldDeco(S.of(context).minSpeedKmh),
                         ),
                       ),
-                    ),
-                    Text(S.of(context).unitSeconds, style: ts(11, c: C.slate)),
-                  ]),
-                SizedBox(height: 14),
-                Text(S.of(context).pickBeaconIconDesc,
-                    style: ts(10, c: C.slate)),
-                SizedBox(height: 8),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  _symbolOpt(ctx, symNotifier, '', S.of(context).defaultLabel),
-                  for (final q in _smartQuickSymbols(S.of(context)))
-                    _symbolOpt(ctx, symNotifier, q.$1,
-                        symName(S.of(context), q.$1)),
-                ]),
-                SizedBox(height: 16),
-                Row(children: [
-                  if (!isIdle)
-                    TextButton.icon(
-                      onPressed: () {
-                        st.removeSmartTier(index);
-                        close();
-                      },
-                      icon: Icon(Icons.delete_outline_rounded,
-                          size: 16, color: C.red),
-                      label: Text(S.of(context).deleteThisTier, style: ts(11, c: C.red)),
-                    )
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: ivCtrl,
+                          keyboardType: TextInputType.number,
+                          style: ts(13, w: FontWeight.w600),
+                          decoration: _tierFieldDeco(S.of(context).intervalSeconds),
+                        ),
+                      ),
+                    ])
                   else
-                    Text(S.of(context).idleTierNotDeletable, style: ts(10, c: C.grey)),
-                  Spacer(),
-                  OutlinedButton(
-                    onPressed: close,
-                    child: Text(S.of(context).cancel, style: ts(12)),
+                    Row(children: [
+                      Text(S.of(context).idleTierDesc,
+                          style: ts(11, c: C.slate)),
+                      Spacer(),
+                      Text(S.of(context).intervalLabel, style: ts(11, c: C.slate)),
+                      SizedBox(width: 8),
+                      SizedBox(
+                        width: 84,
+                        child: TextField(
+                          controller: ivCtrl,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.right,
+                          style: ts(13, w: FontWeight.w700),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 8),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      Text(S.of(context).unitSeconds, style: ts(11, c: C.slate)),
+                    ]),
+                  SizedBox(height: 10),
+                  // ── 距离打点 ──
+                  // 放在速度/间隔**下面单独一行**，两种档共用：静止档同样需要它
+                  // （停在一个地方却真的被挪走了 200m，也该报一个新的位置）。
+                  TextField(
+                    controller: dsCtrl,
+                    keyboardType: TextInputType.number,
+                    style: ts(13, w: FontWeight.w600),
+                    decoration: _tierFieldDeco(S.of(context).tierMinDist),
                   ),
-                  SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () {
-                      int? th = isIdle ? 0 : int.tryParse(thCtrl.text.trim());
-                      int? iv = int.tryParse(ivCtrl.text.trim());
-                      String? err;
-                      if (!isIdle && (th == null || th < 1)) {
-                        err = S.of(context).errMinSpeedInt;
-                      } else if (iv == null || iv < 5) {
-                        err = S.of(context).errIntervalInt;
-                      } else if (!isIdle && th != null) {
-                        for (var i = 0; i < tiers.length; i++) {
-                          if (i != index && tiers[i].minSpeed == th) {
-                            err = S.of(context).errTierDuplicate;
-                            break;
+                  SizedBox(height: 4),
+                  Text(S.of(context).tierMinDistHint,
+                      style: ts(10, c: C.grey, h: 1.3)),
+                  SizedBox(height: 10),
+                  // ── 转弯打点（v1.6.156）──
+                  // 与距离并列的第三路判据：盘山路上车速慢、距离门限很久才够，
+                  // 而连续发卡弯正是最该有轨迹的地方。
+                  TextField(
+                    controller: tnCtrl,
+                    keyboardType: TextInputType.number,
+                    style: ts(13, w: FontWeight.w600),
+                    decoration: _tierFieldDeco(S.of(context).tierMinTurn),
+                  ),
+                  SizedBox(height: 4),
+                  Text(S.of(context).tierMinTurnHint,
+                      style: ts(10, c: C.grey, h: 1.3)),
+                  SizedBox(height: 14),
+                  Text(S.of(context).pickBeaconIconDesc,
+                      style: ts(10, c: C.slate)),
+                  SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    _symbolOpt(ctx, symNotifier, '', S.of(context).defaultLabel),
+                    for (final q in _smartQuickSymbols(S.of(context)))
+                      _symbolOpt(ctx, symNotifier, q.$1,
+                          symName(S.of(context), q.$1)),
+                  ]),
+                  SizedBox(height: 16),
+                  Row(children: [
+                    if (!isIdle)
+                      TextButton.icon(
+                        onPressed: () {
+                          st.removeSmartTier(index);
+                          close();
+                        },
+                        icon: Icon(Icons.delete_outline_rounded,
+                            size: 16, color: C.red),
+                        label: Text(S.of(context).deleteThisTier, style: ts(11, c: C.red)),
+                      )
+                    else
+                      Text(S.of(context).idleTierNotDeletable, style: ts(10, c: C.grey)),
+                    Spacer(),
+                    OutlinedButton(
+                      onPressed: close,
+                      child: Text(S.of(context).cancel, style: ts(12)),
+                    ),
+                    SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () {
+                        int? th = isIdle ? 0 : int.tryParse(thCtrl.text.trim());
+                        int? iv = int.tryParse(ivCtrl.text.trim());
+                        String? err;
+                        if (!isIdle && (th == null || th < 1)) {
+                          err = S.of(context).errMinSpeedInt;
+                        } else if (iv == null || iv < 5) {
+                          err = S.of(context).errIntervalInt;
+                        } else if (!isIdle && th != null) {
+                          for (var i = 0; i < tiers.length; i++) {
+                            if (i != index && tiers[i].minSpeed == th) {
+                              err = S.of(context).errTierDuplicate;
+                              break;
+                            }
                           }
                         }
-                      }
-                      if (err != null) {
-                        ScaffoldMessenger.of(ctx)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(SnackBar(
-                            content: Text(err, style: ts(12)),
-                            duration: const Duration(seconds: 2),
-                          ));
-                        return;
-                      }
-                      st.updateSmartTier(
-                        index,
-                        SmartBeaconTier(
-                          minSpeed: th!,
-                          intervalSec: iv!,
-                          symbol: symNotifier.value,
-                        ),
-                      );
-                      close();
-                    },
-                    child: Text(S.of(context).save, style: ts(12)),
-                  ),
-                ]),
-              ],
+                        if (err != null) {
+                          ScaffoldMessenger.of(ctx)
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(SnackBar(
+                              content: Text(err, style: ts(12)),
+                              duration: const Duration(seconds: 2),
+                            ));
+                          return;
+                        }
+                        st.updateSmartTier(
+                          index,
+                          SmartBeaconTier(
+                            minSpeed: th!,
+                            intervalSec: iv!,
+                            symbol: symNotifier.value,
+                            // 解析失败/留空都当 0（关闭距离打点）——
+                            // 这比「拒绝保存」温和，也与其它数值字段口径一致。
+                            minDistM: int.tryParse(dsCtrl.text.trim()) ?? 0,
+                            minTurnDeg: int.tryParse(tnCtrl.text.trim()) ?? 0,
+                          ),
+                        );
+                        close();
+                      },
+                      child: Text(S.of(context).save, style: ts(12)),
+                    ),
+                  ]),
+                ],
+              ),
+              ),
             ),
-            ),
-          );
+        );
         },
       );
     thCtrl.dispose();
@@ -1438,7 +2062,7 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             decoration: BoxDecoration(
               color: sel ? C.blueBg : C.bgSoft,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: sel ? C.blue : C.border, width: sel ? 1.5 : 1),
             ),
@@ -1458,6 +2082,20 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
     );
   }
 
+
+  /// 「现在是谁在供位置」的文案（来源见 AppState.positionSourceNow 的单一判断）。
+  String _posSourceLabel(AppState st, S s) {
+    switch (st.positionSourceNow) {
+      case PositionSourceNow.sim:
+        return s.posSrcSim;
+      case PositionSourceNow.garmin:
+        return s.posSrcGarmin;
+      case PositionSourceNow.phone:
+        return s.posSrcPhone;
+      case PositionSourceNow.none:
+        return s.posSrcNone;
+    }
+  }
 
   Widget _locSourceCard({
     required String title,
@@ -1593,10 +2231,12 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
           icon: Icons.wifi_rounded,
           color: C.purple,
           body: Column(children: [
-            // ⓪ 数据来源：先让用户确认来源，再决定下面显示什么 —— 比
-            //    「灰掉一片用户看不懂的输入框」清楚得多。
-            DataSourceCard(state: st),
-            const SizedBox(height: 16),
+            // ⓪ 指路：「数据来源」卡**只在设置→设备**那一页（用户反馈三处重复
+            //    「感觉乱套了」）。这一页专注「**这条链路**的参数」——下面每张卡
+            //    都只在对应链路启用时出现。但删掉来源卡必须留一句指路，否则用户
+            //    会以为「启用 TNC 的入口没了」。
+            SettingsHint(S.of(context).sourceMovedHint),
+            const SizedBox(height: 6),
             // 多选：**每条已启用的来源都要有自己的卡片**，顺序固定为
             // APRS-IS → TNC → 音频。此前只按「发射来源」显示一张，
             // 于是「APRS-IS + TNC」时 TNC 的绑定状态/统计完全看不到。
@@ -1725,7 +2365,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: C.orangeBg,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(S.of(context).unverified,
                   style: ts(9, c: C.orange, w: FontWeight.w700)),
@@ -1802,7 +2442,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
             : Icons.cloud_off_rounded;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
       child: Row(children: [
         Icon(icon, color: col, size: 20),
         SizedBox(width: 10),
@@ -2266,7 +2906,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
                 height: 32,
                 decoration: BoxDecoration(
                   color: C.purpleBg,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.blur_circular_rounded,
                     size: 16, color: C.purple),
@@ -2329,7 +2969,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: C.bgSoft,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: C.border, width: 0.6),
                 ),
                 child: Column(children: [
@@ -2378,53 +3018,56 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
       ..sort((a, b) => a.value.compareTo(b.value));
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(S.of(context).addCountry, style: ts(16, w: FontWeight.w700)),
-        content: SizedBox(
-          width: 340,
-          height: MediaQuery.of(context).size.height * 0.55,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final e in entries)
-                GestureDetector(
-                  onTap: () {
-                    st.addReceiveCountry(e.key);
-                    Navigator.pop(ctx);
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: st.receiveCountries.contains(e.key)
-                          ? C.cyanBg
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+      builder: (ctx) => MaterialSurface(
+        radius: 16,
+        child: AlertDialog(
+          backgroundColor: C.sheetFill,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(S.of(context).addCountry, style: ts(16, w: FontWeight.w700)),
+          content: SizedBox(
+            width: 340,
+            height: MediaQuery.of(context).size.height * 0.55,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final e in entries)
+                  GestureDetector(
+                    onTap: () {
+                      st.addReceiveCountry(e.key);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: st.receiveCountries.contains(e.key)
+                            ? C.cyanBg
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      margin: EdgeInsets.only(bottom: 6),
+                      child: Row(children: [
+                        Icon(Icons.public_rounded, size: 16, color: C.cyan),
+                        SizedBox(width: 10),
+                        Text(e.value, style: ts(13, w: FontWeight.w600)),
+                        Spacer(),
+                        if (st.receiveCountries.contains(e.key))
+                          Icon(Icons.check_circle_rounded,
+                              size: 16, color: C.cyan),
+                        Text(' ${e.key}',
+                            style: ts(10, c: C.grey)),
+                      ]),
                     ),
-                    margin: EdgeInsets.only(bottom: 6),
-                    child: Row(children: [
-                      Icon(Icons.public_rounded, size: 16, color: C.cyan),
-                      SizedBox(width: 10),
-                      Text(e.value, style: ts(13, w: FontWeight.w600)),
-                      Spacer(),
-                      if (st.receiveCountries.contains(e.key))
-                        Icon(Icons.check_circle_rounded,
-                            size: 16, color: C.cyan),
-                      Text(' ${e.key}',
-                          style: ts(10, c: C.grey)),
-                    ]),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
-          ),
-        ],
       ),
     );
   }
@@ -2474,6 +3117,11 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
         icon: Icons.palette_rounded,
         color: C.cyan,
         body: Column(children: [
+          // ⚠ 这个子页里**不再**放公告横幅（用户：「不要在子页留了」）。
+          // 公告的入口只有两处：主页/地图那条横幅（[NoticeBanner]），以及
+          // **设置主页最底下**那个「公告」按钮（用户：「在设置主页底下添加一个
+          // 公告进入按钮」）。这里留着的是**开关**（下面那张卡的第三项）：
+          // 它控制横幅显不显示、以及要不要在后台联网拉公告，本身就是这个子页的职责。
           SettingsSectionCard(
             title: S.of(context).all,
             subtitle: S.of(context).settingsGeneralSubtitle,
@@ -2484,7 +3132,22 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                   color: C.slate, onChanged: (v) => st.setDarkMode(v)),
               SettingsSwitch(S.of(context).weatherWidget, value: st.weatherEnabled,
                   color: C.cyan, onChanged: (v) => st.setWeatherEnabled(v)),
+              // 公告横幅：用户明确要「可以打开」的一个开关 —— 默认开，
+              // 关掉后**不再发起任何网络请求**（见 notice_banner.dart 顶部）。
+              // 开关放这里、横幅却不在这个子页：公告的**入口**统一在主页/地图那条
+              // 横幅与设置主页底部的「公告」按钮上，这里只留开关（用户：
+              // 「不要在子页留了」+「在设置主页底下添加一个公告进入按钮」）。
+              SettingsSwitch(S.of(context).noticeTitle,
+                  value: st.noticeBanner,
+                  color: C.cyan,
+                  onChanged: (v) => st.setNoticeBanner(v)),
               _themeColorSelector(st),
+              // 主题若已覆写主色，色板点了不会变 —— 与其让用户以为坏了，
+              // 不如直接说清楚去哪儿改。
+              if (ThemeController.instance.active.overridesColor('primary'))
+                SettingsHint(S.of(context).themeFixedPrimary, color: C.orange),
+              _uiMaterialSelector(st),
+              _uiLayoutSelector(st),
               _languageSelector(st),
               _uiScaleSelector(st),
               SettingsRow2(S.of(context).unit, S.of(context).metricUnits),
@@ -2501,6 +3164,17 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
             children: [
               _mapTypeSelector(),
               SettingsHint(S.of(context).mapTypeDesc),
+              SettingsNavRow(
+                title: S.of(context).offlineMap,
+                subtitle: S.of(context).offlineMapDesc,
+                icon: Icons.download_for_offline_rounded,
+                color: C.blue,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => OfflineMapPage(state: st)),
+                ),
+              ),
             ],
           ),
         ]),
@@ -2569,6 +3243,300 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
       ),
     );
   }
+
+  /// 界面布局选择（1.0 经典 / 2.0 地图为基底）
+  ///
+  /// 与「界面材质」同一个形状：给两档 + 各一句说明。不合并成一个
+  /// 「外观：1.0/2.0」下拉，是因为这两个开关**正交**（2.0 + 云母、1.0 + 磨砂
+  /// 都成立），用户不该因为想试布局而弄丢刚调好的材质。
+  Widget _uiLayoutSelector(AppState st) {
+    final cur = st.uiLayoutValue;
+    final options = <(UiLayout, String, String)>[
+      (
+        UiLayout.classic,
+        S.of(context).uiLayoutClassic,
+        S.of(context).uiLayoutClassicDesc,
+      ),
+      (
+        UiLayout.sheet,
+        S.of(context).uiLayoutSheet,
+        S.of(context).uiLayoutSheetDesc,
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(S.of(context).uiLayout, style: ts(12, c: C.slate)),
+          const SizedBox(height: 2),
+          Text(S.of(context).uiLayoutDesc, style: ts(10, c: C.grey, h: 1.35)),
+          const SizedBox(height: 8),
+          for (final (m, name, desc) in options)
+            GestureDetector(
+              onTap: () => st.setUiLayout(uiLayoutName(m)),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cur == m ? C.cyanBg : C.bgSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: cur == m ? C.cyan : C.border,
+                    width: cur == m ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      cur == m
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 16,
+                      color: cur == m ? C.cyan : C.greyLight,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: ts(
+                              12,
+                              c: cur == m ? C.cyan : C.slate,
+                              w: cur == m ? FontWeight.w700 : FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(desc, style: ts(10, c: C.grey, h: 1.3)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _layoutSwatch(m),
+                  ],
+                ),
+              ),
+            ),
+          SettingsHint(S.of(context).uiLayoutHint),
+        ],
+      ),
+    );
+  }
+
+  /// 布局小样：把「地图在哪、内容在哪」画成示意图。
+  ///
+  /// 两档的区别是**结构**，用文字描述（「地图为基底」）很容易被读成只是换个
+  /// 配色；一张 68×40 的示意图把「地图占满 / 地图只在上面一条」说得毫无歧义。
+  Widget _layoutSwatch(UiLayout l) {
+    final mapColor = C.blue.withValues(alpha: 0.18);
+    final barColor = C.blue.withValues(alpha: 0.55);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 68,
+        height: 40,
+        child: Container(
+          color: C.bgSoft,
+          child: l == UiLayout.sheet
+              // 2.0：地图满屏（底色就是地图），底部一张浮起的卡片
+              ? Stack(
+                  children: [
+                    Positioned.fill(child: ColoredBox(color: mapColor)),
+                    Positioned(
+                      left: 6,
+                      right: 6,
+                      bottom: 5,
+                      child: Container(
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: C.surfaceFill,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: C.border),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              // 1.0：左侧栏 + 顶栏 + 内容区
+              : Row(
+                  children: [
+                    Container(width: 16, color: barColor),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Container(height: 8, color: barColor),
+                          const Expanded(child: SizedBox()),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// 界面材质选择（磨砂玻璃 / 云母）
+  ///
+  /// 给三档而不是一个开关：这两个材质的观感差别（透多少 / 糊多狠）是要**选**的，
+  /// 只给「开 / 关」等于替用户做了选择。
+  ///
+  /// 每档都配一张小样，因为「磨砂玻璃」和「云母」这两个词各人理解不同：
+  /// 只给名字就只能靠点了再看、不满意再点回来。
+  Widget _uiMaterialSelector(AppState st) {
+    final cur = st.uiMaterialValue;
+    final options = <(UiMaterial, String, String)>[
+      (
+        UiMaterial.none,
+        S.of(context).uiMaterialOff,
+        S.of(context).uiMaterialOffDesc,
+      ),
+      (
+        UiMaterial.glass,
+        S.of(context).uiMaterialGlass,
+        S.of(context).uiMaterialGlassDesc,
+      ),
+      (
+        UiMaterial.mica,
+        S.of(context).uiMaterialMica,
+        S.of(context).uiMaterialMicaDesc,
+      ),
+      // 满血档：与「磨砂玻璃」的区别是**小浮层也给满强度模糊** ——
+      // 这正是用户反馈「默认状态下小图层没有磨砂」后加的那一档。
+      (
+        UiMaterial.glassFull,
+        S.of(context).uiMaterialGlassFull,
+        S.of(context).uiMaterialGlassFullDesc,
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(S.of(context).uiMaterial, style: ts(12, c: C.slate)),
+          const SizedBox(height: 2),
+          Text(S.of(context).uiMaterialDesc, style: ts(10, c: C.grey, h: 1.35)),
+          const SizedBox(height: 8),
+          for (final (m, name, desc) in options)
+            GestureDetector(
+              onTap: () => st.setUiMaterial(uiMaterialName(m)),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cur == m ? C.cyanBg : C.bgSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: cur == m ? C.cyan : C.border,
+                    width: cur == m ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      cur == m
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 16,
+                      color: cur == m ? C.cyan : C.greyLight,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: ts(
+                              12,
+                              c: cur == m ? C.cyan : C.slate,
+                              w: cur == m ? FontWeight.w700 : FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(desc, style: ts(10, c: C.grey, h: 1.3)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _materialSwatch(m),
+                  ],
+                ),
+              ),
+            ),
+          // 主题已有背景图时，材质不再自己造底 —— 不说清楚的话，用户会以为
+          // 「选了磨砂玻璃但底色没变成材质那样」是自己点坏了。
+          if (ThemeController.instance.active.hasBackground)
+            SettingsHint(S.of(context).uiMaterialBgHint, color: C.orange),
+          SettingsHint(S.of(context).uiMaterialHint),
+        ],
+      ),
+    );
+  }
+
+  /// 材质小样：一层渐变底 + 一层该材质的磨砂条
+  ///
+  /// 底用的是与真实材质壁纸**同一对颜色**（C.materialAccent / C.materialBase），
+  /// 所以这不是另画一张示意图，而是把那层底缩到 68×40 里。
+  /// 「关闭」那一档画成实色 —— 两个小样一对比，「开了之后到底变在哪里」不用说。
+  Widget _materialSwatch(UiMaterial m) {
+    final sigma = uiMaterialBlurOf(m);
+    final alpha = uiMaterialAlphaOf(m);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 68,
+        height: 40,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [C.materialAccent, C.materialBase],
+                  ),
+                ),
+              ),
+            ),
+            // 「内容」：三条不同宽度的色带。模糊把它们吃成什么样，
+            // 就是这一档「糊不糊」的直接证据。
+            Positioned(left: 6, top: 8, child: _swatchBar(C.blue, 34)),
+            Positioned(left: 6, top: 18, child: _swatchBar(C.green, 22)),
+            Positioned(left: 6, top: 28, child: _swatchBar(C.orange, 44)),
+            // 磨砂层：关闭时不画，小样就是一块干净的实色渐变
+            if (m != UiMaterial.none)
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                  child:
+                      ColoredBox(color: C.white.withValues(alpha: alpha)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _swatchBar(Color c, double w) => Container(
+        width: w,
+        height: 6,
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
 
   /// 语言选择
   Widget _languageSelector(AppState st) {
@@ -2711,7 +3679,7 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -2774,7 +3742,7 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                           color: st.mapType == t.name
                               ? C.blue
                               : C.bgSoft,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: st.mapType == t.name
                                 ? C.blue
@@ -2912,6 +3880,44 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
           ],
         ),
         const SizedBox(height: 16),
+        // 单独一项：只清空**台站列表**（与「清空全部数据」分开），
+        // 用户常常只想清掉收来的台站，不想连消息/日志/数据包一起丢。
+        SettingsSectionCard(
+          title: S.of(context).stationList,
+          subtitle: S.of(context).stationListDesc,
+          icon: Icons.sensors_rounded,
+          color: C.green,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                _clearDataItem(S.of(context).stationList,
+                    S.of(context).nItems('${st.stations.length}')),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        st.stations.isEmpty ? null : _confirmClearStations,
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                    label: Text(S.of(context).clearStations),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.red,
+                      side: BorderSide(color: C.red.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      textStyle: ts(12, w: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         SettingsSectionCard(
           title: S.of(context).clearAllData,
           subtitle: S.of(context).settingsClearDataSubtitle,
@@ -2968,6 +3974,26 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
             ),
           ],
         ),
+        const SizedBox(height: 16),
+        SettingsSectionCard(
+          title: S.of(context).offlineMap,
+          subtitle: S.of(context).offlineCacheUsageDesc,
+          icon: Icons.download_for_offline_rounded,
+          color: C.blue,
+          children: [
+            SettingsNavRow(
+              title: S.of(context).offlineRegions,
+              subtitle: S.of(context).offlineRegionsDesc,
+              icon: Icons.map_rounded,
+              color: C.blue,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => OfflineMapPage(state: st)),
+              ),
+            ),
+          ],
+        ),
       ]),
       ),
     );
@@ -3010,7 +4036,44 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
             },
             style: FilledButton.styleFrom(
               backgroundColor: C.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(S.of(context).clear,
+                style: ts(13, c: Colors.white, w: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 只清空台站列表（收到的台站及其轨迹），消息 / 日志 / 数据包不受影响
+  void _confirmClearStations() {
+    final n = st.stations.length;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title:
+            Text(S.of(context).clearStations, style: ts(16, w: FontWeight.w700)),
+        content: Text(S.of(context).clearStationsConfirm('$n'),
+            style: ts(13, c: C.slate)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+          ),
+          FilledButton(
+            onPressed: () {
+              st.clearStations();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(S.of(context).stationsCleared)),
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: C.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(S.of(context).clear,
                 style: ts(13, c: Colors.white, w: FontWeight.w600)),
@@ -3049,7 +4112,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
             },
             style: FilledButton.styleFrom(
               backgroundColor: C.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(S.of(context).confirmClear, style: ts(13, c: Colors.white, w: FontWeight.w700)),
           ),
@@ -3139,39 +4202,87 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
         ]),
         const SizedBox(height: 6),
         Text(S.of(context).weatherSimDesc,
-            style: ts(9.5, c: C.grey)),
+            style: ts(9, c: C.grey)),
       ]),
+    );
+  }
+
+  /// 确认后清空功能引导的「已看过」记录（各页提示卡重新出现）
+  void _confirmResetGuides() {
+    showDialog(
+      context: context,
+      builder: (ctx) => MaterialSurface(
+        radius: 16,
+        child: AlertDialog(
+          backgroundColor: C.sheetFill,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(S.of(context).guideResetTitle, style: ts(16, w: FontWeight.w700)),
+          content: Text(S.of(context).guideResetConfirm,
+              style: ts(13, c: C.slate, h: 1.6)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: C.purple,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                st.resetGuides();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(S.of(context).guideResetDone),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: C.ink,
+                  ),
+                );
+              },
+              child: Text(S.of(context).guideResetButton,
+                style: ts(13, c: Colors.white, w: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   void _confirmRestartOobe() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: C.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(S.of(context).restartWizardTitle, style: ts(16, w: FontWeight.w700)),
-        content: Text(S.of(context).restartWizardConfirm,
-            style: ts(13, c: C.slate, h: 1.6)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: C.orange,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      builder: (ctx) => MaterialSurface(
+        radius: 16,
+        child: AlertDialog(
+          backgroundColor: C.sheetFill,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(S.of(context).restartWizardTitle, style: ts(16, w: FontWeight.w700)),
+          content: Text(S.of(context).restartWizardConfirm,
+              style: ts(13, c: C.slate, h: 1.6)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
             ),
-            onPressed: () {
-              st.restartOobe();
-              // 弹出所有子路由，回到根路由（home 已切换为设置向导）
-              Navigator.of(ctx).popUntil((r) => r.isFirst);
-            },
-            child: Text(S.of(context).restartWizardButton,
-              style: ts(13, c: Colors.white, w: FontWeight.w700)),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: C.orange,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                st.restartOobe();
+                // 弹出所有子路由，回到根路由（home 已切换为设置向导）
+                Navigator.of(ctx).popUntil((r) => r.isFirst);
+              },
+              child: Text(S.of(context).restartWizardButton,
+                style: ts(13, c: Colors.white, w: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3252,6 +4363,22 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
               ),
             ),
             Divider(height: 1, color: C.border),
+            // 功能引导：清空「已看过」记录，各页的小提示卡会再出现一次
+            InkWell(
+              onTap: () => _confirmResetGuides(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(children: [
+                  Icon(Icons.help_outline_rounded, size: 16, color: C.purple),
+                  SizedBox(width: 8),
+                  Text(S.of(context).guideResetRow,
+                      style: ts(12, c: C.slate, w: FontWeight.w600)),
+                  Spacer(),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+                ]),
+              ),
+            ),
+            Divider(height: 1, color: C.border),
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -3270,7 +4397,7 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
                       filled: true,
                       fillColor: C.bgSoft,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
                     ),

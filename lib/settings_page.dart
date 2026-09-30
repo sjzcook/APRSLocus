@@ -3,7 +3,12 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'notice.dart';
+import 'notice_banner.dart';
 import 'theme.dart';
+import 'sponsor_page.dart';
+import 'sport_rank_page.dart';
+import 'guide.dart';
 import 'state.dart';
 import 'models.dart';
 import 'widgets.dart';
@@ -13,8 +18,14 @@ import 'exit_app.dart';
 import 'early_member.dart';
 import 'honor_wall_page.dart';
 import 'settings_pages.dart';
+import 'life_guard_page.dart';
 import 'translate_page.dart';
 import 'export_adif_page.dart';
+import 'backup_page.dart';
+import 'track_history_page.dart';
+import 'theme_page.dart';
+import 'theme_store.dart';
+import 'theme_text.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppState state;
@@ -25,6 +36,9 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   AppState get st => widget.state;
+
+  /// 公告入口正在取（见 [_openNotice]）：只用来在行尾换成一个转圈
+  bool _noticeLoading = false;
 
   /// 按时段返回问候前缀（早上好/中午好/下午好/晚上好/夜深了）
   String get _greetingPrefix {
@@ -66,7 +80,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 SizedBox(height: 4),
                 Text(S.of(context).settingsDesc, style: ts(13, c: C.slate)),
-                SizedBox(height: 20),
+                const SizedBox(height: 16),
+                // 功能引导（首次进入显示；看过后不占位置）
+                GuideTipCard(
+                  guideId: 'settings',
+                  state: widget.state,
+                  margin: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 20),
                 // 连接状态横幅
                 _connBanner(),
                 SizedBox(height: 16),
@@ -77,8 +98,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.person_rounded,
+                          slot: 'catRadio',
                           color: C.blue,
-                          title: S.of(context).radioCat,
+                          title: Tx.of(context).byKey('radioCat'),
                           desc: S.of(context).radioCatDesc,
                           onTap: () => _push(StationSettingsPage(state: st)),
                         ),
@@ -87,8 +109,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.my_location_rounded,
+                          slot: 'catBeacon',
                           color: C.green,
-                          title: S.of(context).beaconCat,
+                          title: Tx.of(context).byKey('beaconCat'),
                           desc: S.of(context).beaconCatDesc,
                           onTap: () => _push(BeaconSettingsPage(state: st)),
                         ),
@@ -103,8 +126,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.wifi_rounded,
+                          slot: 'catConnection',
                           color: C.purple,
-                          title: S.of(context).connectionCat,
+                          title: Tx.of(context).byKey('connectionCat'),
                           desc: S.of(context).connectionCatDesc,
                           onTap: () => _push(ConnectionSettingsPage(state: st)),
                         ),
@@ -113,8 +137,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.palette_rounded,
+                          slot: 'catDisplay',
                           color: C.cyan,
-                          title: S.of(context).displayCat,
+                          title: Tx.of(context).byKey('displayCat'),
                           desc: S.of(context).displayCatDesc,
                           onTap: () => _push(DisplaySettingsPage(state: st)),
                         ),
@@ -130,8 +155,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.radio_rounded,
+                          slot: 'catDevice',
                           color: C.indigo,
-                          title: S.of(context).deviceCat,
+                          title: Tx.of(context).byKey('deviceCat'),
                           desc: S.of(context).deviceCatDesc,
                           onTap: () => _push(DeviceSettingsPage(state: st)),
                         ),
@@ -140,8 +166,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.storage_rounded,
+                          slot: 'catData',
                           color: C.red,
-                          title: S.of(context).dataCat,
+                          title: Tx.of(context).byKey('dataCat'),
                           desc: S.of(context).dataCatDesc,
                           onTap: () => _push(DataSettingsPage(state: st)),
                         ),
@@ -156,8 +183,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.tune_rounded,
+                          slot: 'catAdvanced',
                           color: C.slate,
-                          title: S.of(context).advancedCat,
+                          title: Tx.of(context).byKey('advancedCat'),
                           desc: S.of(context).advancedCatDesc,
                           onTap: () => _push(AdvancedSettingsPage(state: st)),
                         ),
@@ -166,8 +194,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: _catCard(
                           icon: Icons.system_update_rounded,
+                          slot: 'catUpdate',
                           color: const Color(0xFF0EA5A4),
-                          title: S.of(context).updateCat,
+                          title: Tx.of(context).byKey('updateCat'),
                           desc: S.of(context).updateCatDesc,
                           onTap: () => _push(CheckUpdatePage(state: st)),
                         ),
@@ -176,6 +205,62 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 SizedBox(height: 16),
+                // 运动排行榜（issue #22-3：用户要求加在荣誉墙**上方**）
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => SportRankPage(state: widget.state)),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [
+                              Color(0xFF16A34A),
+                              Color(0xFF0B7A37),
+                            ],
+                          ),
+                          child: const Icon(Icons.leaderboard_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                        SizedBox(width: 10),
+                        Flexible(
+                          flex: 2,
+                          child: Text(
+                            S.of(context).sportRank,
+                            style: ts(13, w: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            S.of(context).sportRankEntryDesc,
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF98A2B8)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
                 // 荣誉墙（徽章墙 / 成就墙 / FIRST FIX）
                 GestureDetector(
                   onTap: () => Navigator.push(
@@ -193,23 +278,37 @@ class _SettingsPageState extends State<SettingsPage> {
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFC9A227), Color(0xFF8A6D1F)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFFC9A227), Color(0xFF8A6D1F)],
                             ),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
                           child: const Icon(Icons.emoji_events_rounded,
                               color: Colors.white, size: 17),
                         ),
                         SizedBox(width: 10),
-                        Text(S.of(context).honorWall, style: ts(13, w: FontWeight.w700)),
+                        // 标题短、副标题长（且各语言长度差很大）：标题限份额，
+                        // 副标题用 Expanded 把剩余全吃掉 —— 不用 Spacer，因为
+                        // Spacer 也是弹性子项，会把副标题的可用宽度再切一刀。
+                        Flexible(
+                          flex: 2,
+                          child: Text(
+                            Tx.of(context).byKey('honorWall'),
+                            style: ts(13, w: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Text(S.of(context).myBadgesAndAchievements,
-                            style: TextStyle(fontSize: 10, color: Color(0xFF98A2B8))),
-                        Spacer(),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            S.of(context).myBadgesAndAchievements,
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF98A2B8)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         Icon(Icons.chevron_right_rounded,
                             color: C.grey, size: 20),
                       ],
@@ -231,14 +330,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF0E7490), Color(0xFF155E75)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFF0E7490), Color(0xFF155E75)],
                             ),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
                           child: const Icon(Icons.translate_rounded,
                               color: Colors.white, size: 17),
                         ),
@@ -247,7 +342,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(S.of(context).translateSettings,
+                              Text(Tx.of(context).byKey('translateSettings'),
                                   style: ts(13, w: FontWeight.w700)),
                               SizedBox(height: 2),
                               Text(S.of(context).translateSettingsSubtitle,
@@ -275,14 +370,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF16A34A), Color(0xFF0B7A37)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
                             ),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
                           child: const Icon(
                             Icons.file_download_rounded,
                             color: Colors.white,
@@ -291,13 +382,224 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         SizedBox(width: 10),
                         Text(
-                          S.of(context).exportAdif,
+                          Tx.of(context).byKey('exportAdif'),
                           style: ts(13, w: FontWeight.w700),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             S.of(context).adifLogFile,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF98A2B8),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 主题（自定义颜色 / 图标 / 文字）
+                GestureDetector(
+                  onTap: () => _push(ThemePage(state: widget.state)),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFFDB2777), Color(0xFF9D174D)],
+                            ),
+                          child: const Icon(
+                            Icons.brush_rounded,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          S.of(context).themeTitle,
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).themeEntryDesc,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF98A2B8),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 历史轨迹（个人按天台账：里程 / 速度 / 时长）
+                GestureDetector(
+                  onTap: () => _push(TrackHistoryPage(state: st)),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
+                            ),
+                          child: const Icon(
+                            Icons.route_rounded,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          S.of(context).historyTracks,
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).historyTracksDesc,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF98A2B8),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 备份与恢复（与 ADIF 导出并列的数据出入口）
+                GestureDetector(
+                  onTap: () => _push(BackupPage(state: widget.state)),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                            ),
+                          child: const Icon(
+                            Icons.settings_backup_restore_rounded,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          Tx.of(context).byKey('backupTitle'),
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).backupEntryDesc,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF98A2B8),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 公告：**主动查看**的入口（用户：「在设置主页底下添加一个公告进入
+                // 按钮」）。归在最底下这一簇入口里（备份之后、关于之前；退出应用
+                // 那颗销毁性按钮仍留在最底，不把公告排到它下面）。
+                //
+                // 为什么是「按钮」而不是在这个主页也放一条横幅：横幅是**被动可见**的
+                // 通知（主页/地图那条已经在做这件事），而这里要的是「我想看时点一下」。
+                // 两条横幅才是重复的 —— 上一版就因为在设置子页也塞了一条而被指出来。
+                //
+                // ⚠ 点它才联网：不在进入设置页时预拉。公告横幅那个开关的承诺是
+                // 「关了就不在后台联网」（见 notice_banner.dart 顶部），而**用户主动
+                // 点这一下**不是后台行为，所以开关关着时这个入口依旧可用 ——
+                // 不然「不想在主页看到横幅」的人就再也读不到公告了。
+                _noticeEntry(),
+                SizedBox(height: 12),
+                // 赞助与鸣谢（issue #21-7：用户要求把入口从「关于」里挪到设置页
+                // **关于之上**，并把它当成一个正经入口 —— 支持的渠道要看得见，
+                // 而不是藏在关于页的第二屏）。
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SponsorPage()),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [
+                              Color(0xFFF59E0B),
+                              Color(0xFFB45309),
+                            ],
+                          ),
+                          child: const Icon(Icons.favorite_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          S.of(context).sponsorEntry,
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).sponsorEntryDesc,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -330,14 +632,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF0A5CFF), Color(0xFF003D99)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [Color(0xFF0A5CFF), Color(0xFF003D99)],
                             ),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
                           child: const Icon(
                             Icons.info_rounded,
                             color: Colors.white,
@@ -346,10 +644,62 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         SizedBox(width: 10),
                         Text(
-                          S.of(context).about,
+                          Tx.of(context).byKey('about'),
                           style: ts(13, w: FontWeight.w700),
                         ),
                         Spacer(),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: C.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // 生命守护（issue #22-4）：用户要求「在设置页底下添加一个生命守护页面」。
+                // 放在「关于」之后、退出应用之前 —— 它是设置页最底下的一项，
+                // 与「关于」并列而不是塞进某个业务分组里（它不属于任何一类设置）。
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => LifeGuardPage(state: widget.state)),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: cardDeco(),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: C.accentDeco(
+                            radius: 8,
+                            fallback: const [
+                              Color(0xFFEF4444),
+                              Color(0xFF991B1B),
+                            ],
+                          ),
+                          child: const Icon(Icons.health_and_safety_rounded,
+                              color: Colors.white, size: 17),
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          S.of(context).lifeGuard,
+                          style: ts(13, w: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            S.of(context).lifeGuardEntryDesc,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFF98A2B8)),
+                          ),
+                        ),
                         Icon(
                           Icons.chevron_right_rounded,
                           color: C.grey,
@@ -407,12 +757,101 @@ class _SettingsPageState extends State<SettingsPage> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 
+  /// 公告入口：点一下**当场去取**（先网络、失败退缓存），拿到了就弹底部弹层。
+  ///
+  /// 取不到就如实说「暂无公告」，不留白也不假装成功 —— 与横幅那条的
+  /// 「暂无公告 + 重试」同一条原则（v1.6.109 只读模式起就定下的）。
+  Future<void> _openNotice() async {
+    // 防连点：不拦的话手抖两下会发两次请求、叠两层弹层
+    if (_noticeLoading) return;
+    setState(() => _noticeLoading = true);
+    final d = await NoticeStore.instance.load(lang: noticeLangOf(context));
+    if (!mounted) return;
+    setState(() => _noticeLoading = false);
+    if (d == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(S.of(context).noticeEmpty),
+        duration: const Duration(seconds: 2),
+      ));
+      return;
+    }
+    // 全文用**底部弹层**（用户明确要求不要整页）：与横幅点开的是同一个
+    await showNoticeSheet(context,
+        markdown: d.body, fetchedAt: d.fetchedAt, fromCache: d.fromCache);
+  }
+
+  /// 公告入口行。样式与上面几个入口（备份 / 关于）保持一致。
+  Widget _noticeEntry() {
+    return GestureDetector(
+      onTap: _openNotice,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: cardDeco(),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: C.accentDeco(
+                radius: 8,
+                fallback: const [Color(0xFF0891B2), Color(0xFF155E75)],
+              ),
+              child: const Icon(
+                Icons.campaign_rounded,
+                color: Colors.white,
+                size: 17,
+              ),
+            ),
+            SizedBox(width: 10),
+            Text(
+              S.of(context).noticeTitle,
+              style: ts(13, w: FontWeight.w700),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                S.of(context).noticeEntryDesc,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF98A2B8),
+                ),
+              ),
+            ),
+            // 取公告时给个转圈：这几百毫秒里若毫无反应，用户会以为没点上
+            // （又一次点击会叠一层弹层）
+            if (_noticeLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 2),
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  // ⚠ 里面没有 C.*，所以 const 合法（check_const_colors 会报）
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                color: C.grey,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _catCard({
     required IconData icon,
     required Color color,
     required String title,
     required String desc,
     required VoidCallback onTap,
+    /// 主题图标插槽 id。给了它，这张卡片的图标就能被主题替换；
+    /// 没给则永远用 [icon]（保持旧行为，不必为了接入主题改一圈调用点）。
+    String? slot,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -428,7 +867,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: slot == null
+                  ? Icon(icon, color: color, size: 20)
+                  : ThemeController.instance.buildSlotIcon(
+                      slot,
+                      size: 20,
+                      color: color,
+                      fallbackIcon: icon,
+                    ),
             ),
             SizedBox(width: 12),
             Expanded(
@@ -438,7 +884,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   Text(
                     title,
-                    style: ts(14, w: FontWeight.w700),
+                    style: ts(13, w: FontWeight.w700),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -480,7 +926,7 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
@@ -547,7 +993,7 @@ class _SettingsPageState extends State<SettingsPage> {
           SizedBox(width: 8),
           Expanded(
             child: Text(S.of(context).quitApp,
-                style: ts(15, w: FontWeight.w700)),
+                style: ts(16, w: FontWeight.w700)),
           ),
         ]),
         content: Text(
@@ -594,7 +1040,7 @@ class _SettingsPageState extends State<SettingsPage> {
               height: 34,
               decoration: BoxDecoration(
                 color: C.blue,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
                 Icons.forum_rounded,
