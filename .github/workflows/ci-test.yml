@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Install dependencies
@@ -33,6 +33,15 @@ jobs:
       # 只会在用户换机那天丢一项设置，所以放在 CI 里每次推都查。
       - name: Check backup preference keys
         run: python3 tool/check_backup_keys.py
+
+      # 桌面三平台的插件注册表（windows/linux/macos 的 generated_plugin_* 和
+      # GeneratedPluginRegistrant.swift）**只由 `flutter create` 重写**，
+      # pub get 与 build 都不碰它们。于是新加一个原生插件后：分析过、CI 绿，
+      # 装出来的程序里那个插件却没注册 —— 方法通道抛 MissingPluginException，
+      # 被功能自己的 try/catch 咽掉，表现成「一点反应都没有」
+      # （2.1.33 的系统托盘就是这么没的）。
+      - name: Check desktop plugin registrants
+        run: python3 tool/check_plugin_registrants.py
 
       # Android 资源的静态检查：ResId 对不上、布局引用了不存在的 drawable、
       # `setInt("方法名")` 在目标控件上不存在、**小组件尺寸声明不合法**等。
@@ -76,6 +85,41 @@ jobs:
       # 的视角校验，把「我这有错、CI 却绿」这种最耗人的错位挡在 CI。
       - name: Check l10n sync
         run: python3 tool/check_l10n_sync.py
+
+      # 用户协议正文有**两份手工副本**（App 打包一份、官网在线一份），必须逐字节一致；
+      # 而且三语条款号必须一致 —— 只加在中文里，用户切一次语言就是两份不同的协议。
+      # 这两条都"不报错但错"，所以钉在这里。
+      - name: Check terms
+        run: python3 tool/check_terms.py
+
+      # 远程限制名单是**手写的 JSON**，写坏的三种方式（条目两项都空 / 小写呼号 /
+      # JSON 语法坏）在应用里**都不报错**，只是"名单没生效" —— 所以钉在这里，
+      # 连"应用到底从哪里取这份文件"一起核对。
+      - name: Check blacklist
+        run: python3 tool/check_blacklist.py
+
+      # 官网最低版本文件：手写 JSON，写坏只在「该拦不拦」或「把所有人拦住」上发作。
+      # 并核对应用取址一致、minVersion 不高于当前发布版（写高了就把最新版用户也挡在外）。
+      - name: Check min version
+        run: python3 tool/check_min_version.py
+
+      # 强提醒：也是手写 JSON，写坏在应用里**不报错**，只是「该弹不弹」或「旧公告
+      # 一直糊在人脸上」。格式、语言文案、截止日期与应用取址一起核对。
+      - name: Check strong notice
+        run: python3 tool/check_strong_notice.py
+
+      # 智能体授权名单（白名单）与限制名单对称、方向相反：写坏的后果是**授权过的人
+      # 被挡在门外**，或 `call` 手滑成 `*` 把智能体对**所有人**开放。这两种在应用里
+      # 都不会报错，所以同样钉在这里，连"应用从哪取这份文件 / 申请邮箱"一起核对。
+      - name: Check agent allowlist
+        run: python3 tool/check_agent_allow.py
+
+      # 智能体对话循环的三条安全线：流式请求必须带 `stream: true`（不带就每轮白
+      # 发一次同样的请求 → 回复慢一倍）、单个工具抛异常不得带走整轮（否则看起来
+      # 就是「调完工具突然没下文」）、轮次用尽必须有收尾请求 + 兜底文案。
+      # 这三件事编译与 analyze 都不报错，坏了只有在真机上用起来才看得见。
+      - name: Check agent loop
+        run: python3 tool/check_agent_loop.py
 
       # 打点质量层的**接线**检查：算法写好了但忘了在某条路径上调用，
       # 编译与 analyze 都不会报错 —— 功能只是悄悄不生效。
@@ -137,6 +181,28 @@ jobs:
       - name: Check release notes extraction
         run: python3 tool/check_release_notes.py
 
+      # 安卓分架构打包的接线：`--split-per-abi` + 三个包的命名 + 「64 位沿用原名」
+      # 这条不变量（应用内更新取资产列表里第一个 `.apk`，而 GitHub 按名字升序返回）。
+      # 破坏它不会有任何东西失败 —— CI 全绿、Release 正常，只有「应用内更新」
+      # 默默下到 32 位包（装不上）。所以把这条不变量在这里算一遍并钉住。
+      - name: Check release assets (split per ABI)
+        run: python3 tool/check_release_assets.py
+
+      # 阿里云 OSS 更新渠道：客户端登记 / 选择器 / 费用提示 / 流水线上传 / 索引生成器
+      # 四处约定任何一处漏了都**不报错**，只表现成「更新页少了这个渠道」或
+      # 「选了却 403」。顺带钉死一条安全约定：访问密钥只能来自 GitHub Secrets，
+      # 明文一旦进仓库（公开仓库）就是泄露。
+      - name: Check Aliyun OSS update channel
+        run: python3 tool/check_oss_channel.py
+
+      # 暗色模式表面色：弹窗/底部面板/卡片不许用写死的 Colors.white。
+      # 深色模式是运行时换调色板（C.white 会变成深色），而 Colors.white 是编译期
+      # 常量 —— 一旦有人顺手写它，深色下那张弹窗就是一块刺眼白板在发亮，
+      # 浅色模式却完全正常。它能编译、能过 analyze、能过所有其它检查器，
+      # 只有切到深色模式肉眼才看得出来（用户报的「更新页等页面不兼容暗黑模式」）。
+      - name: Check dark-mode surface colors
+        run: python3 tool/check_dark_mode.py
+
       # iOS 打包：真跑一遍 tool/make_ipa.py（造一个忠实的最小 Runner.app），断言封出来的
       # .ipa 结构对（Payload 顶层 / Info.plist / 执行位 / 符号链接），并断言
       # build-release.yml 里 .ipa 真的挂进了 Release。
@@ -169,6 +235,33 @@ jobs:
       - name: Check turn-based beaconing (algorithm regression)
         run: python3 tool/sim_turn_dot.py --check
 
+      # 碰撞/摔倒检测的算法回归（纯 Python，1:1 移植自 MotionManager.kt /
+      # MotionPlugin.swift），并校验 Android↔iOS↔仿真三处常量一致。
+      # 核心断言：**把手机放在桌上稍微使劲不许触发**（v2.0.28 的误报 —— 旧判据
+      # 「冲击 + 静止」恰好被放手机满足，且失重判据误用了去重力的线性模）、
+      # 真摔倒/车祸仍要报、失重后才有摔倒、冷却与启动宽限期仍生效。
+      # 这些编译/analyze 全绿、只有真机摔一下才知道，只能靠它在本机与 CI 提前拦。
+      - name: Check crash/fall detection (algorithm regression)
+        run: python3 tool/sim_crash.py --check
+
+      # 台站保留/清理（数据维护，issue #33）：判据与 lib/state.dart 一致，
+      # 并断言「收藏/手动/自己永不被清、恰好卡阈值保留、保留天数 0 时不清」。
+      - name: Check station retention/prune (algorithm regression)
+        run: python3 tool/sim_prune.py --check
+
+      # 数据维护改版：保留天数移入本页、手动清理独立天数（不再复用保留天数）、
+      # 「清除所有数据并重新初始化（恢复出厂）」清呼号+设置并重跑 OOBE。
+      # 这些改动大多在 UI/状态里，编译/analyze 全绿也看不出「参数又被复用回去」，
+      # 靠它把判据钉死。
+      - name: Check data-maintenance rework / factory reset (algorithm regression)
+        run: python3 tool/sim_factory_reset.py --check
+
+      # 自定义状态帧自愈：状态报文是「CONNECT + 自定义」一对，自定义那帧若写失败，
+      # aprs.fi 会一直停在 CONNECT 上、且每轮保活又续一次。断言「丢帧后下一拍补
+      # 自定义帧（不再发 CONNECT）、连败重试到成功、空文本清标记」。
+      - name: Check custom status self-heal (algorithm regression)
+        run: python3 tool/sim_status_selfheal.py --check
+
       # 第三方包（DTI `}`）解包：这类报文**只有真机收得到**才知道是坑。
       # 欧洲的 iGate / 中继大量用 `}` 把**整条报文**再包一层，不解包时内层的
       # `:收件人:文本` 会落到默认类型「位置」—— 数据包页把消息标成位置，
@@ -183,6 +276,54 @@ jobs:
       - name: Test coarse-fix beacon override
         run: flutter test test/beacon_coarse_force_test.dart
 
+      # 「连接后由用户手动确认才开始上报」（v2.0.36）：新闸 beaconArmed 每次连接
+      # 复位、不持久化 —— 这几条错了不会编译失败、analyze 也全绿，只会表现成
+      # 「连上就自动把位置发出去」，正是用户要求去掉的行为，所以钉在 CI。
+      - name: Test manual report confirmation
+        run: flutter test test/report_confirm_test.dart
+
+      # 「打开软件时」三档（2026-10-20）：默认不做操作、自动连接不放行上报、
+      # 自动上报要过单独同意。错了同样编译能过、analyze 全绿，只会表现成
+      # 「一开机就把位置发出去」—— 那是替用户做决定，所以钉在 CI。
+      - name: Test auto start on launch
+        run: flutter test test/auto_start_test.dart
+
+      # 上传/发射的「单独同意」（用户协议 V2.0 附件一）：三个功能项分别记、
+      # 签完才能开、撤回即停、日志可单独清。这几条错了**编译能过、analyze 也全绿**，
+      # 只会表现成「签了没用」或「撤回了还在发」——后者是拿协议当装饰，
+      # 所以钉在 CI。
+      - name: Test transmit consent
+        run: flutter test test/transmit_consent_test.dart
+
+      # 常驻前台服务通知的去重（用户报「反复弹出待确认上报」）：通知文字没变时不能再
+      # 重复 notify()，但服务重启后必须重发一次。这两条错了**编译能过、analyze 也全绿**，
+      # 只会表现成「偶发多弹一次」或「文字永远不更新」，只能靠 CI 钉住。
+      - name: Test foreground notification dedupe
+        run: flutter test test/notification_dedupe_test.dart
+
+      # 报文字节的 UTF-8 / GBK 自动识别：旧实现把字节喂给 16 位编码的 `gbk`，
+      # GBK 中文一直是乱码（`ÄãºÃ`），却没有任何测试发现。
+      - name: Test APRS text decoding (UTF-8 / GBK)
+        run: flutter test test/text_decode_test.dart
+
+      # 外置 GPS 供位时，手机定位只能「待机」不能停服务（用户报的「断开外置 GPS
+      # 后自动上报停了、手动上报只有报文没有位置」）：停了前台服务就丢掉后台生存
+      # 能力，连接静默断、定时器停摆。这属于「编译能过、analyze 也全绿」的那类。
+      - name: Test external GPS standby handoff
+        run: flutter test test/ext_gps_standby_test.dart
+
+      # 地形/等高线图层（v2.0.37）：Esri 地形瓦片是 z/y/x 坐标顺序、且必须判成
+      # WGS-84。这两点写错了**编译能过、analyze 也全绿**，只会表现成「取到别的
+      # 一张图」或「整图偏出 500m」，所以钉在 CI。
+      - name: Test terrain layers
+        run: flutter test test/terrain_layers_test.dart
+
+      # 天地图图层（v2.0.38）：WGS-84（误判成 GCJ 会整图偏 500m）、注记层映射
+      # （vec→cva/img→cia/ter→cta，漏了就是「有图无地名」）、底图与注记缓存键
+      # 必须分开 —— 这些写错了编译能过、analyze 也全绿，只能靠测试钉住。
+      - name: Test Tianditu layers
+        run: flutter test test/tianditu_layers_test.dart
+
       - name: Test third-party packet unwrapping
         run: flutter test test/third_party_packet_test.dart
 
@@ -194,11 +335,253 @@ jobs:
       - name: Test beacon packet format (third-party compatibility)
         run: flutter test test/beacon_format_test.dart
 
+      # APRSNETCN 24 小时台站接口的解析层：时间是不带偏移的北京时间，坐标或
+      # 时间缺一条就该整台丢掉。这两条写错了编译能过、analyze 也全绿，只会让
+      # 「多久前听到」差几个小时、地图上多出一片 0,0 的假台站。
+      - name: Test APRSNETCN station parsing
+        run: flutter test test/aprsnetcn_test.dart
+
+      # 24 小时台站是分页拉的（用户报「每次同步只能 2000 人」）：接口一页给不完，
+      # 拿到不满一页才停。写成只请一次编译能过、analyze 也全绿，只会表现成
+      # 地图上少一大半人，所以用本地服务钉住翻页的 offset。
+      - name: Test APRSNETCN station paging
+        run: flutter test test/acn_stations_page_test.dart
+
       # 百度瓦片投影/编号数学：官方参考向量锁定（BD-09 坐标 + 多项式平面投影 +
       # 瓦片 y 朝北 + 每级瓦片数不是 2^z）。这些**编译能过、analyze 也全绿**，
       # 只有把标记画到与瓦片错开的位置才看得出来，所以钉在 CI。
       - name: Test Baidu tile projection math
         run: flutter test test/baidu_proj_test.dart
+
+      # 「新获荣誉庆祝」的判定边界：没有新增不弹、一次新增多枚只弹展示顺序最
+      # 靠前的一枚、未定义的 key 跳过。这几条错了不会编译失败、analyze 也全绿，
+      # 只会表现成「每次启动都弹」「一次弹好几遍」或弹出无名徽章。
+      - name: Test honor celebration detection
+        run: flutter test test/honor_celebration_test.dart
+
+      # 「升级后今日步数归零」（issue #22-2）：步数此前只存内存、从不落盘，
+      # 升级/冷启动就先回到 0。这属于「analyze 全绿、构建全过」但用户直接看得见
+      # 的错，所以和上面几条一样钉在 CI。
+      - name: Test steps persistence
+        run: flutter test test/steps_persist_test.dart
+
+      # 经纬度显示格式（用户要求「可以按度分、度分秒显示」）：进位（59.9996′ →
+      # 下一度）、半球取舍、经度先规整 —— 三种错都编译能过、analyze 全绿，
+      # 只表现成「读数是 60 分」「南纬写成 N」。
+      - name: Test coordinate format
+        run: flutter test test/coord_format_test.dart
+
+      # 地图右侧工具列的分列算式（列数、封顶、贴底控件让位、裁剪下边距）：
+      # 用户报过两次「控件被重排 / 浮层挡在一起」，那种错编译与 analyze 都看不见。
+      - name: Test map toolbar layout
+        run: flutter test test/map_toolbar_test.dart
+
+      # 官网下发的更新渠道清单：坏数据要退回内置那份，且内置那份必须与官网
+      # docs/assets/update_channels.json 逐条对齐（对不上时拉不到官网就没渠道）。
+      - name: Test update channels
+        run: flutter test test/update_channels_test.dart
+
+      # 安装包的联网校验（版本号 / 仓库里那份的 sha256 / 签名）与
+      # 装完欢迎卡要用的「这一版改了什么」摘要。
+      - name: Test update package verify
+        run: flutter test test/update_verify_test.dart
+
+      # 强提醒的解析与「这一次该不该弹」（语言退化 / 过期 / 已弹过 / every）。
+      - name: Test strong notice
+        run: flutter test test/strong_notice_test.dart
+
+      # 强提醒正文的行首标记排版（【】小标题 / - 条目 / ` ` 等宽）。
+      - name: Test strong notice layout
+        run: flutter test test/strong_notice_layout_test.dart
+
+      # 「高级连接通道设置」开关（用户要求「位置默认全部都发、消息保留勾选」）：
+      # 关着时位置发给所有已启用且连上的可发射链路、消息那条链路不动。
+      # 三条错都编译能过、analyze 全绿：
+      #   ① 列表里夹进没连上的链路（每次信标一条 not-connected）；
+      #   ② 一条都没连上时返回空列表（发送静默什么都不做）；
+      #   ③ 切开关顺手把消息链路也改了。
+      - name: Test advanced channel switch
+        run: flutter test test/adv_channels_test.dart
+
+      # 台站排序「能记忆」（用户要求）：排序原来只活在台站页的 State 里，退出面板
+      # 就回到按呼号排。它同样编译能过、analyze 全绿，只表现成「怎么又变回去了」；
+      # 脏值回落与落盘读回也一并钉住。
+      - name: Test stations sort persistence
+        run: flutter test test/stations_sort_persist_test.dart
+
+      # 自选模块与精简模式：偏好里存「关掉的模块」（默认全开）、精简模式不改写
+      # 用户自己的选择、脏 id 被过滤。三种错都编译能过，只表现成「入口又冒出来了」
+      # 或「我调好的模块全丢了」。
+      - name: Test feature toggles
+        run: flutter test test/features_test.dart
+
+      # 呼号后缀能自己输入（含字母后缀）：老的数字后缀要迁移、脏字符串不能拼进
+      # 呼号发出去、-0 与无后缀是一回事 —— 三种错都编译能过。
+      - name: Test ssid input
+        run: flutter test test/ssid_test.dart
+
+      # 发射来源分两条（用户要求）：位置与状态报文一条、消息一条。选消息那条不该
+      # 把位置那条带走，只读链路不能被选，旧配置的 dataSource 要跟着带过去 ——
+      # 这些都编译能过、analyze 全绿，只表现成「消息怎么从别的链路发出去了」。
+      - name: Test tx source split
+        run: flutter test test/tx_source_split_test.dart
+
+      # 输入框历史（用户要求）：数据包页搜索词与服务器地址要有「最近用过的」。
+      # 上限失效、两个框串了历史、清空没落盘，这些都编译能过、analyze 全绿，
+      # 只表现成「历史怎么空了」或「服务器里怎么出现搜索词」。
+      - name: Test input history
+        run: flutter test test/input_history_test.dart
+
+      # 台站筛选「能记忆」（用户要求）：它原来只活在台站面板的 State 里，关掉
+      # 应用就回到「全部」。任一条错都不会编译报错，只表现成「筛选怎么又没了」。
+      - name: Test station filter persistence
+        run: flutter test test/station_filter_persist_test.dart
+
+      # 地图图层筛选「能记忆」（用户要求）：关掉的台站类型与「套用台站面板筛选」
+      # 原来都不落盘，重启就全显示出来。存的是类型名字，脏名字必须被丢掉。
+      - name: Test map filter persistence
+        run: flutter test test/map_filter_persist_test.dart
+
+      # 地图「锁定地图中心」三态的记忆（用户要求）：它原来只活在地图页的 State 里，
+      # 冷启动就回到「关」。三档之外的值必须夹回 0..2，不能造出第三态。
+      - name: Test map follow mode persistence
+        run: flutter test test/map_follow_mode_persist_test.dart
+
+      # GPS 采样间隔（用户要求「用户可自调 GPS 采样率」）：偏好 → 定位服务 →
+      # 原生三段都得接上，少一段就变成「能选但不生效」，而界面上看不出来。
+      - name: Test GPS sampling interval
+        run: flutter test test/gps_sampling_persist_test.dart
+
+      # 省电模式：开了就得真的把采样拉长、关掉就得回到用户那一档；
+      # 低电量提醒按 20/10/5 三档各提一次，充电中与已开省电时不提。
+      - name: Test power saving
+        run: flutter test test/power_save_test.dart
+
+      # 历史轨迹导出 GPX（用户要求）：GPX 是**给别人读的文件**，时间少个 Z、
+      # 海拔补个 0、断档不断段，在这里都不会报错 —— 只有导进 Strava / Garmin /
+      # Google Earth 之后才看得见。所以把这几条意图逐字钉在 CI。
+      - name: Test GPX export
+        run: flutter test test/gpx_test.dart
+
+      # 云同步：消息的云端 id（两台设备要对得上，否则同步一次每条变两条）、
+      # 上传字段名（与服务端的列一一对应）与同步地址的拼接。
+      - name: Test cloud sync
+        run: flutter test test/cloud_sync_test.dart
+
+      # 云同步是可选模块：关掉之后一个请求都不发；同步内容与自动间隔也在这里钉住。
+      - name: Test cloud sync optional module
+        run: flutter test test/cloud_sync_optional_test.dart
+
+      # 订阅：呼号省略 SSID / 通配前缀 / 中继路径 / 关键词四种判据，错了不会
+      # 编译失败，只会表现成「订阅了却一条也不来」或「全世界的包都来」。
+      - name: Test subscriptions
+        run: flutter test test/subscriptions_test.dart
+
+      # 订阅命中要弹系统通知（用户：「订阅通过系统通知提示啊」）。这里钉住
+      # 「命中会弹 / 30 秒内不刷屏 / 关掉开关不弹」。错了不会编译失败，只会
+      # 表现成「订阅了却没有提醒」或「手机一直响」。
+      - name: Test subscription notifications
+        run: flutter test test/subs_notify_test.dart
+
+      # 设置页卡片逐条进场（用户：「设置页引入线性动画」，选的是卡片淡入上移）。
+      # 错了不会编译失败，只会表现成「设置页空白」或「只在开机时播一次」。
+      - name: Test settings entrance animation
+        run: flutter test test/entrance_test.dart
+
+      # 消息接收身份：发给我另一个 SSID 的消息必须收下（以前直接丢掉），
+      # 且发送身份默认仍是本机 ID。这条错了不会编译失败，只会「对方说发了，我没收到」。
+      - name: Test message SSID reception
+        run: flutter test test/msg_ssid_test.dart
+
+      # 弱信号下的轨迹：颗数与精度两条判据、弱信号门限必须宽于正常门限。
+      # 错了只会表现成「轨迹一坨」或「轨迹缺一大段」。
+      - name: Test weak-fix track gating
+        run: flutter test test/pos_quality_weak_test.dart
+
+      # 「我的其他 SSID」远程指令：格式解析，以及「只执行同呼号发来的」这条边界。
+      # 边界错了就是任何人都能拿一条报文把你的上报关掉。
+      - name: Test other-SSID remote commands
+        run: flutter test test/ssid_command_test.dart
+
+      # 备份/恢复（含 v2.0.39 的历史轨迹拼入）：导出/导入错了不会编译失败、
+      # analyze 也全绿，只会在用户换机那天才发现「少了东西」。轨迹载荷尤其
+      # 不能落进偏好白名单，否则一份伪造 JSON 就能改任意偏好。
+      - name: Test backup & restore
+        run: flutter test test/backup_test.dart
+
+      # 智能体工具层：模型与 AppState 之间唯一的写入通道。权限闸门、参数越界
+      # 校验、字符串数字兼容、`_val` 的 null 归一 —— 这几条错了都不会编译失败、
+      # analyze 也全绿，只会让智能体「悄悄改错设置」或「拿 NULL 去搜台站」。
+      - name: Test agent tools
+        run: flutter test test/agent_tools_test.dart
+
+      # 智能体逐字回复的流式解析：`tool_calls` 是**分片**下发的（id/name 在首片、
+      # arguments 是逐段拼的 JSON 片段），拼错了不会编译失败、analyze 也全绿，
+      # 只会表现成「工具参数丢了一半」或「调用与结果配不上对」。用模拟流钉住。
+      - name: Test agent streaming (SSE) parsing
+        run: flutter test test/agent_stream_test.dart
+
+      # WLAN 电台文案本地化：phaseLabel / 型号描述在 net 层写死中文，界面必须
+      # 翻回 l10n 键。翻错了切到非中文界面才暴露，锁在测试里。
+      - name: Test Icom WLAN localization
+        run: flutter test test/icom_l10n_test.dart
+
+      # 黄岩岛隐藏台站彩蛋：关键词命中面 / 合成台站坐标 / 介绍网页 HTML 与
+      # 6 语言文案完整性。只有主动搜索才触发，编译与分析都拦不住这类漏翻/漏注入。
+      - name: Test Huangyan Island easter egg
+        run: flutter test test/huangyan_island_test.dart
+
+      # 智能体授权名单（白名单）：解析/命中/通配符边界。这份逻辑"命中才放"，
+      # 写坏不会报错、只会静默拒绝（或放行所有人），所以用测试钉住。
+      - name: Test agent allowlist
+        run: flutter test test/agent_allow_test.dart
+
+      # 官网最低版本的解析与判定：该拦不拦（版本号写坏、JSON 坏掉）与不该拦偏拦
+      # 都编译得过、analyze 全绿，只在用户手上才看得出，所以钉在 CI。
+      - name: Test min version gate
+        run: flutter test test/min_version_test.dart
+
+      # 智能体「需授权」这道闸在 AppState 上的行为：点开关未授权不许真开、拉不到
+      # 名单判未授权、备份/旧版本带进来的 enabled=true 要兜底关掉。驱动真实方法。
+      - name: Test agent authorization gate
+        run: flutter test test/agent_auth_state_test.dart
+
+      # 电台热点路由（issue #35）：Android 网络通道的解析/请求/释放/诊断，以及
+      # UDP 套接字按 Wi-Fi IPv4 绑定。这些只有在真机连电台热点时才看得出，
+      # 编译与 analyze 全绿，所以把通道契约与绑定行为钉在 CI。
+      - name: Test IC-705 hotspot network routing
+        run: flutter test test/icom_lan_android_network_test.dart test/icom_lan_udp_channel_test.dart
+
+      # WLAN 发射后置延迟：WLAN 下电台在报尾发完前就松 PTT，对方收不全。
+      # 延迟、夹取与序列化都是纯逻辑，错了不会编译失败，只表现为「填了没用」。
+      - name: Test IC-705 post-TX delay
+        run: flutter test test/icom_lan_post_tx_delay_test.dart
+
+      # 操作证书查询：三张表字段各不相同，解析写错只会表现成「查到了全空白」；
+      # 本地记录解析写错，表现成「徽章指向一个不是本人的呼号」。
+      - name: Test CRAC certificate lookup
+        run: flutter test test/crac_cert_test.dart
+
+      # 灵动岛（Live Activity）的 Dart 侧：去重与非 iOS 平台的拦截都会「静默
+      # 正常」，只在真机上表现为刷屏限流或每次都失败，所以用 mock 通道钉住。
+      - name: Test live activity channel
+        run: flutter test test/live_activity_test.dart
+
+      # 外接 GPS（蓝牙 SPP / NMEA 0183）的解析与装配：度分换算、XOR 校验、
+      # talker 不区分（GP/GN/BD）、状态位与质量位（V / 0 只能算 noFix 不能算失败）、
+      # 多条语句合并成一条定位。这几件全是「编译能过、analyze 全绿」的纯逻辑，
+      # 而错了的表现是「位置偏到另一个城市」或「一直显示未定位」——
+      # 本机没有模块可接，只能靠这份测试钉住。
+      - name: Test external GPS NMEA parsing
+        run: flutter test test/nmea_test.dart
+
+      # 外接 GPS 链路（lib/nmea_gps.dart）：字节流分帧、语句 → 定位的上抛、
+      # 丢弃/忽略/未定位**分别**计数（混在一起会让「还没定上」看着像线路故障）、
+      # 静默 10s 与定位新鲜期 30s（靠注入时钟拨表，不用 sleep）、配置与设备持久化、
+      # 只读守卫。这几件的错法分别是「永远显示未定位」「统计一片红看不出真问题」
+      # 「模组拔了还以为在供位」，都不报编译错，只能靠这份测试钉住。
+      - name: Test external GPS link
+        run: flutter test test/nmea_gps_test.dart
 
       - name: Analyze (tolerate known vector_map false positive)
         shell: bash
@@ -235,20 +618,38 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build Windows (Release)
-        run: flutter build windows --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }}
+        run: flutter build windows --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }}
 
-      - name: Upload Windows build
+      # 只上传 Release/*.exe 会得到一个**跑不起来**的产物：那只是 Flutter 的启动器
+      # （约 123 KB），缺少 flutter_windows.dll 与 data/ 目录，双击无反应。
+      # 正式发版用 Inno Setup 打成自足的单文件安装器，这里照搬同一套做法。
+      - name: Setup Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          echo "ISCC=$(Get-Command ISCC.exe | Select-Object -ExpandProperty Source)" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Build Installer
+        shell: pwsh
+        run: |
+          # Inno 的 AppVersion 用纯数字版本；文件名保留完整版本串以便区分 fork
+          $full = (Select-String -Path pubspec.yaml -Pattern '^version: (\S+)').Matches[0].Groups[1].Value.Split('+')[0]
+          $num  = ($full -split '-')[0]
+          & "$env:ISCC" "/DMyAppVersion=$num" "/DMyOutBase=APRSLocus_Setup_$full" installer.iss
+
+      - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
           name: APRSLocus-Windows
-          path: build/windows/x64/runner/Release/*.exe
+          path: output/*.exe
+          if-no-files-found: error
 
   build-android:
     name: Build Android APK
@@ -260,7 +661,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Setup Java
@@ -273,7 +674,7 @@ jobs:
         run: flutter pub get
 
       - name: Build APK (Release, debug 签名)
-        run: flutter build apk --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }}
+        run: flutter build apk --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -299,20 +700,22 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build iOS (Release, no codesign)
-        run: flutter build ios --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --no-codesign
+        run: flutter build ios --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }} --no-codesign
 
       - name: Package IPA (unsigned)
         shell: bash
         run: |
           set -euo pipefail
-          ver=$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/version: ([0-9.]+).*/\1/')
+          # 取完整版本串（含 fork 后缀）。原先的 sed 用 [0-9.]+ 会把
+          # 2.0.50-QINGLING 截成 2.0.50，导致测试版与上游正式版文件名相同。
+          ver=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
           ipa="build/ios/ipa/APRSLocus_${ver}_unsigned.ipa"
           python3 tool/make_ipa.py build/ios/iphoneos -o "$ipa"
           test -s "$ipa"

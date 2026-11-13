@@ -4,13 +4,13 @@
 
 # APRSlocus
 
-**APRS 定位追蹤與地圖 · APRS Tracking & Mapping**
+**APRS 定位追蹤與地圖 · 本機 APRS 用戶端（不預置伺服器位址）**
 
 專為業餘無線電愛好者打造的輕量級 APRS 客戶端 —— 實時定位、臺站追蹤、消息收發、地圖顯示，一站式掌握電波世界的一舉一動。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20iOS%20%7C%20Linux%20%7C%20macOS%20%7C%20Web-lightgrey.svg)]()
-[![Version](https://img.shields.io/badge/Version-1.6.18-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.2.8-green.svg)]()
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blueviolet.svg)](https://flutter.dev)
 
 作者：[BG7LZQ (Darion)](https://theez.top) · 官網：[aprslocus.theez.top](https://aprslocus.theez.top/) · 最新版發布：[GitHub Releases](https://github.com/dariondong/APRSLocus/releases)
@@ -42,7 +42,7 @@
 ## ✨ 核心特性
 
 ### 🗺️ 實時地圖追蹤
-- **多地圖類型**：高德普通 / 高德衛星 / 矢量地圖 / Carto（淺色·深色·航行者）/ OSM（標準·人道）/ OpenTopo 地形 / Esri（街道·影像），設置頁一鍵切換
+- **多地圖類型**：高德普通 / 高德衛星 / 矢量地圖 / Carto（淺色·深色·航行者）/ OSM（標準·人道）/ 地形（OpenTopo、Esri 等高線·浮雕·山體陰影）/ 天地圖（向量·影像·地形）/ Esri（街道·影像），設置頁一鍵切換
 - **矢量地圖**：基於 `flutter_map` + `vector_map_tiles` 客戶端實時渲染，數據量小、縮放清晰、**無需 API Key**，坐標為 WGS-84，支持顯示我的軌跡與選中臺站軌跡
 - **高德瓦片（GCJ-02）**：國內定位無縫對齊，內置 WGS-84 ↔ GCJ-02 坐標轉換
 - **實時臺站顯示**：所有臺站位置一目了然，在線 / 移動 / 靜止 / 離線狀態以綠 / 藍 / 黃 / 灰區分，活躍臺站帶脈衝動畫
@@ -87,14 +87,23 @@
 - **解析列表模式**：位置 / 消息 / 氣象 / 狀態 / 物體分類展示，支持類型篩選與全文搜索
 - **調試日誌頁**：分級日誌（調試 / 信息 / 警告 / 錯誤），一鍵複製 / 清空，便於排查
 
-### ⚡ 連接與後臺
-- **APRS-IS 公共伺服器自動連接**，後臺保持在線
-- TCP 直連（桌面 / 移動）與 WebSocket（Web 平臺）雙實現
-- 默認伺服器 `rotate.aprs2.net:14580`，解析 `# logresp` 驗證登錄，Passcode 未驗證時主頁黃色警告橫幅
+### ⚡ 連線與後台
+- **資料來源可以多選同時收**：
+  - **APRS-IS** —— 網際網路；自己的呼號與 passcode，斷線自動重連
+  - **TNC** —— 藍牙 SPP 或序列埠，KISS 幀直接收發，收發雙向
+  - **音訊** —— 麥克風 / 喇叭或音效卡線接電台，AFSK 1200（Bell 202）
+  - **PKWDWPL** —— 讀 Kenwood 電台輸出的 `$PKWDWPL` NMEA 航點語句，**只收不發**
+  - **Icom WLAN** —— IC-705 / IC-9700 / IC-7610 / IC-905 走 Wi-Fi 或乙太網路直連電台：PTT 與頻率走 CI-V、音訊走網路，不佔音訊埠
+  - **Icom WLAN** —— IC-705 / IC-9700 / IC-7610 / IC-905 走 Wi-Fi 或乙太網路直連電台：PTT 與頻率走 CI-V、音訊走網路，不佔音訊埠
+
+  多條鏈路可以一起收報文，但**發射只認其中一條**（右側圓點 = 發射來源）。
+- TCP 直連桌面 / 行動，WebSocket（Web 平台）雙實現
+- **不預置任何伺服器位址**：位址與連接埠由你自己填寫（留空 = 完全不連）
 - **漸進式重連**（8 → 16 → 32 → 60 秒）
-- **Android 前臺定位服務**：GPS 持續上報 + 系統通知，通知欄可直接"連接 / 斷開"伺服器、一鍵"退出"應用
-- 收到消息 / 群聊事件推送系統通知
-- 按國家 / 地區接收臺站篩選，按經緯度 + 半徑過濾接收範圍（50 / 100 / 200 / 500 / 1000 / 2000 km 快捷預設）
+- **Android 前景定位服務**：GPS 持續上報 + 系統通知，通知列可直接「連線 / 中斷」，另有一顆「退出」應用
+- 收到訊息 / 群組事件推送到系統通知
+- 國家 / 區域台站篩選，以及經緯度 + 半徑範圍過濾（50 / 100 / 200 / 500 / 1000 / 2000 km 預設）
+
 
 ### 🎨 個性化與體驗
 - **多語言**：簡體中文 / 繁體中文 / English / 跟隨系統，首次啟動可選
@@ -103,6 +112,16 @@
 - **六步引導嚮導（OOBE）**：語言 → 歡迎 → 呼號 / SSID → 符號 → 接收篩選 → 伺服器連接，上手零門檻
 - 詳情頁 / 設置頁豐富的交互彩蛋
 
+### 📱 桌面小工具（Android）
+- **自由縮放**：隨網格佔用自動切換版面，共 4 種
+- **4×2 主檢視**：大字溫度 + 右側 2×2 指標格 + 底部 2 條提示
+- **2×4 小型**：縱向排列，提示可堆到 3~5 條（最接近 App 內天氣面板）
+- **2×2 緊湊型**：溫度 + 天氣 + 只留最重要的一條提示
+- **4×1 單行**：一行放得下溫度 + 天氣 + 今日高低溫 + 一條提示
+- **業餘無線電操作提示**：與 App 內天氣面板**同一套判定規則**（安全提示 · 注意 · 通聯建議 · 其他），按重要性分級，危險級用紅色圓點最易辨認
+- **指標按需出現**：空氣濕度只可能出現在「下雪 / 霧」等特殊天氣裡，露點只在濕度高、雲底低時才在「可飛度」裡出現，避免資料面板變成一張厚重清單
+- **跟隨系統**：隨 Android 7+ 的深色模式變化，顏色與 App 內同源
+- 天氣提示的**觀測時間**（資料產生時間）一眼可見，附安裝包更新入口
 ### 🚀 自動更新
 - 應用內檢查更新，支持 **GitHub / GitCode** 雙渠道切換
 - 智能版本比較，自動按平臺分流（Android 下載 APK、Windows 下載 EXE）
@@ -150,18 +169,18 @@
 | 3️⃣ | 輸入你的業餘無線電**呼號**（如 `BG7LZQ-3`）並選擇 **SSID 後綴**（移動端建議 `3`，手持臺建議 `7`） |
 | 4️⃣ | 選擇代表臺站類型的**符號**（汽車 / 房屋 / 人 / 卡車 / 自行車 / 房車 / 氣象站 / 警局） |
 | 5️⃣ | 按國家 / 地區選擇**接收臺站**（默認中國），可開啟"其他臺站"接收中繼 / 氣象 / FMO / APRSlocus |
-| 6️⃣ | 配置伺服器與 **Passcode**，完成即自動連接 APRS-IS 並開始上報位置 |
+| 6️⃣ | 配置伺服器與 **Passcode**（**可以留空**：留空 = 不連線任何伺服器）；填了就自動連線並開始上報位置 |
 
 > **關於 Passcode**：密碼填 `-1` 即可連接，但**未驗證的 Passcode 無法正常收發消息**。建議到 [APRS Passcode 查詢](https://aprs.cool/AprsPG) 生成你的專屬 Passcode 並填入。
 
-完成引導後，應用會自動連接 APRS-IS 伺服器並開始上報位置、接收周邊臺站。
+完成引導後，**如果你填了伺服器**，應用會自動連線並開始上報位置、接收周邊臺站；**留空則不連線任何伺服器**（也能用藍牙 TNC / 音效卡音訊 / Icom 電台直連，隨時可在設定裡改）。
 
 ---
 
 ## 📚 使用指南
 
 ### 🗺️ 地圖頁
-- 切換地圖類型：設置 → 顯示 → 地圖類型（高德 / 高德衛星 / 矢量 / Carto 系列 / OSM 系列 / OpenTopo / Esri）
+- 切換地圖類型：設置 → 顯示 → 地圖類型（高德 / 高德衛星 / 矢量 / Carto 系列 / OSM 系列 / 地形系列 / 天地圖系列 / Esri）
 - 開啟臺站聚合：地圖控制欄聚合開關
 - 顯示 / 隱藏自身軌跡與選中臺站軌跡
 - 頂部搜索框按呼號快速定位臺站，點擊臺站 Marker 查看詳情
@@ -226,7 +245,7 @@ BG7LZQ-3>APALOC,TCPIP*:!2148.90N/11049.14E/> /A=000328 090/050 Bat:70% APRSlocus
 | 類別 | 技術 |
 |------|------|
 | **框架** | [Flutter](https://flutter.dev)（Dart 3.x） |
-| **地圖** | [高德地圖](https://lbs.amap.com)（瓦片）、[flutter_map](https://pub.dev/packages/flutter_map)、[vector_map_tiles](https://pub.dev/packages/vector_map_tiles)、Carto、OpenStreetMap、OpenTopoMap、Esri ArcGIS |
+| **地圖** | [高德地圖](https://lbs.amap.com)（瓦片）、[天地圖](https://www.tianditu.gov.cn)（瓦片）、[flutter_map](https://pub.dev/packages/flutter_map)、[vector_map_tiles](https://pub.dev/packages/vector_map_tiles)、Carto、OpenStreetMap、OpenTopoMap、Esri ArcGIS |
 | **網絡** | APRS-IS（TCP Socket / WebSocket） |
 | **協議** | APRS 1.0（位置 / 消息 / 氣象 / 狀態 / 物體 / Mic-E 等） |
 | **定位** | Android FusedLocationProvider + 前臺服務 |
@@ -245,7 +264,7 @@ APRSLocus/
 │   ├── home_page.dart        # 主界面（5 Tab：地圖 / 臺站 / 消息 / 數據包 / 設置）
 │   ├── map_page.dart         # 地圖頁
 │   ├── vector_map.dart       # 矢量地圖（flutter_map）
-│   ├── tile_map.dart         # 瓦片地圖（高德 / Carto / OSM / OpenTopo / Esri）
+│   ├── tile_map.dart         # 瓦片地圖（高德 / Carto / OSM / 地形 / 天地圖 / Esri）
 │   ├── stations_page.dart    # 臺站列表
 │   ├── station_detail.dart   # 臺站詳情
 │   ├── messages_page.dart    # 消息頁（單聊 + 群聊）
@@ -344,7 +363,7 @@ flutter build ios --release --no-codesign
 <details>
 <summary><b>Q：連接失敗 / 頻繁掉線？</b></summary>
 
-應用內置漸進式重連（8 → 16 → 32 → 60 秒）。若持續失敗，請檢查網絡、確認伺服器地址（默認 `rotate.aprs2.net:14580`）與埠是否被攔截，或在"連接設置"中更換伺服器後點擊"重新連接"。
+應用內置漸進式重連（8 → 16 → 32 → 60 秒）。若持續失敗，請檢查網路，並確認**你填寫的**伺服器位址與連接埠是否正確（預設留空＝不連線任何伺服器），或在「連線設定」中更換伺服器後點擊「重新連線」。
 </details>
 
 <details>
@@ -376,6 +395,7 @@ Android 端使用前臺服務持續定位以保持 APRS 在線，可在"定位 /
 ## 🙏 致謝與貢獻
 
 - [高德地圖](https://lbs.amap.com) — 地圖瓦片 / JS API 服務
+- [天地圖](https://www.tianditu.gov.cn) — 國家地理信息公共服務平臺底圖瓦片
 - [APRS-IS](https://aprs-is.net) — 全球 APRS 數據網絡
 - [flutter_map](https://pub.dev/packages/flutter_map) / [vector_map_tiles](https://pub.dev/packages/vector_map_tiles) — 矢量地圖渲染
 - [OpenFreeMap](https://openfreemap.org) — 免費矢量瓦片底圖

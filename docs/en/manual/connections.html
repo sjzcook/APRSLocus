@@ -4,36 +4,35 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Connections — APRSlocus</title>
-<meta name="description" content="Goal: pick the data sources, connect and verify APRS-IS, then get the RF link working.">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="description" content="Goal: get the internet link connected and verified, then add a radio link when you need RF.">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="Connections — APRSlocus">
-<meta property="og:description" content="Goal: pick the data sources, connect and verify APRS-IS, then get the RF link working.">
+<meta property="og:description" content="Goal: get the internet link connected and verified, then add a radio link when you need RF.">
 <meta property="og:url" content="https://aprslocus.theez.top/en/manual/connections.html">
 <meta property="og:image" content="https://aprslocus.theez.top/assets/logo.png">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Connections — APRSlocus">
-<meta name="twitter:description" content="Goal: pick the data sources, connect and verify APRS-IS, then get the RF link working.">
+<meta name="twitter:description" content="Goal: get the internet link connected and verified, then add a radio link when you need RF.">
 <link rel="canonical" href="https://aprslocus.theez.top/en/manual/connections.html">
     <link rel="alternate" hreflang="zh-CN" href="https://aprslocus.theez.top/manual/connections.html">
     <link rel="alternate" hreflang="zh-TW" href="https://aprslocus.theez.top/zh-TW/manual/connections.html">
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/connections.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/connections.html">
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
-<link rel="stylesheet" href="../../css/style.css?v=5">
+<link rel="stylesheet" href="../../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -42,7 +41,7 @@
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "name": "Connections — APRSlocus",
-  "description": "Goal: pick the data sources, connect and verify APRS-IS, then get the RF link working.",
+  "description": "Goal: get the internet link connected and verified, then add a radio link when you need RF.",
   "url": "https://aprslocus.theez.top/en/manual/connections.html",
   "inLanguage": "en",
   "dateModified": "2026-09-23",
@@ -130,7 +129,7 @@
   </nav>
   <div class="section-head reveal">
     <h1>Connections</h1>
-    <p>Goal: pick the data sources, connect and verify APRS-IS, then get the RF link working.</p>
+    <p>Goal: get the internet link connected and verified, then add a radio link when you need RF.</p>
   </div>
 
   <div class="manual-tools reveal">
@@ -160,58 +159,114 @@
         <a href="platform.html">Platforms</a>
         <a href="troubleshooting.html">Troubleshooting</a>
       <div class="mn-title">On this page</div>
-        <a href="#sources">Four links: many RX, one TX</a>
+        <a href="#sources">Six links: two on the internet, four into a radio</a>
         <a href="#aprsis">Connect APRS-IS</a>
-        <a href="#rf">Into a radio: TNC / audio / PKWDWPL</a>
+        <a href="#acn">The second link: APRSNETCN</a>
+        <a href="#cloudsync">Cloud sync: messages and tracks on the server</a>
+        <a href="#extgps">External GPS module</a>
+        <a href="#rf">Into a radio: TNC / audio / PKWDWPL / Icom</a>
         <a href="#igate">iGate</a>
         <a href="#selftest">Self-test & order of diagnosis</a>
     </nav>
     <div class="manual-body">
   <section class="chapter reveal" id="sources">
-    <h2 id="sources">Four links: many RX, one TX<a class="hdr-anchor" href="#sources" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
-<p>Path: <b>Settings → Connection → Data sources</b>. Every ticked link <b>receives</b>, but there is
-only <b>one transmit source</b> — the one marked with the dot. Transmitting the same callsign over
-two links produces duplicate packets.</p>
+    <h2 id="sources">Six links: two on the internet, four into a radio<a class="hdr-anchor" href="#sources" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>Entry: <b>Settings → Server</b>. The page holds the two internet servers only, one card each, each with its own switch. The address and credentials live one level down.</p>
 <div class="doc-table-wrap"><table class="doc-table">
-<thead><tr><th>Source</th><th>Link</th><th>RX</th><th>TX</th></tr></thead><tbody>
-<tr><td><b>APRS-IS</b></td><td>internet TCP, default <code>rotate.aprs2.net:14580</code></td><td>✓</td><td>✓</td></tr>
-<tr><td><b>TNC</b></td><td>Bluetooth SPP / USB serial (OTG), KISS, into a radio</td><td>✓</td><td>✓</td></tr>
+<thead><tr><th>Link</th><th>Carries</th><th>RX</th><th>TX</th></tr></thead><tbody>
+<tr><td><b>APRS-IS</b></td><td>TCP over the internet, address you supply</td><td>✓</td><td>✓</td></tr>
+<tr><td><b>APRSNETCN SERVER</b></td><td>a domestic server on the same protocol, address you supply</td><td>✓</td><td>✓</td></tr>
+<tr><td><b>TNC</b></td><td>Bluetooth SPP or USB serial, KISS protocol</td><td>✓</td><td>✓</td></tr>
 <tr><td><b>Audio</b></td><td>headphone jack into a radio, AFSK 1200 (Bell 202)</td><td>✓</td><td>✓</td></tr>
-<tr><td><b>PKWDWPL</b></td><td>Bluetooth/serial reader of a Kenwood radio’s <code>$PKWDWPL</code> waypoints</td><td>✓</td><td><b>✗ receive-only</b></td></tr>
+<tr><td><b>WLAN radio</b></td><td>Wi-Fi straight to an Icom radio (IC-705 / IC-9700 and similar)</td><td>✓</td><td>✓</td></tr>
+<tr><td><b>PKWDWPL</b></td><td>reads the waypoint sentences a Kenwood radio emits</td><td>✓</td><td><b>✗ read-only</b></td></tr>
 </tbody></table></div>
-<div class="callout warn"><span class="co-ic">📡</span><div><p><b>The receive range defaults to 300 km</b> (10 km minimum), filtered with
-<code>r/lat/lng/radius</code> — press <b>“Save &amp; apply”</b> after changing it. For worldwide
-reception, raise the radius or stop following your position.</p></div></div>
+<p><b>Transmitting is picked in two rows.</b> “Position and status” can tick several links, so both internet links may carry the beacon without clashing. “Messages” takes one link only; it uses that link and nothing else, so a dropped link means the message does not go out.</p>
+<div class="callout warn"><span class="co-ic">📡</span><div><p><b>The receive range defaults to 300 km</b> (10 km minimum) and is sent as <code>r/lat/lon/radius</code>. Press <b>“Save &amp; apply filter”</b> or the change does nothing.</p></div></div>
   </section>
   <section class="chapter reveal" id="aprsis">
     <h2 id="aprsis">Connect APRS-IS<a class="hdr-anchor" href="#aprsis" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>The two internet links are peers, and APRS-IS gets no special status. Its parameters live on its own sub-page, separate from the APRSNETCN card.</p>
 <ol class="m-steps">
-<li><b>Settings → Connection</b>: leave the server at <code>rotate.aprs2.net</code>, port <code>14580</code>.</li>
-<li>Enter your <b>Passcode</b> (generated for the full callsign, see <a href="start.html#passcode">Quick Start</a>).</li>
-<li>Press <b>“Save &amp; apply”</b> — connection edits do nothing until you save.</li>
-<li>Back on the home page the link card reads “connected” and the counter climbs.</li>
+<li><b>Settings → Server → APRS-IS server</b>: enter the address and port <code>14580</code>. An empty address connects nothing; no server is preset.</li>
+<li>Enter the <b>Passcode</b>, generated from your full callsign (see <a href="start.html#passcode">Quick Start</a>). Empty or <code>-1</code> receives only; messages will not go out.</li>
+<li>Switch the card on. If the app was already connected this link joins by itself; otherwise tap Connect on the home screen.</li>
+<li>Watch the link card: it reads connected and the RX counter starts climbing.</li>
 </ol>
 <ul>
-<li><b>It reconnects by itself</b>: progressive backoff of <b>8 → 16 → 32 → 60 s</b>.</li>
-<li><b>Server replies <code>unverified</code></b> = the Passcode failed — go back to step 2.</li>
-<li>Custom relay / WebSocket: fill <b>WebSocket URL (optional)</b> in the same place; empty = plain TCP.</li>
+<li>Address, port and Passcode <b>save themselves</b>; there is no button to press.</li>
+<li><b>A dropped link reconnects on its own</b>: 8 → 16 → 32 → 60 seconds.</li>
+<li>A server reply of <code>unverified</code> means the Passcode failed, back to step 2.</li>
+<li>For your own relay fill in the <b>WebSocket URL</b>; leave it empty for plain TCP.</li>
+</ul>
+  </section>
+  <section class="chapter reveal" id="acn">
+    <h2 id="acn">The second link: APRSNETCN<a class="hdr-anchor" href="#acn" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>APRSNETCN stands beside APRS-IS. It speaks the same APRS-IS protocol, the server sits in China, and the address is yours to fill in. It can carry both directions, and it can be the only link online.</p>
+<ol class="m-steps">
+<li><b>Settings → Server → APRSNETCN SERVER</b>: enter the address and port.</li>
+<li>Enter the <b>Passcode</b>. If the server handed you an account and password, fill those two boxes as well.</li>
+<li>Switch it on and watch the link status inside the card.</li>
+<li>For the 24-hour station list, tap sync below the card; those stations are merged with the ones from APRS-IS.</li>
+</ol>
+<ul>
+<li><b>The login result</b> has a row of its own. A wrong password makes the link connect and drop, and this row is the only place that says why.</li>
+<li>With both servers online the same packet is <b>counted once</b>, so two copies do not inflate the totals.</li>
+<li>After changing the address or password, tap <b>reconnect</b> in the card so the new values take effect.</li>
+</ul>
+  </section>
+  <section class="chapter reveal" id="cloudsync">
+    <h2 id="cloudsync">Cloud sync: messages and tracks on the server<a class="hdr-anchor" href="#cloudsync" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>Cloud sync keeps messages and track history on the server. Sign in with the same account on another device and they come back. It sits on the APRSNETCN page, and the whole block can be turned off.</p>
+<ol class="m-steps">
+<li><b>Settings → Server → APRSNETCN SERVER</b>: the cloud cards are further down; start with the account and password.</li>
+<li>Tap sign in. The card then shows the account and three figures from the server.</li>
+<li>Pick a sync mode: <b>off</b> / <b>manual</b> / <b>auto</b>. Auto can run every 5, 15 or 60 minutes.</li>
+<li>Switch on what you want synced: messages and track history each have their own switch.</li>
+<li>Tap <b>Sync now</b> for a single run, or <b>Clear cloud data</b> to delete the server copy.</li>
+</ol>
+<ul>
+<li>The account is the one on the server access list, the same one the APRSNETCN link page uses.</li>
+<li>The address follows the APRSNETCN link, so there is no second address here. Another server signs you out, and nothing moves over from the old one.</li>
+<li>Messages and per-day tracks sync. App settings and themes stay with Export &amp; Backup.</li>
+<li>Two devices recording the same day come back as one line. Points within 3 seconds and 50 metres count as one point.</li>
+<li>Signed-in devices lists every device that has logged in to this server; yours is marked. Remove one and it has to sign in again on its next sync.</li>
+<li>The connection is plain HTTP, so the password and the payload are not encrypted. The password is dropped after sign-in; the token stays on the device and is discarded on sign-out.</li>
+<li>Settings → Features can turn cloud sync off entirely. With it off the app makes no cloud requests and both links keep working.</li>
+</ul>
+  </section>
+  <section class="chapter reveal" id="extgps">
+    <h2 id="extgps">External GPS module<a class="hdr-anchor" href="#extgps" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>An external GPS is a Bluetooth NMEA module. Once it is connected it supplies the position, which is steadier than the phone and easier on the battery. It is not an APRS link; it only tells the app where you are.</p>
+<ol class="m-steps">
+<li><b>Settings → Device → External GPS</b>.</li>
+<li>Scan, pick the module and bind it. The module runs Bluetooth SPP, so pair it in the system first.</li>
+<li>Once connected, read the “current fix” block: latitude, longitude, satellites and accuracy.</li>
+<li>To send the satellite count with the beacon, open <b>Settings → Position reporting</b> and switch on “Satellites”.</li>
+</ol>
+<ul>
+<li>While the module delivers fixes the phone GPS <b>stands by</b>. If the module drops out the phone takes over and the log says so.</li>
+<li>“Strict checksum” is on by default, so a sentence that fails the checksum is dropped. Turn it off to flag mismatches instead of discarding them.</li>
+<li>A rising sentence count with no fix usually means you are indoors. A flat count means the Bluetooth layer is the problem.</li>
 </ul>
   </section>
   <section class="chapter reveal" id="rf">
-    <h2 id="rf">Into a radio: TNC / audio / PKWDWPL<a class="hdr-anchor" href="#rf" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
-<p>All three RF paths live under <b>Settings → Device</b> (the overview lists the current link and
-three sub-pages):</p>
+    <h2 id="rf">Into a radio: TNC / audio / PKWDWPL / Icom<a class="hdr-anchor" href="#rf" aria-label="Permalink to this section" title="Permalink to this section">#</a></h2>
+<p>All four RF paths live under <b>Settings → Device</b> (the overview lists the current link and
+four sub-pages):</p>
 <div class="doc-table-wrap"><table class="doc-table">
 <thead><tr><th>Path</th><th>Sub-page</th><th>Key parameters</th></tr></thead><tbody>
 <tr><td><b>Bluetooth/USB TNC</b></td><td>Device → TNC</td><td>init string, serial baud, KISS params (txDelay 300 ms, txTail 50 ms, P=63, slot 100 ms, 330 B frames), path <code>WIDE1-1,WIDE2-1</code></td></tr>
 <tr><td><b>Audio (soundcard)</b></td><td>Device → Audio</td><td>22050 sample rate, 1200 baud, mark 1200 Hz / space 2200 Hz, TX level, 3000 ms CSMA wait</td></tr>
 <tr><td><b>Kenwood waypoints</b></td><td>Device → PKWDWPL</td><td>read-only link; strict checksum off by default (mismatches are flagged, not dropped)</td></tr>
+<tr><td><b>Icom Radio Link</b></td><td>Device → Icom Radio Settings</td><td>WLAN/LAN remote control, Network User credentials, radio IP, CI-V address (default 0xA4), <b>band mode set to FM-D</b></td></tr>
 </tbody></table></div>
 <ol class="m-steps">
 <li><b>Bind the device</b>: tap “Scan devices” (paired Bluetooth + USB serial) in the sub-page and pick yours.</li>
 <li><b>TNC receives but will not transmit</b>: send the init string first — many modules boot into command mode and need <code>KISS ON</code>; then match the <b>serial baud</b> on both ends (9600/19200/38400/57600/115200 are common; Bluetooth SPP has no baud rate).</li>
 <li><b>Audio nobody can decode</b>: check the <b>TX level</b> — too low or clipped both fail; wire it (headphone jack → radio data/mic), <b>never speaker-to-microphone</b>.</li>
 <li><b>Receive-only</b>: switch off “allow TX / allow RF beacon” — listening only is the calmest setup and never keys the PTT by mistake.</li>
+<li><b>Icom Direct Link</b>: enable WLAN / LAN remote control on the radio and create a Network User; ensure device and radio are on the same local network, enter IP, port, credentials and CI-V address in the sub-page; <b>set the radio band mode to FM-D</b>.</li>
 </ol>
 <div class="callout warn"><span class="co-ic">⚠️</span><div><p>RF transmission requires a licence — follow local regulations. <b>RF beaconing</b> is off by default; confirm your licence allows it before enabling.</p></div></div>
   </section>
@@ -283,7 +338,7 @@ the live readings of those four gates.</p></div></div>
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../../js/main.js"></script>
+<script src="../../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

@@ -6,9 +6,9 @@
 <title>APRSlocus 视频画面（PPT）· 解说台</title>
 <meta name="description" content="APRSlocus 视频画面稿：16:9 幻灯片，可直接全屏录制、当视频画面用。">
 <meta name="robots" content="noindex, follow">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=8">
 <style>
 /* ════════════════════════════════════════════════════════════════
    APRSlocus 视频画面 · 16:9 幻灯片（沿用官网毛玻璃风格）
@@ -400,7 +400,7 @@ body.rec .prompt, body.rec .tip { display: none !important; }
       <span class="kicker an" style="--i:0">APRS 科普 · 软件分享</span>
       <h1 class="big-line an" style="--i:1;font-size:132px;margin-top:18px"><span class="grad">APRSlocus</span></h1>
       <p class="lead an" style="--i:2;font-size:34px;color:var(--text);font-weight:700">随时随地，掌握电波世界的一举一动</p>
-      <p class="lead an" style="--i:3;max-width:720px">一个给业余无线电爱好者用的 APRS 客户端。<br>打开就能看到附近的台站，位置、消息、信标都在同一张图上，Android 和 Windows 都能跑。</p>
+      <p class="lead an" style="--i:3;max-width:720px">一个业余无线电爱好者用的 APRS 客户端 —— 在本机运行的工具。<br>不提供、也不预置任何服务器地址：要联网请自行填写 APRS-IS 服务器，或改用蓝牙 TNC / 声卡音频 / Icom 电台直连。</p>
       <div class="chips an" style="--i:4">
         <span class="chip"><svg viewBox="0 0 384 512" aria-hidden="true"><path d="M16 64C16 28.7 44.7 0 80 0L304 0c35.3 0 64 28.7 64 64l0 384c0 35.3-28.7 64-64 64L80 512c-35.3 0-64-28.7-64-64L16 64zM144 448c0 8.8 7.2 16 16 16l64 0c8.8 0 16-7.2 16-16s-7.2-16-16-16l-64 0c-8.8 0-16 7.2-16 16zM304 64L80 64l0 320 224 0 0-320z"/></svg>Android</span>
         <span class="chip"><svg viewBox="0 0 576 512" aria-hidden="true"><path d="M64 0C28.7 0 0 28.7 0 64L0 352c0 35.3 28.7 64 64 64l176 0-10.7 32L160 448c-17.7 0-32 14.3-32 32s14.3 32 32 32l256 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-69.3 0L336 416l176 0c35.3 0 64-28.7 64-64l0-288c0-35.3-28.7-64-64-64L64 0zM512 64l0 224L64 288 64 64l448 0z"/></svg>Windows</span>
@@ -638,6 +638,8 @@ body.rec .prompt, body.rec .tip { display: none !important; }
         <li>高德瓦片 / 高德卫星</li>
         <li>Carto（浅色 · 深色 · 航行者）</li>
         <li>OSM 标准 / 人道、OpenTopo、Esri</li>
+        <li>地形（Esri 等高线 · 浮雕 · 山体阴影）</li>
+        <li>天地图（矢量 · 影像 · 地形）</li>
         <li>坐标支持 GCJ-02 与 WGS-84</li>
       </ul>
     </div>
@@ -755,7 +757,7 @@ body.rec .prompt, body.rec .tip { display: none !important; }
 </template>
 
 <!-- ── 13 连接与后台 ── -->
-<template class="sl" data-narr="网络这块不用自己盯着：默认连 rotate.aprs2.net，TCP 和 WebSocket 都支持，断线会按 8、16、32、60 秒渐进重连；Android 上还有前台服务保活。小提示：Passcode 填 -1 能连上，但要正常收发消息，得用真正的 Passcode。">
+<template class="sl" data-narr="网络这块不用自己盯着：服务器地址自己填一次，TCP 和 WebSocket 都支持，断线会按 8、16、32、60 秒渐进重连；Android 上还有前台服务保活。小提示：Passcode 填 -1 能连上，但要正常收发消息，得用真正的 Passcode。">
   <div class="body">
   <div>
     <span class="kicker an" style="--i:0">功能 · 连接与后台</span>
@@ -766,7 +768,7 @@ body.rec .prompt, body.rec .tip { display: none !important; }
       <div class="ic" style="background:linear-gradient(135deg,#38bdf8,#0284c7)"><svg viewBox="0 0 640 512" aria-hidden="true"><path d="M54.2 202.9C123.2 136.7 216.8 96 320 96s196.8 40.7 265.8 106.9c12.8 12.2 33 11.8 45.2-.9s11.8-33-.9-45.2C549.7 79.5 440.4 32 320 32S90.3 79.5 9.8 156.7C-2.9 169-3.3 189.2 8.9 202s32.5 13.2 45.2 .9zM320 256c56.8 0 108.6 21.1 148.2 56c13.3 11.7 33.5 10.4 45.2-2.8s10.4-33.5-2.8-45.2C459.8 219.2 393 192 320 192s-139.8 27.2-190.5 72c-13.3 11.7-14.5 31.9-2.8 45.2s31.9 14.5 45.2 2.8c39.5-34.9 91.3-56 148.2-56zm64 160a64 64 0 1 0 -128 0 64 64 0 1 0 128 0z"/></svg></div>
       <h3>自动连接与渐进重连</h3>
       <ul>
-        <li>默认 <b class="mono">rotate.aprs2.net:14580</b></li>
+        <li>服务器地址自己填，软件不预置</li>
         <li>TCP / WebSocket 都支持</li>
         <li>断线按 <b>8 → 16 → 32 → 60 秒</b> 渐进重连</li>
       </ul>
@@ -886,7 +888,7 @@ body.rec .prompt, body.rec .tip { display: none !important; }
     <div class="gcard an" style="--i:1">
       <div class="ic" style="background:linear-gradient(135deg,#34d399,#059669)"><svg viewBox="0 0 384 512" aria-hidden="true"><path d="M16 64C16 28.7 44.7 0 80 0L304 0c35.3 0 64 28.7 64 64l0 384c0 35.3-28.7 64-64 64L80 512c-35.3 0-64-28.7-64-64L16 64zM144 448c0 8.8 7.2 16 16 16l64 0c8.8 0 16-7.2 16-16s-7.2-16-16-16l-64 0c-8.8 0-16 7.2-16 16zM304 64L80 64l0 320 224 0 0-320z"/></svg></div>
       <h3>Android</h3>
-      <ul><li>最低 Android 5.0，APK 直装</li><li>前台服务持续在线</li><li>出门就是一台移动台</li></ul>
+      <ul><li>最低 Android 7.0 (API 24)，APK 直装</li><li>前台服务持续在线</li><li>出门就是一台移动台</li></ul>
     </div>
     <div class="gcard an" style="--i:2">
       <div class="ic" style="background:linear-gradient(135deg,#38bdf8,#0284c7)"><svg viewBox="0 0 576 512" aria-hidden="true"><path d="M64 0C28.7 0 0 28.7 0 64L0 352c0 35.3 28.7 64 64 64l176 0-10.7 32L160 448c-17.7 0-32 14.3-32 32s14.3 32 32 32l256 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-69.3 0L336 416l176 0c35.3 0 64-28.7 64-64l0-288c0-35.3-28.7-64-64-64L64 0zM512 64l0 224L64 288 64 64l448 0z"/></svg></div>
@@ -922,8 +924,8 @@ body.rec .prompt, body.rec .tip { display: none !important; }
         <span>STUDENT HAMS 群组</span><span>BG7PGW</span><span>BG7ORC</span>
         <span>BA4JLD<em>青岛科技大学业余无线电俱乐部</em></span>
         <span>BA4IUD</span><span>BD1FEH</span><span>BA3RZL<em>算力支持</em></span>
-        <span>BG2EFX</span>
-        <span>BH7NOR</span><span>APRS.TV</span><span>每一位支持者</span>
+        <span>BG2EFX</span><span>BG2WX</span><span>BA8AZJ</span><span>BG7LZQ</span>
+        <span>BD4TYW</span><span>BH2WIX</span><span>BG7QZC</span><span>BH4HGA</span><span>BG2GNI</span><span>BG5AON</span><span>BG5WRY</span><span>BH7NOR</span><span>APRS.TV</span><span>每一位支持者</span>
       </div>
     </div>
     <div class="gcard an" style="--i:2">
@@ -932,9 +934,10 @@ body.rec .prompt, body.rec .tip { display: none !important; }
         <span>BG2HCB<em>设置页优化</em></span>
         <span>BA4UAX<em>繁中翻译</em></span>
         <span>BD3QID<em>英文 &amp; 测试</em></span>
+        <span>BD3QID<em>WLAN 电台直连</em></span>
         <span>BA7KSM<em>翻译</em></span>
         <span>BG7LMW</span><span>BG7OSL</span><span>BG4LZY</span>
-        <span>等 47 位早期成员</span>
+        <span>等 61 位早期成员</span>
       </div>
     </div>
   </div>

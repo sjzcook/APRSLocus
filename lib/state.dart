@@ -9,12 +9,19 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'cloud_sync.dart';
+import 'coord_format.dart';
+import 'update_channels.dart';
+import 'features.dart';
 import 'mock_data.dart';
 import 'services.dart';
 import 'aprs_parse.dart';
 import 'aprs_device.dart';
 import 'pos_quality.dart';
 import 'track_log.dart';
+import 'desktop_metrics.dart';
+import 'ssid_remote.dart';
+import 'subscriptions.dart';
 import 'motion.dart';
 import 'adif.dart';
 import 'l10n/app_localizations.dart';
@@ -28,13 +35,27 @@ import 'l10n/app_localizations_id.dart';
 import 'l10n/app_localizations_ja.dart';
 import 'l10n/app_localizations_zh.dart';
 import 'net/aprs.dart';
+import 'net/http_send.dart';
+import 'aprsnetcn.dart';
 import 'audio.dart';
+import 'box.dart';
 import 'pkwdwpl.dart';
+// ⚠ 外接 GPS 的定位类型（NmeaFix）**定义在 nmea.dart**，而 nmea_gps.dart
+// 只是 import 它（Dart 的 import 不传递）。少了这一行，本机 `flutter analyze`
+// 报 Type 'NmeaFix' not found —— 编译不过（CI 在 b500924 上就是这么红的）。
+import 'nmea.dart';
+import 'nmea_gps.dart';
 import 'diag.dart';
 import 'group_chat.dart';
+import 'strategy_map.dart';
 import 'igate.dart';
+import 'consent.dart';
+import 'live_activity.dart';
+import 'crac_cert.dart';
+import 'terms_version.dart';
 import 'tnc.dart';
 import 'translate.dart';
+import 'agent.dart';
 import 'early_member.dart';
 import 'achievements.dart';
 // 说明：状态层要用 theme.dart 里的 C（应用材质）与 uiMaterialOf / uiMaterialName。
@@ -42,7 +63,12 @@ import 'achievements.dart';
 // 新增的这几个名字才能解析 —— CI 的 analyze 就是这么报出来的。
 import 'theme.dart';
 import 'theme_store.dart';
+import 'tile_cache.dart';
 import 'ble_hr.dart';
+import 'blacklist.dart';
+import 'strong_notice.dart';
+import 'min_version.dart';
+import 'agent_allow.dart';
 import 'garmin.dart';
 import 'share_in.dart';
 import 'turn_dot.dart';
@@ -111,10 +137,45 @@ class SmartBeaconTier {
 
 class AppState extends ChangeNotifier {
   /// 应用版本（用于信标备注、APRSlocus 识别）
-  static const appVersion = '2.0.9';
+  static const appVersion = '2.2.8';
   // 我的电台
   String myCall = 'BV2AAA';
-  int mySsid = 0; // 0 = 无后缀, 1-15 = -1 到 -15
+
+  /// 呼号后缀（SSID），**不含前导 -**。空串 = 没有后缀。
+  ///
+  /// 存字符串而不是数字：APRS-IS 主网只认 0–15，但我们自己的 APRSNETCN 服务器
+  /// 收字母后缀（`BI1QKA-B` 这种），所以后缀写成 1–2 位数字或字母都行。
+  /// 旧版本存的是整数（0 = 无后缀），加载时在那里迁移（见 _loadPrefs）。
+  String mySsid = '';
+
+  /// 后缀的合法形状：1–2 位数字或大写字母。
+  static final RegExp ssidPattern = RegExp(r'^[0-9A-Z]{1,2}$');
+
+  /// 把用户输入规整成后缀：去空白、允许带前导 `-`、转大写。
+  ///
+  /// 空串（或只剩一个 `-`）返回 `''` = 不要后缀；形状不对返回 `null`，
+  /// 由界面自己提示 —— 这里不抛异常，因为它接的是输入框内容。
+  static String? normalizeSsid(String raw) {
+    var v = raw.trim().toUpperCase();
+    if (v.startsWith('-')) v = v.substring(1);
+    // `0` 就是「不加后缀」：APRS 里 -0 与不带后缀是一回事，别让它变成一个
+    // 看起来像有后缀、实际没有的值。
+    if (v.isEmpty || v == '0') return '';
+    if (!ssidPattern.hasMatch(v)) return null;
+    return v;
+  }
+
+  /// 设定后缀（会校验、落盘、通知）。形状不对返回 false，什么都不改。
+  bool setSsid(String raw) {
+    final v = normalizeSsid(raw);
+    if (v == null) return false;
+    if (v == mySsid) return true;
+    mySsid = v;
+    persist();
+    _notify();
+    return true;
+  }
+
   String mySymbol = '>';
   // 备注默认**为空**（用户要求）：新装用户不会再被塞一段默认文字。
   // 历史版本曾默认 'APRSlocus 移动台'，老用户升级后由 _loadPrefs 迁移清零。
@@ -155,7 +216,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// 完整呼号（含 SSID 后缀）
-  String get myFullCall => mySsid == 0 ? myCall : '$myCall-$mySsid';
+  String get myFullCall => mySsid.isEmpty ? myCall : '$myCall-$mySsid';
 
   /// 运行平台短名：用于 CONNECT 在线状态帧，便于在 APRS-IS 上区分端侧。
   /// Android / iOS 用系统名，Windows 简写 Win、macOS 简写 Mac。
@@ -177,8 +238,36 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// 收到新消息时回调（src, text, groupId），用于顶部气泡通知
-  void Function(String src, String text, String? groupId)? onNewMessage;
+  /// 收到新消息时的回调（src, text, groupId）。
+  ///
+  /// **多监听者**：顶部气泡通知（外壳）与「消息到达触发 AI 任务」（智能体聊天框）
+  /// 都要用。早期是单槽 `onNewMessage = f`，谁最后赋值谁生效 —— 外壳一重建
+  /// （换主题/换布局/换语言重挂）就把智能体注册的回调顶掉，于是
+  /// 「新消息来了但 AI 任务不触发」静默发生（用户实测）。改成列表后互不干扰。
+  final List<void Function(String src, String text, String? groupId)>
+      _newMessageListeners = [];
+
+  void addNewMessageListener(
+          void Function(String src, String text, String? groupId) f) {
+    if (!_newMessageListeners.contains(f)) _newMessageListeners.add(f);
+  }
+
+  void removeNewMessageListener(
+          void Function(String src, String text, String? groupId) f) {
+    _newMessageListeners.remove(f);
+  }
+
+  void _emitNewMessage(String src, String text, String? groupId) {
+    // 先复制再遍历：监听者在回调里可能反注册（dispose），直接遍历会并发修改。
+    for (final f in List.of(_newMessageListeners)) {
+      f(src, text, groupId);
+    }
+  }
+
+  /// 供测试驱动「新消息到达」事件（生产代码由收包路径调用 [_emitNewMessage]）。
+  @visibleForTesting
+  void emitNewMessageForTest(String src, String text, String? groupId) =>
+      _emitNewMessage(src, text, groupId);
 
   /// 收到群聊邀请时回调（from, groupCall, groupName），用于弹窗确认
   void Function(String from, String groupCall, String groupName)?
@@ -189,6 +278,28 @@ class AppState extends ChangeNotifier {
 
   // 我的位置
   bool myHasFix = false;
+
+  /// 本轮的定位是不是**只是把上次保存的位置装回来**（尚未收到新的定位）。
+  ///
+  /// 为什么必须和 [myHasFix] 分开：系统（GPS 或网络定位）**每次启动都会把
+  /// 上一次的位置默认交回来**，`_loadPrefs` 也会把磁盘上的 myLat/myLng 装回去 ——
+  /// 于是「定位还没真正开启」时，[myHasFix] 就已经是 true、坐标还是旧的。
+  /// 若拿它上报，就等于在没有任何新定位的情况下对外宣告一个错坐标。
+  ///
+  /// 所以只在**收到一次真实定位**（[_onFix] / 佳明点 / 手动选点）时才允许上报，
+  /// 见 [myPositionReportable]。
+  bool _pendingSavedPos = false;
+
+  /// 位置是否可以**上报**（自动信标与手动「立即上报」都要过这一关）。
+  ///
+  /// ⚠ 不要写成 `myHasFix`：那一位含着「上次保存的位置」，用户报的
+  /// 「定位没开却报出错误位置」正是拿它上报导致的。必须是**本轮重新拿到**的
+  /// 定位才算数（用户要求：先重新获取到位置，位置报告才能开始）。
+  ///
+  /// 与 [myHasFix] 分开还带来一点好处：旧位置仍可**显示**（用户打开 App 想先看到
+  /// 自己上次在哪），但**不发出去**。
+  bool get myPositionReportable => myHasFix && !_pendingSavedPos;
+
   double? myLat, myLng, myAlt;
   double? mySpeed, myCourse;
   String locStatus = '未定位';
@@ -199,6 +310,17 @@ class AppState extends ChangeNotifier {
   /// 自己位置的精度（米）。粗定位时不是系统原值，见 [_kCoarseAccuracyFloorM]
   double myAccuracy = 0;
 
+  /// 当前这个定位**参与定轨的卫星数**（null = 正在供位的来源不提供这个值）。
+  ///
+  /// 两条来源都可能填：[LocService] 的事件（Android 侧读 `Location.extras` 、
+  /// 机型缺这个字段时回退到 `GnssStatus`）与外接 GPS 模块的 GGA 语句
+  /// （见 [_onNmeaGpsFix] → [_ingestExternalFix]）。
+  /// 与 [myAccuracy] 不同的是：它**不参与任何取舍**（既不用来拦点、也不用来自适应
+  /// 抽稀）—— 只用于 ① 信标里可选地带上 `SAT=nn`；② 设置页如实显示。
+  /// null 与 0 必须区分：null 是「这个来源不说」，0 是「确实一颗星都没有」，
+  /// 所以发信标时只发大于 0 的值。
+  int? mySats;
+
   /// 当前这个定位是不是粗定位（网络/基站/被动）。
   ///
   /// 界面上要如实告知：粗点会把「我」放在几百米开外，不说清楚用户会以为
@@ -208,6 +330,15 @@ class AppState extends ChangeNotifier {
   /// 蓝牙心率（bpm）：最近一次收到的读数（心率带通知 / 佳明点）。
   /// null = 还没有过读数（此时**不发** HR=，而不是发一个 0）。
   int? myHr;
+
+  /// 最近一次定位的时刻（无论来源）。首次修复后一直为 null 表示从没定位过。
+  /// 供智能体判断「坐标新不新鲜」——[myLat] 即使过期也会保留旧值（启动即回填缓存），
+  /// 只看坐标无法区分「刚刚定位」和「拿着半小时前的旧点」。
+  DateTime? myFixAt;
+
+  /// 最近一次心率读数的时刻（null = 从没读到过）。心跳带断开时 [myHr] 会被清空，
+  /// 但 [myHrAt] 保留最后时刻，供智能体判断读数是实时还是陈旧的。
+  DateTime? myHrAt;
 
   /// 蓝牙心率带服务（扫描/连接/订阅标准心率服务 0x180D）。
   final BleHrService bleHr = BleHrService.instance;
@@ -225,6 +356,11 @@ class AppState extends ChangeNotifier {
 
   /// 上一个佳明点：只用来算航向（佳明的点没有航向字段，见 [bearingDeg]）。
   GarminPoint? _lastGarminPoint;
+
+  /// 外接 GPS 模块的上一帧：同样只用来算航向（模组只发 GGA/GLL 时没有航向
+  /// 字段）。注：判「还新不新鲜」看链路自己的时间戳（见 [externalFixFresh]），
+  /// 不用这一帧的时间。
+  NmeaFix? _lastNmeaFix;
 
   /// 佳明 LiveTrack 的分享链接与开关状态。
   String garminUrl = '';
@@ -281,72 +417,22 @@ class AppState extends ChangeNotifier {
   /// 这里只做三件必须做的事：更新位置、写轨迹（同一套抽稀）、跟随过滤中心。
   void _onGarminPoint(GarminPoint p) {
     if (_disposed) return;
-    final first = !myHasFix;
-    myLat = p.lat;
-    myLng = p.lng;
-    myHasFix = true;
-    myFixCoarse = false; // 手表 GPS，不是粗定位
-    myAccuracy = 0; // 佳明页面不给精度 → 0 = 未知（不画精度圈）
-    if (p.altM != null) myAlt = p.altM;
-    if (p.speedMps != null) mySpeed = p.speedMps! * 3.6;
-    if (p.hr != null && p.hr! > 0) {
-      myHr = p.hr;
-      _checkHrAlarm();
-    }
-    _checkCrash();
-    // 航向：佳明的点里没有这个字段，用**前后两点**算（见 bearingDeg 的注释）。
-    // 没有上一个点（首个点）时不改 —— 保留手机 GPS 的最后已知航向，比瞎指北好。
     final prev = _lastGarminPoint;
-    if (prev != null) {
-      final b = bearingDeg(prev.lat, prev.lng, p.lat, p.lng);
-      if (b != null) myCourse = b;
-    }
     _lastGarminPoint = p;
-    // 转弯打点的航向样本（见 lib/turn_dot.dart）。佳明的点比手机 GPS 稀得多
-    // （十几秒到一分钟一个），而那道物理门的阈值是**按 dt 折算**的（40°/秒），
-    // 所以这里可以放心直接喂：稀疏序列不会被误杀，只是也不受它保护。
-    if ((mySpeed ?? 0) >= _kTurnMinSpeedKmh) {
-      _turnDot.onCourse(myCourse, DateTime.now());
-    }
-    locStatus = '佳明 LiveTrack';
-    // 跳变守卫的参照点也要跟着走：否则手机 GPS 接回来的那一刻会被误判成跳变
-    _lastFixLat = p.lat;
-    _lastFixLng = p.lng;
-    _lastFixTime = DateTime.now();
-    _hadLiveFix = true;
-    // 轨迹：与 GPS 同一套「按速度自适应抽稀」，但不受静止防抖影响
-    // （佳明的点本身就是干净的；静止时手表也会给点，画出来才对）。
-    final last = myTrack.isEmpty ? null : myTrack.last;
-    final minDistM =
-        PosQuality.trackMinDistM(speedKmh: (p.speedMps ?? 0) * 3.6);
-    final movedM = last == null
-        ? double.infinity
-        : haversine(last.lat, last.lng, p.lat, p.lng) * 1000;
-    if (last == null || movedM > minDistM) {
-      myTrack.add(TrackPt(p.lat, p.lng, DateTime.now()));
-      if (myTrack.length > maxTrackPts) {
-        myTrack.removeRange(0, myTrack.length - maxTrackPts);
-      }
-      // 历史台账（按天落盘）：GPS 那条路径写在同一个条件里，佳明这条也必须写 ——
-      // 不写的话「佳明接管期间」在历史记录里是**一段空白**（而手机 GPS 正好被让位，
-      // 两边都不记，用户回头看会觉得那一段路凭空消失）。
-      TrackLogStore.instance.record(
-        lat: p.lat,
-        lng: p.lng,
-        speedKmh: (p.speedMps ?? 0) * 3.6,
-        course: myCourse,
-        alt: p.altM,
-        accuracyM: 0,
-        // 佳明轨迹点自带心率，上面已经把有效值写进 [myHr]（issue #17）
-        hr: myHr,
-      );
-      // 佳明接管期间的里程也要记，否则那段路在里程里是空白（与台账一致）
-      if (last != null) _addMileage(movedM / 1000.0);
-    }
-    if (filterFollow) {
-      filterLat = p.lat;
-      filterLng = p.lng;
-    }
+    final first = _ingestExternalFix(
+      p.lat,
+      p.lng,
+      status: '佳明 LiveTrack',
+      altM: p.altM,
+      speedKmh: p.speedMps == null ? null : p.speedMps! * 3.6,
+      // 航向：佳明的点里没有这个字段，用**前后两点**算（见 bearingDeg 的注释）。
+      // 没有上一个点（首个点）时不改 —— 保留手机 GPS 的最后已知航向，比瞎指北好。
+      prevLat: prev?.lat,
+      prevLng: prev?.lng,
+      hr: p.hr,
+      // 佳明页面不给精度 → 0 = 未知（不画精度圈）
+      accuracyM: 0,
+    );
     if (first) {
       _log(
         LogLevel.info,
@@ -354,8 +440,122 @@ class AppState extends ChangeNotifier {
         'LiveTrack 首个点 ${p.lat.toStringAsFixed(5)}, ${p.lng.toStringAsFixed(5)}',
       );
     }
+  }
+
+  /// 外接位置源（佳明 LiveTrack / 外接 GPS 模块）带来的一次定位 → 「我」的位置。
+  ///
+  /// 为什么两条源共用一个函数：它们要做的**是同一件事** —— 更新我的位置、
+  /// 按速度抽稀写轨迹与历史台账、跟随过滤中心、跳变参照点跟着走；
+  /// 差别只在两处：来源文案（[status]）与「这条源自带什么字段」
+  /// （佳明带心率、外接 GPS 带航向/精度/海拔）。各写一份的结局已经见过：
+  /// 同一个修复只会落在其中一半路径上（佳明接管期间里程/台账空白就是这么来的）。
+  ///
+  /// 返回**是不是本次进程的首个点**（调用方据此打自己的「首个点」日志）。
+  bool _ingestExternalFix(
+    double lat,
+    double lng, {
+    required String status,
+    double? altM,
+    double? speedKmh,
+    double? courseDeg,
+    double? prevLat,
+    double? prevLng,
+    int? hr,
+    double accuracyM = 0,
+    int? satellites,
+  }) {
+    final first = !myHasFix;
+    myLat = lat;
+    myLng = lng;
+    myHasFix = true;
+    myFixAt = DateTime.now();
+    _pendingSavedPos = false; // 外部源给的是真实点，可以上报
+    myFixCoarse = false; // 外部源不是粗定位
+    myAccuracy = accuracyM;
+    // 卫星数：这条源的定位自带的颗数（佳明不给这个字段 → null）。
+    // **无条件赋值**而不是「有值才改」：「这个源不说」与「上一颗源说的」是两件事 ——
+    // 留着上一个值会让信标里的 `SAT=nn` 变成一个没人再说得清来源的数字。
+    mySats = satellites;
+    if (altM != null) myAlt = altM;
+    if (speedKmh != null) mySpeed = speedKmh;
+    if (hr != null && hr > 0) {
+      myHr = hr;
+      myHrAt = DateTime.now();
+      _checkHrAlarm();
+    }
+    _checkCrash();
+    // 航向：本条没给就用**前后两点**算（佳明的点里没有航向字段；
+    // 外接 GPS 模组只发 GGA/GLL 时也没有）。没有上一个点时不改 ——
+    // 保留手机 GPS 的最后已知航向，比瞎指北好。
+    final course = courseDeg ??
+        (prevLat == null || prevLng == null
+            ? null
+            : bearingDeg(prevLat, prevLng, lat, lng));
+    if (course != null) myCourse = course;
+    // 转弯打点的航向样本（见 lib/turn_dot.dart）。外部源的点比手机 GPS 稀得多
+    // （佳明十几秒到一分钟一个），而那道物理门的阈值是**按 dt 折算**的（40°/秒），
+    // 所以这里可以放心直接喂：稀疏序列不会被误杀，只是也不受它保护。
+    if ((mySpeed ?? 0) >= _kTurnMinSpeedKmh) {
+      _turnDot.onCourse(myCourse, DateTime.now());
+    }
+    // 跳变守卫的参照点也要跟着走：否则手机 GPS 接回来的那一刻会被误判成跳变
+    _lastFixLat = lat;
+    _lastFixLng = lng;
+    _lastFixTime = DateTime.now();
+    _hadLiveFix = true;
+    // 轨迹：与 GPS 同一套「按速度自适应抽稀」，但不受静止防抖影响
+    // （外面的点本身就是干净的；停着不动时手表/模块也会给点，画出来才对）。
+    final speed = speedKmh ?? 0;
+    final last = myTrack.isEmpty ? null : myTrack.last;
+    final weak = PosQuality.weakFix(sats: satellites, accuracyM: accuracyM);
+    final weakGate = weak && !beaconForceCoarse;
+    var minDistM = PosQuality.trackMinDistM(speedKmh: speed);
+    if (weakGate) {
+      minDistM = math.max(minDistM, PosQuality.weakTrackMinDistM);
+    }
+    final movedM = last == null
+        ? double.infinity
+        : haversine(last.lat, last.lng, lat, lng) * 1000;
+    final gapSec = last == null
+        ? double.infinity
+        : DateTime.now().difference(last.time).inSeconds.toDouble();
+    // 弱信号时还要求「离上个点够久」，否则一秒一个点照样能把它堆成一坨
+    final farEnough = weakGate
+        ? (movedM > minDistM && gapSec >= PosQuality.weakTrackMinGapSec)
+        : movedM > minDistM;
+    final skipWeak = weakGate && accuracyM > PosQuality.weakSkipAccuracyM;
+    if (!skipWeak && (last == null || farEnough)) {
+      myTrack.add(TrackPt(lat, lng, DateTime.now()));
+      if (myTrack.length > maxTrackPts) {
+        myTrack.removeRange(0, myTrack.length - maxTrackPts);
+      }
+      // 历史台账（按天落盘）：GPS 那条路径写在同一个条件里，这里也必须写 ——
+      // 不写的话「外部源接管期间」在历史记录里是**一段空白**（而手机 GPS 正好被
+      // 让位，两边都不记，用户回头看会觉得那一段路凭空消失）。
+      // 记录开关默认关（[trackLogOn]），与屏幕轨迹无关：屏幕上那条线照旧画。
+      if (trackLogOn) {
+        TrackLogStore.instance.record(
+          lat: lat,
+          lng: lng,
+          speedKmh: speed,
+          course: myCourse,
+          alt: altM,
+          accuracyM: accuracyM,
+          // 轨迹点自带的心率（佳明有），没有就是当前心率带的值
+          hr: myHr,
+        );
+      }
+      // 接管期间的里程也要记，否则那段路在里程里是空白（与台账一致）
+      if (last != null) _addMileage(movedM / 1000.0);
+    }
+    if (filterFollow) {
+      filterLat = lat;
+      filterLng = lng;
+    }
+    locStatus = status;
     _notify();
     _updateNotification();
+    return first;
   }
 
   /// 收到分享进来的文本（佳明 App 的 LiveTrack 链接）。
@@ -390,6 +590,19 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 是否有**新鲜的外接位置源**在供位（外接 GPS 模块或佳明 LiveTrack）。
+  ///
+  /// 抽出来是因为两处判据必须一致：位置优先级 [positionSourceNow]，
+  /// 以及「外接源接管时停手机 GPS」[_syncPhoneGps]。各写一遍的话迟早出现
+  /// 「一处认为外接源在跑、另一处认为没在跑」—— 那正是「位置在两路之间
+  /// 来回跳」的经典成因。
+  bool get externalFixFresh =>
+      nmeaGpsSupplying || (garmin.on && garmin.fresh);
+
+  /// 外接 GPS **模块**是否正在供位（它与佳明同在 [externalFixFresh] 里，
+  /// 但日志与状态行要能分清是谁）
+  bool get nmeaGpsSupplying => nmeaGpsOn && nmeaGps.fresh;
+
   /// **现在是谁在供位置** —— 位置来源的唯一出口。
   ///
   /// 用户问过「如果选了佳明定位来源，定位上报页那个定位来源不重复了吗？听谁的？」
@@ -399,9 +612,14 @@ class AppState extends ChangeNotifier {
   /// 现在两处都读这一个 getter，并在界面上把优先级写明。
   ///
   /// 优先级（与 `_onFix` 完全一致，不要在这里另立一套）：
-  ///   `sim`（模拟/手动）＞ `garmin`（手表有实时数据时）＞ `phone`（手机 GPS）
+  ///   `sim`（模拟/手动）＞ `spp`（外接 GPS 模块）＞ `garmin`（手表）＞ `phone`（手机 GPS）
+  ///
+  /// 为什么外接 GPS 排在佳明前面：那个模块是**用户亲手接上去的**位置源
+  /// （常常架在车顶/窗外），精度与频率都高于手腕上那只表；而佳明手表
+  /// 十几秒到一分钟才一个点、且位置在腕上。
   PositionSourceNow get positionSourceNow {
     if (useSimLocation) return PositionSourceNow.sim;
+    if (nmeaGpsOn && nmeaGps.fresh) return PositionSourceNow.spp;
     if (garmin.on && garmin.fresh) return PositionSourceNow.garmin;
     if (myHasFix || loc.running) return PositionSourceNow.phone;
     return PositionSourceNow.none;
@@ -413,11 +631,22 @@ class AppState extends ChangeNotifier {
     myLng = lng;
     myAlt = alt;
     myHasFix = true;
+    myFixAt = DateTime.now(); // 手动选点也是「刚刚的」位置
     useSimLocation = true;
-    loc.stop();
+    // 之前在真正定位（GPS/网络）就停掉它 —— 模拟位置由手动坐标供位。
+    // 已经在保活模式时**不要**停：stop() 会把前台服务一并关掉。
+    if (loc.running) loc.stop();
+    // ⚠ 手动选点后必须让**保活前台服务**继续在后台跑：模拟位置模式下 APRS-IS 连接
+    // 与信标定时器仍要靠它存活，常驻通知也来自它。原先这里无条件 loc.stop() 却没再
+    // 起保活 —— 于是「手动选点（模拟位置）没有系统通知」，切到后台连接还会被冻结。
+    // startKeepAlive 自带幂等（已在保活模式直接返回），不会来回重启服务。
+    unawaited(startTracking());
     // 换到模拟位置：复位 GPS 侧的全部状态，免得切回真实定位时拿着手动坐标
     // 当历史、把位置粘在旧点上。
     _resetSelfFix();
+    // ⚠ 上面这行会把「只是保存的位置」重新置位，所以这里必须在它**之后**清掉。
+    // 手动坐标是用户显式指定的，允许上报（否则模拟位置永远发不出去）。
+    _pendingSavedPos = false;
     locStatus = '模拟位置';
     _syncFilterToPosition(); // 过滤中心跟随我的位置（filterFollow 时）
     persist();
@@ -468,6 +697,95 @@ class AppState extends ChangeNotifier {
   /// 连接成功后首次询问“自动上报位置”的回调（由首页绑定并弹出选择）
   void Function()? onAskBeaconAuto;
 
+  /// **本次连接**是否已由用户确认「开始上报」。
+  ///
+  /// 用户要求：无论用哪种方式定位，**连上服务器后都不要自动上报**，必须由用户
+  /// 手动点一下正式的「开始上报」按钮，确认坐标有效之后才开始上报。
+  ///
+  /// 与 [beaconEnabled] 的区别：
+  ///   * [beaconEnabled] 是**持久**的自动上报总开关（用户设置里选的）；
+  ///   * [beaconArmed] 是**每次连接**的一次性确认，由用户自己发起的连接/断开
+  ///     与重开 App 都会复位，所以老用户不会因为它而被静默恢复成自动上报。
+  ///
+  /// ── 什么算「新的一次连接」（用户 2026-10-14 补充）──
+  ///
+  /// 用户原话：「如果是**计划外**断开，可以直接重连」。即
+  ///   * **计划内**（用户自己点连接 / 断开 / 恢复出厂）→ 复位，要重新确认；
+  ///   * **计划外**（链路抖动、被服务器踢、自动重连、发射来源切换）→ **保留**
+  ///     确认，直接接着上报。
+  ///
+  /// 为什么计划外要保留：以前只要 `connected` 翻转就复位，链路一抖用户刚点过
+  /// 的确认就没了 —— 上报停住，界面与常驻通知又跳回「待确认上报」，在部分
+  /// ROM 上还会连着弹（用户报的「反复弹出待确认上报」）。对用户来说，一条自己
+  /// 掉线又自己连回来的链路仍然是同一次连接。
+  ///
+  /// ⚠️ 不持久化是刻意的：持久化就等于「确认一次，以后永远自动」，
+  /// 又绕回用户反对的「连上就自动上报」。
+  bool beaconArmed = false;
+
+  /// 用户点了正式的「开始上报」按钮 → 本次连接内放行自动上报。
+  ///
+  /// 只在自动上报总开关**已经打开**时才放行自动流程：已有有效本轮定位时立刻
+  /// 补发一次，让用户马上在地图上看到自己；没有有效定位时先只放行，等拿到定位
+  /// 后由定时器按间隔发出（不会误发旧坐标，见 [myPositionReportable]）。
+  /// 总开关没开时，这一下只是手动发报一次（见方法内注释）。
+  void beginReporting() {
+    // 「开始上报」是用户主动放行自动上报的那一下，也是附件一要求的关口：
+    // 没签过同意就先签，签完再回到这里。
+    if (!ensureConsent(beaconConsentScopes, then: beginReporting)) return;
+    // 自动上报总开关**没开**时，这一下只是一次手动发报：
+    // 不打开总开关、也不放行自动流程。用户 2026-10-20 的要求原话是
+    // 「如果自动上报没有开启的情况下，待确认上报点击后发报一次，而不是进入
+    // 自动流程」—— 想开自动上报走主界面的「自动 / 单次」按钮
+    // （[toggleAutoReport]），两个动作不挤在同一枚按钮里。
+    if (!beaconEnabled) {
+      if (myPositionReportable) sendBeacon();
+      return;
+    }
+    beaconArmed = true;
+    if (myPositionReportable) sendBeacon();
+    _notify();
+  }
+
+  /// ── 打开软件时自动做什么 ──
+  ///
+  /// 0 = 不做操作（默认）、1 = 自动连接服务器、2 = 自动连接并直接进入上报。
+  ///
+  /// 默认 0：一开机就联网、就发位置属于**替用户做决定**，必须他自己选。
+  /// 界面在打开它之前先把后果说清楚（见上报设置页的确认框）。
+  int autoStartMode = 0;
+
+  /// 改「打开软件时」的档位（非法值夹回 0..2）。提示与确认框由界面承担。
+  void setAutoStartMode(int v) {
+    final n = v.clamp(0, 2);
+    if (n == autoStartMode) return;
+    autoStartMode = n;
+    persist();
+    _notify();
+  }
+
+  /// 启动后按 [autoStartMode] 自动起步。构造器延时调用；测试也能直接调。
+  Future<void> autoStartOnLaunch() async {
+    final mode = autoStartMode;
+    if (mode <= 0 || _disposed) return;
+    // 首次引导还没走完时不动：那时地址都还没填，替他连一次毫无意义。
+    if (!oobeDone) return;
+    // 已经连着（开机前就在后台连着，或用户先手动连了）就不重复连。
+    if (!anyLinkUp) {
+      await toggleConnect();
+      if (_disposed) return;
+    }
+    if (mode >= 2) startReportingAuto();
+  }
+
+  /// 直接进入上报流程：先过单独同意，再把自动上报打开并放行本次连接。
+  void startReportingAuto() {
+    if (_disposed) return;
+    if (!ensureConsent(beaconConsentScopes, then: startReportingAuto)) return;
+    if (!beaconEnabled) setBeaconEnabled(true);
+    beginReporting();
+  }
+
   // 信标上报内容选项
   bool beaconIncludeSpeed = true; // 速度
   bool beaconIncludeCourse = true; // 方位角
@@ -503,9 +821,15 @@ class AppState extends ChangeNotifier {
   /// 只认 `toCall == APALOC`（其它设备即使备注里凑巧有 STEPS= 也不该进榜），
   /// 且只取**最后一次**报文里的值 —— 旧值没有意义（人一直在走）。
   List<(Station, int)> sportRank({int limit = 50}) {
+    final now = DateTime.now();
     final out = <(Station, int)>[];
     for (final s in stations) {
       if (s.toCall != apalocToCall) continue;
+      // 自己在榜里（用户要求）：榜上要能看到"我第几"——上面那张「我」卡片管的是
+      // 开关与授权，不承担"名次"这件事。
+      // **只算今天**：卡片标题写的是「今日」，而台站最后一次报文可能是三天前的 ——
+      // 把三天前的 30000 步排在今天 8000 步前面，读者只会以为自己今天输了。
+      if (!_heardToday(s.lastHeard, now)) continue;
       final m = RegExp(r'STEPS=(\d+)').firstMatch(s.comment ?? '');
       if (m == null) continue;
       final n = int.tryParse(m.group(1)!) ?? 0;
@@ -515,6 +839,13 @@ class AppState extends ChangeNotifier {
     out.sort((a, b) => b.$2.compareTo(a.$2));
     return out.length > limit ? out.sublist(0, limit) : out;
   }
+
+  /// 是不是**今天**听到的（本地日历日）。
+  ///
+  /// 为什么按"日历日"而不是"最近 24 小时"：界面上的标题、空提示写的都是
+  /// 「今日」—— 口径必须与文案一致，否则又是"两个数字各说各话"。
+  static bool _heardToday(DateTime t, DateTime now) =>
+      t.year == now.year && t.month == now.month && t.day == now.day;
 
   /// 通知栏的**附加行**（更新包下载进度等）。
   ///
@@ -528,6 +859,69 @@ class AppState extends ChangeNotifier {
     if (notifExtra == v) return;
     notifExtra = v;
     _updateNotification();
+  }
+
+  /// 常驻通知的**显示样式**（显示页里选）。
+  ///
+  /// * `plain` = 通知栏里一条普通常驻通知（默认）；
+  /// * `live`  = 申请 Android 16 的实时更新（状态栏那一小条 + 倒计时胶囊）。
+  ///
+  /// 提不上去时**退回**普通通知，不会因此少一条通知。
+  String notifStyle = 'plain';
+
+  bool get notifLiveUpdates => notifStyle == 'live';
+
+  void setNotifStyle(String v) {
+    if (v != 'plain' && v != 'live') return;
+    if (notifStyle == v) return;
+    notifStyle = v;
+    persist();
+    loc.setLiveUpdates(notifLiveUpdates);
+    _updateNotification();
+    _notify();
+  }
+
+  /// 实时更新（状态栏那一小条 / 胶囊）里显示什么。
+  ///
+  /// 每一项都必须压进**一行 ≤7 字符**：胶囊只有那么宽，多写的会在中段
+  /// 省略，读数就废了。
+  ///
+  /// * `default` 交给系统（不倒计时、不塞文字）；
+  /// * `counts`  当前链路的收发帧数（射频在用时用射频的，否则用 APRS-IS 的）；
+  /// * `msgs`    未读消息数；
+  /// * `near`    附近台站数（半径沿用「服务器」页那个距离筛选）；
+  /// * `grid`    自己的网格；
+  /// * `course`  朝向；
+  /// * `speed`   速度；
+  /// * `alt`     海拔；
+  /// * `hr`      心率（读数超过 5 分钟就当没有）；
+  /// * `batt`    手机电量；
+  /// * `trip`    本次里程；
+  /// * `beacon`  距下次上报的倒计时（走系统 chronometer，不用反复重发）。
+  String notifLiveText = 'default';
+
+  static const _notifLiveTexts = <String>[
+    'default',
+    'counts',
+    'msgs',
+    'near',
+    'grid',
+    'course',
+    'speed',
+    'alt',
+    'hr',
+    'batt',
+    'trip',
+    'beacon',
+  ];
+
+  void setNotifLiveText(String v) {
+    if (!_notifLiveTexts.contains(v)) return;
+    if (notifLiveText == v) return;
+    notifLiveText = v;
+    persist();
+    _updateNotification();
+    _notify();
   }
 
   /// 地图页上报状态栏的样式（issue #21-2）。
@@ -551,7 +945,51 @@ class AppState extends ChangeNotifier {
   // 会把备注撑长、也只在 APRSlocus 自己的运动排行榜里有意义，所以**默认关**。
   bool beaconIncludeSteps = false;
 
+  /// 信标备注里是否带上**卫星数**（`SAT=nn`）。
+  ///
+  /// 与 [beaconIncludeSteps] 同类：APRS 没有卫星数的标准字段，`SAT=` 是本应用
+  /// 自造的备注（第三方地图只会当文字显示，aprs.fi 那类站点不会给你画出来）。
+  /// 默认关 —— 它属于「自己看得开心」的信息，不该默认把别人的备注栏占满。
+  ///
+  /// 值来自 [mySats]：正在供位的那个来源（手机 GPS / 外接模块）说多少就是多少；
+  /// 来源不提供时**不发**（而不是发一个会被读成「没有卫星」的 0）。
+  bool beaconIncludeSats = false;
+
+  /// 信标带上电脑的 CPU / 内存占用（`CPU=42% MEM=63%`）。
+  ///
+  /// 只对桌面平台有意义：手机上没有「整机负载」这回事，取不到值就不发。
+  /// 非标准备注字段（与 SAT= / STEPS= 同类），默认关。
+  bool beaconIncludeDeskLoad = false;
+
+  void setBeaconIncludeDeskLoad(bool v) {
+    beaconIncludeDeskLoad = v;
+    persist();
+    _notify();
+  }
+
+  /// 上报位置的**模糊位数**（APRS101 第 8 章的位置模糊）。
+  ///
+  /// 0 = 不模糊（默认），1 ≈ 200 米，2 ≈ 2 公里，3 ≈ 20 公里。发出去的那一包
+  /// 里最低位的几个数字换成空格，接收方只能看到一片方格。
+  ///
+  /// 只改**发出去的那一包**：本机的地图、轨迹、网格仍按真实坐标算。默认关 ——
+  /// 精度是用户自己的选择，不该替他降。
+  int beaconAmbiguity = 0;
+
+  /// 改位置模糊档位（非法值夹回 0..3）。
+  void setBeaconAmbiguity(int n) {
+    final v = n.clamp(0, 3);
+    if (v == beaconAmbiguity) return;
+    beaconAmbiguity = v;
+    persist();
+    _notify();
+  }
+
   /// 今日步数（0 = 还没读到或确实没走）。
+  ///
+  /// **必须落盘**（见 [_persistSteps]）：只留内存的话，每次冷启动、
+  /// 升级重装或改文件重编译之后都会回落到 0 —— 用户看到的就是
+  /// 「一升级步数就清零」。
   int stepsToday = 0;
 
   /// 今日步数里「设备重启之前」已经攒下的部分（见上）。
@@ -629,7 +1067,7 @@ class AppState extends ChangeNotifier {
       _stepsBaseline = raw;
       _stepsCarry = 0;
       stepsToday = 0;
-      persist();
+      _persistSteps();
       return;
     }
     if (_stepsBaseline < 0 || raw < _stepsBaseline) {
@@ -637,7 +1075,7 @@ class AppState extends ChangeNotifier {
       //    区别是重启时要把已经攒下的部分接住，否则今日步数会凭空少一截。
       if (_stepsBaseline >= 0) _stepsCarry = stepsToday;
       _stepsBaseline = raw;
-      persist();
+      _persistSteps();
     }
     // ⚠ 不能用 `.clamp()`：`int.clamp` 的返回类型是 **num**（它声明在 num 上），
     // 赋给 int 字段会报 argument_type_not_assignable/类型不匹配 —— CI 才看得出来。
@@ -646,8 +1084,30 @@ class AppState extends ChangeNotifier {
     final v = _stepsCarry + delta;
     if (v != stepsToday) {
       stepsToday = v;
+      // 每次变化都落盘：升级 / 重装 / 改文件重编译后，[_stepsCarry] 与
+      // [stepsToday] 都要能接回来，否则「一升级步数就归零」。
+      _persistSteps();
       _notify();
     }
+  }
+
+  /// 只把计步相关字段落盘（比 [persist] 轻，[stepsToday] 变化可能几秒一次）。
+  ///
+  /// 为什么单独落盘而不是走 [persist]：走那个会顺带写完整份偏好并 `_notify()`，
+  /// 走一步就重建一次页面树不合算。这几个键是「跟着设备走」的数据（不进备份，
+  /// 见 tool/check_backup_keys.py），但**必须在同机升级后存活**。
+  void _persistSteps() {
+    unawaited(_persistStepsNow());
+  }
+
+  Future<void> _persistStepsNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setInt('stepsToday', stepsToday);
+      await p.setInt('stepsBaseline', _stepsBaseline);
+      await p.setString('stepsDayKey', _stepsDayKey);
+      await p.setInt('stepsCarry', _stepsCarry);
+    } catch (_) {}
   }
 
   /// 外置 GPS（佳明 LiveTrack）新鲜期间，把**手机 GPS 停下来**（issue #21-4）。
@@ -656,7 +1116,7 @@ class AppState extends ChangeNotifier {
   /// 失效时才激活手机 GPS 并替代，并发通知给用户，说明外置 GPS 失效」。
   ///
   /// 这里做成一个**可关的开关**，理由要说清楚：位置的优先级本来就已实现
-  /// （sim > garmin > phone，见 [positionSourceNow]），手机点根本抢不走手表的
+  /// （sim > spp > garmin > phone，见 [positionSourceNow]），手机点根本抢不走手表的
   /// 位置；这个开关多管一步 —— 干脆不让手机侧去点 GPS（省电）。
   /// 而它带来的额外风险是「手表数据静默断供时，手机也没在定位」，所以
   /// ① 默认开但可关；② 状态栏与日志都会明说现在是谁在供位（见 [_syncPhoneGps]）。
@@ -664,6 +1124,9 @@ class AppState extends ChangeNotifier {
 
   /// 是否正因为外置 GPS 而停着手机定位（内部状态，不持久化）
   bool _phoneGpsPaused = false;
+
+  /// 上次尝试「把手机定位接回来」失败后的重试时刻（null = 不欠重试）。
+  DateTime? _phoneGpsResumeAt;
 
   void setExtGpsStandby(bool v) {
     extGpsStandby = v;
@@ -674,25 +1137,60 @@ class AppState extends ChangeNotifier {
   /// 每秒 tick 调一次：把手机定位的启停与外置源的鲜度对齐。
   ///
   /// 很便宜：只在**状态翻转**时才做事（不翻转时就是两次判断）。
+  ///
+  /// ⚠ 待机用的是 `loc.pauseForExternal()`（只切原生定位模式），**不是**
+  /// `loc.stop()`。`stop()` 会把前台服务、WakeLock 与定位事件订阅一起拆掉，
+  /// 退到后台后系统随即冻结 Dart 隔离区：APRS-IS 连接静默失效、信标定时器停摆，
+  /// 而界面上的「已连接」还亮着 —— 用户报的「断开外置 GPS 后自动上报停了、
+  /// 手动上报只有报文没有位置」正是这条路径（之前这里就是 `loc.stop()`）。
   void _syncPhoneGps() {
     if (useSimLocation) return;
-    final ext = garmin.on && garmin.fresh;
+    final ext = externalFixFresh;
     if (extGpsStandby && ext && !_phoneGpsPaused) {
       _phoneGpsPaused = true;
-      loc.stop();
+      _phoneGpsResumeAt = null;
+      unawaited(loc.pauseForExternal());
       locStatus = '外置 GPS 供位 · 手机 GPS 已待机';
-      _log(LogLevel.info, '定位', '外置 GPS（佳明）接管，手机 GPS 已待机');
+      _log(LogLevel.info, '定位',
+          '外置 GPS（${nmeaGpsSupplying ? '外接模块' : '佳明'}）接管，手机 GPS 已待机');
+      _notify();
       return;
     }
     if (_phoneGpsPaused && (!ext || !extGpsStandby)) {
+      // 上一轮接回失败时先退避，别每秒重试一次（平台通道/系统会被打爆）
+      final due = _phoneGpsResumeAt;
+      if (due != null && DateTime.now().isBefore(due)) return;
       _phoneGpsPaused = false;
       // 外置失效（或用户关掉了这个开关）：把手机 GPS 接回来，并**明确告诉用户**
       // —— 否则「位置突然换了一批点」会被当成漂移故障。
       locStatus = ext ? '手机 GPS 已接管' : '外置 GPS 已失效 · 改用手机 GPS';
       _log(LogLevel.info, '定位',
           ext ? '手机 GPS 已接管' : '外置 GPS 已失效，改用手机 GPS');
-      unawaited(startTracking());
+      _notify();
+      unawaited(_resumePhoneGps());
     }
+  }
+
+  /// 把手机定位接回来；失败就退避 10 秒再试。
+  ///
+  /// 为什么要重试：外置源断供的那一刻往往只有一次机会 —— 前台服务刚被 ROM 掐过、
+  /// 定位权限刚被系统回收、平台通道瞬时异常都会让这一次失败。没有第二次尝试，
+  /// 位置就再也回不来（界面停在「外置 GPS 已失效」，自动上报一直没位置可发）。
+  Future<void> _resumePhoneGps() async {
+    if (_disposed) return;
+    final ok = loc.pausedForExternal
+        ? await loc.resumeFromExternal()
+        // 服务本来就不在跑（模块供位期间它没起过 / 被系统停掉）：老实地起一遍
+        : await startTracking();
+    if (_disposed) return;
+    if (ok) {
+      _phoneGpsResumeAt = null;
+      return;
+    }
+    if (useSimLocation) return; // 其间切到了模拟位置：位置由手动坐标供，不再纠缠
+    _phoneGpsPaused = true; // 没接回来：下一轮继续（退避 10 秒）
+    _phoneGpsResumeAt = DateTime.now().add(const Duration(seconds: 10));
+    _log(LogLevel.warn, '定位', '手机定位没接回来，10 秒后重试');
   }
 
   // ─── 碰撞 / 摔倒检测（issue #26）───
@@ -713,6 +1211,18 @@ class AppState extends ChangeNotifier {
   /// 当前未处理的碰撞告警（null = 没有）。
   String? crashAlarm;
 
+  /// 碰撞/摔倒检测灵敏度（issue #32）：`gentle` / `standard` / `firm`。
+  ///
+  /// 阈值的**取用**在原生侧（[MotionService.setSensitivity] 会落盘到原生 prefs）；
+  /// 这里保存一份是为了设置页能立刻回显，并在启动时把选择下发给原生。
+  String crashSensitivity = 'standard';
+
+  /// 这次告警的判定类型（issue #32）：`'fall'`（摔倒）或 `'crash'`（碰撞）。
+  ///
+  /// 由原生侧根据「冲击前是否有自由落体」给出（见 MotionManager.checkImpact）；
+  /// 界面据此换标题与说明文字 —— 对摔倒的人说「疑似碰撞」是不准确的。
+  String crashAlarmKind = 'crash';
+
   /// 告警序号：界面靠它区分「同一次告警不要反复弹窗」。
   int crashAlarmSeq = 0;
 
@@ -728,6 +1238,9 @@ class AppState extends ChangeNotifier {
   /// 碰撞检测的轮询节拍（见 tick）
   int _crashPollTick = 0;
 
+  /// 胶囊里那些「非秒级」读数的刷新节拍（见 1 秒 tick）。
+  int _notifPollTick = 0;
+
   /// 首次采样时把序号对齐，避免把「进应用之前发生的事」当成新事件。
   bool _crashSeqInited = false;
 
@@ -738,6 +1251,19 @@ class AppState extends ChangeNotifier {
       // 打开时要把加速度计接上（它可能在传感器辅助关闭时是停着的）
       unawaited(MotionService.instance.start(motion: _needMotion));
     }
+    persist();
+    _notify();
+  }
+
+  /// 设置碰撞/摔倒灵敏度（issue #32）：gentle / standard / firm。
+  ///
+  /// 阈值取用在原生侧，所以这里除了记一份用于界面回显，还要下发给原生并落盘
+  /// （[MotionService.setSensitivity] 内部会写原生 prefs，跨重启保留）。
+  void setCrashSensitivity(String v) {
+    if (v != 'gentle' && v != 'standard' && v != 'firm') v = 'standard';
+    if (v == crashSensitivity) return;
+    crashSensitivity = v;
+    unawaited(MotionService.instance.setSensitivity(v));
     persist();
     _notify();
   }
@@ -756,14 +1282,22 @@ class AppState extends ChangeNotifier {
     if (!_crashSeqInited) {
       _crashSeqInited = true;
       _crashSeqSeen = smp.crashSeq;
+      // 首次采样：把本地的灵敏度下发给原生（换机后原生 prefs 是空的，
+      // 而备份里带着用户选的档位 —— 不下发就会静默回到 standard）。
+      unawaited(MotionService.instance.setSensitivity(crashSensitivity));
       return;
     }
     if (smp.crashSeq == _crashSeqSeen) return;
     _crashSeqSeen = smp.crashSeq;
     if (!crashDetectEnabled) return;
     crashAlarm = 'crash';
+    crashAlarmKind = smp.crashKind.isEmpty ? 'crash' : smp.crashKind;
     crashAlarmSeq++;
-    _log(LogLevel.warn, '生命守护', '检测到疑似碰撞/摔倒（冲击后持续静止）');
+    _log(LogLevel.warn, '生命守护',
+        crashAlarmKind == 'fall' ? '检测到疑似摔倒（自由落体后静止）' : '检测到疑似碰撞（冲击后持续静止）');
+    // 强提醒（issue #32）：弹窗只在用户正看着屏幕时有用，手机在兜里时必须靠
+    // 高优先级通知把人叫到屏幕前 —— 与心率告警同一处理，见 _notifyStrongAlarm。
+    _notifyStrongAlarm();
     _notify();
   }
 
@@ -844,7 +1378,29 @@ class AppState extends ChangeNotifier {
     hrAlarm = b;
     hrAlarmSeq++;
     _log(LogLevel.warn, '心率', '心率异常：$b bpm（阈值 $hrAlarmLow~$hrAlarmHigh）');
+    _notifyStrongAlarm();
     _notify();
+  }
+
+  /// 生命守护「强提醒」（issue #32）：把告警发成**高优先级系统通知**
+  /// （响铃 + 震动 + 抬头横幅，见原生 NotifHelper.showAlarm）。
+  ///
+  /// 为什么弹窗还不够：碰撞/摔倒与心率异常大多发生在用户没在看手机的时候
+  /// （开车、摔倒、夜里）。挂一条 IMPORTANCE_LOW 的常驻通知是**静音**的，
+  /// 用户根本不会察觉 —— 那等于没有提醒。这里另开一条高优先级通道，
+  /// 与弹窗互补：看着屏幕时弹窗，看不见屏幕时通知把人叫过来。
+  ///
+  /// 只发通知，不改告警状态（谁发起、谁负责 clear）。
+  void _notifyStrongAlarm() {
+    final l = l10n;
+    // 心率与碰撞同时成立时优先报心率（与 HrAlarmWatcher 的弹窗优先级一致）：
+    // 心率异常带具体读数，信息量更大。
+    final crash = crashAlarm != null && hrAlarm == null;
+    final title = crash
+        ? (crashAlarmKind == 'fall' ? l.crashFallAlarmTitle : l.crashAlarmTitle)
+        : l.hrAlarmTitle;
+    final body = crash ? l.crashAlarmBody : l.hrAlarmNotif('${hrAlarm ?? 0}');
+    unawaited(loc.showAlarmNotification(title, body));
   }
 
   /// 我附近（[radiusKm] 内）的台站，按距离升序，最多 [limit] 条。
@@ -863,10 +1419,138 @@ class AppState extends ChangeNotifier {
     return out.length > limit ? out.sublist(0, limit) : out;
   }
 
+  /// [radiusKm] 内有多少台站（[nearbyStations] 的**计数版**）。
+  ///
+  /// 与 [nearbyStations] 同一套排除规则（不算自己），只是不排序、不截断 ——
+  /// 胶囊要的是「周围有几个人」，不是那五个名字。
+  int nearbyStationCount(double radiusKm) {
+    if (!myHasFix || myLat == null || myLng == null) return 0;
+    final lat = myLat!, lng = myLng!;
+    var n = 0;
+    for (final s in stations) {
+      if (s.call == myFullCall) continue;
+      if (s.distKm(lat, lng) <= radiusKm) n++;
+    }
+    return n;
+  }
+
+  /// 读一次手机电量（**自节流**：默认 30 秒内不重复读）。
+  ///
+  /// 30 秒是刻意的：电量是"分钟级"的量，读得太勤只是在耗电（每次都是一趟平台通道），
+  /// 读得太懒又会出现"盒子上的数字与状态栏差一截"。`force` 留给"马上就要用到"的场合。
+  Future<void> _refreshBattery({bool force = false}) async {
+    final now = DateTime.now();
+    if (!force &&
+        _batteryAt != null &&
+        now.difference(_batteryAt!).inSeconds < 30) {
+      return;
+    }
+    _batteryAt = now;
+    // 没人用这个数就别读：信标不带电量、盒子链路也没开、胶囊也没在显示它
+    // → 跳过这趟平台通道
+    if (!beaconIncludeBattery &&
+        !box.config.enabled &&
+        notifLiveText != 'batt') {
+      return;
+    }
+    try {
+      final v = await loc.getBatteryLevel();
+      if (v >= 0) _battery = v;
+      final ch = await loc.chargingNow();
+      if (ch != null) _charging = ch;
+      _checkLowBattery();
+    } catch (_) {
+      // 读不到就保持上一次的值（-1 = 未知），界面/盒子上会如实写 `--`
+    }
+  }
+
+  /// 低电量提醒：20% / 10% / 5% 各提一次，满足任一条件就不提 ——
+  /// 在充电、已经开着省电模式、电量回到 25% 以上（阈值留 5 个点避开抖动）。
+  void _checkLowBattery() {
+    final level = _battery;
+    if (level < 0) return;
+    if (_charging == true || powerSave || level > 25) {
+      _lowBatteryWarned = -1;
+      return;
+    }
+    if (level > 20) return;
+    final band = level <= 5 ? 5 : (level <= 10 ? 10 : 20);
+    if (_lowBatteryWarned != -1 && band >= _lowBatteryWarned) return;
+    _lowBatteryWarned = band;
+    onLowBattery?.call(level);
+  }
+
+  /// 盒子的 APRS-IS passcode 是不是
+  ///
+  /// 为什么用 [filterRadius] 而不是盒子自己的半径：这条数据表达的是
+  /// 「**手机**这侧看到谁」——两边半径一致反而让盒子上的列表与它自己收到的
+  /// 永远一样，失去了"对照"的意义（盒子在 bt 模式下更是完全没有这份数据）。
+  /// 距下次**自动上报**还有多少秒（盒子仪表盘的"UPLOAD"进度条用）。
+  ///
+  /// 返回 -1 = 当前不会自动上报（手动模式 / 链路不可用），盒子会写 `manual` ——
+  /// 与首页那根上报横杠同一个判据（[canAutoBeacon]），不另立一套。
+  int? _boxUploadInSec() {
+    if (!canAutoBeacon) return -1;
+    final since = DateTime.now().difference(_lastBeacon).inSeconds;
+    final left = beaconIntervalNow - since;
+    return left < 0 ? 0 : left;
+  }
+
+  void _pushBoxNearby() {
+    if (!myHasFix || myLat == null || myLng == null) {
+      box.pushNear(const []);   // 没定位就说清楚：清空，别让盒子留着旧列表
+      return;
+    }
+    final lat = myLat!, lng = myLng!;
+    final list = nearbyStations(filterRadius.toDouble(), limit: 8);
+    final rows = <BoxNearRow>[];
+    for (final st in list) {
+      if (st.call == myFullCall) continue;
+      rows.add(BoxNearRow(
+        call: st.call,
+        distM: (st.distKm(lat, lng) * 1000).round(),
+        brg: st.bearingFrom(lat, lng).round(),
+        ageSec: DateTime.now().difference(st.lastHeard).inSeconds,
+        comment: st.comment ?? '',
+      ));
+    }
+    box.pushNear(rows);
+  }
+
   bool beaconBarDetailed = true;
 
   void setBeaconBarDetailed(bool v) {
     beaconBarDetailed = v;
+    persist();
+    _notify();
+  }
+
+  /// 历史轨迹（按天落盘的台账）是否记录。**默认关** —— 用户 2026-10-22：
+  /// 「历史轨迹默认不开启，需要开启后才能记录」。
+  ///
+  /// 台账写的是几点在哪、走了多远，属于会留在设备上的位置历史；默认不写，
+  /// 谁要翻账谁自己打开（入口在设置 → 历史轨迹那一页）。关掉之后已经记下的
+  /// 那些天照旧可看可删，只是不再往上追加。
+  bool trackLogOn = false;
+
+  void setTrackLogOn(bool v) {
+    if (trackLogOn == v) return;
+    trackLogOn = v;
+    persist();
+    _notify();
+  }
+
+  /// 关闭窗口时是否收进系统托盘（只有桌面三平台有托盘）。
+  ///
+  /// **默认开**：桌面版关窗口本来是退出，而开着 APRS 的人多半想让它继续在
+  /// 后台收报文，一关窗口就把两条链路全断掉太粗暴。真要退出走托盘菜单里的
+  /// 「退出」，或者把这一档关掉，恢复成「关窗口 = 退出」。
+  /// 手机与 Web 上没有托盘，这一档在那里不参与任何判断。
+  bool closeToTray = true;
+
+  void setCloseToTray(bool v) {
+    if (closeToTray == v) return;
+    closeToTray = v;
     persist();
     _notify();
   }
@@ -881,6 +1565,36 @@ class AppState extends ChangeNotifier {
   DateTime _lastMileageSave = DateTime.fromMillisecondsSinceEpoch(0);
 
   int _battery = -1; // 电量百分比（-1 未知）
+
+  /// 手机是不是在充电（null = 这个平台没说）。
+  ///
+  /// 只给低电量提醒用：「电量 18%」边充着电边弹提醒只会招烦。拿不到就不当
+  /// 作阻断条件（宁可多重提醒一次，也不要该提醒时不提醒）。
+  bool? _charging;
+
+  /// 低电量提醒的回调（外壳挂上来，用 ScaffoldMessenger 弹一条）。
+  ///
+  /// AppState 不碰 UI，所以这里只留口子。null = 没人要这个提醒（比如测验 / 无外壳）。
+  void Function(int level)? onLowBattery;
+
+  /// 已经提醒过的电量档（-1 = 这一轮还没提过）。
+  ///
+  /// 台阶是 20 / 10 / 5：一次掉一格才再提一次，否则电量在 19% 上下浮就会反复弹。
+  int _lowBatteryWarned = -1;
+
+  /// 手机电量（%）；-1 = 未知（没权限 / 还没读到）。
+  int get battery => _battery;
+
+  /// 电量的读取时刻（null = 从没读到过）。
+  DateTime? get batteryAt => _batteryAt;
+
+  /// 最近一次读到电量的时刻。
+  ///
+  /// 为什么需要它：电量以前**只在定位回调里**刷新（而且只在"随信标发手机电量"开着时）——
+  /// 手机放着不动时系统会停发定位点，那一刻电量就冻在旧值上；而盒子每 5 秒推一次
+  /// `TEL bat=…`，推的一直是那个旧数（用户看到的"电量同步不及时"）。
+  /// 现在改成**按时间自己刷新**，与定位无关、也与那个开关无关。
+  DateTime? _batteryAt;
 
   /// **强制接受网络定位自动上报**（默认关）。
   ///
@@ -1115,6 +1829,13 @@ class AppState extends ChangeNotifier {
   }
 
   void setBeaconEnabled(bool v) {
+    // 开启自动上报 = 开始把位置发到公开网络/空中 → 先过单独同意
+    // （用户协议 V2.0 附件一 / 5.3）。已同意就直接放行。
+    if (v &&
+        !ensureConsent(beaconConsentScopes,
+            then: () => setBeaconEnabled(true))) {
+      return;
+    }
     // 开启信标 = 开始新一次上报会话 → 本次里程从零重新累计
     if (v && !beaconEnabled) _resetTripMileage();
     beaconEnabled = v;
@@ -1137,6 +1858,13 @@ class AppState extends ChangeNotifier {
 
   void setBeaconIncludeSpeed(bool v) {
     beaconIncludeSpeed = v;
+    persist();
+    _notify();
+  }
+
+  /// 信标是否带上卫星数（见 [beaconIncludeSats]）。
+  void setBeaconIncludeSats(bool v) {
+    beaconIncludeSats = v;
     persist();
     _notify();
   }
@@ -1347,27 +2075,42 @@ class AppState extends ChangeNotifier {
     _refreshFilter();
   }
 
-  /// 应用过滤变更：重连以使 APRS-IS 服务器使用新过滤器
+  /// 应用过滤变更：两条链路共用一套规则，改完各自用新过滤器重连。
   void _refreshFilter() {
-    if (!connected) return;
     final newFilter = filterString;
-    if (_lastFilter != newFilter) {
+    if (connected && _lastFilter != newFilter) {
       aprs.filter = newFilter;
       _log(LogLevel.info, '连接', '过滤规则变更，重连: $newFilter');
       reconnect();
+    }
+    // 第二条链路也按这一套规则收：它在线时同样要用新过滤器重连，
+    // 否则得等用户自己去点那张卡上的「重新连接」才生效。
+    if (acnConnected && acnLink.filter != newFilter) {
+      _log(LogLevel.info, 'APRSNETCN', '过滤规则变更，重连: $newFilter');
+      unawaited(reconnectAcn());
     }
   }
 
   /// 公开：手动触发 APRS 过滤器刷新（设置面板调用）
   void refreshAprsFilter() => _refreshFilter();
 
-  /// 生成 APRS-IS 过滤字符串（服务器只收范围 + 群呼号，国家过滤在本地做）
+  /// 两条互联网链路共用的过滤字符串（范围 + 群呼号，国家过滤在本地做）。
+  ///
+  /// APRS-IS 与 APRSNETCN SERVER 用同一套规则：同一个中心点、同一个半径、
+  /// 同一份群呼号，在「服务器」页上只填一次。群呼号走 `b/`（呼号列表），
+  /// 那是两边服务器都认的前缀 —— 认不出来的一条会让整条过滤器作废。
   String get filterString {
     var f =
         'r/${filterLat.toStringAsFixed(2)}/${filterLng.toStringAsFixed(2)}/$filterRadius';
-    // 追加所有群呼号（~ 前缀精确匹配）
-    for (final g in chatGroups) {
-      f += ' ~${g.groupCall}';
+    // 群呼号：b/call1/call2…，一条过滤器带 5 个，多的另起一条。
+    final calls = chatGroups
+        .map((g) => g.groupCall.trim().toUpperCase())
+        .where((c) => c.isNotEmpty)
+        .toSet()
+        .toList();
+    for (var i = 0; i < calls.length; i += 5) {
+      final end = i + 5 < calls.length ? i + 5 : calls.length;
+      f += ' b/${calls.sublist(i, end).join('/')}';
     }
     // 双向网关必须额外请求**全部消息**（t/m）。
     //
@@ -1492,6 +2235,55 @@ class AppState extends ChangeNotifier {
     if (guideSeen.isEmpty) return;
     guideSeen.clear();
     persist();
+  }
+
+  /// 输入框历史最多留几条。
+  ///
+  /// 8 条的理由：面板是一屏能看全的高度，再多就只能滚动 —— 而这里存的是
+  /// 「刚才用过的那几个」，翻到第 9 条的场景基本不存在。
+  static const int historyLimit = 8;
+
+  /// 数据包页搜索框最近搜过的词，新的在前。
+  ///
+  /// 这两个列表（搜索词 / 服务器地址）是同一套东西：输入框右侧的「最近用过的」
+  /// 按钮读它们，见 lib/input_history.dart。存成 List 而不是 Set，因为顺序本身
+  /// 就是信息（最近用过的排最前）。
+  final List<String> packetSearchHistory = [];
+
+  /// 最近连过的服务器地址，新的在前。
+  final List<String> serverHistory = [];
+
+  /// 取某个输入框的历史列表。
+  List<String> historyOf(InputHistory which) =>
+      which == InputHistory.server ? serverHistory : packetSearchHistory;
+
+  /// 记一条输入历史（去两端空白，重复的提到最前，最多 [historyLimit] 条）。
+  void rememberInput(InputHistory which, String value) {
+    final v = value.trim();
+    if (v.isEmpty) return;
+    final list = historyOf(which);
+    if (list.isNotEmpty && list.first == v) return;
+    list.remove(v);
+    list.insert(0, v);
+    if (list.length > historyLimit) list.removeRange(historyLimit, list.length);
+    persist();
+    _notify();
+  }
+
+  /// 从历史里删掉一条。
+  void forgetInput(InputHistory which, String value) {
+    if (!historyOf(which).remove(value)) return;
+    persist();
+    _notify();
+  }
+
+  /// 清空某个输入框的全部历史。
+  void clearInputHistory(InputHistory which) {
+    final list = historyOf(which);
+    if (list.isEmpty) return;
+    list.clear();
+    persist();
+    _notify();
   }
 
   /// 按国家接收列表（国家代码）
@@ -1639,15 +2431,41 @@ class AppState extends ChangeNotifier {
   /// 是否把台站面板的筛选同时应用到地图（默认关闭，避免误隐藏台站）
   bool applyFilterToMap = false;
 
-  /// 更新台站筛选；推进台站版本让台站页与地图（共用同一条台站流）同步刷新
+  /// 地图「图层筛选」里被关掉的台站类型（只作用于地图）。
+  ///
+  /// 用户要求「地图筛选也要记住」：它原来只活在地图页的 State 里（页面重建就回
+  /// 到「全部显示」），而那颗按钮所在的图层面板每点一下都在提醒他改过什么。
+  final Set<TypeGroup> mapHiddenTypes = <TypeGroup>{};
+
+  /// 切换某个类型在地图上的显隐（[mapHiddenTypes] 的反向操作），并落盘。
+  void toggleMapHiddenType(TypeGroup g) {
+    if (!mapHiddenTypes.remove(g)) mapHiddenTypes.add(g);
+    persist();
+  }
+
+  /// 把地图图层筛选一次恢复成「全部显示」，并落盘。
+  void clearMapHiddenTypes() {
+    if (mapHiddenTypes.isEmpty) return;
+    mapHiddenTypes.clear();
+    persist();
+  }
+
+  /// 更新台站筛选；推进台站版本让台站页与地图（共用同一条台站流）同步刷新。
+  ///
+  /// 落盘（用户要求「记住台站筛选」）：它原来只活在台站面板的 State 里，关掉应用
+  /// 就回到「全部」，下次打开要在几个 chips 之间重新点一遍。没有变化时不写盘。
   void setStationFilter(StationFilter f) {
+    if (f.key == stationFilter.key) return;
     stationFilter = f;
     _bumpStationsVersion();
+    persist();
   }
 
   void setApplyFilterToMap(bool v) {
+    if (v == applyFilterToMap) return;
     applyFilterToMap = v;
     _bumpStationsVersion();
+    persist();
   }
 
   /// 数据包列表上限（下限 100，防止设成 0 把历史全清掉）
@@ -1701,10 +2519,90 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 设置台站保留天数（0–3650；0 = 关闭自动清理，仅保留手动入口）。
+  void setStationRetentionDays(int n) {
+    stationRetentionDays = n.clamp(0, 3650);
+    persist();
+    _notify();
+  }
+
+  /// 会因 [pruneOldStations] 被清理的台站数量（收藏 / 手动 / 自己的不计入）。
+  /// 未开启保留天数时返回 0。
+  int get prunableStationCount {
+    if (stationRetentionDays <= 0) return 0;
+    return _prunableStations(
+      maxAge: Duration(days: stationRetentionDays),
+      now: DateTime.now(),
+    ).length;
+  }
+
+  /// 指定 [days] 天阈值下会被清理的台站数量。
+  ///
+  /// 供「清理过时台站」按钮按**用户当场选的**天数预览：手动清理不再套用
+  /// 自动清理那一个保留天数（两者混用会让「点一下清掉多少」不可预期）。
+  int prunableStationCountFor(int days) {
+    if (days <= 0) return 0;
+    return _prunableStations(
+      maxAge: Duration(days: days),
+      now: DateTime.now(),
+    ).length;
+  }
+
+  List<Station> _prunableStations(
+      {required Duration maxAge, required DateTime now}) {
+    final cutoff = now.subtract(maxAge);
+    final self = myFullCall.toUpperCase();
+    return stations
+        .where((s) => !s.favorite && !s.manual)
+        .where((s) => s.call.toUpperCase() != self)
+        .where((s) => s.lastHeard.isBefore(cutoff))
+        .toList();
+  }
+
+  /// 清理超过 [days] 天没有再听到的台站，返回清理条数。
+  ///
+  /// **收藏 / 手动添加 / 自己的台站永不清理** —— 用户明确标记过的目标不该因为
+  /// 「这几天没听到」就被自动删掉（保留规则与 [setMaxStations] 的条数上限一致）。
+  ///
+  /// 「台站数据包」在本应用里就是台站条目本身（`packets` 只是内存里的最近收包
+  /// 列表，重启即空、不进磁盘），所以这里的「过时数据」指的就是陈旧的台站条目
+  /// 及其轨迹/遥测记忆。清理是**不可逆**的，故仅由用户显式触发或由已开启的
+  /// 自动清理触发，绝不静默全清。
+  int pruneOldStations([int? days]) {
+    final d = (days ?? stationRetentionDays);
+    if (d <= 0) return 0;
+    final doomed = _prunableStations(
+      maxAge: Duration(days: d),
+      now: DateTime.now(),
+    );
+    if (doomed.isEmpty) return 0;
+    final calls = doomed.map((s) => s.call).toSet();
+    stations.removeWhere((s) => calls.contains(s.call));
+    _bumpStationsVersion();
+    _saveStations();
+    _notify();
+    return calls.length;
+  }
+
+  /// 启动时按已保存的保留天数自动清理一次（未开启则什么都不做）。
+  void _autoPruneStations() {
+    if (stationRetentionDays <= 0) return;
+    final n = pruneOldStations(stationRetentionDays);
+    if (n > 0) {
+      _log(LogLevel.info, '数据维护', '自动清理 ${stationRetentionDays} 天前的台站：$n 个');
+    }
+  }
+
   // 连接
   /// 当前连接（数据来源）状态。TNC 模式下它表示「TNC 链路已建立」，
   /// 因此上层（连接卡片、状态栏、通知）无需分辨数据来源 —— 详见 [_syncConnFromLink]。
   bool connected = false;
+
+  /// 消息那条链路通不通。
+  ///
+  /// [connected] 量的是位置/状态报文那条链路，消息可能走另一条 —— 发消息
+  /// 前要问的是这一条，问错了就会出现「消息没发出去但界面说已发送」。
+  bool get msgLinkUp => isUp(dataSourceMsg);
   bool connecting = false;
   /// 连接状态（结构化）。
   ///
@@ -1742,6 +2640,40 @@ class AppState extends ChangeNotifier {
   /// 航点语句），不可能发报。因此 [enabledSources] 里出现 pkwdwpl 时它
   /// 只能“收”，发射永远落在另外三条之一上。
   String dataSource = 'aprsis';
+
+  /// **消息**（私聊 / 群发 / 位置点 / ack）走哪条链路发。
+  ///
+  /// 与 [dataSource]（位置与状态报文）分开选：常见用法是位置走射频、消息走
+  /// 网络。两条选同一条也允许，那就还是「全从这条链路发」。同样只在启用过
+  /// 且能发射的链路里选，谁都不顶替谁。
+  String dataSourceMsg = 'aprsis';
+
+  /// 位置/状态报文要**同时**再发一遍的链路（不含 [dataSource] 本身）。
+  ///
+  /// 用户要求「位置也要能同时发」：射频与网络各发一份，两侧都看得到这个站。
+  /// 第一条仍然是 [dataSource]（许多判断靠它），这里只放额外的那些。
+  /// 这份名单只在 [advChannels] 打开时才生效；简单模式下它跟着
+  /// [enabledSources] 走（见 [_notePosTxLink]），切回高级时勾选与通道开关一致。
+  List<String> posTxExtra = <String>[];
+
+  /// 位置/状态报文要逐条挑还是全发（设备面板的「高级连接通道设置」）。
+  ///
+  /// 默认关（简单模式）：位置与状态报文发往**所有**已启用且连上的可发射
+  /// 链路 —— 「开了哪几条，位置就从哪几条出去」，不必逐个打勾。消息不受这个
+  /// 开关影响，始终按上一次勾的那一条发（[dataSourceMsg]）。
+  /// 打开后才回到逐条挑：位置可多选（[posTxExtra]）、消息仍旧单选。
+  bool advChannels = false;
+
+  void setAdvChannels(bool v) {
+    if (advChannels == v) return;
+    advChannels = v;
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 这条链路发不发位置/状态报文。
+  bool posTxHas(String src) => posTxTargets.contains(src);
 
   /// 已启用的来源集合（至少一个；发射来源必须在此集合内）
   final Set<String> enabledSources = {srcAprsIs};
@@ -1795,6 +2727,22 @@ class AppState extends ChangeNotifier {
   /// 且电台只单向输出。因此它参与「收」（台站上图/台账），不参与「发」。
   final PkwdwplLink pkwdwpl = PkwdwplLink();
 
+  /// 外接 GPS 链路（蓝牙 SPP 上的 NMEA 0183，**只收不发**）。
+  ///
+  /// 与 PKWDWPL 彻底分开的一条：那条连的是**电台**（收别人的航点），
+  /// 这条连的是外面的 GPS/北斗**模组**（收**我的位置**）。两者都是 NMEA 明文，
+  /// 但是两台设备、两种语义 —— 共用一条链路既连不上也解释不清。
+  /// 它进 [enabledSources]（与 PKWDWPL 同类：参与「收」，永不参与「发」）。
+  final NmeaGpsLink nmeaGps = NmeaGpsLink();
+
+  /// APRSlocusBOX（小盒子）链路。
+  ///
+  /// ⚠ **不进 [enabledSources]**：盒子自己就上 APRS-IS、自己组报文，本应用
+  /// 再收一遍只会与 APRS-IS / TNC 重复。它对手机的意义是「一台要管的设备」
+  /// （改配置 / 喂位置 / 催它发信标），所以它只有「用户在设备页开了没有」
+  /// 这一个开关：[BoxConfig.enabled]。
+  final BoxLink box = BoxLink();
+
   /// 发射是否走 TNC（射频）
   bool get usingTnc => dataSource == 'tnc';
 
@@ -1806,6 +2754,460 @@ class AppState extends ChangeNotifier {
   bool get tncOn => enabledSources.contains(srcTnc);
   bool get audioOn => enabledSources.contains(srcAudio);
   bool get pkwdwplOn => enabledSources.contains(srcPkwdwpl);
+
+  /// 外接 GPS（蓝牙 SPP）是否已启用
+  bool get nmeaGpsOn => enabledSources.contains(srcNmeaGps);
+
+  /// IC-705 Wi-Fi 直连是否已启用（多选接收）
+  bool get icomLanOn => audioOn && audio.config.source == AudioSource.icomLan;
+
+  /// AFSK 系统声卡是否已启用（多选接收）
+  bool get audioDeviceOn => audioOn && audio.config.source == AudioSource.device;
+
+  /// IC-705 是否为当前发射来源
+  bool get isIcomLanTx =>
+      posTxHas(srcAudio) && audio.config.source == AudioSource.icomLan;
+
+  /// 同一条 WLAN 电台链路，但指的是**消息**那条来源。
+  bool get isIcomLanTxMsg =>
+      dataSourceMsg == srcAudio && audio.config.source == AudioSource.icomLan;
+
+  /// AFSK 系统声卡是否为当前发射来源
+  bool get isAudioDeviceTx =>
+      posTxHas(srcAudio) && audio.config.source == AudioSource.device;
+
+  /// 同上，消息那条来源。
+  bool get isAudioDeviceTxMsg =>
+      dataSourceMsg == srcAudio && audio.config.source == AudioSource.device;
+
+  /// 远程限制名单（黑名单）命中的结果；null = 没被限制 / 还没查到。
+  ///
+  /// 命中时 `app.dart` 会用整页把它拦下（依据用户协议第 8.2 条）。
+  BlacklistHit? blacklistHit;
+
+  /// 下一次**廉价检查**的时刻（真正的拉取在 [recheckBlacklist] 里按 6 小时节流）
+  DateTime? _blacklistNext;
+
+  /// 官网要求的最低版本（`assets/min_version.json`）；null = 还没查到 / 拉取失败。
+  ///
+  /// 本机版本低于它时 `app.dart` 用整页拦下：只能去更新页，别的都进不去
+  /// （见 [versionBlocked]）。
+  MinVersion? minVersionLimit;
+
+  /// 下一次**廉价检查**的时刻（真正的拉取在 [recheckMinVersion] 里按 6 小时节流）
+  DateTime? _minVersionNext;
+
+  /// 本会话是否已经**成功**拉到过最低版本（同 [_blacklistFetched]：新会话必拉一次）
+  bool _minVersionFetched = false;
+
+  /// 本机版本是否**低于**官网要求的最低版本。
+  ///
+  /// 没拉到过 / 坏 JSON / 下限留空 / 版本号写错 —— 全部返回 false（失败放行，
+  /// 见 `lib/min_version.dart` 的三条原则）。装了新版本后版本号自己就超过下限，
+  /// 闸门随之消失，不需要任何人去解封。
+  bool get versionBlocked => minVersionLimit?.blocks(appVersion) ?? false;
+
+  /// 需要更新到的版本号（没被拦时是空串）。
+  String get minVersionRequired =>
+      versionBlocked ? (minVersionLimit?.minVersion ?? '') : '';
+
+  /// ── 数据与网络使用告知 ──
+  ///
+  /// 连接服务器**前**必须签署：本软件不提供、不运营、也不推荐任何服务器地址
+  /// （用户协议 2.4/2.5），所以"要不要连"这件事必须由用户明确同意一次。
+  /// 存本地，签过就不再问；用户取消则本次不连。
+  bool dataNoticeAccepted = false;
+
+  /// 用户点了连接、但还没签告知 → UI 弹告知页（见 `app.dart`）。
+  bool pendingDataNotice = false;
+
+  /// 签署「数据与网络使用告知」并继续连接。
+  void acceptDataNotice() {
+    dataNoticeAccepted = true;
+    pendingDataNotice = false;
+    persist();
+    unawaited(toggleConnect());
+  }
+
+  /// 拒绝告知（不连接，保持本地）。
+  void declineDataNotice() {
+    pendingDataNotice = false;
+    _notify();
+  }
+
+  /// ── 上传/发射的单独同意（用户协议 V2.0 附件一）──
+  ///
+  /// 与上面那份「数据与网络使用告知」是**两件事**：那份讲「连不连、连到哪里」，
+  /// 这份讲「把位置发到公开网络或空中」。所以各自独立、谁也不替代谁，
+  /// 同意书也在同一个设置层级可以撤回（协议 5.2 / 5.5）。
+  final ConsentStore consent = ConsentStore();
+
+  /// 等待用户签署的范围。非空时 `app.dart` 整页显示单独同意书。
+  Set<ConsentScope> pendingConsent = {};
+
+  /// 同意之后要继续做的事（用户拨开关 → 弹同意 → 回来把开关真的打开）。
+  VoidCallback? _consentThen;
+
+  bool hasConsent(ConsentScope s) => consent.has(s);
+
+  /// 当前配置下发一个信标需要哪些同意。
+  ///
+  /// 与附件一的三项一一对应：有互联网链路（APRS-IS / APRSNETCN，两者都能
+  /// 发射）就需要第一项；有射频来源（TNC / 声卡）就需要第二项。
+  /// 一条能发射的链路都没配时返回空集 —— 那时信标本来就发不出去，
+  /// 不该凭空拦一道同意。
+  Set<ConsentScope> get beaconConsentScopes {
+    final s = <ConsentScope>{};
+    if (aprsIsOn || acnOn) s.add(ConsentScope.internet);
+    if (tncOn || audioOn) s.add(ConsentScope.rf);
+    return s;
+  }
+
+  /// 当前配置是否已经拿齐「发信标需要的同意」。
+  ///
+  /// 撤回任意一项就变假，[canAutoBeacon] 与发送口子都读它 ——
+  /// 这就是协议 5.5「撤回后立即停止发送新的数据」的落地方式。
+  bool get consentSatisfied => consent.hasAll(beaconConsentScopes);
+
+  /// 需要同意就挂起并返回 false（外壳会把同意书显示出来）；已同意直接返回 true。
+  ///
+  /// [then] 是「同意之后接着做」的动作。这样开关的语义是「点了就是要开」，
+  /// 而不是「点了没反应、自己去再点一遍」。
+  bool ensureConsent(Set<ConsentScope> want, {VoidCallback? then}) {
+    final miss = want.where((s) => !consent.has(s)).toSet();
+    if (miss.isEmpty) return true;
+    pendingConsent = miss;
+    _consentThen = then;
+    _notify();
+    return false;
+  }
+
+  /// 「射频发射」那一项的同意闸（附件一第二项）。
+  bool ensureRfConsent([VoidCallback? then]) =>
+      ensureConsent({ConsentScope.rf}, then: then);
+
+  /// iGate 向射频转就是代表他人发射，所以这项同意同时需要第二项。
+  bool ensureIgateConsent([VoidCallback? then]) =>
+      ensureConsent({ConsentScope.igate, ConsentScope.rf}, then: then);
+
+  /// 用户在同意书上勾选并确认。[picked] 是那一页上真正勾上的功能项。
+  Future<void> acceptConsent(Set<ConsentScope> picked) async {
+    final want = pendingConsent;
+    // 之前已经签过的项不算「新同意」（[ConsentStore.grant] 幂等，不重复写日志）。
+    await consent.grant(picked, kTermsVersion);
+    pendingConsent = {};
+    final then = _consentThen;
+    _consentThen = null;
+    _log(LogLevel.info, '同意', '已签署上传/发射单独同意（$kTermsVersion）');
+    _notify();
+    // 用户可能在同意书上故意漏勾一项：那就**不要**替他把那个功能打开。
+    // 开关本身读 consent，所以这里不回调也不会出现「看见开了却在发」的情况。
+    if (consent.hasAll(want)) then?.call();
+  }
+
+  /// 用户选了「暂不开启」：只关弹窗，不记任何东西。
+  void declineConsent() {
+    pendingConsent = {};
+    _consentThen = null;
+    _notify();
+  }
+
+  /// 撤回一项同意。对应功能立即停（闸门读 [consent]）。
+  Future<void> revokeConsent(ConsentScope s) async {
+    await consent.revoke(s, kTermsVersion);
+    pendingConsent = {};
+    _consentThen = null;
+    // 撤回后必须回到「待确认上报」：否则 beaconArmed 还留着，界面会显示一个
+    // 照走的倒计时，而 canAutoBeacon 已因同意没了而不发 ——
+    // 正是「倒计时走着却不发射」那个老毛病。重新点「开始上报」会再过一次同意。
+    if (!consentSatisfied) beaconArmed = false;
+    _log(LogLevel.info, '同意', '已撤回单独同意（${s.id}）');
+    _notify();
+    _updateNotification();
+  }
+
+  /// 只清同意日志（协议 5.4：可以单独清除）。已作出的同意不动。
+  Future<void> clearConsentLog() async {
+    await consent.clearLog();
+    _notify();
+  }
+
+  /// 测试口子：把同意摆成「已签过」（不写日志、不碰磁盘）。
+  void debugGrantConsent([Iterable<ConsentScope>? scopes]) {
+    consent.debugGrant(scopes ?? ConsentScope.values);
+    _notify();
+  }
+
+  /// 测试口子：电量与充电状态直接摆成指定值，并跑一遍低电量判断
+  /// （不碰平台通道）。
+  void debugBattery(int level, {bool? charging}) {
+    _battery = level;
+    _charging = charging;
+    _checkLowBattery();
+  }
+
+  /// ── 服务器地址没填 ──
+  ///
+  /// 用户要求：没有配置服务器时要点出**连不上的原因**并提示去配置，与 Passcode
+  /// 填 -1 的验证提示一个口径。这个自增序号是「弹一次」的信号（外壳监听它的变化，
+  /// 见 `app.dart`）—— 拦在 [toggleConnect] 这个唯一的口子上，7 个连接入口都覆盖得到。
+  int connectNoServerSeq = 0;
+
+  /// 这条链路现在**必然连不上**：启用了 APRS-IS 却没填服务器地址。
+  ///
+  /// 只看「服务器地址」一项，与外壳那条未连接横幅的原因文案（`linkNoServer`）同一判据。
+  /// 例外：Web 平台可以只填 WebSocket 地址（`wsUrl`）—— 那种配置能连上，不算没配置。
+  bool get connectBlockedNoServer =>
+      aprsIsOn &&
+      aprs.server.trim().isEmpty &&
+      (aprs.wsUrl == null || aprs.wsUrl!.trim().isEmpty);
+
+  /// 点连接时被上面那条拦下：记一次序号，交给外壳弹提示。
+  void markConnectNoServer() {
+    connectNoServerSeq++;
+    _notify();
+  }
+
+  /// ── 智能体使用告知 ──
+  ///
+  /// 启用智能体前必须签署（与「数据与网络使用告知」相互独立、各签各的）：
+  /// 智能体会把对话与上下文发给你选定的第三方大模型服务，且能读取本机数据、
+  /// 在授权后改动设置 / 发消息。风险与「连服务器」不同，因此单独一份协议。
+  /// 存本地，签过就不再问；用户取消则不启用。
+  bool agentNoticeAccepted = false;
+
+  /// 用户打开智能体开关、但还没签告知 → 弹告知页（见 app.dart）。
+  bool pendingAgentNotice = false;
+
+  /// 签署「智能体使用告知」，然后接着走**授权判定**（见 [setAgentEnabled]）：
+  /// 签告知 ≠ 获授权，未授权时一样弹授权/申请页。
+  void acceptAgentNotice() {
+    agentNoticeAccepted = true;
+    pendingAgentNotice = false;
+    persist();
+    setAgentEnabled(true);
+  }
+
+  /// 拒绝告知（不启用智能体）。
+  void declineAgentNotice() {
+    pendingAgentNotice = false;
+    _notify();
+  }
+
+  /// ── 智能体授权（白名单）──
+  ///
+  /// 智能体**不对普通用户开放**：先签「智能体使用告知」，再要求本机呼号在官网
+  /// 的授权名单（`AgentAllow`）里。名单结构与远程限制名单对称，但方向相反 ——
+  /// 那边命中就拦，这边命中才放。
+  ///
+  /// - [agentAllow] = 名单里**是否包含**本机呼号（null = 还没查到 / 拉不到）。
+  /// - [agentAllowed] = 当前是否**确认**已授权。存缓存，离线也能用。
+  ///
+  /// 判定沿用 `blacklist.dart` 的"失败策略"，但因为它是把门锁，方向相反：
+  /// **拉不到不放行**（从没拉到过 → 视为未授权）；**曾拉到过就认缓存**（离线也算数）。
+  bool? agentAllow;
+  bool agentAllowed = false;
+
+  /// 让用户主动"重新检查授权"（申请批下来后，不用等 6 小时节流）。
+  bool agentAuthChecking = false;
+
+  /// 用户点了智能体开关、但还没授权 → 弹授权/申请页（见 app.dart）。
+  bool pendingAgentAuth = false;
+
+  /// 本会话是否已经**成功**拉到过授权名单（与 [_blacklistFetched] 同理）。
+  bool _agentAllowFetched = false;
+
+  /// 下一次廉价检查的时刻（真正的拉取在 [recheckAgentAllow] 里按 6 小时节流）。
+  DateTime? _agentAllowNext;
+
+  /// 查一次远程授权名单（白名单）。
+  ///
+  /// 时机：启动后一次 + 每 [AgentAllow.kRefresh] 一次；`force` 供"重新检查"按钮用。
+  ///
+  /// 与 [recheckBlacklist] 的**唯一实质性差别**：没有缓存（从没成功拉到过）时
+  /// 判为**未授权**（默认拒绝），而不是放行 —— 见 [AgentAllow] 的类注释。
+  Future<void> recheckAgentAllow({bool force = false}) async {
+    try {
+      final cached = await AgentAllow.cached();
+      var al = cached;
+      final last = await AgentAllow.lastChecked();
+      final due = force ||
+          !_agentAllowFetched ||
+          last == null ||
+          DateTime.now().difference(last) > AgentAllow.kRefresh;
+      if (due) {
+        final fresh = await AgentAllow.fetch();
+        if (fresh != null) {
+          al = fresh;
+          _agentAllowFetched = true;
+        }
+        // 拉取失败 → 沿用缓存（有就认）；不置位，留给下次再试
+      }
+      final ok = al?.allows(myFullCall) ?? false;
+      agentAllow = al == null ? null : ok;
+      final changed = ok != agentAllowed;
+      agentAllowed = ok;
+      if (changed) {
+        _log(LogLevel.info, '智能体',
+            ok ? '本机已获智能体授权' : '本机未获智能体授权（呼号不在白名单）');
+        _notify();
+      }
+      // 兜底强制关闭：配置可能来自备份/旧版本（那时还没这道闸），一旦确认未授权
+      // 就把智能体关掉 —— 授权是使用它的前提，不能靠"当初是怎么开的"绕过。
+      if (!ok && AgentService.instance.config.enabled) {
+        AgentService.instance.config.enabled = false;
+        unawaited(AgentService.instance.saveConfig());
+        _notify();
+      }
+    } catch (_) {
+      // 任何异常都当"未查到"（未授权）—— 白名单是那把锁，出错时不该自动开
+    }
+  }
+
+  /// 提交授权申请（用户点了"重新检查授权"）：拉一次名单并重判。
+  /// 返回**重判后是否已授权**：已授权则顺手关闭本页并启用智能体。
+  /// 申请通常需人工审核，所以没查到时调用方应如实提示"可能仍在审核"。
+  Future<bool> submitAgentAuthApplication() async {
+    agentAuthChecking = true;
+    _notify();
+    await recheckAgentAllow(force: true);
+    agentAuthChecking = false;
+    final ok = agentAllowed;
+    if (ok) {
+      pendingAgentAuth = false;
+      setAgentEnabled(true);   // 两道闸都已过，这里真正启用
+    }
+    _notify();
+    return ok;
+  }
+
+  /// 关闭授权/申请页（不启用智能体，留在原地）。
+  void dismissAgentAuth() {
+    pendingAgentAuth = false;
+    _notify();
+  }
+
+  /// 切换智能体开启状态。开启入口有两处（实验设置、智能体设置页），都走这里，
+  /// 闸门只此一个口子，且**两道**：
+  ///   1. 未签「智能体使用告知」→ 弹告知页，签完 [acceptAgentNotice] 继续；
+  ///   2. 未获授权（不在官网白名单）→ 弹授权/申请页，授权后才真正启用。
+  void setAgentEnabled(bool v) {
+    if (v && !agentNoticeAccepted) {
+      pendingAgentNotice = true;
+      _notify();
+      return;
+    }
+    if (v && !agentAllowed) {
+      pendingAgentAuth = true;
+      _notify();
+      // 顺手后台再查一次名单：可能刚被加进白名单（或本地缓存还旧）。若这次查到
+      // 已授权，就自动关页并启用 —— 免得用户明明已授权还停在申请页上。
+      unawaited(recheckAgentAllow(force: true).then((_) {
+        if (agentAllowed && pendingAgentAuth) {
+          pendingAgentAuth = false;
+          setAgentEnabled(true);
+        }
+      }));
+      return;
+    }
+    AgentService.instance.config.enabled = v;
+    unawaited(AgentService.instance.saveConfig());
+    _notify();
+  }
+
+  /// 本会话是否已经**成功**拉到过名单。
+  ///
+  /// 为什么需要它：名单是"远程开关"，紧急封禁不该等 6 小时。所以**每次启动（新会话）
+  /// 都拉一次**，6 小时节流只用来挡同一会话内的重复检查（挡的是轮询，不是启动）。
+  /// 只在**成功**时置位：失败（离线）就留给下一次检查再试，不要一整会话都不再拉。
+  bool _blacklistFetched = false;
+
+  /// 查一次远程限制名单。
+  ///
+  /// 时机：启动后一次 + 每 [Blacklist.kRefresh]（6 小时）一次；`force` 供"重新检查"
+  /// 按钮用（绕过节流，解除限制后能立刻放行）。
+  ///
+  /// 三条原则见 `lib/blacklist.dart`：**失败放行**（从没拉到过 → 不拦）、
+  /// **命中后离线也拦**（有缓存就认）、**只是礼貌拦截**（GPL 开源，改编译就能绕过）。
+  Future<void> recheckBlacklist({bool force = false}) async {
+    try {
+      final cached = await Blacklist.cached();     // 先看缓存：命中立刻拦，不等网络
+      final id = await Blacklist.deviceId();
+      // 本机豁免（本地白名单）：在拦截页 / 「关于」长按安装标识切换 —— 见
+      // `Blacklist.localExempt` 的注释（一句话：这是给"被误判的人"和自测留的出口，
+      // 代价是它挡不住有心人）。
+      final exempt = await Blacklist.localExempt();
+      var bl = cached;
+      final last = await Blacklist.lastChecked();
+      // 新会话第一次必拉（改完名单，重开应用就生效）；同一会话内才按 6 小时节流。
+      final due = force ||
+          !_blacklistFetched ||
+          last == null ||
+          DateTime.now().difference(last) > Blacklist.kRefresh;
+      if (due) {
+        final fresh = await Blacklist.fetch();
+        if (fresh != null) {
+          bl = fresh;                              // 拉到了就用新的
+          _blacklistFetched = true;
+        }
+        // 拉取失败 → 沿用缓存（有就认）；不置位，留给下次检查再试
+      }
+      // 本机白名单只放行**软封**：硬封（`hard`，默认）命中后照样拦 —— 见
+      // `Blacklist.match` 的注释。
+      final hit = bl?.match(myFullCall, id, exemptSoft: exempt);
+      final changed = (hit == null) != (blacklistHit == null) ||
+          hit?.matched != blacklistHit?.matched;
+      blacklistHit = hit;
+      if (hit != null && changed) {
+        _log(LogLevel.warn, '限制', '本机被远程限制名单命中（${hit.matched}）');
+      }
+      if (changed) _notify();
+    } catch (_) {
+      // 任何异常都当"没查到"（放行）—— 绝不让这个功能把正常用户挡在门外
+    }
+  }
+
+  /// 查一次官网要求的最低版本。
+  ///
+  /// 时机：启动后一次 + 每 [MinVersion.kRefresh]（6 小时）一次；`force` 供
+  /// 「重新检查」用（绕过节流——装完新版本回来能立刻放行）。
+  ///
+  /// 与 [recheckBlacklist] 同一套原则：**失败放行**（从没拉到过 → 不拦）、
+  /// **拉到过就认缓存**（之后断网也按上次那份）。
+  Future<void> recheckMinVersion({bool force = false}) async {
+    try {
+      final cached = await MinVersion.cached();
+      var mv = cached;
+      final last = await MinVersion.lastChecked();
+      final due = force ||
+          !_minVersionFetched ||
+          last == null ||
+          DateTime.now().difference(last) > MinVersion.kRefresh;
+      if (due) {
+        final fresh = await MinVersion.fetch();
+        if (fresh != null) {
+          mv = fresh;
+          _minVersionFetched = true;
+        }
+        // 拉取失败 → 沿用缓存（有就认）；不置位，留给下次检查再试
+      }
+      final before = versionBlocked;
+      final beforeMin = minVersionRequired;
+      minVersionLimit = mv;
+      if (versionBlocked != before || minVersionRequired != beforeMin) {
+        if (versionBlocked) {
+          _log(LogLevel.warn, '版本',
+              '本机版本 $appVersion 低于官网最低版本 $minVersionRequired');
+        }
+        _notify();
+      }
+    } catch (_) {
+      // 任何异常都当"没查到"（放行）—— 这个功能不能把正常用户挡在门外
+    }
+  }
+
+  /// 盒子链路是否被用户启用（**不在 [enabledSources] 里**，见 [box]）
+  bool get boxOn => box.config.enabled;
 
   /// 是否有多条链路在同时工作（此时界面需要区分「发射来源」）
   bool get multiSource => enabledSources.length > 1;
@@ -1864,6 +3266,8 @@ class AppState extends ChangeNotifier {
     if (deviceId == null || deviceId.isEmpty) return null;
     if (tnc.device?.id == deviceId) return srcTnc;
     if (pkwdwpl.device?.id == deviceId) return srcPkwdwpl;
+    if (nmeaGps.device?.id == deviceId) return srcNmeaGps;
+    if (box.device?.id == deviceId) return srcBox;
     return null;
   }
 
@@ -1924,20 +3328,25 @@ class AppState extends ChangeNotifier {
   /// 是否为「射频频段」来源（TNC / 音频）。
   ///
   /// 二者在协议与合规上完全同类：都经电台上空、都用 APALOC 目的呼号、
-  /// 都受 67 字符消息上限、都禁用群聊广播、自动发射都要显式开关。
+  /// 都受 67 字符消息上限、自动发射都要显式开关。
+  /// （射频下群聊现也开放 —— 见 [groupChatAllowed]；发射路径走 [pathFor]。）
   /// 因此射频相关判断统一用本 getter，避免只改 TNC 漏改音频
   /// （那会导致音频模式下群聊被放行、限长失效这类静默错误）。
   bool get usingRf => usingTnc || usingAudio;
 
-  /// 当前射频来源的中继路径配置
-  String get _rfPath => rfPathOf(dataSource);
+  /// 消息那条链路是不是射频（策略帧按它决定带不带 ack）。
+  bool get usingRfMsg => dataSourceMsg == srcTnc || dataSourceMsg == srcAudio;
 
   /// 数据来源的中文名（日志用；界面文案一律走 l10n）
   String _sourceName(String s) => s == srcTnc
       ? 'TNC（电台）'
       : (s == srcAudio
           ? '音频（声卡）'
-          : (s == srcPkwdwpl ? 'PKWDWPL（Kenwood）' : 'APRS-IS'));
+          : (s == srcAcn
+              ? 'APRSNETCN'
+              : (s == srcPkwdwpl
+                  ? 'PKWDWPL（Kenwood）'
+                  : (s == srcNmeaGps ? '外接 GPS（蓝牙）' : 'APRS-IS'))));
 
   static const String srcAprsIs = 'aprsis';
   static const String srcTnc = 'tnc';
@@ -1946,11 +3355,34 @@ class AppState extends ChangeNotifier {
   /// PKWDWPL（Kenwood 航点语句）——**只收不发**的来源
   static const String srcPkwdwpl = 'pkwdwpl';
 
+  /// 外接 GPS（蓝牙 SPP / NMEA 0183）——**只收不发**的来源。
+  ///
+  /// 它对应用的意义与其它来源不同：别的来源供的是**报文**（台站、消息），
+  /// 它供的是**我自己的位置**（见 [positionSourceNow]）。但生命周期完全同类
+  /// （扫设备 → 连 → 断 → 自动重连），所以照样进 [enabledSources] ——
+  /// 那样才能复用「勾选 / 连接 / 重连 / 设备占用」这套已经踩出来的机制。
+  static const String srcNmeaGps = 'spp';
+
+  /// 盒子链路。**不属于**数据来源，只在「哪条链路占着设备」与
+  /// 「重连时要照顾到它」这两件事上出现（见 [box] 的注释）。
+  static const String srcBox = 'box';
+
+  /// APRSNETCN 链路（见 [acnLink]）。
+  ///
+  /// 与 APRS-IS **等价**的一条来源：自己的地址、端口、账号口令、过滤器，
+  /// 可以单独启用、单独连、单独当发射来源。只连这一条也成立。
+  static const String srcAcn = 'acn';
+
   /// 可发射的来源（用于「至少要保留一条能发射的链路」与各种发射守卫）。
   ///
   /// 写成集合而不是各处硬写三个比较，是因为以后再加只读来源时
   /// 漏改一处就会出现「发射走了只读链路」这类静默错误。
-  static const Set<String> txCapableSources = {srcAprsIs, srcTnc, srcAudio};
+  static const Set<String> txCapableSources = {
+    srcAprsIs,
+    srcAcn,
+    srcTnc,
+    srcAudio,
+  };
 
   /// 某个来源能否发射
   static bool canTransmit(String src) => txCapableSources.contains(src);
@@ -1967,12 +3399,56 @@ class AppState extends ChangeNotifier {
   /// 导致按 `u/APALOC` 订阅的第三方统计站只能收到状态包、收不到位置包
   /// （表现为这些台站在统计站上没有位置）。回归测试见
   /// test/beacon_format_test.dart「发射路径的目的呼号」。
-  String get txPath {
-    if (!usingRf) return 'APALOC,TCPIP*';
-    final p = _rfPath.trim();
+  String get txPath => pathFor(dataSource);
+
+  /// **某一条链路**该用的报头路径（目的呼号 + 中继）。
+  ///
+  /// 为什么必须按链路算，而不是只算一条：位置/状态报文可以同时发往多条
+  /// 链路（见 [posTxExtra]），消息那条链路（[dataSourceMsg]）也可以与位置
+  /// 不同。以前整个发送路径只用 [dataSource] 算一次 `txPath`，逐条链路复用
+  /// 同一个字符串，于是「位置走射频、同时再发一份 APRS-IS」时射频那一份
+  /// 带着 `TCPIP*` 出去 —— Ax25 会把它剔掉，而它是射频路径上唯一的一项，
+  /// 于是**中继路径整段消失**；日志里也写着 `>APALOC,TCPIP*:`，看起来就像
+  /// 发的是网络报文。反过来（主链路射频、另发一份互联网）则会让 APRS-IS
+  /// 收到一条带 `WIDE1-1` 的报文，等于把中继语义交给服务器。
+  String pathFor(String src) {
+    final s0 = _normalizeSrc(src);
+    if (s0 != srcTnc && s0 != srcAudio) return 'APALOC,TCPIP*';
+    final p = rfPathOf(s0).trim();
     // 去掉头部逗号/空格，避免出现 `APALOC,,WIDE1-1`
     final cleaned = p.replaceAll(RegExp(r'^[,\s]+'), '');
     return cleaned.isEmpty ? 'APALOC' : 'APALOC,$cleaned';
+  }
+
+  /// 消息那条链路该用的报头路径（[dataSourceMsg] 决定）。
+  String get txPathMsg => pathFor(dataSourceMsg);
+
+  /// 把一条**我们自己组出来的报文**的报头改成指定链路该用的路径。
+  ///
+  /// 只改源呼号等于 [myFullCall] 的报文：网关转递的报文（[Igate] 产出的
+  /// `qAR`/`qAO` 路径）与用户手写的报文都不在此列，改了就成伪造路径。
+  String lineForLink(String src, String raw) {
+    final gt = raw.indexOf('>');
+    if (gt <= 0) return raw;
+    final colon = raw.indexOf(':', gt);
+    if (colon < 0) return raw;
+    if (raw.substring(0, gt).trim() != myFullCall) return raw;
+    final want = pathFor(src);
+    if (raw.substring(gt + 1, colon) == want) return raw;
+    return '${raw.substring(0, gt)}>$want${raw.substring(colon)}';
+  }
+
+  /// 简单模式（[advChannels] 关）下「启用通道 = 该通道也发位置」。
+  ///
+  /// 简单模式发送时看的是「已启用 + 已连上」，这份名单只在运行时算，不落盘；
+  /// 用户打开某条通道后如果只记在 [enabledSources] 里，切到高级模式时它又是
+  /// 没勾的 —— 同一台设备上两种口径自相矛盾（用户报的「关闭高级通道设置后，
+  /// 启用其中一个通道，该通道的位置发射也该跟着开启」）。所以启用链路时把这条
+  /// 同时记进 [posTxExtra]（高级模式用的那份勾选），关掉时由 [toggleSource]
+  /// 删掉，两边永远一致。
+  void _notePosTxLink(String src) {
+    if (advChannels || !canTransmit(src) || posTxExtra.contains(src)) return;
+    posTxExtra = <String>[...posTxExtra, src];
   }
 
   /// 启用/停用某条链路（多选）。
@@ -1984,6 +3460,7 @@ class AppState extends ChangeNotifier {
     if (on) {
       if (enabledSources.contains(s0)) return;
       enabledSources.add(s0);
+      _notePosTxLink(s0);
     } else {
       if (!enabledSources.contains(s0)) return;
       if (enabledSources.length <= 1) {
@@ -2004,6 +3481,13 @@ class AppState extends ChangeNotifier {
         dataSource =
             enabledSources.firstWhere(canTransmit, orElse: () => dataSource);
       }
+      if (dataSourceMsg == s0) {
+        dataSourceMsg =
+            enabledSources.firstWhere(canTransmit, orElse: () => dataSourceMsg);
+      }
+      if (posTxExtra.contains(s0)) {
+        posTxExtra = [...posTxExtra]..remove(s0);
+      }
     }
     if (s0 == srcTnc || s0 == srcAudio) {
       // 射频链路的去重表与「听到过」列表都是**跨会话累积**的：换了设备、
@@ -2015,6 +3499,97 @@ class AppState extends ChangeNotifier {
       _heard.clear();
     }
     _reconcileSources();
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 启用/停用 IC-705 Wi-Fi 直连（作为独立数据来源）
+  Future<void> toggleIcomLan(bool on) async {
+    if (on) {
+      final wasOther = audio.config.source != AudioSource.icomLan;
+      audio.config.source = AudioSource.icomLan;
+      await audio.save();
+      if (!enabledSources.contains(srcAudio)) {
+        await toggleSource(srcAudio, true);
+      } else if (wasOther && (anyLinkUp || audio.connected)) {
+        await audio.disconnect(manual: false);
+        _setLinkUp(srcAudio, false);
+        if (!_userDisconnected) await _connectAudio();
+      }
+    } else {
+      if (icomLanOn) {
+        await toggleSource(srcAudio, false);
+      }
+    }
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 启用/停用 AFSK 系统声卡（作为独立数据来源）
+  Future<void> toggleAudioDevice(bool on) async {
+    if (on) {
+      final wasOther = audio.config.source != AudioSource.device;
+      audio.config.source = AudioSource.device;
+      await audio.save();
+      if (!enabledSources.contains(srcAudio)) {
+        await toggleSource(srcAudio, true);
+      } else if (wasOther && (anyLinkUp || audio.connected)) {
+        await audio.disconnect(manual: false);
+        _setLinkUp(srcAudio, false);
+        if (!_userDisconnected) await _connectAudio();
+      }
+    } else {
+      if (audioDeviceOn) {
+        await toggleSource(srcAudio, false);
+      }
+    }
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 指定 IC-705 为发射来源
+  /// 把 WLAN 电台设为发射来源；[forMsg] 为真时只改消息那条。
+  Future<void> setTxIcomLan({bool forMsg = false}) async {
+    final wasOther = audio.config.source != AudioSource.icomLan;
+    audio.config.source = AudioSource.icomLan;
+    await audio.save();
+    if (!enabledSources.contains(srcAudio)) {
+      await toggleSource(srcAudio, true);
+    } else if (wasOther && (anyLinkUp || audio.connected)) {
+      await audio.disconnect(manual: false);
+      _setLinkUp(srcAudio, false);
+      if (!_userDisconnected) await _connectAudio();
+    }
+    if (forMsg) {
+      setTxMsgSource(srcAudio);
+    } else {
+      setTxSource(srcAudio);
+    }
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 指定 AFSK 系统声卡为发射来源；[forMsg] 为真时只改消息那条。
+  Future<void> setTxAudioDevice({bool forMsg = false}) async {
+    final wasOther = audio.config.source != AudioSource.device;
+    audio.config.source = AudioSource.device;
+    await audio.save();
+    if (!enabledSources.contains(srcAudio)) {
+      await toggleSource(srcAudio, true);
+    } else if (wasOther && (anyLinkUp || audio.connected)) {
+      await audio.disconnect(manual: false);
+      _setLinkUp(srcAudio, false);
+      if (!_userDisconnected) await _connectAudio();
+    }
+    if (forMsg) {
+      setTxMsgSource(srcAudio);
+    } else {
+      setTxSource(srcAudio);
+    }
     persist();
     _notify();
     _updateNotification();
@@ -2036,6 +3611,7 @@ class AppState extends ChangeNotifier {
     final s0 = _normalizeSrc(src);
     if (enabledSources.contains(s0)) return;
     enabledSources.add(s0);
+    _notePosTxLink(s0);
     _log(LogLevel.info, '连接', '${_sourceName(s0)} 已加入数据来源（设备页手动连接）');
     persist();
     _notify();
@@ -2065,6 +3641,16 @@ class AppState extends ChangeNotifier {
     _updateNotification();
   }
 
+  /// 设备页手动连/断**盒子**之后，把结果同步回 [_linkUp]。
+  ///
+  /// 为什么不复用 [adoptDeviceLink]：那个会 `ensureSourceEnabled` ——
+  /// 把 'box' 塞进 [enabledSources] 会让它被当成报文来源（多选里多一项、
+  /// 参与发射来源编排），而盒子根本不是来源。这里只记链路表。
+  void adoptBoxLink(bool up) {
+    _setLinkUp(srcBox, up);
+    _notify();
+  }
+
   /// 设备页连接**之前**的守卫：返回 null 表示可以连，否则返回不可连的原因。
   ///
   /// 为什么不能只把关卡放在 [_connectTnc] / [_connectPkwdwpl] 里：那两个方法
@@ -2076,6 +3662,55 @@ class AppState extends ChangeNotifier {
   ///   * **PKWDWPL** 是只读链路 —— 冲突时直接拒绝，避免抢走 TNC 的接收字节流。
   Future<String?> guardDeviceConnect(String src) async {
     final s0 = _normalizeSrc(src);
+    // 盒子是**最低优先**的链路：它既不是报文来源、也不参与发射编排，
+    // 所以「别的链路要用的设备正被盒子占着」时，让盒子先让路。
+    // 反过来，盒子绝不抢别人的设备（下面直接拒绝）。
+    final wantId = _targetDeviceId(s0);
+    if (s0 != srcBox &&
+        wantId != null &&
+        box.connected &&
+        box.device?.id == wantId) {
+      _log(
+        LogLevel.info,
+        '连接',
+        '盒子正占用 ${box.device?.label}：已先断开盒子，把设备让给 '
+            '${_sourceName(s0)}。',
+      );
+      await box.disconnect(manual: false);
+      _setLinkUp(srcBox, false);
+    }
+    // 外接 GPS 与盒子同为**最低优先**的链路（它只供位置、不供报文）：
+    // 别的链路要用的设备正被它占着时，同样先断开让路。
+    if (s0 != srcNmeaGps &&
+        wantId != null &&
+        nmeaGps.connected &&
+        nmeaGps.device?.id == wantId) {
+      _log(
+        LogLevel.info,
+        '连接',
+        '外接 GPS 正占用 ${nmeaGps.device?.label}：已先断开它，把设备让给 '
+            '${_sourceName(s0)}。',
+      );
+      await nmeaGps.disconnect(manual: false);
+      _setLinkUp(srcNmeaGps, false);
+    }
+    if (s0 == srcBox) {
+      final owner = deviceBoundBy(box.device?.id);
+      if (owner != null && owner != srcBox) {
+        box.lastError = 'device-in-use';
+        return 'device-in-use';
+      }
+      return null;
+    }
+    if (s0 == srcNmeaGps) {
+      // 只读且优先级最低：设备被任何其它链路绑着就拒绝，绝不抢。
+      final owner = deviceBoundBy(nmeaGps.device?.id);
+      if (owner != null && owner != srcNmeaGps) {
+        nmeaGps.lastError = 'device-in-use';
+        return 'device-in-use';
+      }
+      return null;
+    }
     if (!tncPkwdwplConflict) return null;
     if (s0 == srcTnc) {
       _log(
@@ -2110,11 +3745,92 @@ class AppState extends ChangeNotifier {
     _updateNotification();
   }
 
-  String _normalizeSrc(String src) => src == srcTnc
-      ? srcTnc
-      : (src == srcAudio
-          ? srcAudio
-          : (src == srcPkwdwpl ? srcPkwdwpl : srcAprsIs));
+  /// 位置/状态报文的发射链路开关（可多选）。
+  ///
+  /// 至少要留一条：取消最后一条没有意义，也不会有任何报文发出去。
+  void togglePosTx(String src) {
+    final s0 = _normalizeSrc(src);
+    if (posTxHas(s0)) {
+      if (s0 == dataSource) {
+        // 取消的是主链路：把另一条顶上来；只剩它一条时不动。
+        if (posTxExtra.isEmpty) return;
+        dataSource = posTxExtra.removeAt(0);
+      } else {
+        posTxExtra = [...posTxExtra]..remove(s0);
+      }
+    } else {
+      if (!enabledSources.contains(s0) || !canTransmit(s0)) return;
+      posTxExtra = [...posTxExtra, s0];
+    }
+    _log(LogLevel.info, '连接',
+        '位置/状态报文发射链路：${posTxTargets.map(_sourceName).join(' + ')}');
+    persist();
+    _refreshConnected();
+    _notify();
+    _updateNotification();
+  }
+
+  /// 位置/状态报文实际要发的链路，第一条是 [dataSource]。
+  ///
+  /// 两种模式（见 [advChannels]）：
+  ///   * 高级（true）：用户逐条勾的 —— [dataSource] + [posTxExtra]；
+  ///   * 默认（false）：所有已启用**且已连上**的可发射链路。
+  ///
+  /// 没连上的链路不进默认列表：勾着却发不出去，每次信标都会在日志里留一条
+  /// not-connected，而用户并没有做错什么。一条都没连上时仍返回主链路，让
+  /// 发送路径照常报错，而不是静默不发。
+  List<String> get posTxTargets {
+    if (advChannels) {
+      return <String>[
+        dataSource,
+        ...posTxExtra.where((s) => s != dataSource),
+      ];
+    }
+    final out = <String>[
+      if (isUp(dataSource)) dataSource,
+      for (final s in enabledSources)
+        if (s != dataSource && canTransmit(s) && isUp(s)) s,
+    ];
+    return out.isEmpty ? <String>[dataSource] : out;
+  }
+
+  /// 指定**消息**的发射来源（同样必须已启用、可发射）。
+  void setTxMsgSource(String src) {
+    final s0 = _normalizeSrc(src);
+    if (!enabledSources.contains(s0) || dataSourceMsg == s0) return;
+    if (!canTransmit(s0)) return;
+    dataSourceMsg = s0;
+    _log(LogLevel.info, '连接', '消息发射来源切换为 ${_sourceName(s0)}');
+    persist();
+    _notify();
+    _updateNotification();
+  }
+
+  String _normalizeSrc(String src) {
+    if (src == srcAcn) return srcAcn;
+    if (src == srcTnc) return srcTnc;
+    if (src == srcAudio) return srcAudio;
+    if (src == srcPkwdwpl) return srcPkwdwpl;
+    if (src == srcNmeaGps) return srcNmeaGps;
+    if (src == srcBox) return srcBox;
+    return srcAprsIs;
+  }
+
+  /// 某条链路当前**绑定**的设备 id（「谁占着这台设备」的判断用）
+  String? _targetDeviceId(String src) {
+    switch (src) {
+      case srcTnc:
+        return tnc.device?.id;
+      case srcPkwdwpl:
+        return pkwdwpl.device?.id;
+      case srcNmeaGps:
+        return nmeaGps.device?.id;
+      case srcBox:
+        return box.device?.id;
+      default:
+        return null;
+    }
+  }
 
   /// 让「实际链路」与「已启用集合」对齐：新启用的连上，取消启用的断开。
   ///
@@ -2135,9 +3851,15 @@ class AppState extends ChangeNotifier {
     if (!pkwdwplOn && isUp(srcPkwdwpl)) {
       await pkwdwpl.disconnect(manual: false);
     }
+    if (!nmeaGpsOn && isUp(srcNmeaGps)) {
+      await nmeaGps.disconnect(manual: false);
+    }
+    // APRSNETCN 与 APRS-IS 同类：停用就断开，不是留一条挂着。
+    if (!acnOn && isUp(srcAcn)) _dropAcn();
     _setLinkUp(srcTnc, tnc.connected);
     _setLinkUp(srcAudio, audio.connected);
     _setLinkUp(srcPkwdwpl, pkwdwpl.connected);
+    _setLinkUp(srcNmeaGps, nmeaGps.connected);
     // 连上新启用的（仅当本来就在工作）
     if (wasActive && !_userDisconnected) await _connect();
   }
@@ -2156,9 +3878,74 @@ class AppState extends ChangeNotifier {
   @visibleForTesting
   void debugSetLinkUp(String src, bool up) => _setLinkUp(src, up);
 
+  /// 仅测试用：模拟「用户自己点了连接 / 断开」这一计划内动作。
+  ///
+  /// 生产路径走 [toggleConnect]（连接与断开两个分支）和 [factoryReset]，
+  /// 它们都从 [_plannedLinkChange] 进；单测里跑真实的 [toggleConnect] 会碰
+  /// 平台通道，所以留这个口子（与 [debugSetLinkUp] 同理）。
+  @visibleForTesting
+  void debugPlannedLinkChange({required bool disconnecting}) =>
+      _plannedLinkChange(disconnecting: disconnecting);
+
+  /// 仅测试用：模拟「本轮重新拿到了一次定位」。
+  ///
+  /// 生产代码不要用它 —— 真实定位通过 [_onFix] 打开上报闸（[myPositionReportable]）。
+  /// 测试若直接改 `_pendingSavedPos`（私有）也改不到，所以留这个口子。
+  @visibleForTesting
+  void debugSetFreshFix() => _pendingSavedPos = false;
+
+  /// 测试口子：喂一条收到的报文（走真实的收包路径，含订阅记账）。
+  ///
+  /// 生产代码不要用它 —— 真实报文从各条链路的 `onLine` 进来。
+  @visibleForTesting
+  void debugFeedLine(String line) =>
+      _onAprsLine(line, rf: false, source: srcAprsIs);
+
+  /// 测试口子：把某条订阅「上次弹通知」的时刻推回 [ago] 之前，
+  /// 用来验证限流窗口前后两种行为（等 30 秒的测试不可接受）。
+  @visibleForTesting
+  void debugAgeSubNotify(String ruleId, Duration ago) {
+    if (!_subNotifiedAt.containsKey(ruleId)) return;
+    _subNotifiedAt[ruleId] = DateTime.now().subtract(ago);
+  }
+
+  /// 仅测试用：模拟「当前坐标只是上次保存的位置、尚未重新定位」。
+  @visibleForTesting
+  void debugSetSavedPosPending() => _pendingSavedPos = true;
+
+  /// 仅测试用：用当前 [MotionService.instance.sample] 同步一次步数。
+  ///
+  /// 生产路径只在定位回调 / 启动传感器后调用 [_syncSteps]（需要平台通道），
+  /// 单测里用这个口子直接驱动基线算法。
+  @visibleForTesting
+  void debugSyncSteps() => _syncSteps();
+
+  /// 「计划内」的连接变动 —— 用户自己点的连接 / 断开 / 恢复出厂。
+  ///
+  /// 两件事必须成对做，所以合成一个口子，别再各写各的：
+  ///   * 压住或放开自动重连（[_userDisconnected]）；
+  ///   * 作废本次连接的「开始上报」确认（[beaconArmed]）—— 用户自己的动作算
+  ///     「新的一次连接」，坐标要重新看过再确认。
+  ///
+  /// **计划外**的掉线自愈**不**走这里（见 [beaconArmed] 的长注释）：链路自己
+  /// 掉、自己连回来的，确认要留着 —— 用户要求「计划外断开可以直接重连」。
+  void _plannedLinkChange({required bool disconnecting}) {
+    _userDisconnected = disconnecting;
+    beaconArmed = false;
+  }
+
   void _setLinkUp(String src, bool up) {
+    final wasConnected = connected;
     _linkUp[src] = up;
     _refreshConnected();
+    // ⚠️ 这里**不再**复位「开始上报」的确认（以前是「connected 一翻转就复位」）。
+    //
+    // 那正是「计划外断开」被当成新连接的根源：链路抖一下、APRS-IS 被踢一次、
+    // 自动重连成功、换一次发射来源，用户已经点过的确认就没了 —— 上报停住，
+    // 界面与常驻通知反复跳回「待确认上报」（用户报的 bug）。
+    // 现在的分工：计划内的连接变动在 [_plannedLinkChange] 里复位，这里只负责
+    // 把「链路可用性变了」通知给界面。
+    if (connected != wasConnected) _notify();
   }
 
   /// 该链路是否因**设备冲突**而根本不可能连上。
@@ -2194,6 +3981,16 @@ class AppState extends ChangeNotifier {
             pkwdwpl.lastError == 'no-device' ||
             pkwdwpl.lastError == 'unsupported' ||
             pkwdwpl.lastError == 'device-in-use';
+      case srcBox:
+        return box.device == null ||
+            box.lastError == BoxStatus.noDevice ||
+            box.lastError == BoxStatus.unsupported ||
+            box.lastError == 'device-in-use';
+      case srcNmeaGps:
+        return nmeaGps.device == null ||
+            nmeaGps.lastError == NmeaGpsStatus.noDevice ||
+            nmeaGps.lastError == NmeaGpsStatus.unsupported ||
+            nmeaGps.lastError == 'device-in-use';
       default:
         return false;
     }
@@ -2203,8 +4000,13 @@ class AppState extends ChangeNotifier {
   ///
   /// 专门抽出来避免两处重连判断（排程时、定时器触发时）写得不一致 ——
   /// 只改一处就会漏成无限重连。
-  bool get _allExpectedLinksUp => enabledSources.every(
-      (s) => isUp(s) || blockedByConflict(s) || _permanentlyDown(s));
+  bool get _allExpectedLinksUp {
+    // 盒子不在 enabledSources 里（它不是报文来源），但同样是「期望连上」的
+    // 一条链路 —— 不把它算进来，它掉线之后重连定时器就再也不会重试。
+    if (boxOn && !box.connected && !_permanentlyDown(srcBox)) return false;
+    return enabledSources.every(
+        (s) => isUp(s) || blockedByConflict(s) || _permanentlyDown(s));
+  }
 
   /// 任一已启用来源掉线就安排重连（不是只看发射来源）
   void _scheduleReconnectIfNeeded() {
@@ -2215,6 +4017,36 @@ class AppState extends ChangeNotifier {
 
   // 坐标显示：'wgs84' 标准 / 'gcj' 高德火星坐标
   String coordDatum = 'wgs84';
+
+  /// 经纬度**显示格式**：'dec' 十进制度 / 'dm' 度分 / 'dms' 度分秒。
+  ///
+  /// 只换给人看的字符串（见 coord_format.dart），报文与所有计算仍用十进制度。
+  String coordFormat = 'dec';
+
+  /// 当前显示格式（枚举）
+  CoordFormat get coordFmt => coordFormatOf(coordFormat);
+
+  void setCoordFormat(String v) {
+    final n = coordFormatName(coordFormatOf(v));
+    if (n == coordFormat) return;
+    coordFormat = n;
+    notifyListeners();
+    persist();
+  }
+
+  /// 地图正中那一圈的经纬度读数（见 MapPage 的「中心读数」）。
+  ///
+  /// **默认关**。它是一件「要知道的时候才要」的东西：读数是给「正中这个点
+  /// 在哪」用的，平时只挡地图。开关有两个入口 —— 地图工具列里那一颗（就地
+  /// 开关）与 设置 → 显示 → 地图，两处改的是同一个值，都持久化。
+  bool mapCenterCoord = false;
+
+  void setMapCenterCoord(bool v) {
+    if (v == mapCenterCoord) return;
+    mapCenterCoord = v;
+    notifyListeners();
+    persist();
+  }
 
   // 深色模式
   bool darkMode = false;
@@ -2282,6 +4114,55 @@ class AppState extends ChangeNotifier {
 
   UiLayout get uiLayoutValue => uiLayoutOf(uiLayout);
 
+  // ─── 自选模块 + 精简模式 ───
+  //
+  // 存「关掉的模块 id」，默认全开（理由见 features.dart 顶部）。精简模式是
+  // **另一件事**：它不看模块开关，直接把附加模块全按掉，并把外壳换成
+  // lite_shell.dart 那套极简布局 —— 用户要的是「回到最初的 APRS 工具」。
+  //
+  // 所以模块开关不会被精简模式改写：关掉精简模式，用户自己关过的那几个照旧
+  // 关着。把两组状态合并会导致「开一次精简模式，我调好的模块全丢了」。
+  bool liteMode = false;
+
+  /// 被关掉的模块 id（空 = 全部打开）。
+  final Set<String> featuresOff = <String>{};
+
+  /// 这个模块现在要不要显示。
+  ///
+  /// 精简模式下一律 false —— 调用点只要问这一句就够了，不必每处再写
+  /// `liteMode || …`（写漏一处就是「精简模式里还留着一个额外入口」）。
+  bool featureOn(String id) => !liteMode && !featuresOff.contains(id);
+
+  bool featureEnabled(AppFeature f) => featureOn(f.id);
+
+  /// 云同步要不要在这个设备上存在。
+  ///
+  /// 它不是 APRS 收发的必需品：关掉之后「APRSNETCN」页里那些卡不出现，
+  /// 定时同步与手动同步也一律不发请求。链路本身不受影响。
+  bool get cloudSyncOn => featureEnabled(AppFeature.cloudSync);
+
+  /// 打开 / 关掉一个模块。认不出的 id 直接忽略（脏偏好不该造出幽灵开关）。
+  void setFeature(String id, bool on) {
+    if (appFeatureById(id) == null) return;
+    final changed = on ? featuresOff.remove(id) : featuresOff.add(id);
+    if (!changed) return;
+    persist();
+    _notify();
+  }
+
+  /// 切换精简模式。
+  ///
+  /// 走 [applySavedTheme]：它写在 `C` 这个全局调色板上（见 theme.dart 的
+  /// `C.liteMode`），而外壳是在 app.dart 里按 `C` 选的 —— 不重算就会出现
+  /// 「开关点了，界面还是老样子」。
+  void setLiteMode(bool v) {
+    if (liteMode == v) return;
+    liteMode = v;
+    applySavedTheme();
+    persist();
+    _notify();
+  }
+
   /// 切换界面语言
   void setLocale(String lang) {
     locale = lang;
@@ -2322,6 +4203,43 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 设置热力图档位（0 弱 / 1 中 / 2 强）—— 两套地图共用。
+  void setHeatLevel(int v) {
+    heatLevel = v.clamp(0, 2);
+    persist();
+    _notify();
+  }
+
+  /// 切换「始终显示地图标签」（见 [mapLabelsAlways]）。
+  void setMapLabelsAlways(bool v) {
+    mapLabelsAlways = v;
+    persist();
+    _notify();
+  }
+
+  /// 地图「锁定地图中心」的三态：0 关 / 1 锁定中心·正北朝上 / 2 锁定中心·航向朝上。
+  ///
+  /// 用户要求「航向锁定选择每次启动后都要保持」：它原来是地图页的 State 字段
+  /// `_followMode`，冷启动就回到 0，于是每次重新打开地图都要再点两下。落盘
+  /// 之后只认三档，其它值一律夹回合法范围（不写脏值）。
+  void setMapFollowMode(int v) {
+    final n = v.clamp(0, 2);
+    if (n == mapFollowMode) return;
+    mapFollowMode = n;
+    persist();
+  }
+
+  /// 设置台站列表的排序方式（见 [stationSort]）。
+  ///
+  /// 非法值直接忽略：这颗入口只有四个选项，谁传进来的脏值都不该把列表排序弄成
+  /// 「按呼号升序」以外的第三种行为，更不该写进偏好文件。
+  void setStationSort(String v) {
+    if (!stationSorts.contains(v) || v == stationSort) return;
+    stationSort = v;
+    persist();
+    _notify();
+  }
+
   /// 设置自定义主题色
   void setThemeColor(String hex) {
     final v = hex.trim().replaceAll('#', '').toUpperCase();
@@ -2358,6 +4276,7 @@ class AppState extends ChangeNotifier {
     // 否则换主题那一下会用上一档材质算出一套错的 alpha。
     C.material = uiMaterialValue;
     C.layout = uiLayoutValue;
+    C.liteMode = liteMode;
     ThemeController.instance.applyColors(
       isDark: darkMode,
       legacyPrimary: themeColorValue,
@@ -2382,6 +4301,7 @@ class AppState extends ChangeNotifier {
         setMyPosition(39.9042, 116.4074);
       } else {
         myHasFix = true;
+        _pendingSavedPos = false; // 沿用模拟坐标也就是「有坐标可上报」
         locStatus = '模拟位置';
         _syncFilterToPosition(); // 已有坐标：切模拟时同样同步过滤中心
       }
@@ -2396,6 +4316,528 @@ class AppState extends ChangeNotifier {
 
   // 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助；'network' = 纯网络
   String locationMode = 'gps_network';
+
+  /// GPS 采样间隔（秒）：用户可以自己调。
+  ///
+  /// 原生侧原来是写死的（GPS 1 秒 / 5 米，见 LocationService.kt），嫌耗电的人
+  /// 没地方改。现在是一个下拉档位：1 秒最细（导航类应用的常规取样率，轨迹
+  /// 拐弯不被切角），想省电就往大调。只作用于 **GPS** provider：网络定位仍固定
+  /// 10 秒 —— 基站/Wi-Fi 本来也不会更新得更频。
+  ///
+  /// 可选值写在 [gpsSampleChoices] 里，别处不另开一套：脏值（改坏偏好）一律夹回默认。
+  int gpsIntervalSec = 1;
+  static const gpsSampleChoices = <int>[1, 2, 3, 5, 10, 30];
+
+  void setGpsIntervalSec(int v) {
+    if (!gpsSampleChoices.contains(v)) return;
+    gpsIntervalSec = v;
+    // 服务在跑就立即生效；没在跑只记下来，下次 startService 带上。
+    unawaited(loc.setSampling(effectiveGpsIntervalSec * 1000));
+    persist();
+    _notify();
+  }
+
+  /// 省电模式的 GPS 采样间隔：不论用户原来选的多快，都压到不低于 30 秒。
+  ///
+  /// 30 秒是采样档位里最省的那一档（同一个下拉里的 30 秒），不再另造一档：
+  /// 多一档就多一个「档位与省电到底谁说了算」的解释。
+  static const int powerSaveGpsSec = 30;
+
+  /// 省电模式。
+  ///
+  /// 只做两件事，但都是真省：
+  ///   * GPS 采样拉长到 [powerSaveGpsSec] 秒（定位是整台应用最费电的一项）；
+  ///   * 地图上移动台站的脉冲动画停下（那是唯一的**每帧**重绘来源，停下后
+  ///     光栅化结果可以复用）。
+  ///
+  /// 都不动数据本身：台站照收、报文照发、轨迹照记，变的只是取点频率与画法。
+  /// 低电量时外壳会提示一次「要不要开省电模式」，开关本身在这里。
+  bool powerSave = false;
+
+  /// 实际生效的 GPS 采样间隔（省电模式下不低于 [powerSaveGpsSec]）。
+  int get effectiveGpsIntervalSec =>
+      powerSave && gpsIntervalSec < powerSaveGpsSec
+          ? powerSaveGpsSec
+          : gpsIntervalSec;
+
+  void setPowerSave(bool v) {
+    if (powerSave == v) return;
+    powerSave = v;
+    // 采样率立即生效（服务在跑就改请求频率；没在跑只记下来）
+    unawaited(loc.setSampling(effectiveGpsIntervalSec * 1000));
+    if (v) _lowBatteryWarned = -1; // 开了就不再提
+    persist();
+    _notify();
+  }
+
+  // ── 云同步（消息 / 云端备份 / 历史轨迹）──
+  //
+  // 一个呼号的三类本机数据存到 APRSNETCN SERVER 上，换设备或重装以后拉回来。
+  // 服务器没有第二个地址：云端数据管理是那台服务器专属的，地址跟着「APRSNETCN」
+  // 链路走（见 [syncBase]）。账号就是接入名单里那条（账号 + 口令），
+  // 口令只用来换令牌，换完就不留。
+  // 令牌与本机安装标识都不进备份：换台机器重新登录一次就行。
+  static const syncModes = ['off', 'manual', 'auto'];
+
+  /// 自动那一档隔多久跑一轮（分钟）。手机上太勤会一直亮着前台服务。
+  static const syncAutoChoices = [5, 15, 60];
+  int syncAutoMinutes = 5;
+
+  /// 同步方式：`off` 关闭 / `manual` 手动 / `auto` 自动（每 5 分钟一轮）。
+  String syncMode = 'off';
+  String syncAccount = '';
+  String syncPassword = '';
+
+  /// 登录换来的长期令牌（90 天）与这台设备的安装标识。
+  String syncToken = '';
+  String syncDeviceId = '';
+  String syncCall = '';
+
+  /// 同步哪些东西。两个都关掉就只登录，不传也不收。
+  bool syncMessagesOn = true;
+  bool syncTracksOn = true;
+
+  /// 三类数据各自上次成功的时间（毫秒）。
+  int syncMsgAt = 0;
+  int syncPullAt = 0;
+  int syncTrackAt = 0;
+
+  /// 云端的历史消息整份拉回来过没有。
+  ///
+  /// 服务器会把它自己看到的消息也存进这个呼号（手机没开机那段），所以第一次同步、
+  /// 以及重装之后要先从最早一条拉一遍，之后只拉新的。
+  bool syncMsgAllDone = false;
+
+  /// 已经传上去的 `day → 点数`：哪天变了就传哪天，没变的不重复上传。
+  String syncTrackSig = '{}';
+
+  /// 上次从云端拉到的那一天的**服务端点数**，用来判断还要不要重拉。
+  String syncServerSig = '{}';
+
+  bool _syncBusy = false;
+  DateTime _syncNextAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get syncBusy => _syncBusy;
+
+  /// 同步接口的地址：跟着「APRSNETCN」链路的服务器地址走。
+  ///
+  /// 地址空着就是没配：返回空串，同步一律不发请求（`no-server`）。一个地址都
+  /// 不预填，也不拿任何内置地址当兜底。
+  /// 云端数据与那条链路由同一台机器管，界面上把生效地址写出来。
+  String get syncBase => SyncApi.baseFor(acnServer, acnHttpPort);
+
+  SyncApi get syncApi => SyncApi(base: syncBase, token: syncToken);
+
+  bool get syncReady => syncMode != 'off' && syncToken.isNotEmpty;
+
+  /// 链路换了服务器：云端那台也就换了，把这台设备的登录丢掉。
+  ///
+  /// 令牌是原来那台服务器发的，带到另一台上只会一直 401；上次同步的时间、
+  /// 两份上传标记也属于原来那台，一起清掉。云端上的数据不动。
+  /// [oldServer] 是改之前那条链路的地址，[oldPort] 是改之前的 HTTP 端口，
+  /// 都由改设置的地方传进来。
+  void dropSyncSessionIfMoved(String oldServer, [int? oldPort]) {
+    if (syncToken.isEmpty && syncCall.isEmpty) return;
+    if (SyncApi.baseFor(oldServer, oldPort ?? acnHttpPort) == syncBase) return;
+    syncToken = '';
+    syncCall = '';
+    syncMsgAt = 0;
+    syncPullAt = 0;
+    syncTrackAt = 0;
+    syncMsgAllDone = false;
+    syncTrackSig = '{}';
+    syncServerSig = '{}';
+    _notify();
+    persist();
+  }
+
+  void setSyncMode(String v) {
+    if (!syncModes.contains(v)) return;
+    syncMode = v;
+    persist();
+    _notify();
+  }
+
+  void setSyncAutoMinutes(int v) {
+    if (!syncAutoChoices.contains(v)) return;
+    syncAutoMinutes = v;
+    _syncNextAt = DateTime.fromMillisecondsSinceEpoch(0);
+    persist();
+    _notify();
+  }
+
+  void setSyncMessagesOn(bool v) {
+    if (syncMessagesOn == v) return;
+    syncMessagesOn = v;
+    persist();
+    _notify();
+  }
+
+  void setSyncTracksOn(bool v) {
+    if (syncTracksOn == v) return;
+    syncTracksOn = v;
+    persist();
+    _notify();
+  }
+
+  void setSyncAccount(String v) {
+    syncAccount = v.trim();
+    persist();
+  }
+
+  void setSyncPassword(String v) {
+    syncPassword = v;
+    persist();
+  }
+
+  /// 登录换令牌。返回空串就是成功，否则是原因码（界面按它选文案）。
+  Future<String> syncLogin() async {
+    if (!cloudSyncOn) return 'disabled';
+    if (syncBase.isEmpty) return 'no-server';
+    if (syncAccount.isEmpty || syncPassword.isEmpty) return 'missing-account';
+    if (!await isHttpAvailable()) return 'no-http';
+    final device =
+        syncDeviceId.isNotEmpty ? syncDeviceId : await Blacklist.deviceId();
+    syncDeviceId = device;
+    try {
+      final result = await SyncApi(base: syncBase).login(
+        account: syncAccount.toLowerCase(),
+        password: syncPassword,
+        device: device,
+        ver: appVersion,
+        platform: _platformName(),
+      );
+      syncToken = result.token;
+      syncCall = result.call;
+      // 口令只用来换令牌，换完就不再留着
+      syncPassword = '';
+      persist();
+      _notify();
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  Future<void> syncLogout() async {
+    if (syncToken.isNotEmpty) {
+      try {
+        await syncApi.logout();
+      } catch (_) {}
+    }
+    syncToken = '';
+    syncCall = '';
+    // 下一个人登上来时要从最早一条重新拉：云端那份与这台机器无关
+    syncMsgAt = 0;
+    syncPullAt = 0;
+    syncMsgAllDone = false;
+    persist();
+    _notify();
+  }
+
+  /// 云端现状（设备、消息条数、轨迹天数、备份列表）。
+  Future<Map<String, dynamic>> syncState() async {
+    if (!cloudSyncOn) throw const SyncException('disabled');
+    if (syncToken.isEmpty) throw const SyncException('need-login');
+    return syncApi.state();
+  }
+
+  /// 把本地消息推到云端。[all] = 整批重传（第一次登录时用）。
+  Future<String> syncPushMessages({bool all = false}) async {
+    if (!syncMessagesOn) return '';
+    if (syncToken.isEmpty) return 'need-login';
+    final since = all ? 0 : syncMsgAt;
+    final pending = <Map<String, dynamic>>[];
+    for (final m in messages) {
+      if (m.system) continue;
+      if (!all && m.time.millisecondsSinceEpoch <= since) continue;
+      pending.add(syncMessagePayload(m));
+    }
+    if (pending.isEmpty) return '';
+    pending.sort((a, b) => (a['ts'] as int).compareTo(b['ts'] as int));
+    try {
+      final api = syncApi;
+      for (var i = 0; i < pending.length; i += 400) {
+        final end = math.min(i + 400, pending.length);
+        final batch = pending.sublist(i, end);
+        await api.pushMessages(batch);
+        syncMsgAt = batch.last['ts'] as int;
+        persist();
+      }
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  /// 把云端比本地多的消息拉回来。同一条（同一个 mid）不重复，已确认状态只往上推。
+  ///
+  /// [all] 是从最早一条开始拉：服务器自己也存了一份它看到的消息，手机没开机那段
+  /// 就在里面，所以第一次同步先整份拉一遍。
+  Future<String> syncPullMessages({bool all = false}) async {
+    if (!syncMessagesOn) return '';
+    if (syncToken.isEmpty) return 'need-login';
+    try {
+      final rows = await syncApi.pullMessages(all ? 0 : syncPullAt);
+      if (rows.isEmpty) {
+        if (all && !syncMsgAllDone) {
+          syncMsgAllDone = true;
+          persist();
+        }
+        return '';
+      }
+      final seen = {for (final m in messages) syncMessageId(m)};
+      var newest = syncPullAt;
+      var touched = false;
+      for (final row in rows) {
+        final stamp = (row['ts'] as num?)?.toInt() ?? 0;
+        if (stamp > newest) newest = stamp;
+        final mid = (row['mid'] as String?) ?? '';
+        if (mid.isEmpty) continue;
+        if (seen.contains(mid)) {
+          final at = messages.indexWhere((m) => syncMessageId(m) == mid);
+          if (at >= 0 && row['acked'] == true && !messages[at].acked) {
+            messages[at].acked = true;
+            touched = true;
+          }
+          continue;
+        }
+        seen.add(mid);
+        final sent = (row['dir'] as String?) == 'out';
+        final peer = (row['peer'] as String?) ?? '';
+        messages.add(AprsMsg(
+          sent ? myBaseCall : peer,
+          sent ? peer : myFullCall,
+          (row['text'] as String?) ?? '',
+          DateTime.fromMillisecondsSinceEpoch(stamp),
+          sent: sent,
+          acked: row['acked'] == true,
+          groupId: ((row['grp'] as String?) ?? '').isEmpty
+              ? null
+              : row['grp'] as String,
+        ));
+        touched = true;
+      }
+      syncPullAt = newest;
+      if (all) syncMsgAllDone = true;
+      persist();
+      if (touched) {
+        // 本地按「新的在前」排，插入的是旧的可能落在中间，排一次最省事
+        messages.sort((a, b) => b.time.compareTo(a.time));
+        if (messages.length > 500) {
+          messages.removeRange(500, messages.length);
+        }
+        await _saveMessagesNow();
+        _notify();
+      }
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  /// 把本地轨迹推上去：云端缺哪天补哪天，今天每轮都传。
+  ///
+  /// 判断「要不要传」不能只看本机的同步记号：记号只是这台机器「上次传过」的
+  /// 记忆，而云端可能被另一台设备清空过，这台也可能刚从一份带记号的备份恢复
+  /// 过来。只信记号的结果就是「本机 27 天，云端只有今天这一天」。所以先问一句
+  /// 云端有哪些天、各多少点，缺的、少的都补上去。
+  Future<String> syncPushTracks({bool all = false}) async {
+    if (!syncTracksOn) return '';
+    if (syncToken.isEmpty) return 'need-login';
+    final store = TrackLogStore.instance;
+    if (!store.available) return 'no-tracks';
+    final days = await store.loadAll();
+    if (days.isEmpty) return '';
+    final sig = _jsonMap(syncTrackSig);
+    final today = TrackLogStore.dayKey(DateTime.now());
+    final api = syncApi;
+    try {
+      final remote = <String, int>{};
+      for (final row in await api.trackDays()) {
+        final day = (row['day'] as String?) ?? '';
+        if (day.isNotEmpty) {
+          remote[day] = (row['points'] as num?)?.toInt() ?? 0;
+        }
+      }
+      for (final day in days) {
+        final count = day.points.length;
+        if (count == 0) continue;
+        if (!all &&
+            day.day != today &&
+            sig[day.day] == count &&
+            (remote[day.day] ?? 0) >= count) {
+          continue;
+        }
+        await api.pushTrack(
+          day.day,
+          [for (final point in day.points) point.toJson()],
+        );
+        sig[day.day] = count;
+      }
+      syncTrackSig = jsonEncode(sig);
+      syncTrackAt = DateTime.now().millisecondsSinceEpoch;
+      persist();
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  /// 拉云端比本地多的天（多设备已经在服务端合成一条）。
+  Future<String> syncPullTracks() async {
+    if (!syncTracksOn) return '';
+    if (syncToken.isEmpty) return 'need-login';
+    final store = TrackLogStore.instance;
+    if (!store.available) return 'no-tracks';
+    try {
+      final remote = await syncApi.trackDays();
+      final sig = _jsonMap(syncServerSig);
+      // 本机有哪些天（只看档名）。同步记号会说「这天拉过了」，但它随备份搬家，
+      // 换台机器后云端的轨迹就再也下不来 —— 记号必须和本地这一天的文件对上，
+      // 才准许跳过。缺了这一天就照常拉，云端有多少天就补多少天。
+      final mine = await store.dayKeys();
+      final api = syncApi;
+      for (final row in remote) {
+        final day = (row['day'] as String?) ?? '';
+        if (day.isEmpty) continue;
+        final count = (row['points'] as num?)?.toInt() ?? 0;
+        if (count == 0) continue;
+        if (sig[day] == count && mine.contains(day)) continue; // 拉过且还在
+        final local = await store.loadDay(day);
+        if ((local?.points.length ?? 0) >= count) {
+          sig[day] = count;
+          continue;
+        }
+        final points = await api.pullTrack(day);
+        if (points.isEmpty) continue;
+        await store.mergeDayPoints(day, points);
+        sig[day] = count;
+      }
+      syncServerSig = jsonEncode(sig);
+      persist();
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  /// 手动跑一轮（三类一起）。返回第一个出错的原因码，全对就是空串。
+  Future<String> syncNow() async {
+    if (!cloudSyncOn) return 'disabled';
+    if (syncBase.isEmpty) return 'no-server';
+    if (_syncBusy) return 'busy';
+    _syncBusy = true;
+    _notify();
+    try {
+      final steps = <Future<String> Function()>[
+        syncPushMessages,
+        () => syncPullMessages(all: !syncMsgAllDone),
+        syncPushTracks,
+        syncPullTracks,
+      ];
+      for (final step in steps) {
+        final code = await step();
+        if (code.isNotEmpty) return code;
+      }
+      return '';
+    } finally {
+      _syncBusy = false;
+      _notify();
+    }
+  }
+
+  /// 自动档：按 [syncAutoMinutes] 跑一轮，安静地跑，失败不弹东西。
+  void _syncAutoTick() {
+    if (!cloudSyncOn) return;          // 模块关掉就不碰网络
+    if (syncMode != 'auto' || syncToken.isEmpty || _syncBusy) return;
+    final now = DateTime.now();
+    if (now.isBefore(_syncNextAt)) return;
+    _syncNextAt = now.add(Duration(minutes: syncAutoMinutes));
+    unawaited(syncNow());
+  }
+
+  /// 备份上传 / 下载 / 清空云端：界面直接调这三条。
+  Future<String> syncUploadBackup(String text, String label) async {
+    if (syncToken.isEmpty) return 'need-login';
+    try {
+      final id = await syncApi.pushBackup(text, label);
+      return id.isEmpty ? 'bad-response' : '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  Future<String> syncDownloadBackup(String id) async {
+    if (syncToken.isEmpty) return 'need-login';
+    try {
+      final doc = await syncApi.pullBackup(id);
+      return jsonEncode(doc);
+    } on SyncException catch (error) {
+      return 'error:${error.code}';
+    } catch (_) {
+      return 'error:network';
+    }
+  }
+
+  Future<String> syncClearCloud() async {
+    if (syncToken.isEmpty) return 'need-login';
+    try {
+      await syncApi.clearAll();
+      syncMsgAt = 0;
+      syncPullAt = 0;
+      syncMsgAllDone = false;
+      syncTrackSig = '{}';
+      syncServerSig = '{}';
+      persist();
+      _notify();
+      return '';
+    } on SyncException catch (error) {
+      return error.code;
+    } catch (_) {
+      return 'network';
+    }
+  }
+
+  Map<String, int> _jsonMap(String raw) {
+    try {
+      final data = jsonDecode(raw);
+      if (data is Map) {
+        return {
+          for (final entry in data.entries)
+            if (entry.value is num)
+              '${entry.key}': (entry.value as num).toInt(),
+        };
+      }
+    } catch (_) {}
+    return <String, int>{};
+  }
+
+  String _platformName() {
+    // 用查表而不是 switch：switch 在枚举上要求穷举，将来 Flutter 加一个平台
+    // 就会变成编译错，而这个名字只是给服务器记一笔用的。
+    const names = <TargetPlatform, String>{
+      TargetPlatform.android: 'android',
+      TargetPlatform.iOS: 'ios',
+      TargetPlatform.windows: 'windows',
+      TargetPlatform.macOS: 'macos',
+      TargetPlatform.linux: 'linux',
+      TargetPlatform.fuchsia: 'fuchsia',
+    };
+    return names[defaultTargetPlatform] ?? 'other';
+  }
 
   void setLocationMode(String v) {
     if (v != 'gps' && v != 'gps_network' && v != 'network') return;
@@ -2433,16 +4875,251 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
-  // 更新渠道：'gitcode' / 'github'
+  // 更新渠道：**清单由官网下发**（见 lib/update_channels.dart）
   //
-  // 默认 **GitHub**：GitCode 的 release API 在境外/部分网络下不稳定，而且
-  // 镜像站可能滞后或缺少资产 —— 默认指向「官方发布的地方」更不容易出现
-  // 「检查更新永远失败/永远没有新版」。想用镜像的用户仍可在更新页一键切换
-  // （选择会写进 prefs，不会被这里的默认值覆盖）。
-  String updateChannel = 'github';
+  // 这里只存「用户选了哪一条」这个 id。有哪些渠道、地址、默认哪个、什么顺序
+  // 都来自官网那份 JSON（`docs/assets/update_channels.json`），拉不到就用内置
+  // 的那份 [kFallbackChannels]（与旧硬编码逐字一致）。
+  //
+  // 用户选过的 id 不在新清单里（那条被下线了）时，自动回落到官网指定的默认。
+  String updateChannel = kFallbackChannelId;
+
+  /// 官网那份渠道清单的原始文本（缓存）与拉取时间。
+  ///
+  /// 不进备份：它是官网配置的本地副本，换机后重新拉就是了。
+  String updateChannelsJson = '';
+  int updateChannelsAt = 0;
+
+  /// 多久重新拉一次官网的渠道清单。
+  static const int updateChannelsTtlMs = 6 * 60 * 60 * 1000;
+
+  UpdateChannelConfig? _channelCfg;
+
+  UpdateChannelConfig get updateChannels =>
+      _channelCfg ??= UpdateChannelConfig.parse(updateChannelsJson);
+
+  /// 实际生效的渠道 id：用户选的还在清单里就用它，否则用官网的默认。
+  String get updateChannelId {
+    final cfg = updateChannels;
+    return cfg.byId(updateChannel) != null ? updateChannel : cfg.resolvedDefault;
+  }
+
+  UpdateChannel? get updateChannelNow => updateChannels.byId(updateChannelId);
+
+  /// 当前渠道的 API 根地址。
+  String get updateChannelBase =>
+      updateChannelNow?.base ?? kFallbackChannels.first.base;
+
+  /// 当前渠道的显示名（提示与无障碍标签用）。
+  String get updateChannelName => updateChannelNow?.name ?? updateChannelId;
+
+  /// 拉一次官网的渠道清单。
+  ///
+  /// 失败什么都不做：缓存与内置清单各挡一层，更新这条路不该因为拉配置而断。
+  Future<void> refreshUpdateChannels({bool force = false}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (!force && updateChannelsAt > 0 &&
+        now - updateChannelsAt < updateChannelsTtlMs) {
+      return;
+    }
+    final text = await fetchUpdateChannelsJson(
+      userAgent: 'APRSlocus/$appVersion',
+    );
+    if (text == null || text.trim().isEmpty) return;
+    // 只收「解析得出清单」的那份：官网写崩了不该把用户手里的好清单盖掉。
+    if (UpdateChannelConfig.parse(text).channels.isEmpty) return;
+    updateChannelsAt = now;
+    if (updateChannelsJson == text) {
+      persist();
+      return;
+    }
+    updateChannelsJson = text;
+    _channelCfg = null;
+    persist();
+    _notify();
+  }
 
   void setUpdateChannel(String c) {
     updateChannel = c;
+    persist();
+    _notify();
+  }
+
+  // ─── 强提醒：打开应用时整页弹一张（内容由官网下发）──
+  //
+  // 与限制名单 / 最低版本同一套自律：**拉不到就什么都不弹**（没联网、
+  // 文件坏了、一条都不合格）。整页拦人是重型手段，不能因为一次网络抖动把
+  // 所有人挡在门外。
+  String strongNoticeJson = '';
+  int strongNoticeAt = 0;
+
+  /// 已经弹过的 id（逗号分隔，只留最近 20 条）。
+  String strongNoticeSeen = '';
+  bool _strongNoticeFetched = false;
+
+  /// 同一会话里重拉的间隔。以前是 6 小时 —— 改一句话要等到第二天才生效，
+  /// 用户反馈「只在安装时弹一次，内容更新了不触发」。这份文件只有几 KB，
+  /// 10 分钟一档不贵；冷启动那一次不管多久都重拉（见 refreshStrongNotice）。
+  static const int strongNoticeTtlMs = 10 * 60 * 1000;
+
+  Set<String> get strongNoticeSeenIds => strongNoticeSeen.isEmpty
+      ? const <String>{}
+      : strongNoticeSeen.split(',').where((e) => e.isNotEmpty).toSet();
+
+  /// 本次运行已经弹过的 id。**不落盘**：它的意思是「这一次打开已经
+  /// 给过了」，进程一重启就清空 —— 否则 `every: true` 的那条会在每一次
+  /// 重建时又跳出来（关掉→重建→又弹，用户永远进不了主界面）。
+  final Set<String> _strongNoticeShownNow = <String>{};
+
+  /// 这一次该弹哪一条（null = 不弹）。
+  StrongNotice? get strongNoticeNow {
+    final n = StrongNotice.pick(strongNoticeJson, locale, strongNoticeSeenIds);
+    if (n == null) return null;
+    // 本次已弹过：`every` 的意思是「每次打开弹一次」，
+    // 不是「每一次重建都弹」。
+    if (_strongNoticeShownNow.contains(n.key)) return null;
+    return n;
+  }
+
+  /// 用户关掉了这一条：记下来，默认同一条不再弹（`every` 除外）。
+  void dismissStrongNotice(StrongNotice n) {
+    if (n.id.isEmpty) return;
+    _strongNoticeShownNow.add(n.key);
+    final ids = strongNoticeSeenIds.toList();
+    if (!ids.contains(n.key)) {
+      ids.add(n.key);
+      while (ids.length > 20) {
+        ids.removeAt(0);
+      }
+      strongNoticeSeen = ids.join(',');
+      persist();
+    }
+    _notify();
+  }
+
+  /// 拉一次官网那份强提醒文件。
+  ///
+  /// 拉不到就什么都不做（沿用缓存里那份）；拉到了但一条都不合格就不覆盖
+  /// 上次那份好的—— 官网写崩了不该把用户手里那份好的盖掉。
+  Future<void> refreshStrongNotice({bool force = false}) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // 每次冷启动必拉一次（这一会话还没拉过），否则上一次的时间戳会把
+    // 新内容挡在门外—— 旧版就是这一条把「每次打开都拉」变成了「六小时拉一次」。
+    if (!force &&
+        _strongNoticeFetched &&
+        strongNoticeAt > 0 &&
+        now - strongNoticeAt < strongNoticeTtlMs) {
+      return;
+    }
+    final text = await fetchStrongNoticeJson(
+      userAgent: 'APRSlocus/$appVersion',
+    );
+    if (text == null || text.trim().isEmpty) return;
+    strongNoticeAt = now;
+    _strongNoticeFetched = true;
+    // 日志里留一笔：弹不出来时能自己看出是「没拉到」还是「拉到了但过期 / 已弹」。
+    _log(LogLevel.info, '强提醒',
+        '拉到一份，本次可用 ${StrongNotice.parseAll(text, locale).where((e) => e.worthShowing(strongNoticeSeenIds)).length} 条');
+    if (strongNoticeJson == text) {
+      persist();
+      return;
+    }
+    // 一条可用都解不出来：只更新时间戳，不动正文
+    if (StrongNotice.parseAll(text, locale).isEmpty) return;
+    strongNoticeJson = text;
+    persist();
+    _notify();
+  }
+
+  // ─── 更新安装包：放在哪、装完问不问 ───
+  //
+  // 下载好的包会复制一份到系统「下载」目录（用户自己翻得到），装上新版以后
+  // 再问一次「要不要删掉这个包」。三处状态：
+  //   * [updatePkgJson]：**这一个**包的记录（版本 / 文件名 / 下载时落盘的路径 / 大小），
+  //     换机恢复没有意义（文件名与路径都是本机的），不进备份；
+  //   * [updatePkgAction]：用户选过的做法（问 / 删 / 留）；
+  //   * [updatePkgAsked]：同一个版本只问一次。
+  static const updatePkgActions = ['ask', 'delete', 'keep'];
+
+  String updatePkgAction = 'ask';
+  String updatePkgJson = '';
+  String updatePkgAsked = '';
+
+  /// 已经欢迎过哪个版本的安装包（欢迎卡与「要不要留」分两步问，
+  /// 各自只问一次：留着安装包的人不应该每次启动都被欢迎一遍）。
+  String updatePkgWelcomeSeen = '';
+
+  Map<String, dynamic> get updatePkg {
+    if (updatePkgJson.isEmpty) return const {};
+    try {
+      final j = jsonDecode(updatePkgJson);
+      if (j is Map) return j.map((k, v) => MapEntry(k.toString(), v));
+    } catch (_) {}
+    return const {};
+  }
+
+  String get updatePkgTag => (updatePkg['tag'] ?? '').toString();
+  String get updatePkgName => (updatePkg['name'] ?? '').toString();
+  String get updatePkgPath => (updatePkg['path'] ?? '').toString();
+  int get updatePkgSize => ((updatePkg['size'] as num?) ?? 0).toInt();
+
+  /// 这一版改了什么（下载时从 release 正文里挑出的几行，装完的欢迎卡要用）。
+  List<String> get updatePkgNotes {
+    final raw = updatePkg['notes'];
+    if (raw is List) {
+      return [for (final e in raw) e.toString()];
+    }
+    return const [];
+  }
+
+  /// 记下一个刚下载好、并且已经复制进「下载」的安装包。
+  ///
+  /// [name] 是用户在文件管理器里看到的文件名，[path] 是下载时落在应用自己
+  /// 目录里的那一份（桌面端两者是同一个文件）。
+  void rememberUpdatePackage({
+    required String tag,
+    required String name,
+    required String path,
+    int size = 0,
+    List<String> notes = const [],
+  }) {
+    updatePkgJson = jsonEncode({
+      'tag': tag,
+      'name': name,
+      'path': path,
+      'size': size,
+      if (notes.isNotEmpty) 'notes': notes,
+    });
+    persist();
+    _notify();
+  }
+
+  /// 这一个包已经处理完了（删了 / 用户明确留着并且问过了）。
+  void forgetUpdatePackage() {
+    if (updatePkgJson.isEmpty) return;
+    updatePkgJson = '';
+    persist();
+    _notify();
+  }
+
+  /// 记住「这个版本已经欢迎过了」。
+  void markUpdatePkgWelcomeSeen(String tag) {
+    if (tag.isEmpty || updatePkgWelcomeSeen == tag) return;
+    updatePkgWelcomeSeen = tag;
+    persist();
+  }
+
+  /// 记住「这个版本已经问过删不删」。
+  void markUpdatePkgAsked(String tag) {
+    if (tag.isEmpty || updatePkgAsked == tag) return;
+    updatePkgAsked = tag;
+    persist();
+    _notify();
+  }
+
+  void setUpdatePkgAction(String v) {
+    if (!updatePkgActions.contains(v) || updatePkgAction == v) return;
+    updatePkgAction = v;
     persist();
     _notify();
   }
@@ -2527,6 +5204,55 @@ class AppState extends ChangeNotifier {
   double filterLat = 39.9042;
   double filterLng = 116.4074;
   int filterRadius = 300; // km
+
+  /// 热力图档位（0 弱 / 1 中 / 2 强）：决定热力光斑的大小与浓度。
+  /// 栅格地图与矢量地图共用同一个值（设置 → 显示 → 地图）。
+  int heatLevel = 1;
+
+  /// 地图标签：**无论台站多密 / 缩得多小**都绘制呼号标签（设置 → 显示）。
+  ///
+  /// 默认关，保持原有取舍：标签排版是每个标记最贵的一步，台站密时也最容易
+  /// 糊成一片，所以原逻辑只在 `台站数 <= 60 || 缩放 >= 13` 时才画。
+  /// 打开后忽略该阈值、**始终**绘制 —— 栅格与矢量两套地图共用。
+  bool mapLabelsAlways = false;
+
+  /// 地图「锁定地图中心」三态（见 [setMapFollowMode]）：0 关 / 1 正北朝上 / 2 航向朝上。
+  /// 默认关 —— 与原来一致，不锁就不跟着跑。
+  int mapFollowMode = 0;
+
+  /// 台站列表的排序方式（台站面板统计行右端那颗排序入口）。
+  ///
+  /// 取值 [stationSorts] 之一，认不出的值（改坏 / 将来改名字）一律回到 `call`。
+  /// 用户要求「排序要能记忆」—— 每次进面板都要重选一遍很烦，所以落盘、也进备份。
+  String stationSort = 'call';
+
+  /// [stationSort] 的合法取值（同时也是排序入口的菜单顺序）。
+  static const List<String> stationSorts = [
+    'call',
+    'recent',
+    'distance',
+    'status',
+  ];
+
+  /// 操作证书验证结果（JSON，见 [CracCertInfo]）。空串 = 没查过。
+  ///
+  /// 查询页（设置 → 高级 → 开发人员）查到就写这里，电台页的「认证信息」
+  /// 那块从它取数；清除也清这里。
+  String cracCertJson = '';
+
+  CracCertInfo? get cracCert => CracCertInfo.fromJson(cracCertJson);
+
+  /// 当前呼号去掉 SSID（`BG7LZQ-7` → `BG7LZQ`）。
+  String get myBaseCall => _baseCall(myCall);
+
+  void setCracCert(CracCertInfo? info) {
+    final next = info?.encode() ?? '';
+    if (next == cracCertJson) return;
+    cracCertJson = next;
+    persist();
+    _notify();
+  }
+
   int maxStations = 100000; // 台站上限（默认无限制，可下调）
 
   /// 数据包列表上限（历史记录条数）。原先硬编码 200，偏少。
@@ -2534,6 +5260,14 @@ class AppState extends ChangeNotifier {
 
   /// 单个台站的轨迹点数上限。原先硬编码 60，导致运动轨迹显示很不完整。
   int maxTrackPts = 300;
+
+  /// 台站保留天数（数据维护）。超过该天数没有再听到的台站会被自动清理，
+  /// 避免历史台站无限堆积；0 = 关闭自动清理（只保留手动入口）。
+  ///
+  /// 与 [maxStations]（条数上限）互补：条数上限管「最多留几个」，
+  /// 这个管「最久留多久」——两者都只在各自触发时才裁剪。收藏 / 手动
+  /// 添加 / 自己的台站**永不被自动清理**（见 [pruneOldStations]）。
+  int stationRetentionDays = 0;
   bool filterFollow = true; // 过滤中心跟随我的位置
 
   /// 未连接时的待发送队列（重连成功后补发）
@@ -2544,6 +5278,29 @@ class AppState extends ChangeNotifier {
   Timer? _keepaliveTimer;
   Timer? _reconnectTimer;
   bool _userDisconnected = false;
+
+  /// 用户（或智能体）是否主动断开过 —— 为 true 时自动重连不会把链路拉起来。
+  bool get userDisconnected => _userDisconnected;
+
+  /// 最近一帧**自定义状态报文**是否没能写进链路（socket 抖动 / 半开）。
+  ///
+  /// 状态报文是「内置 CONNECT + 自定义状态」一对：第二帧被吞掉时，aprs.fi 上的
+  /// 「台站状态」会永远停在 CONNECT 上，而保活每轮都先发 CONNECT —— 等于每 15s
+  /// 把错误的文本又续一次（射频模式更没有任何周期保活）。所以这里记住「上次自定义
+  /// 帧丢了」，由 [_keepaliveTimer] 无视发报门槛立刻补发，直到写成功为止。
+  bool _customStatusLost = false;
+
+  /// 最近一次把位置喂给盒子的时刻（喂位置按 30 秒节流：盒子侧 60 秒内算新鲜）
+  DateTime? _lastBoxFeed;
+
+  /// 盒子推送的节流时刻：手机状态 **5 秒**、附近台站 **15 秒**。
+  ///
+  /// 为什么分开节流：状态是"我自己的数字"（变得快、报文短 —— 心率/速度要跟上人），
+  /// 台站列表一次要发 8 行。用户反馈过"信息不够实时"，所以这两条都收紧了一档；
+  /// 更省的做法是让**盒子自己把倒计时走完**（固件已经这么做），这里只负责把
+  /// "当下的事实"尽快送过去。
+  DateTime? _lastBoxPushApp;
+  DateTime? _lastBoxPushNear;
 
   // 开发者模式：开启后显示模拟台站/模拟数据
   bool devMode = false;
@@ -2631,14 +5388,352 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 恢复出厂设置：清空**全部**本地数据与设置，并重新跑一次首次引导（OOBE）。
+  ///
+  /// 与 [clearAllData] 的区别：那个只清「内容」（台站/消息/日志/轨迹），
+  /// 保留呼号、服务器、信标等一切设置；本方法连**呼号与全部设置**一起清掉，
+  /// 相当于「重装」——适合把设备交给别人、或配置被改乱想从头来一遍。
+  ///
+  /// 实现上**不逐个 reset 字段再由 setter 落盘**（那既漏又慢），而是：
+  ///   ① 断开所有链路、停定位；
+  ///   ② 把内存里的设置/内容全部复位成字段默认值；
+  ///   ③ 复位各单例的内存态（主题/成就/翻译/已读荣誉）；
+  ///   ④ 磁盘 `p.clear()` 一把清干净，再把「出厂默认」的最小集合写回。
+  ///
+  /// ④ 的顺序很关键：先 clear 再让 [ThemeController.saveTo] 写回主题包，
+  /// 否则 clear 会把刚写进去的默认主题也抹掉。清完不调用 [persist]——
+  /// 那会把内存里的默认值整包写回去，等于白清（虽然值相同，但没必要）。
+  ///
+  /// 完成后 [oobeDone] 置回 false，App 层（见 app.dart）会切回向导页；
+  /// [reloadTick] 自增让 MaterialApp 换 key、丢掉整个旧导航栈。
+  Future<void> factoryReset() async {
+    // ① 先压住自动重连：断链会触发 onDisconnected → 立刻排重连，
+    //    若不在最前面置位，清完设置后会马上又拿旧参数去连。
+    //    （顺带作废「开始上报」确认 —— 恢复出厂后必须重新确认。）
+    _plannedLinkChange(disconnecting: true);
+    try {
+      aprs.disconnect();
+    } catch (_) {}
+    try {
+      acnLink.disconnect();
+    } catch (_) {}
+    try {
+      await tnc.disconnect(manual: false);
+    } catch (_) {}
+    try {
+      await audio.disconnect(manual: false);
+    } catch (_) {}
+    try {
+      await pkwdwpl.disconnect(manual: false);
+    } catch (_) {}
+    try {
+      await nmeaGps.disconnect(manual: false);
+    } catch (_) {}
+    try {
+      await box.disconnect(manual: false);
+    } catch (_) {}
+    try {
+      loc.stop();
+    } catch (_) {}
+    try {
+      await bleHr.disconnect();
+    } catch (_) {}
+    try {
+      garmin.stop();
+    } catch (_) {}
+    garminOn = false;
+
+    // ② 设置项复位（与字段声明处的默认值保持一致）
+    myCall = 'BV2AAA';
+    mySsid = '';
+    mySymbol = '>';
+    myComment = '';
+    aprsStatusText = '';
+    beaconEnabled = true;
+    beaconAutoAsked = false;
+    beaconArmed = false; // 恢复出厂：上报确认一并作废（与字段默认值一致）
+    dataNoticeAccepted = false;
+    // 单独同意也一样：磁盘上会被下面的 p.clear() 抹掉，内存里必须同时清，
+    // 否则「恢复出厂 → 首次引导」这段还带着上一次安装的同意。
+    consent.reset();
+    pendingConsent = {};
+    _consentThen = null;
+    pendingDataNotice = false;
+    agentNoticeAccepted = false;
+    pendingAgentNotice = false;
+    pendingAgentAuth = false;
+    agentAuthChecking = false;
+    agentAllowed = false;
+    agentAllow = null;
+    beaconInterval = 60;
+    beaconNetInterval = 300;
+    smartBeaconEnabled = false;
+    smartTiers
+      ..clear()
+      ..addAll(defaultSmartTiers());
+    beaconIncludeSpeed = true;
+    beaconIncludeCourse = true;
+    beaconIncludeBattery = true;
+    beaconPowerW = null;
+    beaconAntennaHeightFt = null;
+    beaconGainDb = null;
+    beaconAltOverrideM = null;
+    beaconIncludeHr = true;
+    beaconBarDetailed = true;
+    trackLogOn = false;
+    closeToTray = true;
+    networkSymbol = '';
+    extGpsStandby = true;
+    hrAlarmEnabled = true;
+    hrAlarmHigh = 150;
+    hrAlarmLow = 40;
+    crashDetectEnabled = true;
+    crashSensitivity = 'standard';
+    emergencyTel = '120';
+    beaconIncludeSteps = false;
+    beaconIncludeSats = false;
+    beaconIncludeDeskLoad = false;
+    acceptOtherSsidMsgs = true;
+    subsNotify = true;
+    beaconAmbiguity = 0;
+    notifStyle = 'plain';
+    notifLiveText = 'default';
+    _stepsBaseline = -1;
+    _stepsDayKey = '';
+    _stepsCarry = 0;
+    stepsToday = 0;
+    beaconIncludeTripMileage = false;
+    beaconIncludeTotalMileage = false;
+    totalMileageKm = 0;
+    beaconForceCoarse = false;
+    autoStartMode = 0;
+    bleHrId = '';
+    bleHrName = '';
+    bleHr.deviceId = '';
+    bleHr.deviceName = '';
+    garminUrl = '';
+    coordDatum = 'wgs84';
+    coordFormat = 'dec';
+    mapCenterCoord = false;
+    darkMode = false;
+    weatherEnabled = true;
+    noticeBanner = true;
+    locale = '';
+    themeColor = '';
+    uiScale = 1.0;
+    uiMaterial = '';
+    uiLayout = '';
+    liteMode = false;
+    featuresOff.clear();
+    mapType = 'gaode';
+    tileCacheOn = true;
+    offlineOnly = false;
+    updateChannel = kFallbackChannelId;
+    updateChannelsJson = '';
+    updateChannelsAt = 0;
+    _channelCfg = null;
+    updatePkgAction = 'ask';
+    updatePkgJson = '';
+    updatePkgAsked = '';
+    updatePkgWelcomeSeen = '';
+    strongNoticeJson = '';
+    strongNoticeAt = 0;
+    strongNoticeSeen = '';
+    adifMode = 'PKT';
+    adifSubMode = true;
+    adifBand = '';
+    adifFreq = '';
+    adifStripSsid = false;
+    locationMode = 'gps_network';
+    loc.mode = locationMode;
+    gpsIntervalSec = 1;
+    powerSave = false;
+    // 云同步是这台设备自己的登录，出厂复位就断开；云端数据不跟着删
+    syncMode = 'off';
+    syncAccount = '';
+    syncPassword = '';
+    syncAutoMinutes = 5;
+    syncMessagesOn = true;
+    syncTracksOn = true;
+    syncToken = '';
+    syncCall = '';
+    syncMsgAt = 0;
+    syncPullAt = 0;
+    syncTrackAt = 0;
+    syncMsgAllDone = false;
+    syncTrackSig = '{}';
+    syncServerSig = '{}';
+    _lowBatteryWarned = -1;
+    loc.samplingMs = 1000;
+    useSimLocation = false;
+    filterLat = 39.9042;
+    filterLng = 116.4074;
+    filterRadius = 300;
+    heatLevel = 1;
+    mapLabelsAlways = false;
+    mapFollowMode = 0;
+    stationFilter = const StationFilter();
+    applyFilterToMap = false;
+    mapHiddenTypes.clear();
+    stationSort = 'call';
+    cracCertJson = '';
+    maxStations = 100000;
+    maxPackets = 2000;
+    onlineWindowMin = 5;
+    _applyOnlineWindow();
+    maxTrackPts = 300;
+    stationRetentionDays = 0;
+    filterFollow = true;
+    receiveCountries.clear();
+    receiveOthers = false;
+    guideSeen.clear();
+    packetSearchHistory.clear();
+    serverHistory.clear();
+    labLandscape = false;
+    sensorAssist = true;
+    aprs.server = '';
+    aprs.port = 14580;
+    aprs.passcode = '-1';
+    aprs.account = '';
+    aprs.password = '';
+    acnServer = '';
+    acnPort = kAcnServerPort;
+    acnHttpPort = kAcnHttpPort;
+    acnPasscode = '';
+    _acnConfWarned = false;
+    acnAccount = '';
+    acnPassword = '';
+    acnLogin = null;
+    _acnRetryAt = null;
+    _acnAttempt = 0;
+    acnLast = null;
+    dataSource = srcAprsIs;
+    dataSourceMsg = srcAprsIs;
+    posTxExtra = <String>[];
+    advChannels = false;
+    enabledSources
+      ..clear()
+      ..add(srcAprsIs);
+    igateEnabled = false;
+    igateTwoWay = false;
+    _lastFilter = '';
+
+    // 内容与运行时状态
+    stations.clear();
+    myTrack.clear();
+    beaconMarks.clear();
+    messages.clear();
+    chatGroups.clear();
+    logs.clear();
+    packets.clear();
+    _readAt.clear();
+    _groupReadAt.clear();
+    packetsRx = 0;
+    packetsTx = 0;
+    acnRx = 0;
+    unreadMessages = 0;
+    myLat = null;
+    myLng = null;
+    myHasFix = false;
+    myHr = null;
+    myFixAt = null;
+    myHrAt = null;
+    ignoredStations.clear();
+    subscriptions.clear();
+    subHits.clear();
+    subUnread = 0;
+    _subJson = null;
+    _resetSelfFix();
+    _bumpStationsVersion();
+    _reconnectAttempt = 0;
+    _customStatusLost = false;
+    pendingDataNotice = false;
+
+    // ③ 单例内存态复位
+    ThemeController.instance.resetToDefaults();
+    AchievementCenter.instance.resetToDefaults();
+    TranslateService.instance.resetToDefaults();
+    AgentService.instance.resetToDefaults();
+    try {
+      await resetHonorSeen();
+    } catch (_) {}
+
+    // 配色写在全局 C 上（不在 C 里、也不随 rebuild 自动重算），必须显式重算，
+    // 否则「界面仍是上一个主题的配色」——主题包已清、C 还是旧的。
+    applySavedTheme();
+
+    // ④ 磁盘：先清空全部键，再把出厂默认的最小集合写回
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.clear();
+      await ThemeController.instance.saveTo(p);
+    } catch (_) {}
+    try {
+      await TrackLogStore.instance.clearAll();
+    } catch (_) {}
+    try {
+      await TileCache.clear();
+      TileMem.clear(); // 内存里那份也一起丢掉，否则清完缓存地图还画得出来
+    } catch (_) {}
+
+    // 收尾：清掉「不重连」闸门、进入向导、换 key 重建导航栈
+    _userDisconnected = false;
+    oobeDone = false;
+    reloadTick++;
+    _log(LogLevel.warn, '数据维护', '已恢复出厂设置：全部数据与设置已清除，正在重新运行首次引导');
+    _notify();
+  }
+
   // 持久化数据加载完成（用于启动画面）
   bool initialized = false;
 
   // 数据
   final List<Station> stations;
   final List<Packet> packets = [];
+
+  /// 正在把报文喂进 [_onAprsLine] 的那条链路的来源 id（见 `src*` 常量）。
+  ///
+  /// `_onAprsLine` 被抽象成「链接收 → 解析」的共用出口，收包处因此拿不到
+  /// 来源；而数据包页要标注每一条的来源。用一个「当前来源」在入口处设一下、
+  /// 在图里的 [_pushPacket] 读取即可 —— 解析全程同步，不会串包。
+  String _rxSource = 'local';
   final List<AprsMsg> messages;
   final List<ChatGroup> chatGroups = [];
+
+  /// 策略地图元素：`<群呼号>|<元素ID>` → 元素（自己的 + 群里收到的）。
+  /// 跨群同名 ID 靠 `groupId|id` 区分，见 [StrategyItem.key]。
+  final Map<String, StrategyItem> strategyItems = {};
+
+  /// 划线分片暂存：`<群>|<ID>` → 已收到的片（收齐才拼成一条线落图）。
+  final Map<String, Map<int, List<(double, double)>>> _lineParts = {};
+
+  /// 划线分片的颜色（`<群>|<ID>` → 颜色下标）：收齐拼装时要用首片带来的颜色，
+  /// 而分片暂存只记了坐标 —— 不单独存就会「线收齐了但颜色丢了」。
+  final Map<String, int> _linePartsColor = {};
+
+  /// 编号种子：每群每条新元素自增，生成短而不撞的 ID。
+  final Map<String, int> _strategySeq = {};
+
+  /// 等回执的已发策略帧：**帧的 APRS 消息 ID** → (发出时间, 帧文本, 群呼号)。
+  ///
+  /// 射频下策略帧用带 ack 的格式发出（`{id`），队友的标准自动 ack 会回到这里 ——
+  /// 于是「有没有人收到」不必自己造协议：匹配上就说明至少一个队友收到了。
+  /// APRS-IS 下用 no-ack（`{id_`），一般不会有人回，映射仅作为兜底记录。
+  final Map<String, (DateTime, String, String)> _strategyAckWait = {};
+
+  /// 本群还有几帧发出去没被任何队友确认（射频下即「可能丢了」的帧数）。
+  ///
+  /// 只统计 [_ackWindow] 内的帧：队友可能关着自动 ack，旧帧永远等不到回执 ——
+  /// 不设窗口的话提示会一直挂着，反而变成噪声。
+  int strategyAckPending(String groupCall) {
+    _pruneStrategyAckWait();
+    final gc = groupCall.toUpperCase();
+    return _strategyAckWait.values.where((v) => v.$3 == gc).length;
+  }
+
+  /// 等待队友回执的时间窗。超过即视为「不确认」（不一定丢，也可能对方关了 ack）。
+  static const Duration _ackWindow = Duration(seconds: 90);
+
   bool _stationsDirty = false; // 台站列表有变更，待节流保存
   final List<LogEntry> logs = [];
   int unreadMessages = 0; // 未读消息数（侧边栏/底部导航角标）
@@ -2658,11 +5753,27 @@ class AppState extends ChangeNotifier {
   /// 最近 60 秒内收到的数据包数（即当前接收速率，包/分）
   int get rxPerMin => _rxTimes.length;
 
+  /// 智能体代用户操作时置真（见 [executeAgentTool]）——此期间**普通运行日志
+  /// 不写进日志页**。
+  ///
+  /// 智能体的每个动作在对话里本来就看得见（确认条 + 工具结果行），再往日志页
+  /// 灌一遍「发送到群…」之类只会把用户真正要排查的链路日志淹掉。所以工具执行
+  /// 期间只放行 [LogLevel.warn] / [LogLevel.error]：真出问题仍有痕，正常操作不刷屏。
+  bool agentQuiet = false;
+
   /// 记录一条日志（最新在前，超出上限丢弃最旧）
   void _log(LogLevel level, String source, String message) {
+    if (agentQuiet && level.index < LogLevel.warn.index) return;
     logs.insert(0, LogEntry(DateTime.now(), level, source, message));
     if (logs.length > _maxLogs) logs.removeLast();
   }
+
+  /// 给页面用的日志入口（同一份 [logs]，见「数据包 → 日志」）。
+  ///
+  /// 只给真正需要用户自查的地方用：更新页的联网校验、强提醒拉取这类
+  /// 「界面上只写一句结论」的路径 —— 出问题时得能看出卡在哪一步。
+  void logLine(LogLevel level, String source, String message) =>
+      _log(level, source, message);
 
   void clearLogs() {
     logs.clear();
@@ -2721,6 +5832,150 @@ class AppState extends ChangeNotifier {
   final LocService loc = LocService();
   final AprsConnector aprs = createAprs();
 
+  /// APRSNETCN 的 24 小时台站接口（见 lib/aprsnetcn.dart）。
+  ///
+  /// 入口跟着界面里填的服务器地址走：换一台机器、自己搭一台试，拉的就是
+  /// 那一台的接口。token 只在内存里，不进备份。
+  AcnClient? _acnHttp;
+  AcnClient get acn {
+    final base = acnHttpBaseHost(acnServer, acnHttpPort);
+    final client = _acnHttp;
+    if (client != null && client.base == base) return client;
+    final fresh = AcnClient(base: base);
+    _acnHttp = fresh;
+    return fresh;
+  }
+
+  /// 服务器公布的能力与策略（`/api/v1/version`），页面打开时拉一次。
+  AcnInfo? acnInfo;
+
+  Future<void> fetchAcnInfo() async {
+    // 地址没填就没有接口可问，不去猜一台服务器
+    if (acnServer.trim().isEmpty) return;
+    try {
+      final info = await acn.info();
+      acnInfo = info;
+      _notify();
+    } catch (e) {
+      _log(LogLevel.warn, 'APRSNETCN', '服务器信息没取到：$e');
+    }
+  }
+
+  /// 上一次同步的结果（设置页/日志用），未同步过为 null。
+  AcnSyncResult? acnLast;
+  bool _acnSyncing = false;
+
+  /// 正在拉 24 小时台站。设置页的按钮据此置灰，不会连点两次。
+  bool get acnSyncing => _acnSyncing;
+
+  /// APRSNETCN 的第二条链路。
+  ///
+  /// 它本身是一台完整的 APRS-IS 服务器（同一套登录行、同一个 passcode，收发都
+  /// 行）：地址填进连接设置就是主链路；当第二条链路用时，收的一份并进台站列表，
+  /// 发的报文两边各发一份（见 [_sendAprs]）。
+  final AprsConnector acnLink = createAprs();
+
+  /// APRSNETCN 这条链路是否启用。
+  ///
+  /// 它不是一个「副链路开关」，而是和 APRS-IS 一样的一条数据来源：进
+  /// [enabledSources]、可以是发射来源、断了照样重连。只连这一条也成立。
+  bool get acnOn => enabledSources.contains(srcAcn);
+
+  /// 副链路的服务器地址、APRS 端口与 HTTP 端口。
+  ///
+  /// 不给默认地址：地址由用户自己填（服务器页空了就显示「未配置」）。协议是
+  /// 同一套，地址不该写死在连接里：服务器换机器、走反代、或者自己搭一台试用，
+  /// 都只改这几格。[acnPort] 是收报文的 TCP 口，[acnHttpPort] 是那台机器上
+  /// HTTP 接口的口，24 小时台站与云同步都走它。
+  // 不给默认地址：地址由用户自己填（服务器页空了就显示「未配置」）。
+  String acnServer = '';
+  int acnPort = kAcnServerPort;
+  int acnHttpPort = kAcnHttpPort;
+
+  bool get acnConnected => isUp(srcAcn);
+
+  /// APRSNETCN 这条链路自己收到的报文数。
+  ///
+  /// 不能复用 [packetsRx]：那是全部链路的合计，设备页的链路行拿它当
+  /// 「这条链路收了多少」会一直虚高。
+  int acnRx = 0;
+  bool _acnConnecting = false;
+  int _acnAttempt = 0;
+  /// 地址没填的提示只报一次：重连循环会把 `_connectAcn` 反复叫起来，
+  /// 每叫一次就刷一行错误日志只会把真正的错盖掉。
+  bool _acnConfWarned = false;
+
+  /// 下一次允许重连的时刻（1 秒 tick 里判断，不另起 Timer）
+  DateTime? _acnRetryAt;
+
+  /// 名单账号口令：只给副链路的登录行（`auth <账号> <口令>`）与 24 小时台站接口
+  /// 用。主链路永远不带 —— 发到 rotate.aprs2.net 有可能被当成非法登录词。
+  String acnAccount = '';
+  String acnPassword = '';
+
+  /// APRSNETCN 自己的 passcode：留空就用 APRS-IS 那一格的值。
+  ///
+  /// 两条链路是两套登录，只连 APRSNETCN 的人不该被要求先去填 APRS-IS 那张卡；
+  /// 同一台服务器通常同一个呼号同一个 passcode，所以留空时沿用。
+  String acnPasscode = '';
+
+  /// 副链路的登录结果：null = 还没收到服务器的 logresp；'' = 已验证；
+  /// 其他 = 服务器自己说的原因（`unverified` / `auth-failed` / `auth-required`）。
+  ///
+  /// 它与主链路的 `passcodeInvalid` 是两件事：副链路有自己的 passcode 与账号，
+  /// 拿它的未验证去把主横幅变黄是错的（见 [_noteAcnServerLine]）。
+  String? acnLogin;
+
+  /// 主链路最近收到的原始报文行（副链路镜像去重用，见 [_isMainMirror]）。
+  final Map<String, DateTime> _mainLines = {};
+
+  /// 这一行是不是刚在主链路上收到过（60 秒内、逐字相同）。
+  ///
+  /// APRSNETCN 那边是拿 rotate.aprs2.net 的报文再转给我们的，两边常常是同一帧。
+  /// 台站是 upsert，重复无害；数据包列表、收包计数与成就会各记两遍。
+  bool _isMainMirror(String line) {
+    final at = _mainLines[line];
+    return at != null && DateTime.now().difference(at).inSeconds < 60;
+  }
+
+  static final RegExp _acnReject = RegExp(r'not authorized \(([^)]*)\)');
+  static final RegExp _acnLogresp =
+      RegExp(r'logresp\s+(\S+)\s+(unverified|verified)');
+
+  /// 副链路服务器的说明行（`# logresp …` / `# aprsnetcn: not authorized (…)`）。
+  ///
+  /// 只写 [acnLogin]：passcode 是 -1 时服务器也会回 `unverified`，那是正常的
+  /// 只收状态；账号口令错了才会再来一句 `not authorized (auth-failed)`。
+  void _noteAcnServerLine(String line) {
+    final rejected = _acnReject.firstMatch(line);
+    if (rejected != null) {
+      final why = rejected.group(1) ?? 'rejected';
+      if (acnLogin == why) return;
+      acnLogin = why;
+      _log(LogLevel.warn, 'APRSNETCN', '被服务器拒绝：$why');
+      _notify();
+      return;
+    }
+    final m = _acnLogresp.firstMatch(line);
+    if (m == null) return;
+    final unverified = m.group(2)!.toLowerCase() == 'unverified';
+    final value = unverified ? 'unverified' : '';
+    if (acnLogin == value) return;
+    acnLogin = value;
+    _log(LogLevel.info, 'APRSNETCN',
+        unverified ? '登录未验证（只按 passcode 收报文）' : '登录已验证');
+    _notify();
+  }
+
+  void _noteMainLine(String line) {
+    final now = DateTime.now();
+    _mainLines[line] = now;
+    // 只在超长时清一次过期的：多数报文 60 秒后自动失效，不必每帧遍历。
+    if (_mainLines.length > 400) {
+      _mainLines.removeWhere((_, t) => now.difference(t).inSeconds >= 60);
+    }
+  }
+
   Timer? _simTimer;
   Timer? _tickTimer;
 
@@ -2734,7 +5989,14 @@ class AppState extends ChangeNotifier {
     try {
       final p = await SharedPreferences.getInstance();
       myCall = p.getString('myCall') ?? myCall;
-      mySsid = p.getInt('mySsid') ?? mySsid;
+      // 旧版本存整数（0 = 无后缀，1–15 = 带数字后缀）：两种类型都认，
+      // 认不出的值一律回到「无后缀」，而不是把脏字符串当成呼号的一部分发出去。
+      final rawSsid = p.get('mySsid');
+      if (rawSsid is int) {
+        mySsid = rawSsid == 0 ? '' : '$rawSsid';
+      } else if (rawSsid is String) {
+        mySsid = normalizeSsid(rawSsid) ?? mySsid;
+      }
       mySymbol = p.getString('mySymbol') ?? mySymbol;
       myComment = p.getString('myComment') ?? myComment;
       // 迁移：老版本会把 'APRSlocus 移动台' 当作默认备注存下来。
@@ -2742,6 +6004,10 @@ class AppState extends ChangeNotifier {
       if (myComment == _legacyDefaultComment) myComment = '';
       beaconEnabled = p.getBool('beacon') ?? beaconEnabled;
       beaconAutoAsked = p.getBool('beaconAutoAsked') ?? beaconAutoAsked;
+    dataNoticeAccepted = p.getBool('dataNoticeAccepted') ?? false;
+    // 单独同意（用户协议 V2.0 附件一）：与上面那份告知分开存、分开读。
+    await consent.load();
+    agentNoticeAccepted = p.getBool('agentNoticeAccepted') ?? false;
       beaconInterval = p.getInt('beaconInterval') ?? beaconInterval;
       beaconNetInterval =
           p.getInt('beaconNetInterval') ?? beaconNetInterval;
@@ -2777,6 +6043,8 @@ class AppState extends ChangeNotifier {
       beaconIncludeHr = p.getBool('beaconIncludeHr') ?? beaconIncludeHr;
       beaconBarDetailed =
           p.getBool('beaconBarDetailed') ?? beaconBarDetailed;
+      trackLogOn = p.getBool('trackLogOn') ?? trackLogOn;
+      closeToTray = p.getBool('closeToTray') ?? closeToTray;
       networkSymbol = p.getString('networkSymbol') ?? networkSymbol;
       extGpsStandby = p.getBool('extGpsStandby') ?? extGpsStandby;
       hrAlarmEnabled = p.getBool('hrAlarmEnabled') ?? hrAlarmEnabled;
@@ -2784,13 +6052,33 @@ class AppState extends ChangeNotifier {
       hrAlarmLow = p.getInt('hrAlarmLow') ?? hrAlarmLow;
       crashDetectEnabled =
           p.getBool('crashDetectEnabled') ?? crashDetectEnabled;
+      crashSensitivity =
+          p.getString('crashSensitivity') ?? crashSensitivity;
       emergencyTel = p.getString('emergencyTel') ?? emergencyTel;
       beaconIncludeSteps =
           p.getBool('beaconIncludeSteps') ?? beaconIncludeSteps;
+      beaconIncludeSats =
+          p.getBool('beaconIncludeSats') ?? beaconIncludeSats;
+      beaconIncludeDeskLoad =
+          p.getBool('beaconIncludeDeskLoad') ?? beaconIncludeDeskLoad;
+      beaconAmbiguity =
+          (p.getInt('beaconAmbiguity') ?? beaconAmbiguity).clamp(0, 3);
+      // 只认两种值：早期版本存过 'focus'（小米焦点通知那一档已删）。
+      // 不归一化的话它既不是 plain 也不是 live，用户选了实时更新也永远提不上去。
+      notifStyle = p.getString('notifStyle') == 'live' ? 'live' : 'plain';
+      final liveText = p.getString('notifLiveText');
+      notifLiveText =
+          _notifLiveTexts.contains(liveText) ? liveText! : 'default';
+      loc.setLiveUpdates(notifLiveUpdates);
       // 计步基线：跨重启必须留着，否则重启后「今日步数」会从 0 重新数
       _stepsBaseline = p.getInt('stepsBaseline') ?? _stepsBaseline;
       _stepsDayKey = p.getString('stepsDayKey') ?? _stepsDayKey;
       _stepsCarry = p.getInt('stepsCarry') ?? _stepsCarry;
+      // 今日步数本身也要接回来：不接的话，本次启动在拿到第一个传感器读数前
+      // 会先显示 0，而**升级/重装/改文件重编译**若一直没等到读数，就永远停在 0
+      // —— 用户报的「升级后步数变 0」正是这一档。跨天时下面 [_syncSteps] 会自己归零。
+      final savedToday = p.getInt('stepsToday');
+      if (savedToday != null) stepsToday = savedToday;
       beaconIncludeTripMileage =
           p.getBool('beaconIncludeTripMileage') ?? beaconIncludeTripMileage;
       beaconIncludeTotalMileage = p.getBool('beaconIncludeTotalMileage') ??
@@ -2798,6 +6086,11 @@ class AppState extends ChangeNotifier {
       totalMileageKm = p.getDouble('totalMileageKm') ?? totalMileageKm;
       beaconForceCoarse =
           p.getBool('beaconForceCoarse') ?? beaconForceCoarse;
+      // 打开软件时自动做什么：认不出的值（改坏 / 旧版不写这一项）回到「不做操作」
+      autoStartMode = (p.getInt('autoStartMode') ?? autoStartMode).clamp(0, 2);
+      acceptOtherSsidMsgs =
+          p.getBool('acceptOtherSsidMsgs') ?? acceptOtherSsidMsgs;
+      subsNotify = p.getBool('subsNotify') ?? subsNotify;
       bleHrId = p.getString('bleHrId') ?? bleHrId;
       bleHrName = p.getString('bleHrName') ?? bleHrName;
       // 只恢复「记住的是哪台」，不自动连（权限/设备不在身边时静默失败更困惑）
@@ -2810,6 +6103,9 @@ class AppState extends ChangeNotifier {
       garminUrl = p.getString('garminUrl') ?? garminUrl;
       garminOn = false;
       coordDatum = p.getString('coordDatum') ?? coordDatum;
+      coordFormat =
+          coordFormatName(coordFormatOf(p.getString('coordFormat') ?? coordFormat));
+      mapCenterCoord = p.getBool('mapCenterCoord') ?? mapCenterCoord;
       darkMode = p.getBool('darkMode') ?? darkMode;
       weatherEnabled = p.getBool('weatherEnabled') ?? weatherEnabled;
       noticeBanner = p.getBool('noticeBanner') ?? noticeBanner;
@@ -2823,11 +6119,30 @@ class AppState extends ChangeNotifier {
       uiLayout = uiLayoutName(
         uiLayoutOf(p.getString('uiLayout') ?? uiLayout),
       );
+      liteMode = p.getBool('liteMode') ?? liteMode;
+      featuresOff
+        ..clear()
+        ..addAll(
+          (p.getStringList('featuresOff') ?? const <String>[])
+              .where((id) => appFeatureById(id) != null),
+        );
       mapType = p.getString('mapType') ?? mapType;
       // 离线地图：缓存开关与「仅离线」模式
       tileCacheOn = p.getBool('tileCacheOn') ?? tileCacheOn;
       offlineOnly = p.getBool('offlineOnly') ?? offlineOnly;
       updateChannel = p.getString('updateChannel') ?? updateChannel;
+      updateChannelsJson = p.getString('updateChannelsJson') ?? updateChannelsJson;
+      updateChannelsAt = p.getInt('updateChannelsAt') ?? updateChannelsAt;
+      _channelCfg = null;
+      updatePkgAction = p.getString('updatePkgAction') ?? updatePkgAction;
+      if (!updatePkgActions.contains(updatePkgAction)) updatePkgAction = 'ask';
+      updatePkgJson = p.getString('updatePkgJson') ?? updatePkgJson;
+      updatePkgAsked = p.getString('updatePkgAsked') ?? updatePkgAsked;
+      updatePkgWelcomeSeen =
+          p.getString('updatePkgWelcomeSeen') ?? updatePkgWelcomeSeen;
+      strongNoticeJson = p.getString('strongNoticeJson') ?? strongNoticeJson;
+      strongNoticeAt = p.getInt('strongNoticeAt') ?? strongNoticeAt;
+      strongNoticeSeen = p.getString('strongNoticeSeen') ?? strongNoticeSeen;
       adifMode = p.getString('adifMode') ?? adifMode;
       adifSubMode = p.getBool('adifSubMode') ?? adifSubMode;
       adifBand = p.getString('adifBand') ?? adifBand;
@@ -2835,16 +6150,70 @@ class AppState extends ChangeNotifier {
       adifStripSsid = p.getBool('adifStripSsid') ?? adifStripSsid;
       locationMode = p.getString('locationMode') ?? locationMode;
       loc.mode = locationMode;
+      gpsIntervalSec = p.getInt('gpsIntervalSec') ?? gpsIntervalSec;
+      // 认不出的档位夹回默认，并把值交给定位服务（启动时就要带上）。
+      if (!gpsSampleChoices.contains(gpsIntervalSec)) gpsIntervalSec = 1;
+      // 省电模式必须在算采样间隔**之前**读回来，否则冷启那一瞬间会按
+      // 用户原来的档位去注册 GPS，下一次 tick 才纠正
+      powerSave = p.getBool('powerSave') ?? powerSave;
+      loc.samplingMs = effectiveGpsIntervalSec * 1000;
+      // 云同步：开关、账号、令牌与三类数据的上次时间。令牌不进备份。
+      syncMode = p.getString('syncMode') ?? syncMode;
+      if (!syncModes.contains(syncMode)) syncMode = 'off';
+      syncAccount = p.getString('syncAccount') ?? syncAccount;
+      syncPassword = p.getString('syncPassword') ?? syncPassword;
+      syncToken = p.getString('syncToken') ?? syncToken;
+      syncDeviceId = p.getString('syncDeviceId') ?? syncDeviceId;
+      syncCall = p.getString('syncCall') ?? syncCall;
+      syncMsgAt = p.getInt('syncMsgAt') ?? syncMsgAt;
+      syncPullAt = p.getInt('syncPullAt') ?? syncPullAt;
+      syncTrackAt = p.getInt('syncTrackAt') ?? syncTrackAt;
+      syncMsgAllDone = p.getBool('syncMsgAllDone') ?? syncMsgAllDone;
+      syncTrackSig = p.getString('syncTrackSig') ?? syncTrackSig;
+      syncServerSig = p.getString('syncServerSig') ?? syncServerSig;
+      syncAutoMinutes = p.getInt('syncAutoMinutes') ?? syncAutoMinutes;
+      if (!syncAutoChoices.contains(syncAutoMinutes)) syncAutoMinutes = 5;
+      syncMessagesOn = p.getBool('syncMessagesOn') ?? syncMessagesOn;
+      syncTracksOn = p.getBool('syncTracksOn') ?? syncTracksOn;
       useSimLocation = p.getBool('useSimLocation') ?? useSimLocation;
       filterLat = p.getDouble('filterLat') ?? filterLat;
       filterLng = p.getDouble('filterLng') ?? filterLng;
       filterRadius = p.getInt('filterRadius') ?? filterRadius;
+      heatLevel = (p.getInt('heatLevel') ?? heatLevel).clamp(0, 2);
+      mapLabelsAlways = p.getBool('mapLabelsAlways') ?? mapLabelsAlways;
+      // 地图锁定中心的三态：认不出的值夹回 0..2（改坏 / 旧版不写这一项）
+      mapFollowMode = (p.getInt('mapFollowMode') ?? mapFollowMode).clamp(0, 2);
+      // 台站筛选：启动后保持上次那一套（含脏值回落，见 StationFilter.fromJson）
+      try {
+        final sf = p.getString('stationFilterJson');
+        if (sf != null && sf.isNotEmpty) {
+          stationFilter = StationFilter.fromJson(jsonDecode(sf));
+        }
+      } catch (_) {}
+      applyFilterToMap = p.getBool('applyFilterToMap') ?? applyFilterToMap;
+      // 地图图层筛选：认不出的类型名直接丢掉（改坏 / 将来改名都不该崩）
+      try {
+        final hid = p.getStringList('mapHiddenTypes');
+        if (hid != null) {
+          mapHiddenTypes
+            ..clear()
+            ..addAll(hid.map(typeGroupByName).whereType<TypeGroup>());
+        }
+      } catch (_) {}
+      // 台站排序：认不出的值（改坏 / 旧版本号）回到默认的按呼号排
+      final savedSort = p.getString('stationSort');
+      if (savedSort != null && stationSorts.contains(savedSort)) {
+        stationSort = savedSort;
+      }
+      cracCertJson = p.getString('cracCertJson') ?? cracCertJson;
       maxStations = p.getInt('maxStations') ?? maxStations;
       maxPackets = p.getInt('maxPackets') ?? maxPackets;
       onlineWindowMin = p.getInt('onlineWindowMin') ?? onlineWindowMin;
       // 同步到模型层，供 effectiveStatus / 地图绘制使用
       _applyOnlineWindow();
       maxTrackPts = p.getInt('maxTrackPts') ?? maxTrackPts;
+      stationRetentionDays =
+          p.getInt('stationRetentionDays') ?? stationRetentionDays;
       filterFollow = p.getBool('filterFollow') ?? filterFollow;
       // 按国家接收
       try {
@@ -2860,17 +6229,49 @@ class AppState extends ChangeNotifier {
         final gseen = p.getStringList('guideSeen');
         if (gseen != null) guideSeen..clear()..addAll(gseen);
       } catch (_) {}
+      // 输入框历史（搜索词 / 服务器地址，见 lib/input_history.dart）
+      try {
+        final ps = p.getStringList('packetSearchHistory');
+        if (ps != null) packetSearchHistory..clear()..addAll(ps);
+      } catch (_) {}
+      try {
+        final sh = p.getStringList('serverHistory');
+        if (sh != null) serverHistory..clear()..addAll(sh);
+      } catch (_) {}
       labLandscape = p.getBool('labLandscape') ?? labLandscape;
       sensorAssist = p.getBool('sensorAssist') ?? sensorAssist;
       oobeDone = p.getBool('oobeDone') ?? oobeDone;
       aprs.server = p.getString('server') ?? aprs.server;
       aprs.port = p.getInt('port') ?? aprs.port;
       aprs.passcode = p.getString('passcode') ?? aprs.passcode;
+      aprs.account = p.getString('aprsAccount') ?? aprs.account;
+      aprs.password = p.getString('aprsPassword') ?? aprs.password;
+      // 副链路的账号口令与开关。老版本把这几格放在主连接卡里、存在
+      // aprsAccount/aprsPassword 下：那时只有在主连接就是 APRSNETCN 时才会显示，
+      // 所以那两个值可以无歧义地当作副链路的账号口令搬过来（只搬一次，之后
+      // 以 acn* 为准）。
+      // 老版本的「同时连接 APRSNETCN」是一个独立开关（acnOn），新版本把它
+      // 并进 enabledSources：读到旧值就补一条来源，之后只听 enabledSources。
+      final legacyAcnOn = p.getBool('acnOn') ?? false;
+      acnServer = p.getString('acnServer') ?? acnServer;
+      acnPort = p.getInt('acnPort') ?? acnPort;
+      final httpPort = p.getInt('acnHttpPort') ?? acnHttpPort;
+      if (httpPort > 0 && httpPort <= 65535) acnHttpPort = httpPort;
+      acnPasscode = p.getString('acnPasscode') ?? acnPasscode;
+      acnAccount = p.getString('acnAccount') ??
+          (aprs.server.trim() == kAcnServerHost ? aprs.account : '');
+      acnPassword = p.getString('acnPassword') ??
+          (aprs.server.trim() == kAcnServerHost ? aprs.password : '');
       dataSource = p.getString('dataSource') ?? dataSource;
+      dataSourceMsg = p.getString('dataSourceMsg') ?? dataSource;
       // 容错：非法/旧值一律回落 APRS-IS，避免多来源判断失配。
       // pkwdwpl 是**只读**来源，即使旧配置里存了它也不能当发射来源。
       if (!canTransmit(dataSource)) {
         dataSource = srcAprsIs;
+      }
+      // 消息的发射来源同一条规矩；旧版本没存过这个键，就跟位置那条一致。
+      if (!canTransmit(dataSourceMsg)) {
+        dataSourceMsg = dataSource;
       }
       // 多选来源：旧版本只存了单个 dataSource，这里做一次迁移
       // （把旧值当成唯一启用项），避免升级后「什么都没启用」。
@@ -2884,6 +6285,8 @@ class AppState extends ChangeNotifier {
       } else {
         enabledSources.add(dataSource);
       }
+      // 旧版本的「同时连接 APRSNETCN」补成一条来源。
+      if (legacyAcnOn) enabledSources.add(srcAcn);
       // 发射来源必须落在已启用集合里，否则启动后永远连不上。
       // 注意不能直接取 first：集合里可能只有 pkwdwpl（只读），那样发射就没有落点。
       if (!enabledSources.contains(dataSource)) {
@@ -2892,18 +6295,67 @@ class AppState extends ChangeNotifier {
           orElse: () => srcAprsIs,
         );
       }
+      // 消息那条同样要落在已启用集合里：落空就退回位置那条。
+      if (!enabledSources.contains(dataSourceMsg)) {
+        dataSourceMsg = dataSource;
+      }
+      // 「同时发」的额外链路：只留还在启用、还能发射、且不是主链路的那几个。
+      posTxExtra = (p.getStringList('posTxExtra') ?? <String>[])
+          .map(_normalizeSrc)
+          .where((s) =>
+              s != dataSource && enabledSources.contains(s) && canTransmit(s))
+          .toSet()
+          .toList();
+      advChannels = p.getBool('advChannels') ?? advChannels;
       igateEnabled = p.getBool('igateEnabled') ?? igateEnabled;
       igateTwoWay = p.getBool('igateTwoWay') ?? igateTwoWay;
       await tnc.load();
       await audio.load();
       await pkwdwpl.load();
+      await nmeaGps.load();
+      await box.load();
+      // 远程限制名单：启动就查一次（放在配置载入之后 —— 要用到 myFullCall）。
+      // ⚠ 用 timeout 把"等它"限制在 400ms：只有 prefs 读 + 缓存比对这么快。
+      // 联网那份**不会**被取消（超时只是不再等它），会在后台跑完并自己通知 ——
+      // 于是野外弱网/断网时启动画面不会被一次最长 8 秒的连接拖住，而"命中后
+      // 离线也拦"的语义也不受影响。
+      await recheckBlacklist()
+          .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      // 官网要求的最低版本：同样启动就查一次，同样只等 400ms（联网那份后台跑完）。
+      await recheckMinVersion()
+          .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      // 智能体授权名单：同样启动就查一次，也用 400ms 上限（联网请求会后台跑完）。
+      await recheckAgentAllow()
+          .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      // 更新渠道清单（官网下发）：6 小时一次。拉不到就用缓存/内置那份，
+      // 更新这条路不受影响，所以同样只等 400ms。
+      await refreshUpdateChannels()
+          .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      // 强提醒（官网下发）：同样启动就查一次、同样只等 400ms。
+      await refreshStrongNotice()
+          .timeout(const Duration(milliseconds: 400), onTimeout: () {});
       final savedLat = p.getDouble('myLat');
       final savedLng = p.getDouble('myLng');
       if (savedLat != null && savedLng != null) {
         myLat = savedLat;
         myLng = savedLng;
         myHasFix = true;
+        // ⚠ 这只是「上次保存的位置」，**不是本轮的定位** —— 记上这一笔，
+        // 让上报闸（myPositionReportable）在收到真实定位前一直关着。
+        // 否则定位没开、坐标还是旧的，就会把这个错位置当成「我在哪」发出去。
+        _pendingSavedPos = true;
         locStatus = '已保存位置';
+      }
+      // 模拟位置（手动定位）模式下，保存的 myLat/myLng **就是**用户选定的坐标，
+      // 不是「上一次的实时定位」—— 上面那套「先关着上报闸」对它不适用。
+      // 而系统 GPS 的那条自动定位路径（见构造器里的延时 startTracking）会被
+      // useSimLocation 挡掉，所以这里必须放行：否则启动后坐标虽然装回来了，
+      // 上报闸却一直关着（locStatus 停在「已保存位置」/界面显示「等待定位」），
+      // 用户得再点一次「应用坐标」才恢复 —— 正是用户反馈的现象。
+      if (useSimLocation && savedLat != null && savedLng != null) {
+        _pendingSavedPos = false;
+        locStatus = '模拟位置';
+        _syncFilterToPosition(); // 过滤中心跟随手动坐标（filterFollow 时）
       }
       // 注意：devMode 不持久化，启动始终为干净的演示关闭状态
       // 加载消息
@@ -2926,6 +6378,18 @@ class AppState extends ChangeNotifier {
           chatGroups.addAll(
             list.map((j) => ChatGroup.fromJson(j as Map<String, dynamic>)),
           );
+        } catch (_) {}
+      }
+      // 加载策略地图元素
+      final stratJson = p.getString('strategyItems');
+      if (stratJson != null && stratJson.isNotEmpty) {
+        try {
+          final list = jsonDecode(stratJson) as List;
+          strategyItems.clear();
+          for (final j in list) {
+            final it = StrategyItem.fromJson(j as Map<String, dynamic>);
+            strategyItems[it.key] = it;
+          }
         } catch (_) {}
       }
       // 加载会话已读时间点
@@ -2951,8 +6415,27 @@ class AppState extends ChangeNotifier {
         } catch (_) {}
       }
       _recalcUnread();
+      // 加载本地屏蔽台站
+      ignoredStations
+        ..clear()
+        ..addAll(p.getStringList('ignoredStations') ?? const []);
+      // 加载订阅规则与命中记录（坏了就当没有，不影响启动）
+      final subRaw = p.getString('subscriptions');
+      if (subRaw != null && subRaw.isNotEmpty) {
+        final d = decodeSubscriptions(subRaw);
+        subscriptions
+          ..clear()
+          ..addAll(d.rules);
+        subHits
+          ..clear()
+          ..addAll(d.hits);
+        _subJson = subRaw;
+      }
       // 加载收藏/手动联系人
       _loadStations(p);
+      // 数据维护：若用户开启了「台站保留天数」，启动时顺带清一次过时台站
+      // （放在 _loadStations 之后，且不会碰收藏/手动条目）。
+      _autoPruneStations();
       // 应用保存的主题（深色/自定义色）——必须在 initialized 前，避免先渲染默认皮肤
       // 主题要在 applySavedTheme 之前加载：后者会读当前主题的令牌覆写
       await ThemeController.instance.load(p);
@@ -2990,11 +6473,13 @@ class AppState extends ChangeNotifier {
   /// [persistNow] 的真正写入口（抽出来是为了让「导出前落盘」与「顺手保存」共用同一份键列表）
   Future<void> _writePrefs(SharedPreferences p) async {
     await p.setString('myCall', myCall);
-    await p.setInt('mySsid', mySsid);
+    await p.setString('mySsid', mySsid);
     await p.setString('mySymbol', mySymbol);
     await p.setString('myComment', myComment);
     await p.setBool('beacon', beaconEnabled);
     await p.setBool('beaconAutoAsked', beaconAutoAsked);
+    await p.setBool('dataNoticeAccepted', dataNoticeAccepted);
+    await p.setBool('agentNoticeAccepted', agentNoticeAccepted);
     await p.setInt('beaconInterval', beaconInterval);
     await p.setInt('beaconNetInterval', beaconNetInterval);
     _ensureSmartTiers();
@@ -3035,25 +6520,39 @@ class AppState extends ChangeNotifier {
     await p.setString('aprsStatusText', aprsStatusText);
     await p.setBool('beaconIncludeHr', beaconIncludeHr);
     await p.setBool('beaconBarDetailed', beaconBarDetailed);
+    await p.setBool('trackLogOn', trackLogOn);
+    await p.setBool('closeToTray', closeToTray);
     await p.setString('networkSymbol', networkSymbol);
     await p.setBool('extGpsStandby', extGpsStandby);
     await p.setBool('hrAlarmEnabled', hrAlarmEnabled);
     await p.setInt('hrAlarmHigh', hrAlarmHigh);
     await p.setInt('hrAlarmLow', hrAlarmLow);
     await p.setBool('crashDetectEnabled', crashDetectEnabled);
+    await p.setString('crashSensitivity', crashSensitivity);
     await p.setString('emergencyTel', emergencyTel);
     await p.setBool('beaconIncludeSteps', beaconIncludeSteps);
+    await p.setBool('beaconIncludeSats', beaconIncludeSats);
+    await p.setBool('beaconIncludeDeskLoad', beaconIncludeDeskLoad);
+    await p.setBool('acceptOtherSsidMsgs', acceptOtherSsidMsgs);
+    await p.setBool('subsNotify', subsNotify);
+    await p.setInt('beaconAmbiguity', beaconAmbiguity);
+    await p.setString('notifStyle', notifStyle);
+    await p.setString('notifLiveText', notifLiveText);
     await p.setInt('stepsBaseline', _stepsBaseline);
     await p.setString('stepsDayKey', _stepsDayKey);
     await p.setInt('stepsCarry', _stepsCarry);
+    await p.setInt('stepsToday', stepsToday);
     await p.setBool('beaconIncludeTripMileage', beaconIncludeTripMileage);
     await p.setBool('beaconIncludeTotalMileage', beaconIncludeTotalMileage);
     await p.setDouble('totalMileageKm', totalMileageKm);
     await p.setBool('beaconForceCoarse', beaconForceCoarse);
+    await p.setInt('autoStartMode', autoStartMode);
     await p.setString('bleHrId', bleHrId);
     await p.setString('bleHrName', bleHrName);
     await p.setString('garminUrl', garminUrl);
     await p.setString('coordDatum', coordDatum);
+    await p.setString('coordFormat', coordFormat);
+    await p.setBool('mapCenterCoord', mapCenterCoord);
     await p.setBool('darkMode', darkMode);
     await p.setBool('weatherEnabled', weatherEnabled);
     await p.setBool('noticeBanner', noticeBanner);
@@ -3062,27 +6561,70 @@ class AppState extends ChangeNotifier {
     await p.setDouble('uiScale', uiScale);
     await p.setString('uiMaterial', uiMaterial);
     await p.setString('uiLayout', uiLayout);
+    await p.setBool('liteMode', liteMode);
+    await p.setStringList('featuresOff', featuresOff.toList()..sort());
     await p.setString('mapType', mapType);
     await p.setBool('tileCacheOn', tileCacheOn);
     await p.setBool('offlineOnly', offlineOnly);
     await p.setString('updateChannel', updateChannel);
+    await p.setString('updateChannelsJson', updateChannelsJson);
+    await p.setInt('updateChannelsAt', updateChannelsAt);
+    await p.setString('updatePkgAction', updatePkgAction);
+    await p.setString('updatePkgJson', updatePkgJson);
+    await p.setString('updatePkgAsked', updatePkgAsked);
+    await p.setString('updatePkgWelcomeSeen', updatePkgWelcomeSeen);
+    await p.setString('strongNoticeJson', strongNoticeJson);
+    await p.setInt('strongNoticeAt', strongNoticeAt);
+    await p.setString('strongNoticeSeen', strongNoticeSeen);
     await p.setString('adifMode', adifMode);
     await p.setBool('adifSubMode', adifSubMode);
     await p.setString('adifBand', adifBand);
     await p.setString('adifFreq', adifFreq);
     await p.setBool('adifStripSsid', adifStripSsid);
     await p.setString('locationMode', locationMode);
+    await p.setInt('gpsIntervalSec', gpsIntervalSec);
+    await p.setBool('powerSave', powerSave);
+    await p.setString('syncMode', syncMode);
+    await p.setString('syncAccount', syncAccount);
+    await p.setString('syncPassword', syncPassword);
+    await p.setString('syncToken', syncToken);
+    await p.setString('syncDeviceId', syncDeviceId);
+    await p.setString('syncCall', syncCall);
+    await p.setInt('syncMsgAt', syncMsgAt);
+    await p.setInt('syncPullAt', syncPullAt);
+    await p.setInt('syncTrackAt', syncTrackAt);
+    await p.setBool('syncMsgAllDone', syncMsgAllDone);
+    await p.setString('syncTrackSig', syncTrackSig);
+    await p.setString('syncServerSig', syncServerSig);
+    await p.setInt('syncAutoMinutes', syncAutoMinutes);
+    await p.setBool('syncMessagesOn', syncMessagesOn);
+    await p.setBool('syncTracksOn', syncTracksOn);
     await p.setBool('useSimLocation', useSimLocation);
     await p.setDouble('filterLat', filterLat);
     await p.setDouble('filterLng', filterLng);
     await p.setInt('filterRadius', filterRadius);
+    await p.setInt('heatLevel', heatLevel);
+    await p.setBool('mapLabelsAlways', mapLabelsAlways);
+    await p.setInt('mapFollowMode', mapFollowMode);
+    await p.setString('stationFilterJson', jsonEncode(stationFilter.toJson()));
+    await p.setBool('applyFilterToMap', applyFilterToMap);
+    await p.setStringList(
+        'mapHiddenTypes', mapHiddenTypes.map((g) => g.name).toList());
+    await p.setString('stationSort', stationSort);
+    await p.setString('cracCertJson', cracCertJson);
     await p.setInt('maxStations', maxStations);
     await p.setInt('maxPackets', maxPackets);
     await p.setInt('onlineWindowMin', onlineWindowMin);
     await p.setInt('maxTrackPts', maxTrackPts);
+    await p.setInt('stationRetentionDays', stationRetentionDays);
     await p.setBool('filterFollow', filterFollow);
     await p.setStringList('receiveCountries', receiveCountries);
     await p.setStringList('guideSeen', guideSeen.toList());
+    await p.setStringList('packetSearchHistory', packetSearchHistory);
+    // 订阅规则 + 命中记录（合成一条 JSON，省得逐条写键）
+    await p.setString(
+        'subscriptions', _subJson ?? encodeSubscriptions(subscriptions, subHits));
+    await p.setStringList('serverHistory', serverHistory);
     await p.setBool('receiveOthers', receiveOthers);
     await p.setBool('labLandscape', labLandscape);
     await p.setBool('sensorAssist', sensorAssist);
@@ -3090,8 +6632,22 @@ class AppState extends ChangeNotifier {
     await p.setString('server', aprs.server);
     await p.setInt('port', aprs.port);
     await p.setString('passcode', aprs.passcode);
+    await p.setString('aprsAccount', aprs.account);
+    await p.setString('aprsPassword', aprs.password);
+    await p.setString('acnPasscode', acnPasscode);
+    await p.setString('acnServer', acnServer);
+    await p.setInt('acnPort', acnPort);
+    await p.setInt('acnHttpPort', acnHttpPort);
+    await p.setString('acnAccount', acnAccount);
+    await p.setString('acnPassword', acnPassword);
     await p.setString('dataSource', dataSource);
+    await p.setString('dataSourceMsg', dataSourceMsg);
+    await p.setStringList('posTxExtra', posTxExtra);
+    await p.setBool('advChannels', advChannels);
     await p.setStringList('enabledSources', enabledSources.toList());
+    // 老版本只认这一个开关（它没有 enabledSources）：照当前的启用状态同步
+    // 写一份，免得磁盘上留着的旧 true 在下次启动时把已经关掉的链路又补回来。
+    await p.setBool('acnOn', acnOn);
     await p.setBool('igateEnabled', igateEnabled);
     await p.setBool('igateTwoWay', igateTwoWay);
     if (myHasFix && myLat != null && myLng != null) {
@@ -3106,6 +6662,11 @@ class AppState extends ChangeNotifier {
       chatGroups.map((g) => g.toJson()).toList(),
     );
     await p.setString('chatGroups', groupsJson);
+    // 保存策略地图元素
+    final stratJson = jsonEncode(
+      strategyItems.values.map((e) => e.toJson()).toList(),
+    );
+    await p.setString('strategyItems', stratJson);
     // 主题（含用户自建的全部主题与当前激活项）
     await ThemeController.instance.saveTo(p);
   }
@@ -3148,6 +6709,12 @@ class AppState extends ChangeNotifier {
     // 翻译配置（接口、密钥、语言、每会话偏好）在启动时载入：
     // 消息页可能在用户还没进设置前就要用它（自动翻译）。
     unawaited(TranslateService.instance.load());
+    // 智能体配置与聊天历史同样在启动时载入：用户可能一进界面就用它。
+    // 载入后**再查一次授权**：load 是异步的，若配置里 enabled=true 而本机未授权，
+    // 上面的兜底强制关闭会等这次检查落地（否则可能被"配置晚到"绕过）。
+    unawaited(AgentService.instance.load().then((_) {
+      if (!_disposed) unawaited(recheckAgentAllow());
+    }));
     // 翻译的「我的语言」默认跟随界面语言（见 TranslateService.uiLocale）
     TranslateService.instance.setUiLocale(locale);
     unawaited(ensureMembersLoaded());
@@ -3164,7 +6731,7 @@ class AppState extends ChangeNotifier {
       if (_disposed) return;
       toggleConnect();
     };
-    aprs.onLine = (l) => _onAprsLine(l, rf: false);
+    aprs.onLine = (l) => _onAprsLine(l, rf: false, source: srcAprsIs);
     aprs.onDisconnected = () {
       if (_disposed) return;
       _setLinkUp(srcAprsIs, false);
@@ -3184,6 +6751,9 @@ class AppState extends ChangeNotifier {
     _wireTnc();
     _wireAudio();
     _wirePkwdwpl();
+    _wireBox();
+    _wireNmeaGps();
+    _wireAcnLink();
     // 蓝牙心率带：状态变化只影响 UI 与信标备注，通知一次即可。
     bleHr.onChanged = () {
       if (_disposed) return;
@@ -3197,6 +6767,7 @@ class AppState extends ChangeNotifier {
       final b = bleHr.bpm;
       if (b != null && b > 0) {
         myHr = b;
+        myHrAt = DateTime.now();
       } else if (!bleHr.connected && !(garmin.on && garmin.fresh)) {
         myHr = null;
       }
@@ -3218,6 +6789,9 @@ class AppState extends ChangeNotifier {
     });
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_disposed) return;
+      // 外接 GPS 的静默检测（连着但久久没有字节 → 状态转 silent）。
+      // 它刻意不自起 Timer：已经在跑的秒 tick 就是天然的心跳。
+      nmeaGps.heartbeat();
       // 自动定时上报仅在链路可用时进行；未连接不发送（避免误以为在上报）。
       // TNC 模式下还需用户显式开启「射频信标」（见 canAutoBeacon）。
       // 上报判据：**定时到了，或者走够了**（智能信标的距离打点）。
@@ -3225,7 +6799,10 @@ class AppState extends ChangeNotifier {
       //   * 距离那条专治「走得快时两点之间被拉成直线、拐弯全被抹平」——
       //     走得快就按距离补点，停下来距离不动、自然退回纯定时。
       // 两条都不成立时什么都不做（不空转、不 notify）。
-      if (canAutoBeacon && myHasFix) {
+      //
+      // myPositionReportable 而不是 myHasFix：后者含「上次保存的位置」，
+      // 用它会在**本轮还没拿到定位**时就报一个旧坐标（见 canAutoBeacon 条件③）。
+      if (canAutoBeacon && myPositionReportable) {
         final sinceSec =
             DateTime.now().difference(_lastBeacon).inSeconds.toDouble();
         final dueByTime = sinceSec >= beaconIntervalNow;
@@ -3246,6 +6823,37 @@ class AppState extends ChangeNotifier {
       // 台站“有效状态”翻转（如超 5 分钟变离线、移动→静止）时才推进版本并通知，
       // 否则不触发任何页面重建；无翻转只刷新秒级 UI（tick）。
       if (_bumpStatusVersionIfChanged()) _notify();
+      // 不用为倒计时的「下一秒」重发通知：那由系统的 chronometer 自己走。
+      // 以前这里每秒重发一次，前台服务通知被反复重建，通知容易消失，也费电。
+      // 但胶囊那条短文本得我们自己推：每 **5 秒** 推一次，既能看见它在动，
+      // 又不会把通知一秒重建一次。
+      if (notifLiveUpdates &&
+          notifLiveText == 'beacon' &&
+          (beaconPhase == BeaconPhase.counting ||
+              beaconPhase == BeaconPhase.coarseForced) &&
+          beaconSecondsLeft > 0 &&
+          beaconSecondsLeft % 5 == 0) {
+        _updateNotification();
+      }
+      // 其余读数（速度 / 海拔 / 心率 / 电量 / 里程 / 未读 / 附近台站）都不是
+      // 秒级量，5 秒一次就够。真正的出口是 LocService 的按内容去重：值没变时
+      // 那次调用根本不会发通知，所以这里多调几次不构成「反复弹」。
+      if (++_notifPollTick >= 5) {
+        _notifPollTick = 0;
+        if (notifLiveUpdates &&
+            notifLiveText != 'default' &&
+            notifLiveText != 'beacon') {
+          if (notifLiveText == 'batt') {
+            // 电量是**异步读**的：先读，读到再刷，否则这一刷永远比读数早一步，
+            // 胶囊总是落后一个节拍（30 秒）。
+            unawaited(_refreshBattery().then((_) {
+              if (!_disposed) _updateNotification();
+            }));
+          } else {
+            _updateNotification();
+          }
+        }
+      }
       _checkStationAchievement();
       // 碰撞/摔倒（issue #26）：它**不能**只挂在定位回调上 —— 事件可能在没开定位、
       // 或定位很慢（静止后系统常常不再给点）的时候发生，而那正是这个功能要管的场景。
@@ -3264,9 +6872,98 @@ class AppState extends ChangeNotifier {
           }));
         }
       }
+      // 远程限制名单：启动后一次 + 每 30 分钟做一次"到点了没"的廉价判断
+      // （真正的网络请求在 recheckBlacklist 里按 6 小时节流）。
+      if (_blacklistNext == null || DateTime.now().isAfter(_blacklistNext!)) {
+        _blacklistNext = DateTime.now().add(const Duration(minutes: 30));
+        unawaited(recheckBlacklist());
+      }
+      // 官网要求的最低版本：同一个节拍（30 分钟一次"到点了没"，真正的拉取按 6 小时节流）。
+      if (_minVersionNext == null || DateTime.now().isAfter(_minVersionNext!)) {
+        _minVersionNext = DateTime.now().add(const Duration(minutes: 30));
+        unawaited(recheckMinVersion());
+      }
+      // 智能体授权名单：同一个节拍（30 分钟一次"到点了没"，真正的拉取按 6 小时节流）。
+      if (_agentAllowNext == null || DateTime.now().isAfter(_agentAllowNext!)) {
+        _agentAllowNext = DateTime.now().add(const Duration(minutes: 30));
+        unawaited(recheckAgentAllow());
+      }
+      // 手机电量：与定位解耦，自己按时间刷（30 秒一次，见 _refreshBattery）。
+      // 盒子那边的「APRSLOCUS」页显示它，所以必须保证这个数**不是几小时前的**。
+      unawaited(_refreshBattery());
       // 外置 GPS（佳明）与手机 GPS 的启停对齐（issue #21-4）：很便宜，
       // 只在状态翻转时做事，不需要再开一个定时器。
       _syncPhoneGps();
+      // 盒子推送：把**手机这侧看到的东西**给盒子（速度/方位/海拔/未读 + 附近台站）。
+      // 与"喂位置"是两件事：这个只写盒子的屏幕，不上射频。
+      if (boxOn && box.config.pushStatus && box.connected) {
+        final now = DateTime.now();
+        if (_lastBoxPushApp == null ||
+            now.difference(_lastBoxPushApp!).inSeconds >= 5) {
+          _lastBoxPushApp = now;
+          box.pushApp(
+            fix: myHasFix,
+            isUp: isUp(srcAprsIs),
+            unread: unreadMessages,
+            speedKmh: mySpeed,          // km/h（与盒子 APP 命令同一单位）
+            courseDeg: myCourse,
+            altM: myAlt,                // 米
+          );
+          // 实时状态（盒子的「APRSLOCUS」仪表盘页）：心率/电量/里程/上报倒计时/
+          // 步数/精度/守护。跑步骑车时手机在包里 —— 这些必须不掏手机也能看到。
+          box.pushTel(
+            hr: myHr,
+            bat: _battery >= 0 ? _battery : null,
+            tripKm: tripMileageKm,
+            odoKm: totalMileageKm,
+            nextSec: _boxUploadInSec(),
+            ivalSec: beaconIntervalNow,
+            steps: stepsToday > 0 ? stepsToday : null,
+            accM: myAccuracy > 0 ? myAccuracy : null,
+            guard: crashDetectEnabled,
+          );
+        }
+        if (_lastBoxPushNear == null ||
+            now.difference(_lastBoxPushNear!).inSeconds >= 15) {
+          _lastBoxPushNear = now;
+          _pushBoxNearby();
+        }
+      }
+      // 盒子喂位置：每秒看一眼，**15 秒**才真发一次（盒子侧 60 秒内算新鲜）。
+      // 开关关着、没定位、没连上时什么都不做（不空转、不 notify）。
+      // myPositionReportable：别把「上次保存的位置」当成现在的位置喂给盒子。
+      if (boxOn && box.config.feedPos && box.connected && myPositionReportable) {
+        final now = DateTime.now();
+        if (_lastBoxFeed == null ||
+            now.difference(_lastBoxFeed!).inSeconds >= 15) {
+          _lastBoxFeed = now;
+          box.feedPos(
+            lat: myLat!,
+            lon: myLng!,
+            altM: myAlt,                       // 米（app 与盒子同一单位）
+            speedMps: (mySpeed ?? 0) / 3.6,    // app 是 km/h，盒子要 m/s
+            courseDeg: myCourse,
+          );
+        }
+      }
+      // APRSNETCN 副链路掉线后的重连：到点了就重连一次。
+      // 走这条 1 秒 tick 而不是自己的 Timer —— 应用在后台时不该多一个定时器，
+      // 副链路也不该抢主链路的 8/16/32/60 秒重连节奏。
+      if (acnOn && !acnConnected && !_acnConnecting && !_userDisconnected) {
+        final due = _acnRetryAt;
+        if (due != null && DateTime.now().isAfter(due)) {
+          _acnRetryAt = null;
+          unawaited(_connectAcn());
+        }
+      }
+      // 电脑负载（CPU / 内存）：开了才采样，内部自己节流到 60 秒一次。
+      // 放在 tick 里而不是信标里：采样要开进程（Windows），不能卡在发送路径上。
+      if (beaconIncludeDeskLoad) {
+        unawaited(
+            DesktopMetrics.refresh(minGap: const Duration(seconds: 60)));
+      }
+      // 云同步（自动档）：每 5 分钟一轮，跑在秒 tick 上而不是另起定时器
+      _syncAutoTick();
       // 每秒刷新：只通知“秒级 UI”（信标倒计时/收包速率），
       // 不再全量 _notify() 重建整个页面树
       tick.value++;
@@ -3281,33 +6978,65 @@ class AppState extends ChangeNotifier {
       // 仍然需要保活帧，否则会被服务器踢掉（网关也就跟着断了）。
       if (!aprsIsOn) return;
       if (!connected || _userDisconnected) return;
-      if (DateTime.now().difference(_lastTx).inSeconds < 25) return;
-      // 保活：发送身份/在线状态帧。tocall=APALOC（本应用官方注册标识），
-      // body=APRSLocus CONNECT（区分于位置信标；不再用非标 “保持连接”）
-      final raw =
-          '$myFullCall>APALOC,TCPIP*:>APRSlocus CONNECT v$appVersion $platformTag';
-      aprs.send(raw);
-      // 用户填了自定义状态文本时，紧跟着**补发一帧**自定义状态报文：
-      // 保活帧会把 aprs.fi 上「台站状态」那一栏改写成内置的 CONNECT 文本，
-      // 不补一帧的话，用户自己的状态每 15 秒就被顶掉一次（看起来就是
-      // 「状态根本设不住」）。
+      // 上次自定义状态帧被吞了：无视发报门槛，立刻重发它（不重复发 CONNECT，
+      // 免得又把状态栏顶回 CONNECT 文本）。成功即清除标记。
+      final lost = _customStatusLost;
+      if (!lost && DateTime.now().difference(_lastTx).inSeconds < 25) return;
+      if (lost) {
+        final re = _customStatusFrame();
+        if (re == null) {
+          _customStatusLost = false; // 用户已清空文本，没什么可补的
+        } else if (_sendAprs(re)) {
+          _customStatusLost = false;
+          _lastTx = DateTime.now();
+          _updateNotification();
+          return;
+        } else {
+          return; // 仍然发不出去：下个 tick（15s 后）再试
+        }
+      }
+      // 保活：**只发一帧**状态报文 —— 谁有内容发谁：
+      //   * 填了自定义状态文本 → 发自定义帧；
+      //   * 没填 → 发内置默认帧（`>APRSlocus CONNECT vX.Y.Z 平台`）。
+      // CONNECT 身份帧只在上线那一下发一次（见 [_connectAprsIs]）。以前每 15s
+      // 都先发一帧 CONNECT、再由自定义帧把它顶回来，既白占一帧，又让 aprs.fi 上
+      // 的「台站状态」在 CONNECT 与自定义之间反复闪（用户看到的现象）。
       //
       // 这里**不走 [sendStatus]**：那条路会改连接状态、写日志、_notify()，
       // 于是界面每 15 秒弹一次「状态已发送」—— 保活是后台行为，不该打扰用户。
-      final custom = aprsStatusText.trim();
-      if (custom.isNotEmpty) {
-        var txt = custom.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
-        if (txt.length > statusMaxLen) txt = txt.substring(0, statusMaxLen);
-        aprs.send('$myFullCall>$_destHeader:>$txt');
+      final frame = _customStatusFrame();
+      if (frame != null) {
+        // 写失败（socket 抖动/半开）就记下来：这帧没进链路。下个 tick 由上面的
+        // 自愈分支重发，直到成功。
+        _customStatusLost = !_sendAprs(frame);
+      } else {
+        // 没填自定义文本：发内置默认帧保活（与上线那帧同文，见 [_defaultStatusFrame]）。
+        _sendAprs(_defaultStatusFrame());
       }
       _lastTx = DateTime.now();
       _updateNotification(); // 定期刷新通知内容（台站数/收包数）
     });
-    // 启动后自动获取定位：仅在 OOBE 已完成（非首次）且非模拟位置时进行；
+    // 启动后自动获取定位：仅在 OOBE 已完成（非首次）时进行；
     // 首次启动的权限请求移到 OOBE 完成后由 _requestLocationAfterOobe 触发。
     Future.delayed(const Duration(milliseconds: 900), () async {
-      if (_disposed || !initialized) return;
-      if (!oobeDone || useSimLocation) return;
+      if (_disposed) return;
+      // ⚠ 必须等初始化**真的**落地，不能只看「900ms 到点了没有」。
+      // `_loadPrefs()` 是异步的（各设备配置 + 本地库 + 三条开机自检各带 400ms
+      // 上限），冷启动时经常超过 900ms。以前这里只判一次
+      // 「初始化好了没」，没好就直接 return，于是加载慢过 900ms 时
+      // 「启动自动定位」这条**唯一**的全自动路径就整个丢掉了：界面一直停在
+      // 「已保存位置」，用户得去「模拟位置」再切回 GPS 才恢复（用户报的正是这个）。
+      await _waitInitialized();
+      if (!initialized) return; // 加载卡到 30 秒上限：这一轮不自动起定位
+      if (!oobeDone) return;
+      if (useSimLocation) {
+        // 模拟位置不读 GPS，但要**对称地**把保活前台服务拉起来：GPS 模式启动就
+        // 有服务在跑，模拟位置若只在「应用坐标」时才起，重启后切后台连接会被冻结、
+        // 信标定时器也停摆（用户会以为「模拟位置后台不上报」）。
+        await startTracking();
+        _updateNotification();
+        return;
+      }
       for (int i = 0; i < 15; i++) {
         final ok = await startTracking();
         if (ok) break;
@@ -3315,6 +7044,50 @@ class AppState extends ChangeNotifier {
       }
       _updateNotification();
     });
+    // 启动后按用户设置自动起步（见 [autoStartMode]）：默认「不做操作」，
+    // 用户开过才会真的走到连接 / 上报。比上面那块晚 300ms，免得两条路同时
+    // 去推连接状态与前台服务。
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (_disposed) return;
+      unawaited(autoStartOnLaunch());
+    });
+  }
+
+  /// 等 [_loadPrefs] 跑完（`initialized` 转真）。
+  ///
+  /// 为什么要等而不是睡固定时长：见构造器里「启动自动定位」那段的说明 ——
+  /// 固定等待一旦短于真实加载时间，自动定位就静默失效，界面永远停在
+  /// 「已保存位置」，只有手动切一次模拟位置再切回来才恢复。
+  /// 上限 30 秒：加载卡死时也不能把后面的启动流程挂住。
+  Future<void> _waitInitialized() async {
+    for (var i = 0; i < 300; i++) {
+      if (_disposed || initialized) return;
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  /// 回到前台时补一次「定位到底起没起」（幂等，很便宜）。
+  ///
+  /// 起因：启动那条自动定位路径只要有一次没走到（权限弹窗还没答、启动竞态、
+  /// 前台服务被系统掐掉），界面就会一直停在「已保存位置」或「定位失败」，
+  /// 而**没有任何东西**会自己恢复它 —— 用户只能去「模拟位置」再切回来
+  /// （用户报的正是这个）。切回前台是最自然的补一次时机。
+  Future<void> ensureLocationRunning() async {
+    if (_disposed || !initialized || !oobeDone) return;
+    if (useSimLocation) return; // 模拟位置由保活服务兼顾，切换时机另有路径
+    if (_phoneGpsPaused) return; // 外置源供位期间手机侧本就该待机
+    if (loc.running) {
+      // 服务说自己在跑，可能只是 Dart 侧的标记：真被系统掐过时，界面会停在
+      // 「已保存位置」而再也没有定位。问一次原生（仅 Android 有这个服务）。
+      if (defaultTargetPlatform == TargetPlatform.android &&
+          !await loc.serviceAlive()) {
+        _log(LogLevel.warn, '定位', '前台服务已不在，回到前台时重新启动');
+        loc.stop();
+        await startTracking();
+      }
+      return;
+    }
+    await startTracking();
   }
 
   /// OOBE 完成后的定位引导：请求定位权限并启动定位，失败不阻塞（可手动再开）
@@ -3379,6 +7152,8 @@ class AppState extends ChangeNotifier {
     // 应当立即释放，不能等进程被杀 —— BluetoothSocket 不关会占住电台，
     // 下次打开应用重连会失败。
     unawaited(pkwdwpl.disconnect(manual: false));
+    unawaited(nmeaGps.disconnect(manual: false));
+    unawaited(box.disconnect(manual: false));
     unawaited(tnc.disconnect(manual: false));
     unawaited(audio.disconnect(manual: false));
     if (_stationsDirty) _saveStations();
@@ -3399,16 +7174,20 @@ class AppState extends ChangeNotifier {
     _keepaliveTimer?.cancel();
     _reconnectTimer?.cancel();
     _rxNotifyTimer?.cancel();
+    _subSaveTimer?.cancel();
     tick.dispose();
     _stationsCtrl.close();
     loc.stop();
     // 把内存里攒着、还没到节流时间的台账落盘（退出后不丢最后几个点）
     unawaited(TrackLogStore.instance.flush());
     aprs.disconnect();
+    acnLink.disconnect();
     // 射频链路也要收尾（原先只释放了 APRS-IS）：
     // pkwdwpl 的传输层持有一个 EventChannel 订阅，不释放会一直挂在平台通道上；
     // TNC 同样有 reader/writer 线程与 socket。
     unawaited(pkwdwpl.disconnect(manual: false));
+    nmeaGps.dispose();
+    unawaited(box.disconnect(manual: false));
     unawaited(tnc.disconnect(manual: false));
     unawaited(audio.disconnect(manual: false));
     // 退出前保存台站列表
@@ -3439,7 +7218,7 @@ class AppState extends ChangeNotifier {
   /// 解析路径。这样台站上图、消息收发、过滤、成就等逻辑无需为 TNC 再写一套，
   /// 也不会出现两个来源行为不一致的分叉。
   void _wireTnc() {
-    tnc.onLine = (l) => _onAprsLine(l, rf: true);
+    tnc.onLine = (l) => _onAprsLine(l, rf: true, source: srcTnc);
     tnc.onClosed = () {
       if (_disposed) return;
       _setLinkUp(srcTnc, false);
@@ -3539,7 +7318,7 @@ class AppState extends ChangeNotifier {
       twoWay: igateTwoWay,
     );
     if (out == null) return;
-    aprs.send(out);
+    _sendAprs(out);
     igateGated++;
     _lastTx = DateTime.now();
     if (_packetsGatedLog++ % 10 == 1) {
@@ -3643,6 +7422,9 @@ class AppState extends ChangeNotifier {
 
   /// 开关网关
   void setIgateEnabled(bool v) {
+    // 网关往射频转就是代表他人在发射 → 先过单独同意（附件一第三项，
+    // 并同时需要第二项「射频发射」）。
+    if (v && !ensureIgateConsent(() => setIgateEnabled(true))) return;
     igateEnabled = v;
     if (!v) igateTwoWay = false; // 网关关了就不该还留着「往射频转」的开关
     if (v) {
@@ -3684,6 +7466,7 @@ class AppState extends ChangeNotifier {
 
   /// 开关双向网关（IS→RF，会真实发射）
   void setIgateTwoWay(bool v) {
+    if (v && !ensureIgateConsent(() => setIgateTwoWay(true))) return;
     igateTwoWay = v;
     if (v && !igateEnabled) igateEnabled = true;
     _log(LogLevel.info, '网关',
@@ -3713,7 +7496,7 @@ class AppState extends ChangeNotifier {
   /// 关键点同 TNC：音频解出的报文直接交给 [_onAprsLine]，三个数据来源
   /// 共用同一条解析路径，因此不会出现「音频模式下台站不上图」这类分叉。
   void _wireAudio() {
-    audio.onLine = (l) => _onAprsLine(l, rf: true);
+    audio.onLine = (l) => _onAprsLine(l, rf: true, source: srcAudio);
     audio.onClosed = () {
       if (_disposed) return;
       _setLinkUp(srcAudio, false);
@@ -3747,6 +7530,27 @@ class AppState extends ChangeNotifier {
   ///
   /// 只收不发：本函数里没有任何 `_sendVia` 调用，且 [AppState.dataSource]
   /// 永远不会是 pkwdwpl（见 [canTransmit]）。
+  /// 盒子链路的接线。
+  ///
+  /// 与 PKWDWPL 的差别只有一处：**它不参与收报文**（没有 onFix），
+  /// 所以只需要「掉线 → 排重连」「有变化 → 刷新界面」两件事。
+  void _wireBox() {
+    box.onClosed = () {
+      _setLinkUp(srcBox, false);
+      if (!_userDisconnected && box.config.autoReconnect) {
+        _scheduleReconnectIfNeeded();
+      }
+    };
+    box.onStateChanged = () {
+      if (boxOn) _notifyRx();
+    };
+    box.onEvent = (kind, text) {
+      // 事件原文已经进盒子自己的日志；这里只把**错误**升到应用日志 ——
+      // 那才是需要跨页面看到的（例如 ERR not-logged-in beacon-not-sent）。
+      if (kind == 'ERR') _log(LogLevel.warn, '盒子', 'ERR $text');
+    };
+  }
+
   void _wirePkwdwpl() {
     pkwdwpl.onFix = (fix) {
       if (_disposed) return;
@@ -3777,6 +7581,74 @@ class AppState extends ChangeNotifier {
     };
   }
 
+  /// 外接 GPS 链路的接线。
+  ///
+  /// 与其它链路最大的不同：**它不进台站管线**（没有 `_upsertStation`）。
+  /// 它供的是「我的位置」，所以只在 [_onNmeaGpsFix] 里处理。
+  void _wireNmeaGps() {
+    nmeaGps.onFix = (fix) {
+      if (_disposed) return;
+      _onNmeaGpsFix(fix);
+    };
+    nmeaGps.onClosed = () {
+      if (_disposed) return;
+      _setLinkUp(srcNmeaGps, false);
+      // 只读链路与 PKWDWPL 同理：断了不改 ConnPhase，
+      // 否则会把「发射来源」的正常状态文案盖掉。
+      final manual = _userDisconnected;
+      _log(
+        manual ? LogLevel.info : LogLevel.warn,
+        '连接',
+        manual ? '已手动断开外接 GPS 链路' : '外接 GPS 链路断开，稍后自动重连',
+      );
+      _notify();
+      _updateNotification();
+      if (!_userDisconnected && nmeaGps.config.autoReconnect) {
+        _scheduleReconnectIfNeeded();
+      }
+    };
+    nmeaGps.onStateChanged = () {
+      if (_disposed) return;
+      if (nmeaGpsOn) _notifyRx();
+    };
+  }
+
+  /// 外接 GPS 的一条定位 → 「我」的位置。
+  ///
+  /// 与佳明走同一个 [_ingestExternalFix]（轨迹/台账/里程/过滤中心都在那里），
+  /// 差别只在本函数提供的三个来源字段（海拔/速度航向/精度）。
+  void _onNmeaGpsFix(NmeaFix fix) {
+    final prev = _lastNmeaFix;
+    _lastNmeaFix = fix;
+    final first = _ingestExternalFix(
+      fix.lat,
+      fix.lng,
+      status: '外接 GPS（蓝牙）',
+      altM: fix.altM,
+      speedKmh: fix.speedKmh,
+      courseDeg: fix.courseDeg,
+      // 模组只发 GGA/GLL 时没有航向 → 用前后两点算（见 _ingestExternalFix）
+      prevLat: prev?.lat,
+      prevLng: prev?.lng,
+      // 精度由 HDOP 估算（见 NmeaFix.accuracyM）；没有 HDOP 时是 null → 0 = 未知
+      accuracyM: fix.accuracyM ?? 0,
+      // 卫星数：模组 GGA 里的「参与定位的颗数」（不发 GGA 的模组就是 null）
+      satellites: fix.satellites,
+    );
+    // 日志只打两次：本进程首个点、以及**每次连接的首条定位** ——
+    // 每条都打会把日志页刷满（模组每秒 1~10 条），而这两条才是排查时真正要看的。
+    if (first || nmeaGps.fixes == 1) {
+      _log(
+        LogLevel.info,
+        '外接 GPS',
+        '收到定位：${fix.lat.toStringAsFixed(5)}, '
+            '${fix.lng.toStringAsFixed(5)}'
+            '${fix.satellites == null ? '' : ' · ${fix.satellites} 颗星'}'
+            '${fix.accuracyM == null ? '' : ' · ±${fix.accuracyM!.toStringAsFixed(0)}m'}',
+      );
+    }
+  }
+
   /// 一条 `$PKWDWPL` 语句 → 台站 + 报文记录。
   void _onPkwdwplFix(PkwdwplFix fix) {
     final p = ParsedPos(
@@ -3796,6 +7668,7 @@ class AppState extends ChangeNotifier {
       raw: fix.raw,
       path: 'PKWDWPL',
       toCall: 'PKWDWPL',
+      via: srcPkwdwpl,
     );
     _pushPacket(Packet(
       fix.raw,
@@ -3803,6 +7676,7 @@ class AppState extends ChangeNotifier {
       'PKWDWPL',
       'position',
       DateTime.now(),
+      source: srcPkwdwpl,
       info: '${fix.latitude.toStringAsFixed(4)}, '
           '${fix.longitude.toStringAsFixed(4)}'
           '${fix.courseDegrees == null ? '' : ' · ${fix.courseDegrees!.toStringAsFixed(0)}°'}'
@@ -3832,6 +7706,8 @@ class AppState extends ChangeNotifier {
   /// 刻意做成**显式动作**而不是收到定位就自动打开：射频发射需要持照操作，
   /// 必须由用户点这一下才算知情同意（见 canAutoBeacon 的注释）。
   Future<void> enableRfBeacon() async {
+    // 射频发射（附件一第二项）：没同意就先签，签完再打开。
+    if (!ensureRfConsent(() => unawaited(enableRfBeacon()))) return;
     if (usingTnc) {
       tnc.config.rfBeacon = true;
       await tnc.persistConfig();
@@ -3844,15 +7720,58 @@ class AppState extends ChangeNotifier {
     _updateNotification();
   }
 
+  /// 一键切换「自动上报」总开关（地图状态栏 / 我的面板 / 沉浸页共用）。
+  ///
+  /// 打开时若卡在**射频信标**这一关（[beaconNeedsRfEnable]），顺手把它一起
+  /// 打开 —— 否则用户点了「开启」却因为射频信标没开而什么都不发，正是
+  /// 「点了没反应」的老毛病。返回实际发生了什么，供界面如实提示。
+  ///
+  /// **不动**智能分档 / 距离 / 转弯这些细节开关：那些是「怎么发」，由设置页管；
+  /// 这里只回答「发不发」。手动「立即上报」不经过本方法（永远是独立动作）。
+  Future<AutoReportResult> toggleAutoReport() async {
+    if (beaconEnabled) {
+      setBeaconEnabled(false);
+      return const AutoReportResult(on: false, rfEnabled: false);
+    }
+    // 打开前先过单独同意：没签就弹同意书，勾完再接着把开关真的打开。
+    if (!ensureConsent(beaconConsentScopes,
+        then: () => unawaited(toggleAutoReport()))) {
+      return const AutoReportResult(on: false, rfEnabled: false);
+    }
+    setBeaconEnabled(true);
+    final needRf = beaconNeedsRfEnable;
+    if (needRf) await enableRfBeacon();
+    // 刚打开自动上报时，如果已经有本轮定位，立刻补发一次让用户马上在地图上
+    // 看到自己（否则要干等一个间隔）。没有本轮定位则由上报闸挡住，不误发。
+    if (myPositionReportable) sendBeacon();
+    return AutoReportResult(on: true, rfEnabled: needRf);
+  }
+
   /// 是否允许**自动**周期上报。
   ///
   /// 「会不会真的自动发出去」只有这一个出口 —— 散在两处必然漂移（见
-  /// [beaconPhase] 的注释）。四个条件缺一不可：
+  /// [beaconPhase] 的注释）。缺一不可的条件：
   ///
   ///   ① 链路可用（[connected]）；
   ///   ② 信标开着（[beaconEnabled]）；
-  ///   ③ **当前定位不是粗定位**（[myFixCoarse]）；
-  ///   ④ 射频来源（TNC/音频）还需用户显式开启「射频信标」。
+  ///   ③ **本轮已重新拿到定位**（[myPositionReportable]）；
+  ///   ④ **本次连接已由用户确认「开始上报」**（[beaconArmed]）；
+  ///   ⑤ **当前定位不是粗定位**（[myFixCoarse]）；
+  ///   ⑥ 射频来源（TNC/音频）还需用户显式开启「射频信标」。
+  ///
+  /// ── 条件 ④：为什么连上还不算数（本次改动）──
+  ///
+  /// 用户要求：无论用哪种方式定位，连上服务器后**都不要自动上报**，必须由用户
+  /// 手动点一下「开始上报」、确认坐标有效之后才开始。否则一连上就抢在用户看清
+  /// 坐标之前把位置发出去。它每次连接都会复位（见 [_setLinkUp]）。
+  ///
+  /// ── 条件 ③：为什么「有位置」还不够（本次改动）──
+  ///
+  /// 系统（GPS 或网络）**每次启动都会把上一次的位置默认交回来**，磁盘上还存着
+  /// 上次的 myLat/myLng。于是「定位根本没开」时 [myHasFix] 就已经是 true、坐标
+  /// 是旧的 —— 拿它上报，等于在没有任何新定位的情况下向全网宣告一个错位置
+  /// （用户报的正是这个）。所以必须等**重新获取到位置**才允许上报；旧的保存位置
+  /// 只用于显示、不发出去。
   ///
   /// ── 为什么粗定位（网络/基站/被动）不自动上报（v1.6.163）──
   ///
@@ -3860,13 +7779,21 @@ class AppState extends ChangeNotifier {
   /// 报出去的是个错坐标，收端（igate / 其他台站）看到的是一条乱跳的轨迹。
   /// 网络定位从此只用来「在地图上给个大概位置」，不进入信道；GPS 一回来
   /// 就自动恢复（倒计时按 [_lastBeacon] 算，所以那一刻会立刻补报一次）。
-  /// **手动「立即上报」不受影响**：那是用户的显式动作，知情且即时。
+  /// **手动「立即上报」不受影响**：那是用户的显式动作，知情且即时
+  /// （但仍受条件 ③ 约束 —— 用户点的是「上报**现在**的位置」，而当前还没有
+  /// 本轮定位时那个位置就是错的，见 [_sendBeaconNow]）。
   ///
   /// 唯一的例外是 [beaconForceCoarse]：用户明确选择了「就要发网络定位」
-  /// （没有 GPS 的设备）时才放开这一道闸 —— 它是**用户自己的决定**，
-  /// 而不是代码替他默认。
+  /// （没有 GPS 的设备）时才放开条件 ⑤ —— 它是**用户自己的决定**，
+  /// 而不是代码替他默认。它**不**放开条件 ③/④：强制的是「网络点也发」，
+  /// 不是「没有新定位也发」，也不是「不用确认就发」。
   bool get canAutoBeacon => connected &&
       beaconEnabled &&
+      myPositionReportable &&
+      beaconArmed &&
+      // 单独同意（用户协议 V2.0 附件一）：撤回任意一项就变假，
+      // 与发送口子里的那道闸同一个判据。
+      consentSatisfied &&
       (!myFixCoarse || beaconForceCoarse || locationMode == 'network') &&
       (!usingRf || (usingTnc ? tnc.config.rfBeacon : audio.config.rfBeacon));
 
@@ -3892,15 +7819,137 @@ class AppState extends ChangeNotifier {
       // 到不了，用户点连接会没任何反馈。它的代价只是几个提前 return，
       // 不会造成空转。
       if (aprsIsOn && !isUp(srcAprsIs)) await _connectAprsIs();
+      if (acnOn && !acnConnected) await _connectAcn();
       if (tncOn && !isUp(srcTnc)) await _connectTnc();
       if (audioOn && !isUp(srcAudio)) await _connectAudio();
       if (pkwdwplOn && !isUp(srcPkwdwpl)) await _connectPkwdwpl();
+      if (nmeaGpsOn && !isUp(srcNmeaGps)) await _connectNmeaGps();
+      if (boxOn && !box.connected) await _connectBox();
     } finally {
       _connectingAll = false;
     }
   }
 
   bool _connectingAll = false;
+
+  /// 把 APRSNETCN 副链路的报文接进同一条解析管线。
+  ///
+  /// 与 TNC 的做法一样：不另写一套解析，只多传一个 `fromAcn`，让台站标记成
+  /// 「来源 APRSNETCN」、并且**不做网关转递**（两条链路可能收到同一条报文，
+  /// 都转一遍就是重复占用射频时隙）。
+  ///
+  /// 副链路上的 `logresp` 不能进主链路那套状态：两条链路各有自己的 passcode，
+  /// 拿副链路的 unverified 去把主横幅变黄是错的。
+  void _wireAcnLink() {
+    acnLink.onLine =
+        (l) => _onAprsLine(l, rf: false, source: srcAcn, fromAcn: true);
+    acnLink.onDisconnected = () {
+      if (_disposed) return;
+      _setLinkUp(srcAcn, false);
+      acnLogin = null;
+      _log(LogLevel.warn, 'APRSNETCN', '链路断开，稍后自动重连');
+      _scheduleAcnRetry();
+      _notify();
+    };
+  }
+
+  /// 连 APRSNETCN 的第二条链路。
+  ///
+  /// 副链路不需要账号口令：服务器在 compat 模式下只按 passcode 判定能否发，
+  /// 收报文不需要验证。填了账号口令就随登录行发 `auth`，换一个 verified。
+  Future<void> _connectAcn() async {
+    // Web 上没有 TCP，副链路连的是一台只有明文 14580 的服务器，重试也只是
+    // 每 8 秒刷一条失败日志（设置页在 Web 上不显示这个开关）。
+    if (kIsWeb) return;
+    if (!acnOn || acnConnected || _acnConnecting || _disposed) return;
+    if (_userDisconnected) return;
+    final host = acnServer.trim();
+    if (host.isEmpty || acnPort <= 0) {
+      if (!_acnConfWarned) {
+        _acnConfWarned = true;
+        _log(LogLevel.error, 'APRSNETCN', '没有填服务器地址，先填好再连');
+        _notify();
+      }
+      return;
+    }
+    _acnConfWarned = false;
+    _acnConnecting = true;
+    acnLogin = null;
+    _log(LogLevel.info, 'APRSNETCN', '正在连接 $host:$acnPort…');
+    _notify();
+    acnLink.server = host;
+    acnLink.port = acnPort;
+    acnLink.callsign = myFullCall;
+    acnLink.passcode =
+        acnPasscode.trim().isEmpty ? aprs.passcode : acnPasscode.trim();
+    acnLink.account = acnAccount.trim();
+    acnLink.password = acnPassword;
+    // 与 APRS-IS 同一套过滤规则（用户：「netcn 的过滤规则与 aprsis 共同」）。
+    acnLink.filter = filterString;
+    final ok = await acnLink.connect();
+    _acnConnecting = false;
+    _setLinkUp(srcAcn, ok);
+    if (ok) {
+      _acnAttempt = 0;
+      _acnRetryAt = null;
+      _log(LogLevel.info, 'APRSNETCN', '第二条链路已连接');
+      // 24 小时台站不在连上时拉：那要再发一次 HTTP 请求，还要把账号口令再发
+      // 一遍，等用户点了设置页的「立即同步」才做这件事。
+    } else {
+      _log(LogLevel.error, 'APRSNETCN', '连接失败，稍后重试');
+      _scheduleAcnRetry();
+    }
+    _notify();
+  }
+
+  /// 排一次副链路重连（渐进：8s → 16s → 32s → 60s 封顶）。
+  ///
+  /// 用 1 秒 tick 里的 [DateTime] 判断，不另起 Timer：副链路掉了不该抢主链路的
+  /// 重连节奏，也不该在应用进后台时多一个定时器。
+  void _scheduleAcnRetry() {
+    // 用户自己按了断开就不要再排：否则 8 秒后它自己又连上去，
+    // 界面成了「断了又自己连」，与其它链路的口径也不一致。
+    if (!acnOn || _userDisconnected || _disposed) return;
+    final backoff = [8, 16, 32, 60][_acnAttempt.clamp(0, 3)];
+    _acnAttempt++;
+    _acnRetryAt = DateTime.now().add(Duration(seconds: backoff));
+  }
+
+  /// 开/关 APRSNETCN 这条链路。
+  ///
+  /// 与 APRS-IS 的开关走同一条路（[toggleSource]）：启用只是「允许连」，
+  /// 真连上要等「连接」按钮或已经在收报文时自动跟上；关掉立刻断开。
+  void setAcnOn(bool v) {
+    if (acnOn == v) return;
+    unawaited(toggleSource(srcAcn, v));
+  }
+
+  /// 断开 APRSNETCN（[toggleSource] 关闭时、以及全断开时用）。
+  void _dropAcn() {
+    _setLinkUp(srcAcn, false);
+    acnLogin = null;
+    _acnRetryAt = null;
+    _acnAttempt = 0;
+    acnLink.disconnect();
+  }
+
+  /// 立刻把副链路重连一次（账号口令改过之后用）。
+  ///
+  /// 先断开再连，不走 [_scheduleAcnRetry] 的 8 秒等待：用户刚刚点的是
+  /// 「重新连接」，等 8 秒他会以为按钮没反应。
+  Future<void> reconnectAcn() async {
+    if (!acnOn || _disposed) return;
+    _setLinkUp(srcAcn, false);
+    _acnAttempt = 0;
+    _acnRetryAt = null;
+    await persistNow();
+    acnLink.disconnect();
+    // 给 socket 一点时间真的关掉：同一台服务器上两个连接同时挂着，服务器
+    // 那边会把同一个呼号当成重连（旧连接先被踢），偶尔把新连接也一起断掉。
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (_disposed || !acnOn) return;
+    await _connectAcn();
+  }
 
   /// APRS-IS 连接（原来的 `_connect` 主体）
   Future<void> _connectAprsIs() async {
@@ -3933,16 +7982,26 @@ class AppState extends ChangeNotifier {
       setConnStatus(ConnPhase.online, arg: myCall);
       _log(LogLevel.info, '连接', '已连接 · $myCall 在线 (过滤: $filterString)');
       _flushPendingTx();
-      // 连接成功即发一次身份状态帧（APRS 惯例：上报在线/客户端标识）
-      aprs.send('$myFullCall>APALOC,TCPIP*:>APRSLocus CONNECT v$appVersion $platformTag');
-      // 连接成功：若主界面已就绪且尚未问过“是否自动上报”，延迟触发询问。
-      // 不在此置位 beaconAutoAsked —— 用户做出选择后才记位，避免漏弹后永久丢失。
-      if (!beaconAutoAsked && beaconEnabled) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (_disposed) return;
-          maybeAskBeaconAuto();
-        });
-      }
+      // 连接成功即发一次身份状态帧（APRS 惯例：上报在线/客户端标识）。
+      _sendAprs(_defaultStatusFrame());
+      // 这是 CONNECT 帧唯一的自动发送点：保活帧只在没填自定义文本时才用它兜底。
+      // 紧接着补一帧自定义状态（issue #31）：上面那帧会把 aprs.fi 上「台站状态」
+      // 改写成 CONNECT 文本，不补就等于「一连上服务器，用户自己设的状态立刻被
+      // 内置文本顶掉」。保活路径现在直接发自定义帧、不再先发 CONNECT，
+      // 所以只有这条「上线」路径还需要补一帧（见 [_keepaliveTimer]）。
+      // 这一帧若写失败（socket 刚建好就抖动），aprs.fi 会停在 CONNECT 上；记下
+      // 失败标记，交给 [_keepaliveTimer] 的自愈分支补发（射频模式没有保活，
+      // 但射频也不发 CONNECT 帧，不存在这个覆盖问题）。
+      final customFrame = _customStatusFrame();
+      if (customFrame != null) _customStatusLost = !_sendAprs(customFrame);
+      // 24 小时台站是用户点了设置页的「立即同步」才会去拉的（见
+      // [syncAcnStations]）：连上就发一次 HTTP 请求、带上账号口令，那种
+      // 副作用得由用户自己按下去。拉回来的那份只在本地列表里**补空**，
+      // 已经收到的呼号一律不动（见 [mergeAcnStations]）。
+      // 连接成功：**不再**自动弹「是否自动上报」询问。
+      // 用户要求：连上后不自动上报，界面给一个正式的「开始上报」按钮，由用户
+      // 手动确认（见 [beginReporting] / [BeaconPhase.needConfirm]）。
+      // 保留 beaconAutoAsked / onAskBeaconAuto 字段仅为兼容旧备份，不再触发。
     } else {
       final backoff = [8, 16, 32, 60][_reconnectAttempt.clamp(0, 3)];
       setConnStatus(ConnPhase.retryServer, seconds: backoff);
@@ -4010,12 +8069,20 @@ class AppState extends ChangeNotifier {
     _scheduleReconnectIfNeeded();
   }
 
-  /// 音频（声卡 TNC）连接。与 TNC 的差异：没有「绑定设备」，连上即开始采集；
-  /// 相同点：不发 APRSlocus CONNECT 身份帧、不注册过滤器、passcode 不适用。
+  /// 音频 / WLAN 电台直连连接。
   Future<void> _connectAudio() async {
+    final isIcom = audio.config.source == AudioSource.icomLan;
+    final radioName = audio.config.icomLan.model.id;
     connecting = true;
-    setConnStatus(ConnPhase.connectingAudio, arg: audio.backendName);
-    _log(LogLevel.info, '连接', '正在打开音频采集（${audio.backendName}）…');
+    setConnStatus(ConnPhase.connectingAudio,
+        arg: isIcom ? '$radioName 直连' : audio.backendName);
+    _log(
+      LogLevel.info,
+      '连接',
+      isIcom
+          ? '正在连接 $radioName 电台（${audio.config.icomLan.host.isNotEmpty ? audio.config.icomLan.host : "未配IP"}）…'
+          : '正在打开音频采集（${audio.backendName}）…',
+    );
     _notify();
     _updateNotification();
     final ok = await audio.connect();
@@ -4027,20 +8094,31 @@ class AppState extends ChangeNotifier {
       passcodeInvalid = false;
       _lastTx = DateTime.now();
       final rate = audio.config.afsk.sampleRate;
-      setConnStatus(ConnPhase.audioConnected, arg: '${rate}Hz');
-      _log(LogLevel.info, '连接',
-          '音频链路已建立 · AFSK 1200 @${rate}Hz（${audio.backendName}）');
+      setConnStatus(ConnPhase.audioConnected,
+          arg: isIcom ? '$radioName 直连' : '${rate}Hz');
+      _log(
+        LogLevel.info,
+        '连接',
+        isIcom
+            ? '$radioName 直连链路已建立（${audio.config.icomLan.host}:${audio.config.icomLan.controlPort}）'
+            : '音频链路已建立 · AFSK 1200 @${rate}Hz（${audio.backendName}）',
+      );
       _flushPendingTx();
       if (beaconEnabled && !audio.config.rfBeacon) {
         _log(LogLevel.warn, '信标',
-            '音频模式下射频信标开关未打开，不会自动发射位置（可在音频页开启）');
+            '${isIcom ? radioName : "音频"}模式下射频信标开关未打开，不会自动发射位置（可在设备页开启）');
       }
     } else {
       final backoff = [8, 16, 32, 60][_reconnectAttempt.clamp(0, 3)];
       setConnStatus(ConnPhase.retryAudio,
           arg: audio.lastError, seconds: backoff);
-      _log(LogLevel.error, '连接',
-          '音频链路打开失败（${audio.lastError}），${backoff} 秒后自动重试');
+      _log(
+        LogLevel.error,
+        '连接',
+        isIcom
+            ? '$radioName 连接失败（${audio.lastError}），$backoff 秒后自动重试'
+            : '音频链路打开失败（${audio.lastError}），$backoff 秒后自动重试',
+      );
     }
     _notify();
     _updateNotification();
@@ -4052,6 +8130,26 @@ class AppState extends ChangeNotifier {
   /// 与其他射频链路一样：不发身份帧、不注册过滤器、passcode 不适用。
   /// 差别是它连上后什么都不用下发 —— 电台自己会持续输出语句，
   /// 我们只需要静静地分帧、校验、解析。
+  /// 盒子链路连接（手动与自动都走这里）。
+  ///
+  /// 与报文链路最大的不同：**它连不上不影响应用工作**（报文照走
+  /// APRS-IS/TNC），所以这里不设 ConnPhase、不弹横幅，只在日志留痕，
+  /// 失败原因由设备页如实显示。
+  Future<void> _connectBox() async {
+    if (box.connected) return;
+    final conflict = await guardDeviceConnect(srcBox);
+    if (conflict != null) {
+      box.lastError = conflict;
+      _log(LogLevel.warn, '盒子', '设备被别的链路占用，盒子暂不连接。');
+      return;
+    }
+    final ok = await box.connect();
+    _setLinkUp(srcBox, ok);
+    if (ok) {
+      _log(LogLevel.info, '盒子', '已连接 ${box.device?.label ?? ''}');
+    }
+  }
+
   Future<void> _connectPkwdwpl() async {
     // 与 TNC 抢同一台设备时拒绝连接：TNC 是发射链路，让它先。
     // 两条链路同时连会瓜分接收字节流（症状：TNC 能发不能收）。
@@ -4097,12 +8195,82 @@ class AppState extends ChangeNotifier {
     _scheduleReconnectIfNeeded();
   }
 
+  /// 连接外接 GPS（蓝牙 SPP）。
+  ///
+  /// 与 PKWDWPL 同类的**只读**链路，但优先级更低：它不供报文、只供位置，
+  /// 所以遇到设备冲突就退（让它自己报 device-in-use，不抢别人的设备），
+  /// 也**不占 ConnPhase** —— 连不上只影响定位来源，不影响报文工作。
+  Future<void> _connectNmeaGps() async {
+    if (nmeaGps.connected) return;
+    final owner = deviceBoundBy(nmeaGps.device?.id);
+    if (owner != null && owner != srcNmeaGps) {
+      nmeaGps.lastError = 'device-in-use';
+      // lastDetail 也要写：设备页的错误提示读的是 lastDetail
+      nmeaGps.lastDetail = 'device-in-use';
+      _setLinkUp(srcNmeaGps, false);
+      _log(
+        LogLevel.warn,
+        '连接',
+        '${nmeaGps.device?.label} 正被 ${_sourceName(owner)} 占用，'
+            '外接 GPS 暂不连接（两条链路同时连会互相抢走接收数据）。',
+      );
+      _notify();
+      _updateNotification();
+      return;
+    }
+    connecting = true;
+    final name = nmeaGps.device?.label ?? '未绑定设备';
+    _log(LogLevel.info, '连接', '正在连接外接 GPS：$name');
+    _notify();
+    _updateNotification();
+    final ok = await nmeaGps.connect();
+    connecting = false;
+    _setLinkUp(srcNmeaGps, ok);
+    if (ok) {
+      _log(LogLevel.info, '连接', '外接 GPS 链路已建立 · $name（只收定位）');
+    } else {
+      _log(LogLevel.error, '连接',
+          '外接 GPS 连接失败（${nmeaGps.lastError}），稍后自动重试');
+    }
+    _notify();
+    _updateNotification();
+    _scheduleReconnectIfNeeded();
+  }
+
+  /// 往 APRS-IS 发一行。
+  ///
+  /// 走哪条互联网链路由**发射来源**决定（见 [_sendVia]）：两条互不退让，
+  /// 选中哪条就从哪条走，另一条不在线也不会偷偷顶上来。
+  bool _sendAprs(String raw) {
+    final ok = aprs.send(raw);
+    if (!ok) {
+      _log(LogLevel.warn, '连接', 'APRS-IS 没有发出：${_trunc(raw)}');
+    }
+    return ok;
+  }
+
   /// 统一发送入口：按当前数据来源路由到 APRS-IS / TNC / 音频。
   ///
   /// 所有发报路径都必须经过它 —— 否则 TNC 模式下会出现
   /// 「界面上报成功、实际报文走 APRS-IS 发出」这类静默错误。
+  ///
+  /// 这一条是**位置与状态报文**（信标、状态帧、测试帧、手打报文）。消息
+  /// （私聊 / 群发 / 位置点 / ack）走 [_sendRawMsg]，两条来源可以不同。
   void _sendRaw(String raw) {
-    _sendVia(dataSource, raw);
+    for (final src in posTxTargets) {
+      // **发射数就在这里数**：信标、状态帧、测试帧走的都是这条路。
+      // 以前只有发消息时 packetsTx++，于是胶囊里的「发射数」永远是 0 ——
+      // 用户看着实际发了报，数字却一动不动。
+      //
+      // 逐条链路重新算报头路径（[lineForLink]）：同时发往射频与互联网时，
+      // 两边该带的路径不同，不能一份报文两处照抄。
+      if (_sendVia(src, lineForLink(src, raw)) == null) packetsTx++;
+    }
+  }
+
+  /// 发一条**消息**：走用户给消息单独选的那条链路。
+  void _sendRawMsg(String raw) {
+    _sendVia(dataSourceMsg, lineForLink(dataSourceMsg, raw));
   }
 
   /// 按指定来源发送（网关向射频转递时需要指定，而不是走「发射来源」——
@@ -4134,7 +8302,20 @@ class AppState extends ChangeNotifier {
       }
       return err;
     }
-    aprs.send(raw);
+    if (src == srcAcn) {
+      // APRSNETCN 是独立的一条链路：没连着就说没连，**不退回** APRS-IS。
+      if (!acnConnected || !acnLink.connected) {
+        _log(LogLevel.warn, 'APRSNETCN', '链路没在线，这条没有发：${_trunc(raw)}');
+        return 'not-connected';
+      }
+      final ok = acnLink.send(raw);
+      if (!ok) {
+        _log(LogLevel.warn, 'APRSNETCN', '发送失败：${_trunc(raw)}');
+        return 'send-failed';
+      }
+      return null;
+    }
+    if (!_sendAprs(raw)) return 'send-failed';
     return null;
   }
 
@@ -4146,15 +8327,10 @@ class AppState extends ChangeNotifier {
   String? sendTestFrame() {
     if (!connected) return 'not-connected';
     final raw = LinkDiag.testFrame(myFullCall, txPath, appVersion);
-    if (usingTnc) {
-      final err = tnc.sendTnc2(raw);
-      if (err != null) return err;
-    } else if (usingAudio) {
-      final err = audio.sendTnc2(raw);
-      if (err != null) return err;
-    } else {
-      aprs.send(raw);
-    }
+    // 一律走统一入口：APRSNETCN 同样是可发射链路，这里若只认射频和 APRS-IS，
+    // 就会出现「发射来源选的是它、测试帧却从 APRS-IS 出去」。
+    final err = _sendVia(dataSource, raw);
+    if (err != null) return err;
     _lastTx = DateTime.now();
     _log(LogLevel.info, '测试', '已发出测试帧：${_trunc(raw)}');
     _pushPacket(Packet(
@@ -4163,6 +8339,7 @@ class AppState extends ChangeNotifier {
       'APRS',
       'status',
       DateTime.now(),
+      source: dataSource,
       info: '链路测试',
     ));
     _notify();
@@ -4195,7 +8372,7 @@ class AppState extends ChangeNotifier {
   String sendStatus() {
     var text = aprsStatusText.trim();
     if (text.isEmpty) {
-      text = 'APRSlocus CONNECT v$appVersion $platformTag';
+      text = _defaultStatusText;
     }
     if (text.length > statusMaxLen) {
       text = text.substring(0, statusMaxLen);
@@ -4209,6 +8386,7 @@ class AppState extends ChangeNotifier {
       'APRS',
       'status',
       DateTime.now(),
+      source: dataSource,
       info: text,
     ));
     _sendRaw(raw);
@@ -4225,6 +8403,36 @@ class AppState extends ChangeNotifier {
     _notify();
     _updateNotification();
     return raw;
+  }
+
+  /// 内置默认状态**文本**（不含报文头）：`APRSlocus CONNECT vX.Y.Z 平台`。
+  ///
+  /// [sendStatus] 文本留空、以及没填自定义文本时的保活帧都用它。版本号会随它
+  /// 发到空中（见仓库 AGENT.md「版本号会发射」一节）。
+  static String get _defaultStatusText =>
+      'APRSlocus CONNECT v$appVersion $platformTag';
+
+  /// APRS-IS 上的内置默认**状态帧**（头 + [_defaultStatusText]）。
+  ///
+  /// 两个用途：连接成功时上报在线的那**一帧**（见 [_connectAprsIs]），以及**没填
+  /// 自定义状态文本时的保活帧**（见 [_keepaliveTimer]，仅 APRS-IS）。射频不发
+  /// CONNECT 帧（见 [_connectTnc]）。
+  String _defaultStatusFrame() =>
+      '$myFullCall>APALOC,TCPIP*:>$_defaultStatusText';
+
+  /// 当前自定义状态文本对应的状态帧原文（DTI `>`）；未填自定义文本时返回 null。
+  ///
+  /// 唯一用途：连接成功时，紧跟在上线上报帧之后**补一帧**（issue #31）。那帧会把
+  /// aprs.fi 上「台站状态」那一栏改写成内置的 CONNECT 文本，不补就等于「一连上
+  /// 服务器，用户自己设的状态立刻被内置文本顶掉」。保活帧现在直接发自定义帧
+  /// （不再先发 CONNECT，见 [_keepaliveTimer]），所以只有「上线」这条路要补。
+  /// 只组帧，不碰连接状态、不写日志、不 _notify()。
+  String? _customStatusFrame() {
+    final custom = aprsStatusText.trim();
+    if (custom.isEmpty) return null;
+    var txt = custom.replaceAll(RegExp(r'[\r\n]+'), ' ').trim();
+    if (txt.length > statusMaxLen) txt = txt.substring(0, statusMaxLen);
+    return '$myFullCall>$_destHeader:>$txt';
   }
 
   /// 是否自动回复 ack。TNC 模式下可由用户在设备页关闭 ——
@@ -4246,8 +8454,16 @@ class AppState extends ChangeNotifier {
   /// 而 APRS-IS 那边是按 512 字节整行算，两者的限制不是一回事。
   int get rfMaxFrame => usingTnc ? tnc.config.maxFrame : audio.config.maxFrame;
 
-  /// 群聊是否可用。射频模式下禁用（见 [sendGroupMessage] 的说明）
-  bool get groupChatAllowed => !usingRf;
+  /// 群聊是否可用。
+  ///
+  /// 曾经射频下禁用：理由是群呼号不是真实台站、无人应答。但射频群里
+  /// **队友都在守听这个群呼号**，他们确实收得到 —— 「无人应答」混淆了
+  /// 「不能确认送达」与「不能通联」。策略地图也是群维度功能，禁用群聊
+  /// 等于把射频用户挡在门外。现在射频下同样开放：
+  /// * 群聊/策略帧用 no-ack 广播（避免多人同时回 ack 的噪声）；
+  /// * 射频下策略帧改用带 ack 的格式发送，靠**标准自动 ack** 判断送达
+  ///   （见 [_sendStrategyFrame]），丢包时可在策略地图页手动重发。
+  bool get groupChatAllowed => true;
 
   /// 当前是否处于「有实际发射能力」的状态（用于 UI 提示）
   bool get rfActive => usingRf && connected;
@@ -4381,8 +8597,10 @@ class AppState extends ChangeNotifier {
       // 模拟位置不读 GPS，但**仍要启动前台服务保活**：
       // 否则切到后台后 APRS-IS 连接会被冻结、信标定时器停摆。
       // 该调用不需要定位权限（Android 侧 keepalive 模式已豁免）。
-      await loc.startKeepAlive();
-      locStatus = '模拟位置 · 后台保活';
+      // 非 Android 平台没有这个服务，返回 false —— 状态文案要如实反映，
+      // 不能在没有服务时说"后台保活"。
+      final alive = await loc.startKeepAlive();
+      locStatus = alive ? '模拟位置 · 后台保活' : '模拟位置';
       _notify();
       return true;
     }
@@ -4393,6 +8611,10 @@ class AppState extends ChangeNotifier {
       _notify();
     } else {
       _log(LogLevel.info, '定位', '定位服务已启动');
+      // 「启动调用发出去了」不等于服务真的在跑：原生被系统挡下或崩掉时，
+      // Dart 这边拿到的仍然是成功。三秒后问一次原生，没起来就重试（有限次），
+      // 否则界面显示「定位中」而常驻通知一条都没有。
+      _verifyServiceUp();
       // 传感器与定位同生共死：没有定位就不需要判「在不在动」
       // 计步与碰撞检测都要这个监听器，所以**无论传感器辅助开没开**都要起：
       // motion 参数只决定加速度计/指南针那部分要不要注册（issue #23）。
@@ -4403,6 +8625,32 @@ class AppState extends ChangeNotifier {
       }));
     }
     return ok;
+  }
+
+  /// 服务起来后确认一下：三秒后问原生「你真的在跑吗」。
+  ///
+  /// 不在就重试启动（有限次）。前台服务没起来时，界面照样显示「定位中」，
+  /// 常驻通知却一条都没有 —— 这个组合最容易让人以为是通知坏了。
+  int _serviceUpRetry = 0;
+
+  void _verifyServiceUp() {
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (_disposed || !loc.running) return;
+      if (await loc.serviceAlive()) {
+        _serviceUpRetry = 0;
+        return;
+      }
+      if (_serviceUpRetry >= 3) {
+        locStatus = '定位失败';
+        _log(LogLevel.error, '定位', '前台服务三次都没起来');
+        _notify();
+        return;
+      }
+      _serviceUpRetry++;
+      _log(LogLevel.error, '定位', '前台服务没起来，第 $_serviceUpRetry 次重试');
+      _notify();
+      await startTracking();
+    });
   }
 
   void stopTracking() {
@@ -4431,9 +8679,16 @@ class AppState extends ChangeNotifier {
     bool lastKnown,
     double accuracy,
     String source,
+    int? satellites,
   ) async {
     if (_disposed) return;
     if (useSimLocation) return; // 模拟位置模式下忽略 GPS 数据
+    // ── 外接 GPS 模块在跑且还新鲜时，**手机 GPS 让位**（与佳明同理）──
+    //
+    // 优先级：sim > 外接 GPS 模块 > 佳明 > 手机（见 [positionSourceNow]）。
+    // 这两档没有合并成一句 `externalFixFresh`：哪条源在供位必须能单独看出来
+    // （下面佳明那一行还是 CI 钉住的判据）。
+    if (nmeaGpsOn && nmeaGps.fresh) return;
     // ── 佳明 LiveTrack 在跑且还新鲜时，**手机 GPS 让位** ──
     //
     // 两路同时在更新「我的位置」会互相打架：手表比手机准，而手机一侧随时可能
@@ -4479,6 +8734,14 @@ class AppState extends ChangeNotifier {
     // 上报横杠多半显示着正常的倒计时（beaconPhase = counting），
     // 用户完全看不出「正在发一个错坐标」。宁可保持上一个（手表的）位置，等真 GPS 接回来。
     if (coarse && garmin.on) return;
+    // ── 外接 GPS 模块：**不再单独挡粗点** ──
+    //
+    // 这里原来有一行「只要是粗点、且模块启用着就 return」。它比上面那道「模块
+    // 新鲜就让位」更狠：只要模块**启用着**（哪怕早已断流、早已拔掉），手机侧的
+    // 网络定位就永远进不来。室内或纯网络模式下这等于没有位置 —— 用户报的
+    // 「断开外置 GPS 后一直没有位置，手动上报只剩一帧状态报文」就是它。
+    // 模块真在供位时上面那道 return 已经把手机点全挡了；断流之后交给下面通用
+    // 那两关（GPS 刚更新过 300 秒内 / 粗点自己跳太远）判断，与其它来源一致。
     if (coarse) {
       final gapSec = _lastFixTime == null
           ? 1 << 30
@@ -4615,12 +8878,23 @@ class AppState extends ChangeNotifier {
     myLng = outLng;
     myAlt = alt;
     myHasFix = true;
+    // 缓存点（lastKnown）不算「刚定位」，只更新真实点的时间，避免「拿旧点当新定位」。
+    if (!lastKnown) myFixAt = DateTime.now();
+    // 收到**本轮的**定位（含用户显式选用的网络定位）→ 上报闸打开。
+    // ⚠ `lastKnown` 是系统缓存点，不算「重新获取到的位置」：它只让标记有东西
+    // 可显示，绝不能据此上报（见 [myPositionReportable] 与用户报的
+    // 「定位没开却报出错位置」）。
+    if (!lastKnown) _pendingSavedPos = false;
     myFixCoarse = coarse;
     // 粗定位的精度**不能照抄系统自报值**：它常报 20~40m 却实际偏几百米，
     // 于是精度圈画得像 GPS 一样小，反而更骗人。给一个诚实的下限。
     myAccuracy = coarse
         ? (accuracy > _kCoarseAccuracyFloorM ? accuracy : _kCoarseAccuracyFloorM)
         : (accuracy > 0 ? accuracy : 0);
+    // 卫星数：只认**实时**定位 —— 缓存点（lastKnown）带的是几小时前那份星数，
+    // 把它写进信标等于向全网报一个当下的假数据。null（平台不给）与 0（真没星）
+    // 在这里都如实传播，发不发由 _beaconComment 决定（只发 > 0）。
+    if (!lastKnown) mySats = satellites;
     if (!lastKnown && !coarse) {
       // 只有实时 **GPS** 才推进参照点与「有过实时定位」标记；
       // 缓存位置与粗定位都不算数（否则粗点会成为后续跳变判断的基准，
@@ -4674,19 +8948,29 @@ class AppState extends ChangeNotifier {
     // 只有前一条时，速度越低点越疏（步行 8m 要 5.8s），而慢速正是用户最想
     // 看清细节的时候 —— 那条「保底」就是为此加的。
     final last = myTrack.isEmpty ? null : myTrack.last;
+    // 弱信号（卫星少 / 精度差）：开了「强制网络上报」就不管，没开就把点放稀，
+    // 精度差到没参考价值时干脆不记 —— 等下一次有效定位再接着画。
+    final weak = PosQuality.weakFix(sats: satellites, accuracyM: accuracy);
+    final weakGate = weak && !beaconForceCoarse;
     if (!lastKnown &&
         !coarse &&
         !still &&
-        accuracy <= SelfFixFilter.trackAccuracyLimitM) {
-      final minDistM = PosQuality.trackMinDistM(speedKmh: speed * 3.6);
+        accuracy <= SelfFixFilter.trackAccuracyLimitM &&
+        !(weakGate && accuracy > PosQuality.weakSkipAccuracyM)) {
+      var minDistM = PosQuality.trackMinDistM(speedKmh: speed * 3.6);
+      var gapNeed = PosQuality.trackMaxGapSec;
+      if (weakGate) {
+        minDistM = math.max(minDistM, PosQuality.weakTrackMinDistM);
+        gapNeed = PosQuality.weakTrackMinGapSec;
+      }
       final movedM = last == null
           ? double.infinity
           : haversine(last.lat, last.lng, outLat, outLng) * 1000;
       final gapSec = last == null
           ? double.infinity
           : DateTime.now().difference(last.time).inSeconds.toDouble();
-      final keepAlive = gapSec >= PosQuality.trackMaxGapSec &&
-          movedM >= PosQuality.trackMinMoveM;
+      final keepAlive =
+          gapSec >= gapNeed && movedM >= PosQuality.trackMinMoveM;
       if (last == null || movedM > minDistM || keepAlive) {
         myTrack.add(TrackPt(outLat, outLng, DateTime.now()));
         if (myTrack.length > maxTrackPts) {
@@ -4695,15 +8979,18 @@ class AppState extends ChangeNotifier {
         // 个人历史台账（按天落盘）与屏幕轨迹分开写：只在「确实在动」时
         // 记，并带上速度/航向/精度，供事后按天统计里程与速度；
         // 有心率读数（心率带 / 佳明）就一并记下，供事后画心率折线（issue #17）。
-        TrackLogStore.instance.record(
-          lat: outLat,
-          lng: outLng,
-          speedKmh: speed * 3.6,
-          course: myCourse,
-          alt: alt,
-          accuracyM: accuracy,
-          hr: myHr,
-        );
+        // 记录开关默认关（[trackLogOn]）—— 没打开就不往台账里写。
+        if (trackLogOn) {
+          TrackLogStore.instance.record(
+            lat: outLat,
+            lng: outLng,
+            speedKmh: speed * 3.6,
+            course: myCourse,
+            alt: alt,
+            accuracyM: accuracy,
+            hr: myHr,
+          );
+        }
         // 里程与轨迹点同门限累计（见 _addMileage）：只在有上一个点时才有位移
         if (last != null) _addMileage(movedM / 1000.0);
       }
@@ -4730,12 +9017,9 @@ class AppState extends ChangeNotifier {
     }
     _notify();
     _updateNotification();
-    // 定期刷新电量（每次定位都取一次，便于上报）
-    if (beaconIncludeBattery) {
-      loc.getBatteryLevel().then((v) {
-        if (v >= 0) _battery = v;
-      });
-    }
+    // 有定位点时顺手刷一下电量（真正的节流在 _refreshBattery 里）。
+    // 注意它**不再**是唯一的刷新点：定位会停，电量不会停。
+    unawaited(_refreshBattery());
   }
 
   // ─── 信标（定位上传） ───
@@ -4759,8 +9043,18 @@ class AppState extends ChangeNotifier {
   /// [force] 为 true 时忽略信标总开关（仅手动上报用）；
   /// 自动定时上报调用时不带 force，受 beaconEnabled 门控。
   void _sendBeaconNow({bool force = false}) {
-    if (!myHasFix) return;
+    // ⚠ 这里必须是 [myPositionReportable] 而不是 [myHasFix]：后者含着
+    // 「上次保存的位置」，用户报的「定位没开却报出错位置」正是它造成的
+    // （系统的上次位置 / 磁盘存档都会把它置真）。手动上报也一样 —— 用户点的是
+    // 「上报现在的位置」，而当前还没有本轮定位，那个坐标就是错的。
+    if (!myPositionReportable) return;
     if (!force && !beaconEnabled) return;
+    // 单独同意（协议 5.1 / 5.3）：没有对应范围的同意，一个字节都不发 ——
+    // 自动、手动两条路都经过这里，所以这一个闸就够了。
+    if (!consentSatisfied) {
+      ensureConsent(beaconConsentScopes);
+      return;
+    }
     final lat = myLat!;
     final lng = myLng!;
     final raw = AprsFmt.position(
@@ -4768,6 +9062,7 @@ class AppState extends ChangeNotifier {
       lat,
       lng,
       beaconSymbolNow,
+      ambiguity: beaconAmbiguity,
       comment: _beaconComment(),
       path: txPath,
     );
@@ -4778,6 +9073,7 @@ class AppState extends ChangeNotifier {
         'APRS',
         'position',
         DateTime.now(),
+        source: dataSource,
         info: '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)} · 手动上报',
       ),
     );
@@ -4969,6 +9265,22 @@ class AppState extends ChangeNotifier {
     if (beaconIncludeSteps && stepsToday > 0) {
       parts.add('STEPS=$stepsToday');
     }
+    // 卫星数：非标准字段（与 STEPS= 同类），默认关。
+    // 值与来源同源（见 [mySats]）：手机 GPS（Android）或外接模组都行，
+    // 来源不说就**不发** —— 发 `SAT=0` 会让收端以为「一颗星都没有」，
+    // 而实际可能只是这个平台不给这个字段。
+    if (beaconIncludeSats && (mySats ?? 0) > 0) {
+      parts.add('SAT=$mySats');
+    }
+    // 电脑负载：非标准字段（同 SAT= / STEPS=），只在桌面平台且真读到值时发。
+    // 读不到就不发 —— 发 `CPU=0%` 会被当成「这台机器闲着」。
+    if (beaconIncludeDeskLoad) {
+      final u = DesktopMetrics.latest;
+      final cpu = u?.cpu;
+      final mem = u?.mem;
+      if (cpu != null && cpu >= 0) parts.add('CPU=$cpu%');
+      if (mem != null && mem >= 0) parts.add('MEM=$mem%');
+    }
     if (myComment.trim().isNotEmpty) {
       parts.add(myComment.trim());
     }
@@ -4979,6 +9291,9 @@ class AppState extends ChangeNotifier {
 
   // ─── 连接 ───
   Future<void> reconnect() async {
+    // 刻意**不**作废「开始上报」确认：用户点「重连」是修复现有的这条连接
+    // （应用新过滤/新参数），不是要开一次新会话 —— 掉线自愈不该让他重新确认
+    // （用户要求：「计划外断开可以直接重连」）。
     _userDisconnected = false;
     _reconnectTimer?.cancel();
     _lastFilter = ''; // 重置，确保下次连接后更新
@@ -5007,6 +9322,15 @@ class AppState extends ChangeNotifier {
       await pkwdwpl.restart();
       _setLinkUp(srcPkwdwpl, pkwdwpl.connected);
     }
+    if (nmeaGpsOn) {
+      // 外接 GPS：同样只需断连重连（模组不接受任何指令）
+      await nmeaGps.restart();
+      _setLinkUp(srcNmeaGps, nmeaGps.connected);
+    }
+    if (boxOn) {
+      await box.restart();
+      _setLinkUp(srcBox, box.connected);
+    }
     if (!aprsIsOn) {
       _notify();
       _updateNotification();
@@ -5023,10 +9347,12 @@ class AppState extends ChangeNotifier {
     // 判据用 anyLinkUp：多选模式下「发射来源断了但别的还连着」时，
     // 用户点这个按钮的意图仍然是「全部断开」，而不是再连一次。
     if (anyLinkUp) {
-      _userDisconnected = true;
+      // 计划内断开：压住自动重连，并作废「开始上报」确认（下次连接重新确认）。
+      _plannedLinkChange(disconnecting: true);
       _reconnectAttempt = 0; // 手动断开，重置重试计数
       _reconnectTimer?.cancel();
       if (aprsIsOn) aprs.disconnect();
+      if (acnOn || isUp(srcAcn)) _dropAcn();
       if (tncOn || isUp(srcTnc)) await tnc.disconnect();
       if (audioOn || isUp(srcAudio)) await audio.disconnect();
       if (pkwdwplOn || isUp(srcPkwdwpl)) await pkwdwpl.disconnect();
@@ -5037,21 +9363,56 @@ class AppState extends ChangeNotifier {
       _updateNotification();
       return;
     }
-    _userDisconnected = false;
+    // ── 数据与网络使用告知：**连接服务器前必须先签署**（用户协议 2.4/2.5）──
+    // 闸门放在这里而不是各个按钮上：连接入口有 7 处（首页、面板、设置、shell…），
+    // 只有放在 toggleConnect 里才是"一个口子"，不会漏。
+    if (!dataNoticeAccepted) {
+      pendingDataNotice = true;
+      _notify();
+      return;
+    }
+    // ── 服务器地址没填：连不上去，先把原因说出来（用户要求：同 Passcode 填 -1 的
+    // 验证提示一样，要「提示原因 + 提示配置」）──
+    //
+    // 拦在这里而不是让 `aprs.connect()` 去失败：地址为空时它只会拿到一个主机名
+    // 解析错误，用户看到的是「正在连接…」转几圈然后自动重试，界面上没有一句
+    // 能读的说明。而且这一拦**不消耗**「开始上报」的确认（[beaconArmed] 不动）。
+    if (connectBlockedNoServer) {
+      markConnectNoServer();
+      return;
+    }
+    // 用户自己发起连接（[toggleConnect] 的入口有 7 处）：算新的一次连接，
+    // 不论之前确认过没有都要重新确认 —— 这正是「连上就自动上报」的反面。
+    _plannedLinkChange(disconnecting: false);
     await _connect();
   }
 
-  void _onAprsLine(String line, {required bool rf}) {
+  void _onAprsLine(String line,
+      {required bool rf, String source = 'local', bool fromAcn = false}) {
+    _rxSource = source;
+    if (fromAcn && _isMainMirror(line)) return;
+    if (fromAcn && !line.startsWith('#')) acnRx++;
+    if (!fromAcn) _noteMainLine(line);
     // 网关转递必须在**解析之前**做：无论这条报文能否解析成台站/消息，
     // 只要它该被转递就得转递（很多报文类型本应用并不解析，但网关该转发）。
-    if (rf) {
-      _gateRfToIs(line);
-    } else {
-      _gateIsToRf(line);
+    // 第二条链路（APRSNETCN）收到的报文不做网关转递：同一条报文可能从两条
+    // 链路都收到，转两遍就是白占一次射频时隙。
+    if (!fromAcn) {
+      if (rf) {
+        _gateRfToIs(line);
+      } else {
+        _gateIsToRf(line);
+      }
     }
     // 简单解析收到的 APRS 帧
     try {
       if (line.startsWith('#')) {
+        // 副链路有它自己的 passcode，它的 logresp 不能去动主链路的横幅，
+        // 但要记进自己那一行，否则口令填错时卡里永远显示「已连接」。
+        if (fromAcn) {
+          _noteAcnServerLine(line);
+          return;
+        }
         // 服务器握手响应：# logresp {call} verified / unverified
         final lm = RegExp(
           r'#\s*logresp[:\s]*(\S+)\s+(unverified|verified)',
@@ -5061,7 +9422,7 @@ class AppState extends ChangeNotifier {
           final status = lm.group(2)!.toLowerCase();
           if (status == 'unverified') {
             passcodeInvalid = true;
-            _log(LogLevel.warn, '连接', '登录未验证：passcode 可能错误（unverified）');
+            _log(LogLevel.warn, '连接', '登录未验证：passcode 或账号口令可能不对（unverified）');
             if (connected) {
               setConnStatus(ConnPhase.unverified);
               _notify();
@@ -5163,10 +9524,10 @@ class AppState extends ChangeNotifier {
           }
           // 自动 ack（标准：{id 需要 ack，{id_ 不需要 ack）
           final ackId = parsed.$2;
-          if (ackId != null && connected && _autoAckEnabled) {
+          if (ackId != null && msgLinkUp && _autoAckEnabled) {
             // ack 包不带消息 ID，防止对方无限 ack 我们的 ack
             final ack = '$myFullCall>$_destHeader::${src.padRight(9)}:ack$ackId';
-            _sendRaw(ack);
+            _sendRawMsg(ack);
             _pushPacket(
               Packet(
                 ack,
@@ -5174,6 +9535,7 @@ class AppState extends ChangeNotifier {
                 'APRS',
                 'message',
                 DateTime.now(),
+                source: dataSourceMsg,
                 info: '自动 ack → $src ($ackId)',
               ),
             );
@@ -5193,6 +9555,10 @@ class AppState extends ChangeNotifier {
             raw: line,
             path: path.isEmpty ? null : path,
             toCall: toCall,
+            fromServer: fromAcn,
+            // 链路是那条，来源就是那条：主链路 aprsis、第二条 acn、
+            // 电台链路 tnc / audio（`source` 本来就是这几项）。
+            via: fromAcn ? srcAcn : source,
           );
           info =
               '${p.lat.toStringAsFixed(4)}, ${p.lng.toStringAsFixed(4)}'
@@ -5217,6 +9583,8 @@ class AppState extends ChangeNotifier {
           'APRS',
           type,
           DateTime.now(),
+          // 标出这条是从哪条链路收到的（APRS-IS / TNC / 声卡）
+          source: _rxSource,
           info: info.length > 80 ? info.substring(0, 80) : info,
         ),
       );
@@ -5371,7 +9739,18 @@ class AppState extends ChangeNotifier {
           break;
         }
       }
-      if (!isGroupMsg) return null; // 不是发给我的，也不是群呼号，忽略
+      if (!isGroupMsg) {
+        // 「同一呼号的其他 SSID」也能收（用户要求）：对方可能发给 BG7LZQ-9，
+        // 而这台设备是 BG7LZQ-7。直接丢掉的话，看起来就是「对方发了、我没收到」。
+        // 收下时 `to` 保留原收件人，气泡上据此提示「这不是发给本机 ID 的」。
+        if (addressee.isEmpty ||
+            _baseCall(addressee.toUpperCase()) !=
+                _baseCall(myFullCall.toUpperCase())) {
+          return null; // 既不是我的 SSID，也不是群呼号，忽略
+        }
+        // 用户关掉「接收其他 SSID 的消息」时退回旧行为：只收发给本机 ID 的
+        if (!acceptOtherSsidMsgs) return null;
+      }
     }
     // 提取消息编号与 ack 标记：`{NNNN` 或 `{NNNN_`
     String? ackId;
@@ -5391,8 +9770,41 @@ class AppState extends ChangeNotifier {
       for (final m in messages) {
         if (m.sent && m.id == ackedId) m.acked = true;
       }
+      // 策略帧的 ack：确认至少有一个队友收到（射频下这才是「送达」凭据），
+      // 顺带把这条帧从待确认表里摘掉并记日志，便于排查射频丢包。
+      final sf = _strategyAckWait.remove(ackedId);
+      if (sf != null) {
+        _log(LogLevel.info, '策略地图', '$src 已确认收到：${sf.$2}');
+      }
       _saveMessages();
       _notify();
+      return null;
+    }
+    // 「我的其他 SSID」远程指令（`!AL ACT/BCN/STP`）：执行，但**照旧进会话**，
+    // 用户能看到自己另一台设备收到了什么指令。
+    _maybeSsidCommand(src, text);
+    // ─── 策略地图帧（群内共享的标点/线/圈/集合点）───
+    // 与群协议一样只解析一次、命中的帧**不进聊天列表**（否则几十个元素会
+    // 把聊天记录冲掉）。策略帧前缀 `$M`，与 GroupProto 的命令字不冲突。
+    final strat = StrategyProto.parse(text);
+    if (strat != null) {
+      // 与群协议同源去重：同一帧可能经 APRS-IS 与射频/ iGate 重复送达。
+      final skey = 'S|${src.toUpperCase()}|${text.toUpperCase()}';
+      final snow = DateTime.now();
+      final sSeen = _seenProtoMsgs[skey];
+      if (sSeen != null && snow.difference(sSeen).inSeconds < 120) return null;
+      _seenProtoMsgs[skey] = snow;
+      if (_seenProtoMsgs.length > 200) {
+        _seenProtoMsgs.remove(_seenProtoMsgs.keys.first);
+      }
+      if (isGroupMsg && groupId != null) {
+        // 群内：位置点（`Q`）是**一对一私聊**专用。若误发进群，忽略即可 ——
+        // 不能当策略元素落图，否则「私聊发的位置点」会污染全群的策略图层。
+        if (strat.op != 'Q') _ingestStrategy(src, groupId, strat);
+        return null;
+      }
+      // 私聊里收到位置点：插一条可点气泡（**不进**策略图层，见 sendLocation）。
+      if (strat.op == 'Q') _ingestPrivateLocation(src, strat);
       return null;
     }
     // ─── 协议消息处理（唯一入口：lib/group_chat.dart 已解析一次）───
@@ -5417,11 +9829,24 @@ class AppState extends ChangeNotifier {
     // ─── 加入会话列表 ───
     final msg = AprsMsg(
       src,
-      isGroupMsg ? addressee : myFullCall,
+      isGroupMsg ? addressee : (addressee.isEmpty ? myFullCall : addressee),
       text,
       DateTime.now(),
       groupId: groupId,
     );
+    // 两条链路同时在线时，同一句话会各来一份。只在这种情况下按
+    // 「谁说的 + 说了什么」在 20 秒内去一次重：单链路时（含射频+网关回环）
+    // 这个判断不该改人原来的行为。
+    if (acnOn && acnConnected) {
+      final mk = 'MSG|${src.toUpperCase()}|${text.toUpperCase()}';
+      final mn = DateTime.now();
+      final ms = _seenProtoMsgs[mk];
+      if (ms != null && mn.difference(ms).inSeconds < 20) return null;
+      _seenProtoMsgs[mk] = mn;
+      if (_seenProtoMsgs.length > 400) {
+        _seenProtoMsgs.remove(_seenProtoMsgs.keys.first);
+      }
+    }
     messages.insert(0, msg);
     if (messages.length > 500) messages.removeLast();
     // 群聊：记录活跃成员
@@ -5440,13 +9865,16 @@ class AppState extends ChangeNotifier {
     _recalcUnread();
     _saveMessages();
     AchievementCenter.instance.bump('receiveMsg'); // 听没听到
-    onNewMessage?.call(src, text, groupId);
+    _emitNewMessage(src, text, groupId);
     return (text, ackId);
   }
 
   // ─── 群聊协议消息处理 ───
-  /// 向群聊插入一条系统消息（不发送网络包，仅本地展示）
-  void _addGroupSystemMsg(String groupId, String text) {
+  /// 向群聊插入一条系统消息（不发送网络包，仅本地展示）。
+  ///
+  /// [type] 是子类型（当前只有 `strategy`）：带子类型的提示在气泡里可点击，
+  /// 用来跳转到对应界面（如策略地图）。
+  void _addGroupSystemMsg(String groupId, String text, {String? type}) {
     final g = chatGroups.where((g) => g.id == groupId).firstOrNull;
     if (g == null) return;
     messages.insert(
@@ -5458,6 +9886,7 @@ class AppState extends ChangeNotifier {
         DateTime.now(),
         groupId: groupId,
         system: true,
+        type: type,
       ),
     );
     if (messages.length > 500) messages.removeLast();
@@ -5740,7 +10169,14 @@ class AppState extends ChangeNotifier {
   /// **自己**的位置防抖（`SelfFixFilter`）与精度显示仍保留 —— 那才是每天看得见的东西。
   /// 若将来想重做这一层，请先回答“它能省下多少帧”再动手。
   void _upsertStation(String call, ParsedPos p,
-      {String? raw, String? path, String? toCall}) {
+      {String? raw,
+      String? path,
+      String? toCall,
+      bool fromServer = false,
+      String? via}) {
+    // 本地屏蔽：被屏蔽的台站不上图、不进台站列表（原始数据包仍落在 packets 里，
+    // 数据包页照常可见）。这是**展示层**过滤，不是接收闸门。
+    if (isStationIgnored(call)) return;
     // 国家/地区接收筛选：未选择国家时不限制；
     // 开启「其他台站」时放行特殊类型（中继/气象/FMO/APRSlocus）；
     // 否则仅保留匹配国家前缀的台站（收藏/手动台站除外）
@@ -5785,7 +10221,12 @@ class AppState extends ChangeNotifier {
     // 使图标与其它 APRS 地图一致；FMO 分类由 fmo 结构化字段决定
     final symbol = p.symbol;
     final symbolTable = p.symbolTable;
-    final comment = isFmo ? _cleanFmoComment(p.comment) : _trunc(p.comment);
+    // 台站备注**整句保留**，不再截断。原来这里留 60 字（多出来的换成「…」），
+    // 长备注（中继频点表、活动通知、台站自述）到详情面板与台站列表里只剩半句，
+    // 看着像「这条报文没说完」。界面那头本来就按需换行（StationNote 不限行数），
+    // 数据层先砍一刀只会丢信息、不会省版面。FMO 那类超长证书数据仍由
+    // _cleanFmoComment 收拾。
+    final comment = isFmo ? _cleanFmoComment(p.comment) : p.comment;
     // APRSlocus 专属信息（版本等）
     Map<String, String>? apInfo;
     if (isAprslocus && p.comment != null) {
@@ -5843,6 +10284,12 @@ class AppState extends ChangeNotifier {
       final s = stations[idx];
       final moved =
           (s.lat - p.lat).abs() > 1e-6 || (s.lng - p.lng).abs() > 1e-6;
+      // 本地真的收到了它的报文：这一行的事实不再来自服务器，详情页那句
+      // 「来源 APRSNETCN」该收起来。
+      // fromServer 为真时这一行的事实仍来自服务器（副链路），标记要留着。
+      s.remote = fromServer;
+      // 这一帧是从哪条链路进来的：详情页那枚标签读它。
+      if (via != null) s.heardVia = via;
       // 记录修改前的“地图相关”字段，用于判断是否推进台站版本
       final oldStatus = s.status;
       final oldSym = s.symbol;
@@ -5932,6 +10379,8 @@ class AppState extends ChangeNotifier {
           aprslocus: apInfo,
           path: path,
           toCall: toCall,
+          remote: fromServer,
+          heardVia: via,
         ),
       );
       _stationsDirty = true;
@@ -6018,6 +10467,12 @@ class AppState extends ChangeNotifier {
     _pendingFixCount = 0;
     myAccuracy = 0;
     myFixCoarse = false;
+    // 卫星数也是「这一轮定位的状态」：切换来源 / 清空数据后必须跟着复位，
+    // 否则会拿着上一颗源的颗数往信标里填（`SAT=12` 而实际根本没在定位）。
+    mySats = null;
+    // 复位「只是保存的位置」这一位：切到模拟位置 / 清空数据后若不复位，
+    // 用户切回真机 GPS 时可能带着上一次的「可上报」状态（那正是要防的）。
+    _pendingSavedPos = true;
   }
 
   // 接收侧不再有任何质量层状态（见 _upsertStation 顶部的说明）。
@@ -6061,6 +10516,7 @@ class AppState extends ChangeNotifier {
   void _pushPacket(Packet p) {
     packets.insert(0, p);
     packetsRx++;
+    _noteSubscriptions(p);
     AchievementCenter.instance.bump('worldListener'); // 世界聆听者(累计3万)
     _rxTimes.add(DateTime.now());
     // 顺带清理超过 60 秒的记录，防止 _rxTimes 无界增长
@@ -6080,6 +10536,302 @@ class AppState extends ChangeNotifier {
       _notify();
       _saveStations();
     }
+  }
+
+  /// 设置收藏状态（幂等）。`on=true` 时若无该台站则手动补一条（同 [addManualStation]）。
+  /// 供智能体「关注/取消关注」用：比 [toggleFavorite] 更适合「我要它变成 X」的语义。
+  void setFavorite(String call, bool on) {
+    final c = call.trim().toUpperCase();
+    if (c.isEmpty) return;
+    final idx = stations.indexWhere((s) => s.call == c);
+    if (idx >= 0) {
+      if (stations[idx].favorite == on) return;
+      stations[idx].favorite = on;
+      _bumpStationsVersion();
+      _notify();
+      _saveStations();
+      return;
+    }
+    if (on) addManualStation(c);
+  }
+
+  // ─── 订阅（只看，不改收发）───
+  //
+  // 三种口径见 lib/subscriptions.dart。命中只记一条记录，不额外上报、
+  // 不过滤台站，所以关掉订阅与从来没订阅过在功能上等价。
+  final List<SubRule> subscriptions = [];
+  final List<SubHit> subHits = [];
+
+  /// 上次看过之后又命中了几条（列表页打开时清零）
+  int subUnread = 0;
+  static const int subHitMax = 200;
+  Timer? _subSaveTimer;
+
+  /// 待写盘的订阅 JSON（命中太密时不每次都落盘）
+  String? _subJson;
+
+  /// 命中要不要弹到系统通知栏（订阅页上的「系统通知」开关，默认开）。
+  ///
+  /// 只管通知栏提醒，不改命中记录：关掉它，命中照旧进 [subHits]。
+  bool subsNotify = true;
+
+  /// 同一条订阅两次通知之间的最短间隔。
+  ///
+  /// 为什么必须限流：一条盯着繁忙中继或热门关键词的规则，可能一分钟命中好几次，
+  /// 每条都弹一次等于把手机变成蜂鸣器。限流窗口里压下的条数会在下一条通知里一起说，
+  /// 信息不会丢。
+  static const Duration subNotifyGap = Duration(seconds: 30);
+
+  /// 每条订阅上次弹通知的时刻 / 限流窗口里被压下的条数
+  final Map<String, DateTime> _subNotifiedAt = {};
+  final Map<String, int> _subMutedCount = {};
+
+  void setSubsNotify(bool v) {
+    if (subsNotify == v) return;
+    subsNotify = v;
+    if (!v) {
+      _subNotifiedAt.clear();
+      _subMutedCount.clear();
+    }
+    persist();
+    _notify();
+  }
+
+  /// 所有命中（新的在前）
+  int get subHitCount => subHits.length;
+
+  bool isSubscribedStation(String call) => subscriptions.any((r) =>
+      (r.kind == SubKind.station || r.kind == SubKind.digi) &&
+      r.asSource &&
+      subBaseCall(r.value.replaceAll('*', '')) == subBaseCall(call));
+
+  /// 加一条订阅；已存在同一种同一值时返回 false
+  ///
+  /// [asSource] / [asPath] / [packet] 不传就按口径取默认值（见 [SubRule]）。
+  bool addSubscription(
+    SubKind kind,
+    String value, {
+    bool? asSource,
+    bool? asPath,
+    SubPacket? packet,
+  }) {
+    final v = value.trim();
+    if (v.isEmpty) return false;
+    final exists = subscriptions.any((r) =>
+        r.kind == kind && r.value.toLowerCase() == v.toLowerCase());
+    if (exists) return false;
+    subscriptions.insert(
+      0,
+      SubRule(
+        id: 's${DateTime.now().microsecondsSinceEpoch}',
+        kind: kind,
+        value: v,
+        asSource: asSource,
+        asPath: asPath,
+        packet: packet,
+      ),
+    );
+    _saveSubscriptions();
+    persist();
+    _notify();
+    return true;
+  }
+
+  /// 改一条已有订阅（口径、值、身份、报文种类）
+  bool updateSubscription(
+    String id, {
+    SubKind? kind,
+    String? value,
+    bool? asSource,
+    bool? asPath,
+    SubPacket? packet,
+  }) {
+    final i = subscriptions.indexWhere((r) => r.id == id);
+    if (i < 0) return false;
+    final r = subscriptions[i];
+    final v = (value ?? r.value).trim();
+    if (v.isEmpty) return false;
+    final k = kind ?? r.kind;
+    var src = asSource ?? (k == r.kind ? r.asSource : k != SubKind.digi);
+    var path = asPath ?? (k == r.kind ? r.asPath : k == SubKind.digi);
+    if (k == SubKind.keyword) {
+      // 关键词不看身份
+      src = true;
+      path = false;
+    }
+    // 两个身份都关掉就什么都收不到，至少留一个
+    if (!src && !path) src = true;
+    subscriptions[i] = SubRule(
+      id: r.id,
+      kind: k,
+      value: v,
+      asSource: src,
+      asPath: path,
+      packet: packet ?? r.packet,
+      enabled: r.enabled,
+      hits: r.hits,
+      createdAt: r.createdAt,
+    );
+    _saveSubscriptions();
+    persist();
+    _notify();
+    return true;
+  }
+
+  void removeSubscription(String id) {
+    subscriptions.removeWhere((r) => r.id == id);
+    subHits.removeWhere((h) => h.ruleId == id);
+    // 限流状态跟着规则一起丢掉，否则删了再加回来会带上一段「刚弹过」的记忆
+    _subNotifiedAt.remove(id);
+    _subMutedCount.remove(id);
+    _saveSubscriptions();
+    persist();
+    _notify();
+  }
+
+  void setSubscriptionEnabled(String id, bool on) {
+    final i = subscriptions.indexWhere((r) => r.id == id);
+    if (i < 0 || subscriptions[i].enabled == on) return;
+    subscriptions[i].enabled = on;
+    _saveSubscriptions();
+    persist();
+    _notify();
+  }
+
+  /// 某个台站「订阅 / 取消订阅」（面板菜单用）
+  bool toggleStationSubscription(String call) {
+    final base = subBaseCall(call);
+    final i = subscriptions.indexWhere((r) =>
+        r.kind == SubKind.station && subBaseCall(r.value) == base);
+    if (i >= 0) {
+      removeSubscription(subscriptions[i].id);
+      return false;
+    }
+    addSubscription(SubKind.station, base);
+    return true;
+  }
+
+  void clearSubHits() {
+    subHits.clear();
+    for (final r in subscriptions) {
+      r.hits = 0;
+    }
+    subUnread = 0;
+    _saveSubscriptions();
+    persist();
+    _notify();
+  }
+
+  void markSubscriptionsRead() {
+    if (subUnread == 0) return;
+    subUnread = 0;
+    _notify();
+  }
+
+  void _saveSubscriptions() {
+    _subSaveTimer?.cancel();
+    _subSaveTimer = null;
+    _subJson = encodeSubscriptions(subscriptions, subHits);
+  }
+
+  /// 命中记账（每收到一个包调用一次；没有订阅时立即返回）
+  void _noteSubscriptions(Packet p) {
+    if (subscriptions.isEmpty) return;
+    final mine = myFullCall.toUpperCase();
+    if (p.src.toUpperCase() == mine) return; // 自己发的不算「看到别人」
+    var hit = false;
+    final matched = <SubRule>[];
+    final pk = subPacketKindOf(p);
+    for (final r in subscriptions) {
+      final role = subMatch(r, p);
+      if (role == null) continue;
+      r.hits++;
+      matched.add(r);
+      subHits.insert(
+        0,
+        SubHit(
+          ruleId: r.id,
+          call: p.src,
+          raw: p.raw,
+          info: p.info,
+          time: p.time,
+          role: role,
+          packet: pk,
+        ),
+      );
+      hit = true;
+    }
+    if (!hit) return;
+    if (subHits.length > subHitMax) {
+      subHits.removeRange(subHitMax, subHits.length);
+    }
+    subUnread++;
+    // 命中有多有少，写盘节流：高频收包时不跟着一次次落盘
+    _subJson = encodeSubscriptions(subscriptions, subHits);
+    _subSaveTimer?.cancel();
+    _subSaveTimer = Timer(const Duration(seconds: 8), () => persist());
+    _notifySubscriptions(matched, p);
+    _notify();
+  }
+
+  /// 把这一包命中的订阅弹到通知栏。
+  ///
+  /// 一条订阅一个通知位（原生侧按订阅 id 取 id），所以同一条规则的新命中只会
+  /// 把旧的那条换掉；[subNotifyGap] 以内再命中只计数，下一条通知里带上
+  /// 「另有 N 条」—— 高频命中时不刷屏，也不悄悄吞掉数量。
+  void _notifySubscriptions(List<SubRule> matched, Packet p) {
+    if (!subsNotify || matched.isEmpty) return;
+    final l = l10n;
+    final now = DateTime.now();
+    final body = _subNotifyBody(p);
+    for (final r in matched) {
+      final last = _subNotifiedAt[r.id];
+      if (last != null && now.difference(last) < subNotifyGap) {
+        _subMutedCount[r.id] = (_subMutedCount[r.id] ?? 0) + 1;
+        continue;
+      }
+      _subNotifiedAt[r.id] = now;
+      final muted = _subMutedCount.remove(r.id) ?? 0;
+      final text = muted > 0 ? '${l.subsNotifyMore('$muted')} · $body' : body;
+      unawaited(loc.showSubscriptionNotification(
+          l.subsNotifyTitle(r.value), text, r.id));
+    }
+  }
+
+  /// 通知正文：呼号 + 报文内容（没有内容就退回原文）
+  String _subNotifyBody(Packet p) {
+    final info = (p.info ?? '').trim();
+    final line = info.isEmpty ? p.raw.trim() : '${p.src} $info';
+    return line.length > 140 ? '${line.substring(0, 140)}…' : line;
+  }
+
+  // ─── 台站屏蔽（本地不上图，包仍接收）───
+  //
+  // 为什么需要：此前只有 [receiveOthers] 这个**全局**收发闸门，要么全看要么全不看。
+  // 被某个台站刷屏时，用户想要的是「只看不画这一个」，而不是关掉全世界。
+  // 屏蔽表只影响展示与地图，不影响数据包接收（数据包页仍能看到它的原文）。
+  final Set<String> ignoredStations = {};
+
+  bool isStationIgnored(String call) =>
+      ignoredStations.contains(call.toUpperCase());
+
+  void setStationIgnored(String call, bool ignored) {
+    final c = call.trim().toUpperCase();
+    if (c.isEmpty) return;
+    if (ignored) {
+      ignoredStations.add(c);
+    } else {
+      ignoredStations.remove(c);
+    }
+    _bumpStationsVersion();
+    _notify();
+    _saveIgnored();
+  }
+
+  void _saveIgnored() {
+    unawaited(SharedPreferences.getInstance()
+        .then((p) => p.setStringList('ignoredStations', ignoredStations.toList()))
+        .catchError((_) {}));
   }
 
   /// 手动添加联系人（无需等待 APRS 数据包）
@@ -6114,6 +10866,137 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// 把 APRSNETCN 的 24 小时台站并进列表。返回新增台数。
+  ///
+  /// 两条规则，缺一条都会坏：
+  ///   * 本地没这个呼号 → 补一台，标记 remote；
+  ///   * 已有 → 只在服务器那边的 last_seen 比本地 lastHeard 新时才刷新。
+  /// 只补空的话，上一轮补进来的台站会永远停在那一次的坐标上；无条件覆盖的话，
+  /// 服务器那份旧坐标会把刚收到的位置顶掉。已屏蔽的台站不并入，国家接收筛选
+  /// 照旧生效。
+  int mergeAcnStations(List<AcnStation> rows) {
+    final mine = myFullCall.toUpperCase();
+    var added = 0;
+    for (final r in rows) {
+      if (isStationIgnored(r.call)) continue;
+      if (!_matchReceiveFilter(r.call)) continue;
+      if (mine.isNotEmpty && r.call == mine) continue;
+      final idx = stations.indexWhere((s) => s.call == r.call);
+      if (idx >= 0) {
+        final s = stations[idx];
+        if (!r.lastSeen.isAfter(s.lastHeard)) continue;
+        final moved =
+            (s.lat - r.lat).abs() > 1e-6 || (s.lng - r.lng).abs() > 1e-6;
+        s.lat = r.lat;
+        s.lng = r.lng;
+        s.alt = r.alt ?? s.alt;
+        s.speed = r.speed ?? s.speed;
+        s.course = r.course ?? s.course;
+        if (r.comment.isNotEmpty) s.comment = r.comment;
+        s.lastHeard = r.lastSeen;
+        // 这一行的事实现在来自服务器；下一次真的收到它的报文时，
+        // _upsertStation 会把标记抹掉。
+        s.remote = true;
+        if (moved &&
+            (s.track.isEmpty ||
+                haversine(s.track.last.lat, s.track.last.lng, r.lat, r.lng) >
+                    0.02)) {
+          s.track = [...s.track, TrackPt(r.lat, r.lng, r.lastSeen)];
+          if (s.track.length > maxTrackPts) {
+            s.track = s.track.sublist(s.track.length - maxTrackPts);
+          }
+        }
+        if (moved) _bumpStationsVersion();
+        continue;
+      }
+      if (stations.length >= maxStations) break;
+      final speed = r.speed;
+      stations.add(
+        Station(
+          call: r.call,
+          symbol: r.symbol.isEmpty ? '/' : r.symbol,
+          symbolTable: r.symbolTable.isEmpty ? '/' : r.symbolTable,
+          lat: r.lat,
+          lng: r.lng,
+          alt: r.alt,
+          speed: speed,
+          course: r.course,
+          comment: r.comment.isEmpty ? null : r.comment,
+          // 服务器给的「最后一次听到」直接当 lastHeard：一个 12 小时前听到的
+          // 台站于是显示成离线，不需要另存一个时间字段。
+          lastHeard: r.lastSeen,
+          status: speed == null
+              ? St.online
+              : (speed > 1.0 ? St.moving : St.stopped),
+          track: [TrackPt(r.lat, r.lng, r.lastSeen)],
+          remote: true,
+        ),
+      );
+      added++;
+    }
+    if (added > 0) {
+      _bumpStationsVersion();
+      _notify();
+      _saveStations();
+    }
+    return added;
+  }
+
+  /// 拉一份 APRSNETCN 的 24 小时台站并合并。
+  ///
+  /// 只有用户点设置页的「立即同步」才会走到这里：连上链路、切回前台都不自动
+  /// 拉，那个请求会带上账号口令，得用户自己按。
+  ///
+  /// 失败只记一条日志与一个结果，**不改链路状态**：这是搭头，链路本身好不好
+  /// 由连接那一层说。
+  Future<AcnSyncResult> syncAcnStations() async {
+    if (_acnSyncing) return acnLast ?? const AcnSyncResult(added: 0, total: 0);
+    if (acnServer.trim().isEmpty) {
+      final r = const AcnSyncResult(added: 0, total: 0, error: 'no-server');
+      acnLast = r;
+      _notify();
+      return r;
+    }
+    final account = acnAccount.trim();
+    final password = acnPassword;
+    if (account.isEmpty || password.isEmpty) {
+      final r = const AcnSyncResult(added: 0, total: 0, error: 'no-account');
+      acnLast = r;
+      _notify();
+      return r;
+    }
+    _acnSyncing = true;
+    // 先通知一次：按钮当场变成「同步中…」，否则这一两秒里还能再点一次。
+    _notify();
+    AcnSyncResult result;
+    try {
+      final rows = await acn.stations(account: account, password: password);
+      final added = mergeAcnStations(rows);
+      result = AcnSyncResult(added: added, total: rows.length);
+      _log(LogLevel.info, 'APRSNETCN', '台站同步：${rows.length} 台，新增 $added');
+    } catch (e) {
+      result = AcnSyncResult(added: 0, total: 0, error: _acnError(e));
+      _log(LogLevel.error, 'APRSNETCN', '台站同步失败：${result.error}');
+    } finally {
+      _acnSyncing = false;
+    }
+    acnLast = result;
+    _notify();
+    return result;
+  }
+
+  /// 把同步异常翻成一句人话（设置页直接显示）
+  String _acnError(Object e) {
+    if (e is HttpStatusError) {
+      if (e.status == 401) return '账号或口令不对';
+      if (e.status == 403) return '这个账号没有权限';
+      if (e.status == 429) return '请求太频繁';
+      return '服务器返回 ${e.status}';
+    }
+    if (e is TimeoutException) return '服务器没响应';
+    return '同步出错';
+  }
+
   /// 保存台站列表到本地
   void _saveStations() {
     unawaited(_saveStationsNow());
@@ -6135,6 +11018,8 @@ class AppState extends ChangeNotifier {
               'comment': s.comment,
               'favorite': s.favorite,
               'manual': s.manual,
+              if (s.remote) 'remote': true,
+              if (s.heardVia != null) 'via': s.heardVia,
               if (s.path != null) 'path': s.path,
               if (s.toCall != null && s.toCall!.isNotEmpty) 'toCall': s.toCall,
               if (s.fmo != null) 'fmo': s.fmo,
@@ -6160,6 +11045,9 @@ class AppState extends ChangeNotifier {
         if (idx >= 0) {
           stations[idx].favorite = m['favorite'] as bool? ?? false;
           stations[idx].manual = m['manual'] as bool? ?? false;
+          stations[idx].remote = m['remote'] as bool? ?? false;
+          stations[idx].heardVia =
+              m['via'] as String? ?? stations[idx].heardVia;
           stations[idx].path = m['path'] as String?;
           final savedToCall = m['toCall'] as String?;
           if (savedToCall != null && savedToCall.isNotEmpty) {
@@ -6200,6 +11088,8 @@ class AppState extends ChangeNotifier {
               comment: m['comment'] as String?,
               favorite: favorite,
               manual: manual,
+              remote: m['remote'] as bool? ?? false,
+              heardVia: m['via'] as String?,
               path: m['path'] as String?,
               toCall: (m['toCall'] as String?)?.isNotEmpty == true
                   ? m['toCall'] as String?
@@ -6503,7 +11393,107 @@ class AppState extends ChangeNotifier {
   /// [sentAs] 是**实际发到空中的文本**（发送前翻译时传入译文）。
   /// 空中的报文用 `sentAs ?? text`，长度限制也按空中内容判定 ——
   /// 否则会出现「原文 60 字符通过、译文 80 字符被对端丢弃」这种静默失败。
-  void sendMessage(String to, String text, {String? sentAs}) {
+  // ─── 我的其他 SSID ───
+  //
+  // 同一个呼号常有多台设备（手机 -7、电脑 -9、车载 -13），台站列表里它们是
+  // 一个个独立台站。快捷面板把它们单列出来：自己的设备应当一眼看到，
+  // 而不是在一堆别人的台站里找。
+
+  /// 同呼号下、除本机 ID 以外的台站（新听到的在前，最多 12 台）
+  List<Station> get myOtherSsidStations {
+    final me = myFullCall.toUpperCase();
+    final base = _baseCall(me);
+    final list = stations
+        .where((s) =>
+            s.call.toUpperCase() != me &&
+            _baseCall(s.call.toUpperCase()) == base)
+        .toList()
+      ..sort((a, b) => b.lastHeard.compareTo(a.lastHeard));
+    return list.length > 12 ? list.sublist(0, 12) : list;
+  }
+
+  /// 给另一个 SSID 发一条远程指令（`!AL ACT` 之类）。
+  ///
+  /// 源呼号**强制**是本机 ID：对方要靠「基础呼号相同」来认指令，
+  /// 用别的 ID 发出去照样能认，但会话里会让人搞不清是谁下发的。
+  bool sendSsidCommand(String call, SsidCmd cmd) {
+    final target = call.trim().toUpperCase();
+    if (target.isEmpty) return false;
+    if (!msgLinkUp) return false;
+    sendMessage(target, ssidCmdText(cmd), fromCall: myFullCall);
+    _log(LogLevel.info, '远程', '已向 $target 发送指令 ${ssidCmdCode(cmd)}');
+    return true;
+  }
+
+  /// 执行一条远程指令（只有同呼号的另一个 SSID 发来的才会走到这里）。
+  void applySsidCommand(SsidCmd cmd) {
+    switch (cmd) {
+      case SsidCmd.activate:
+        // 激活 = 把定位跑起来，并顺手发一次位置：对端要能「看见它醒了」。
+        // 没开自动上报就不自作主张打开（那是本机用户的开关），只发这一帧。
+        unawaited(ensureLocationRunning());
+        sendBeacon();
+        _log(LogLevel.info, '远程', '收到激活指令');
+      case SsidCmd.beacon:
+        sendBeacon();
+        _log(LogLevel.info, '远程', '收到发信标指令');
+      case SsidCmd.stop:
+        setBeaconEnabled(false);
+        _log(LogLevel.info, '远程', '收到停止上报指令');
+    }
+    _notify();
+  }
+
+  /// 这条消息是不是发给我的远程指令；是就执行并返回 true
+  bool _maybeSsidCommand(String src, String text) {
+    final cmd = parseSsidCommand(text);
+    if (cmd == null) return false;
+    final me = myFullCall.toUpperCase();
+    final from = src.trim().toUpperCase();
+    // 只认同一基础呼号，且不是从本机 ID 发出来的（否则自己发一条就自己执行）
+    if (from == me) return false;
+    if (_baseCall(from) != _baseCall(me)) {
+      _log(LogLevel.warn, '远程', '忽略外人发来的指令：$from ${ssidCmdCode(cmd)}');
+      return false;
+    }
+    applySsidCommand(cmd);
+    return true;
+  }
+
+  /// 是否接收**发给同一呼号其他 SSID** 的消息。
+  ///
+  /// 开：对方发给 `BG7LZQ-9` 的报文，本机（`BG7LZQ-7`）也收下，气泡上标出来；
+  /// 关：只收发给本机 ID 的，其余当场忽略 —— 多台设备并用时，可以让每台只回
+  /// 自己的那一份。默认开（用户先要的是「都收到」）。
+  bool acceptOtherSsidMsgs = true;
+
+  void setAcceptOtherSsidMsgs(bool v) {
+    if (acceptOtherSsidMsgs == v) return;
+    acceptOtherSsidMsgs = v;
+    persist();
+    _notify();
+  }
+
+  /// 消息发送身份：默认本机 ID，可以临时选用自己另一个 SSID
+  ///
+  /// 只影响**消息**报文的源呼号。myCall、信标、连接身份都不动 ——
+  /// 那些是这台设备的固定身份，改了会把整个会话的对端搞乱。
+  String? msgSendAs;
+
+  void setMsgSendAs(String? call) {
+    final v = (call == null || call.trim().isEmpty)
+        ? null
+        : call.trim().toUpperCase();
+    if (v == msgSendAs) return;
+    msgSendAs = v;
+    _notify();
+  }
+
+  /// 实际用来发消息的呼号
+  String get msgSendCall => msgSendAs ?? myFullCall;
+
+  void sendMessage(String to, String text,
+      {String? sentAs, String? fromCall}) {
     if (text.trim().isEmpty) return;
     // 防止误发给群呼号：重定向到对应群聊
     for (final g in chatGroups) {
@@ -6512,6 +11502,10 @@ class AppState extends ChangeNotifier {
         return;
       }
     }
+    // 发送身份：默认本机 ID，也可以选用自己另一个 SSID
+    //（收到“发给另一个 SSID”的消息时用）。只换这一帧消息的源呼号，
+    // 不动 myCall 与信标/连接身份。[fromCall] 由调用方强制指定（远程指令）。
+    final from = fromCall ?? msgSendCall;
     final wire = (sentAs ?? text).trim();
     // TNC（射频）模式下的长度限制：APRS101 规定消息文本上限 67 字符。
     // 超长时报文会被对端 TNC/网关丢弃，与其静默失败不如在源头拦住。
@@ -6522,48 +11516,144 @@ class AppState extends ChangeNotifier {
       return;
     }
     final id = AprsFmt.randId();
-    final raw = AprsFmt.message(myFullCall, to, wire, id, path: txPath);
+    final raw = AprsFmt.message(from, to, wire, id, path: txPathMsg);
     messages.insert(
       0,
-      AprsMsg(myFullCall, to, text.trim(), DateTime.now(),
+      AprsMsg(from, to, text.trim(), DateTime.now(),
           sent: true, id: id, sentAs: sentAs == null ? null : wire),
     );
     _saveMessages();
     packetsTx++;
     AchievementCenter.instance.bump('sendMsg'); // 我发出去了吗？
-    if (connected) {
-      _sendRaw(raw);
+    if (msgLinkUp) {
+      _sendRawMsg(raw);
       _lastTx = DateTime.now();
     }
     _log(LogLevel.info, '消息', '发送给 $to：$text');
     _pushPacket(
       Packet(
         raw,
-        myFullCall,
+        from,
         'APRS',
         'message',
         DateTime.now(),
+        source: dataSourceMsg,
         info: '发给 $to：$text',
       ),
     );
     _notify();
   }
 
-  /// 群发：向群呼号广播消息（所有监听该群呼号的人都能收到）
-  /// 使用 no-ack 格式 `{id_`，避免每个成员自动回 ack 造成噪声
+  // ─── 私聊位置点 ───
+
+  /// 私聊发送一个位置点：`$M1 Q <ID> <lat>,<lng>`（见 [StrategyProto.encodeLocation]）。
+  ///
+  /// **走与普通私信同一套投递路径**（带 ack 的单播、射频限长、无连接时只本地
+  /// 入库），因此对方收到时就是一条普通 APRS 消息；本端把它存成一条
+  /// `type='location'` 的**可点气泡**，坐标落在 [AprsMsg.lat]/[AprsMsg.lng]，
+  /// 点一下跳主地图。它**不是**策略图层元素 —— 不会 `_ingestStrategy`，也就
+  /// 不会进入/污染对应群的策略图层。
+  ///
+  /// 返回是否成功发出（坐标非法/无连接时返回 false，由调用方提示）。
+  ///
+  /// [asStation] 非空表示这是「分享某个台站」而非自由选点：该呼号会随帧的标签
+  /// 字段一起发出去，接收端据此把气泡渲染成台站卡片（点按开台站面板）；同时
+  /// 本端气泡文案就用该呼号，比干巴巴的「位置点」清楚。
+  bool sendLocation(String to, double lat, double lng, {String? asStation}) {
+    final target = to.trim().toUpperCase();
+    if (target.isEmpty) return false;
+    if (!StrategyProto.validLocation(
+        StrategyFrame(op: 'Q', lat: lat, lng: lng))) {
+      _log(LogLevel.warn, '消息', '位置点坐标非法（$lat,$lng），已中止');
+      return false;
+    }
+    final station = (asStation ?? '').trim().toUpperCase();
+    final label = station.isEmpty ? '' : 'S:$station';
+    final frame = StrategyProto.encodeLocation(
+      StrategyProto.makeId(myCall, 0),
+      lat,
+      lng,
+      label: label,
+    );
+    final id = AprsFmt.randId();
+    // 私聊是点对点：用带 ack 的单播（与 [sendMessage] 一致），射频下靠对方
+    // 标准自动 ack 确认送达 —— 位置点丢了对双方都没意义，值得要回执。
+    final raw = AprsFmt.message(myFullCall, target, frame, id, path: txPathMsg);
+    messages.insert(
+      0,
+      AprsMsg(
+        myFullCall,
+        target,
+        station.isEmpty ? l10n.msgLocation : station,
+        DateTime.now(),
+        sent: true,
+        id: id,
+        type: 'location',
+        lat: lat,
+        lng: lng,
+        stationCall: station.isEmpty ? null : station,
+      ),
+    );
+    if (messages.length > 500) messages.removeLast();
+    _saveMessages();
+    packetsTx++;
+    AchievementCenter.instance.bump('sendMsg');
+    if (msgLinkUp) {
+      _sendRawMsg(raw);
+      _lastTx = DateTime.now();
+    }
+    _log(LogLevel.info, '消息', '发送位置点给 $target：${frame}');
+    _pushPacket(
+      Packet(raw, myFullCall, 'APRS', 'message', DateTime.now(),
+          source: dataSourceMsg, info: '发给 $target 位置点：${frame}'),
+    );
+    _notify();
+    return true;
+  }
+
+  /// 收到私聊位置点（[src] 发来，[frame] 已解析）：插一条可点气泡。
+  void _ingestPrivateLocation(String src, StrategyFrame frame) {
+    // 标签形如 `S:<CALL>` 表示这是「分享台站」，其余一律当自由选点。
+    final st = _stationFromLabel(frame.label);
+    messages.insert(
+      0,
+      AprsMsg(
+        src,
+        myFullCall,
+        st ?? l10n.msgLocation,
+        DateTime.now(),
+        type: 'location',
+        lat: frame.lat,
+        lng: frame.lng,
+        stationCall: st,
+      ),
+    );
+    if (messages.length > 500) messages.removeLast();
+    _recalcUnread();
+    _saveMessages();
+    AchievementCenter.instance.bump('receiveMsg');
+    _emitNewMessage(src, l10n.msgLocation, null);
+    _notify();
+  }
+
+  /// 从位置点帧的标签里取台站呼号（`S:<CALL>`），没有/格式不对则返回 null。
+  static String? _stationFromLabel(String label) {
+    final t = label.trim().toUpperCase();
+    if (!t.startsWith('S:')) return null;
+    final call = t.substring(2).trim();
+    return AppState.isValidCallsign(call) ? call : null;
+  }
+
+  /// 群发：向群呼号广播消息（所有监听该群呼号的人都能收到）。
+  ///
+  /// 使用 no-ack 格式 `{id_`：群呼号不是真实台站，若每个成员都自动回 ack，
+  /// 共享信道上会瞬间挤满回执噪声 —— 射频下尤其致命。需要送达确认的场景
+  /// （如策略地图帧）改用带 ack 的单播发送，见 [_sendStrategyFrame]。
   int sendGroupMessage(String groupCall, String text, {String? groupId}) {
     if (text.trim().isEmpty || groupCall.isEmpty) return 0;
-    // TNC（射频）模式禁用群发：
-    //   ① 群聊靠 no-ack 广播 + 批量邀请，在共享信道上一次邀请就占大量时隙；
-    //   ② 群呼号不是真实台站，射频上无人能回答，实际是单向噪声。
-    if (usingRf) {
-      _log(LogLevel.warn, '群发', '射频（TNC/音频）模式不支持群聊广播，已中止发送');
-      _notify();
-      return 0;
-    }
     final id = AprsFmt.randId();
-    final raw =
-        AprsFmt.messageNoAck(myFullCall, groupCall, text.trim(), id, path: txPath);
+    final raw = AprsFmt.messageNoAck(
+        myFullCall, groupCall, text.trim(), id, path: txPathMsg);
     AchievementCenter.instance.bump('sendMsg'); // 我发出去了吗？
     messages.insert(
       0,
@@ -6579,8 +11669,8 @@ class AppState extends ChangeNotifier {
     );
     _saveMessages();
     packetsTx++;
-    if (connected) {
-      _sendRaw(raw);
+    if (msgLinkUp) {
+      _sendRawMsg(raw);
       _lastTx = DateTime.now();
     }
     _log(LogLevel.info, '群发', '发送到 $groupCall：$text');
@@ -6591,6 +11681,7 @@ class AppState extends ChangeNotifier {
         'APRS',
         'message',
         DateTime.now(),
+        source: dataSourceMsg,
         info: '群发到 $groupCall：$text',
       ),
     );
@@ -6632,7 +11723,10 @@ class AppState extends ChangeNotifier {
     return g;
   }
 
-  /// 生成群呼号：{呼号}-G{序号}（不超过9字符）
+  /// 生成群呼号：`{呼号}-G{序号}`（不超过 9 字符）。
+  ///
+  /// 射频下同样用带序号的 `-G` 呼号：APRS 呼号 9 字符上限由末尾截断兜底，
+  /// 不带序号反而会让同群主的多个群复用同一呼号。
   String _generateGroupCall(String ownerCall) {
     final base = ownerCall.replaceAll(RegExp(r'-\w+$'), ''); // 去掉 SSID
     // 找到此群主最大的序号
@@ -6659,7 +11753,7 @@ class AppState extends ChangeNotifier {
       memberCall,
       'INVITE $groupCall $groupName',
       AprsFmt.randId(),
-      path: txPath,
+      path: txPathMsg,
     );
     _trySend(raw);
     _log(LogLevel.info, '群聊', '发送邀请给 $memberCall：$groupCall $groupName');
@@ -6672,7 +11766,7 @@ class AppState extends ChangeNotifier {
       ownerCall,
       'JOIN_CONFIRM $groupCall',
       AprsFmt.randId(),
-      path: txPath,
+      path: txPathMsg,
     );
     _trySend(raw);
     // 同时更新本地状态：否则「我点了同意」但成员表里自己仍是 pending，
@@ -6696,7 +11790,7 @@ class AppState extends ChangeNotifier {
       ownerCall,
       'LEFT $groupCall',
       AprsFmt.randId(),
-      path: txPath,
+      path: txPathMsg,
     );
     _trySend(raw);
     final g = chatGroups
@@ -6714,8 +11808,8 @@ class AppState extends ChangeNotifier {
 
   /// 尽力发送：连接就发，未连接只记录（等待重连后由定时器补发待发队列）
   void _trySend(String raw) {
-    if (connected) {
-      _sendRaw(raw);
+    if (msgLinkUp) {
+      _sendRawMsg(raw);
       _lastTx = DateTime.now();
       packetsTx++;
     } else {
@@ -6730,7 +11824,7 @@ class AppState extends ChangeNotifier {
     final list = List<String>.from(_pendingTx);
     _pendingTx.clear();
     for (final raw in list) {
-      _sendRaw(raw);
+      _sendRawMsg(raw);
       _lastTx = DateTime.now();
       packetsTx++;
     }
@@ -6739,7 +11833,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// 更新群聊
-  void updateGroup(String groupId, {String? name, Set<String>? members}) {
+  void updateGroup(String groupId,
+      {String? name, Set<String>? members, Set<String>? remove}) {
     final g = chatGroups.where((g) => g.id == groupId).firstOrNull;
     if (g == null) return;
     if (name != null) g.name = name;
@@ -6752,8 +11847,42 @@ class AppState extends ChangeNotifier {
         );
       }
     }
+    if (remove != null) {
+      for (final m in remove) {
+        final who = m.toUpperCase();
+        g.memberStatus.remove(who);
+        g.activeMembers.remove(who);
+      }
+    }
     _saveChatGroups();
     _notify();
+  }
+
+  /// 按群名或群呼号查群（大小写不敏感）。找不到返回 null。
+  ChatGroup? findGroup(String query) {
+    final q = query.trim().toUpperCase();
+    if (q.isEmpty) return null;
+    return chatGroups
+        .where((g) =>
+            g.groupCall.toUpperCase() == q || g.name.toUpperCase() == q)
+        .firstOrNull;
+  }
+
+  /// 设置自己在某个群里的成员状态（加入 / 退出）。返回群名，找不到返回 null。
+  String? setMyGroupMembership(String groupId, bool joined) {
+    final g = chatGroups.where((g) => g.id == groupId).firstOrNull;
+    if (g == null) return null;
+    final me = myCall.toUpperCase();
+    if (joined) {
+      g.memberStatus[me] = GroupMemberStatus.joined;
+      g.activeMembers.add(me);
+    } else {
+      g.memberStatus[me] = GroupMemberStatus.left;
+      g.activeMembers.remove(me);
+    }
+    _saveChatGroups();
+    _notify();
+    return g.name;
   }
 
   void deleteGroup(String groupId) {
@@ -6783,6 +11912,453 @@ class AppState extends ChangeNotifier {
       final p = await SharedPreferences.getInstance();
       final json = jsonEncode(chatGroups.map((g) => g.toJson()).toList());
       p.setString('chatGroups', json);
+    } catch (_) {}
+  }
+
+  // ─── 策略地图（群内共享的标点/线/圈/集合点，走 APRS msg）───
+
+  /// 某群的策略元素（按最后修改时间排序，新元素在后，画图时后画的盖住先画的）。
+  List<StrategyItem> strategyOf(String groupCall) => strategyItems.values
+      .where((e) => e.groupCall == groupCall.toUpperCase())
+      .toList()
+    ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
+
+  /// 全部策略元素（跨群），用于「从群聊消息跳进策略地图」这类没有群上下文的地方。
+  List<StrategyItem> get allStrategy =>
+      strategyItems.values.toList()
+        ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
+
+  /// 策略元素的类型名（跟随界面语言）。
+  String _strategyKindLabel(StrategyKind k) => switch (k) {
+    StrategyKind.point => l10n.strategyAddPoint,
+    StrategyKind.line => l10n.strategyAddLine,
+    StrategyKind.circle => l10n.strategyAddCircle,
+    StrategyKind.rally => l10n.strategyAddRally,
+  };
+
+  /// 在群聊里插一条「谁共享/更新/删除了什么」的可点击提示（[type]=strategy）。
+  /// 策略帧本身不进聊天列表，但**留一条提示** —— 否则用户看不出图层变过。
+  ///
+  /// [action]：`add`（新建）/ `update`（改动，含划线）/ `delete`（删除）/ `clear`（清空）。
+  /// 文案在**本机**按本机语言生成（不是从空中收来的），所以各端显示各自的语言。
+  void _strategyNotice(
+    String groupId,
+    String owner,
+    StrategyKind? kind, {
+    String action = 'add',
+  }) {
+    final String text;
+    if (action == 'clear') {
+      text = l10n.strategyClearedMsg(owner);
+    } else {
+      final k = _strategyKindLabel(kind ?? StrategyKind.point);
+      text = switch (action) {
+        'delete' => l10n.strategyDeletedItem(owner, k),
+        'update' => l10n.strategyUpdatedItem(owner, k),
+        _ => l10n.strategySharedItem(owner, k),
+      };
+    }
+    _addGroupSystemMsg(groupId, text, type: 'strategy');
+  }
+
+  /// 群成员里「有可用 APRS 坐标」的台站 —— 策略地图上的队友位置。
+  ///
+  /// 位置**不是**策略协议的一部分：它就是普通 APRS 信标（`Station`），
+  /// 所以队友不需要做任何额外操作，只要在报位置就会出现在这里。方位角取
+  /// [Station.course]（信标里的航向字节；静止/无航向时为 null，UI 不画角标）。
+  ///
+  /// 匹配用**去 SSID 的基础呼号**：群成员表里存的是 `BG7LZQ-9` 或 `BG7LZQ`，
+  /// 而台站表里是设备实际报的呼号，两边 SSID 常常对不上。
+  List<Station> strategyTeammates(ChatGroup g) {
+    final out = <Station>[];
+    final seen = <String>{};
+    final me = _baseCall(myCall);
+    for (final member in {...g.allMemberCalls, ...g.activeMembers}) {
+      final mb = _baseCall(member);
+      // 自己不用画成「队友」，我的位置地图上本来就有
+      if (mb == me) continue;
+      for (final s in stations) {
+        if (s.baseCall.toUpperCase() != mb) continue;
+        // (0,0) 是「无定位」哨兵值，画在几内亚湾外海 —— 不能当队友位置
+        if (s.lat == 0 && s.lng == 0) continue;
+        if (!seen.add(s.call)) continue;
+        out.add(s);
+      }
+    }
+    return out;
+  }
+
+  /// 群呼号 → 群记录
+  ChatGroup? _groupByCall(String groupCall) => chatGroups
+      .where((g) => g.groupCall.toUpperCase() == groupCall.toUpperCase())
+      .firstOrNull;
+
+  /// 去掉 SSID 的基呼号。元素 owner 一律用它 —— 收信头里的 `src` 带 `-7`，
+  /// 而本地 [myCall] 不带，不归一化就会把「自己发的」当成别人发的。
+  static String _baseCall(String call) =>
+      call.toUpperCase().replaceAll(RegExp(r'-\w+$'), '');
+
+  /// 生成一个群内不撞的短 ID
+  String _nextStrategyId(String groupCall) {
+    final gc = groupCall.toUpperCase();
+    var seq = (_strategySeq[gc] ?? 0) + 1;
+    // 与图上已有元素（含别人放的）去重，避免 ID 碰撞覆盖别人的元素
+    while (strategyItems.containsKey('$gc|${StrategyProto.makeId(myCall, seq)}')) {
+      seq++;
+    }
+    _strategySeq[gc] = seq;
+    return StrategyProto.makeId(myCall, seq);
+  }
+
+  /// 广播一条策略帧到群呼号。APRS-IS 与射频都走这条。
+  ///
+  /// 帧长两种媒介都按 APRS101 的 **67 字符消息文本上限**（[StrategyProto] 编码
+  /// 时已保证，超长的线自动分片）—— 这是消息体自身的限制，与 AX.25 帧上限无关。
+  ///
+  /// 两种媒介的送达语义不同，用不同手段补「可靠性」：
+  /// * **APRS-IS**：点对点 TCP 转发，缺包不是常态 → no-ack 广播即可
+  ///   （每个成员都回 ack 反而制造噪声，这也是 [sendGroupMessage] 的取舍）。
+  /// * **射频**：共享信道、突发丢失、半双工冲突 → 单发不保险。群呼号不是真实
+  ///   台站、无人应答，所以**收件人的标准自动 ack**（见 `_autoAckEnabled`）
+  ///   才是「有人收到」的唯一凭据：射频下改用带 ack 的格式发送，发方据回执
+  ///   判断送达；无人回执时用 [retryStrategy] 手动重发。
+  ///
+  /// 返回是否成功编码发送。
+  bool _sendStrategyFrame(String groupCall, String frame) {
+    if (frame.isEmpty || groupCall.isEmpty) return false;
+    final gc = groupCall.toUpperCase();
+    if (frame.length > StrategyProto.maxFrameLen) {
+      _log(LogLevel.warn, '策略地图', '单帧超长（${frame.length}），已中止');
+      return false;
+    }
+    final id = AprsFmt.randId();
+    // 射频：带 ack 发（队友的自动 ack 是唯一的送达凭据）；
+    // APRS-IS：no-ack（`{id_`）广播，避免群呼号被每个成员回 ack 造成噪声。
+    final raw = usingRfMsg
+        ? AprsFmt.message(myFullCall, gc, frame, id, path: txPathMsg)
+        : AprsFmt.messageNoAck(myFullCall, gc, frame, id, path: txPathMsg);
+    _trySend(raw);
+    // 只有射频才记「待确认」：APRS-IS 用的是 no-ack，本来就不会有回执，
+    // 记进去只会让 UI 永远显示「未确认」。射频下队友的标准自动 ack 会带
+    // 这个 id 回来（见收到分支）。
+    if (usingRfMsg) {
+      _strategyAckWait[id] = (DateTime.now(), frame, gc);
+      _pruneStrategyAckWait();
+    }
+    _log(LogLevel.info, '策略地图',
+        '发送到 $groupCall（${usingRfMsg ? '射频' : '网络'}）：$frame');
+    _pushPacket(
+      Packet(raw, myFullCall, 'APRS', 'message', DateTime.now(),
+          source: dataSourceMsg, info: '策略地图 → $groupCall：$frame'),
+    );
+    return true;
+  }
+
+  void _pruneStrategyAckWait() {
+    final cut = DateTime.now().subtract(_ackWindow);
+    _strategyAckWait.removeWhere((_, v) => v.$1.isBefore(cut));
+  }
+
+  /// 新增/更新一个策略元素：本地即刻落图，再广播出去。返回是否成功编码发送。
+  ///
+  /// [id] 为空表示新建；非空表示编辑既有元素（owner 仍是原作者，[updatedAt] 刷新）。
+  bool putStrategy(
+    String groupCall,
+    StrategyKind kind, {
+    required double lat,
+    required double lng,
+    String id = '',
+    int radiusM = 0,
+    List<(double, double)> path = const [],
+    String label = '',
+    int colorIndex = -1,
+  }) {
+    final gc = groupCall.toUpperCase();
+    if (_groupByCall(gc) == null) return false;
+    final eid = id.isEmpty ? _nextStrategyId(gc) : id;
+    // 编辑时若调用方没给颜色（-1），保留原元素的颜色，避免「改个名字就掉色」
+    final prev = strategyItems['$gc|$eid'];
+    final item = StrategyItem(
+      id: eid,
+      kind: kind,
+      owner: _baseCall(myCall),
+      groupCall: gc,
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      lat: lat,
+      lng: lng,
+      radiusM: radiusM,
+      path: path,
+      label: label,
+      colorIndex: colorIndex >= 0 ? colorIndex : (prev?.colorIndex ?? -1),
+    );
+    strategyItems[item.key] = item;
+    unawaited(_saveStrategyNow());
+    final frames = StrategyProto.encode(item);
+    if (frames.isEmpty) {
+      _log(LogLevel.warn, '策略地图', '元素过长，未发送（$eid）');
+      _notify();
+      return false;
+    }
+    var ok = true;
+    for (final f in frames) {
+      ok = _sendStrategyFrame(gc, f) && ok;
+    }
+    // 新建/改动都留群聊提示（用户要求：划线/改动也要提示），区别只在动词。
+    // 打开编辑框又原样确认（内容没变）不刷提示，避免无意义的“更新了”。
+    final g = _groupByCall(gc);
+    if (g != null && (id.isEmpty || !_sameStrategyContent(prev, item))) {
+      _strategyNotice(g.id, _baseCall(myCall), kind,
+          action: id.isEmpty ? 'add' : 'update');
+    }
+    _notify();
+    return ok;
+  }
+
+  /// 删除一个策略元素并广播 `D`。同时在群聊留提示（本地删除 + 队友删除都提示）。
+  void deleteStrategy(String groupCall, String id) {
+    final gc = groupCall.toUpperCase();
+    final key = '$gc|$id';
+    final it = strategyItems[key];
+    if (it == null) return;
+    strategyItems.remove(key);
+    unawaited(_saveStrategyNow());
+    _sendStrategyFrame(gc, '\$M${StrategyProto.version} D $id');
+    final g = _groupByCall(gc);
+    if (g != null) {
+      _strategyNotice(g.id, _baseCall(myCall), it.kind, action: 'delete');
+    }
+    _notify();
+  }
+
+  /// 请求群里每位成员重播自己的元素（`S`），用于新入群时补齐已有图层。
+  void requestStrategySnapshot(String groupCall) {
+    _sendStrategyFrame(
+      groupCall.toUpperCase(),
+      '\$M${StrategyProto.version} S',
+    );
+  }
+
+  /// 清空本群全部策略元素并广播 `X`。同时在群聊留一条提示。
+  void clearStrategy(String groupCall) {
+    final gc = groupCall.toUpperCase();
+    strategyItems.removeWhere((k, v) => v.groupCall == gc);
+    _lineParts.removeWhere((k, _) => k.startsWith('$gc|'));
+    unawaited(_saveStrategyNow());
+    _sendStrategyFrame(gc, '\$M${StrategyProto.version} X');
+    final g = _groupByCall(gc);
+    if (g != null) {
+      _strategyNotice(g.id, _baseCall(myCall), null, action: 'clear');
+    }
+    _notify();
+  }
+
+  /// 重发本群尚未被队友确认的帧（射频丢包时用）或全部帧（[all] 为真）。
+  ///
+  /// 射频下丢包是**静默**的：没人回 ack 时，发方无从分辨「大家都收到了只是
+  /// 没回」还是「这一帧压根没人收到」。所以这里不自动重传（自动重传会在
+  /// 弱覆盖下形成风暴），而是给用户一个明确的手动动作。
+  /// 重发沿用原帧与元素 ID，接收端按 ID 幂等覆盖，不会重复落图。
+  /// 返回重发的帧数。
+  int retryStrategy(String groupCall, {bool all = false}) {
+    final gc = groupCall.toUpperCase();
+    if (_groupByCall(gc) == null) return 0;
+    final frames = <String>[];
+    if (all) {
+      for (final it in strategyOf(gc)) {
+        frames.addAll(StrategyProto.encode(it));
+      }
+      frames.add('\$M${StrategyProto.version} S');
+    } else {
+      for (final v in _strategyAckWait.values) {
+        if (v.$3 == gc) frames.add(v.$2);
+      }
+    }
+    var n = 0;
+    for (final f in frames) {
+      if (_sendStrategyFrame(gc, f)) n++;
+    }
+    _log(LogLevel.info, '策略地图', '重发 $n 帧到 $gc');
+    _notify();
+    return n;
+  }
+
+  /// 收到本人元素的快照请求 → 重播自己在该群的元素（让新成员看到图层）。
+  void _replySnapshot(String groupCall) {
+    final gc = groupCall.toUpperCase();
+    for (final it in strategyOf(gc)) {
+      if (it.owner != _baseCall(myCall)) continue;
+      for (final f in StrategyProto.encode(it)) {
+        _sendStrategyFrame(gc, f);
+      }
+    }
+  }
+
+  /// 处理一条收到的策略帧（[frame] 已由 [StrategyProto.parse] 解析）。
+  ///
+  /// 信任模型：只接受**本机已知群**的帧（由 [_parseIncomingMessage] 给出 groupId）；
+  /// 对他人元素只在“后写胜”时覆盖，且不允许把 owner 改成别人。
+  void _ingestStrategy(String src, String groupId, StrategyFrame frame) {
+    final g = chatGroups.where((g) => g.id == groupId).firstOrNull;
+    if (g == null) return;
+    final gc = g.groupCall.toUpperCase();
+    final key = '$gc|${frame.id}';
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    switch (frame.op) {
+      case 'X':
+        if (strategyItems.values.any((v) => v.groupCall == gc)) {
+          strategyItems.removeWhere((k, v) => v.groupCall == gc);
+          _lineParts.removeWhere((k, _) => k.startsWith('$gc|'));
+          _log(LogLevel.info, '策略地图', '$gc 图层被 ${src.toUpperCase()} 清空');
+          unawaited(_saveStrategyNow());
+          // 群聊留提示：否则队友只会看到图层「凭空消失」
+          _strategyNotice(g.id, _baseCall(src), null, action: 'clear');
+        }
+        _notify();
+        return;
+      case 'S':
+        // 有人（可能是新成员）要快照 → 我重播自己的元素
+        _replySnapshot(gc);
+        _log(LogLevel.info, '策略地图', '${src.toUpperCase()} 请求快照，已重播本群元素');
+        return;
+      case 'D':
+        final removed = strategyItems.remove(key);
+        if (removed != null) {
+          _lineParts.remove(key);
+          unawaited(_saveStrategyNow());
+          // 群聊留提示：谁删了什么（否则只是图层里少一个元素，看不出原因）
+          _strategyNotice(g.id, _baseCall(src), removed.kind,
+              action: 'delete');
+          _notify();
+        }
+        return;
+      case 'P':
+      case 'R':
+      case 'C':
+        final kind = frame.kind!;
+        final radius = kind == StrategyKind.circle ? frame.radiusM : 0;
+        _upsertStrategy(
+          StrategyItem(
+            id: frame.id,
+            kind: kind,
+            owner: _baseCall(src),
+            groupCall: gc,
+            updatedAt: now,
+            lat: frame.lat,
+            lng: frame.lng,
+            radiusM: radius,
+            label: frame.label,
+            colorIndex: frame.colorIndex,
+          ),
+          notifyChat: true,
+        );
+        return;
+      case 'L':
+        _ingestLine(src, gc, frame, now);
+        return;
+    }
+  }
+
+  /// 划线分片聚合：收齐 [StrategyFrame.partTotal] 片后才拼成一条线落图。
+  void _ingestLine(String src, String gc, StrategyFrame frame, int now) {
+    final key = '$gc|${frame.id}';
+    if (frame.partTotal <= 1) {
+      _upsertStrategy(StrategyItem(
+        id: frame.id,
+        kind: StrategyKind.line,
+        owner: _baseCall(src),
+        groupCall: gc,
+        updatedAt: now,
+        lat: frame.path.first.$1,
+        lng: frame.path.first.$2,
+        path: frame.path,
+        label: frame.label,
+        colorIndex: frame.colorIndex,
+      ), notifyChat: true);
+      return;
+    }
+    final parts = _lineParts.putIfAbsent(key, () => {});
+    parts[frame.partIndex] = frame.path;
+    // 颜色每片都带且应一致；用先到的那片记录（缺色 -1 不覆盖已记的颜色）
+    if (frame.colorIndex >= 0) _linePartsColor[key] = frame.colorIndex;
+    if (parts.length < frame.partTotal) return; // 还没收齐
+    final merged = <(double, double)>[];
+    for (var i = 1; i <= frame.partTotal; i++) {
+      final seg = parts[i];
+      if (seg == null) return; // 缺片，继续等
+      merged.addAll(seg);
+    }
+    _lineParts.remove(key);
+    final ci = _linePartsColor.remove(key) ?? -1;
+    _upsertStrategy(StrategyItem(
+      id: frame.id,
+      kind: StrategyKind.line,
+      owner: _baseCall(src),
+      groupCall: gc,
+      updatedAt: now,
+      lat: merged.first.$1,
+      lng: merged.first.$2,
+      path: merged,
+      colorIndex: ci,
+    ), notifyChat: true);
+  }
+
+  /// 落图 + 冲突消解（同一 ID 后写胜；「后写」以本地到达顺序为准）。
+  ///
+  /// [notifyChat] 只对**收到**的元素为真：新元素或**内容确有变化**时在群里留
+  /// 一条可点击提示。判据不看 owner —— 快照重播（`S`）会把自己早先的元素再发
+  /// 一遍，用内容比对（[_sameStrategyContent]）挡掉这种重播，既不漏「改动」，
+  /// 也不因为每次同步就刷一屏提示。
+  void _upsertStrategy(StrategyItem it, {bool notifyChat = false}) {
+    final prev = strategyItems[it.key];
+    final isNew = prev == null;
+    strategyItems[it.key] = it;
+    if (strategyItems.length > 500) {
+      // 防膨胀：丢掉最早更新的元素（避免无限增长）
+      final oldest = strategyItems.values
+          .reduce((a, b) => a.updatedAt <= b.updatedAt ? a : b);
+      strategyItems.remove(oldest.key);
+    }
+    unawaited(_saveStrategyNow());
+    if (notifyChat && (isNew || !_sameStrategyContent(prev, it))) {
+      final g = _groupByCall(it.groupCall);
+      if (g != null) {
+        _strategyNotice(g.id, it.owner, it.kind,
+            action: isNew ? 'add' : 'update');
+      }
+    }
+    _notify();
+  }
+
+  /// 两个策略元素的**可见内容**是否一致（用于判断收到的是否为真的「改动」）。
+  /// 不比 owner / updatedAt：同一 ID 的重播只有这些字段会漂。
+  bool _sameStrategyContent(StrategyItem? a, StrategyItem b) {
+    if (a == null) return false;
+    if (a.kind != b.kind ||
+        a.lat != b.lat ||
+        a.lng != b.lng ||
+        a.radiusM != b.radiusM ||
+        a.label != b.label ||
+        a.colorIndex != b.colorIndex ||
+        a.path.length != b.path.length) {
+      return false;
+    }
+    for (var i = 0; i < a.path.length; i++) {
+      if (a.path[i].$1 != b.path[i].$1 || a.path[i].$2 != b.path[i].$2) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// 策略元素落盘（可 await，供备份导出前强制刷新）
+  Future<void> _saveStrategyNow() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final json = jsonEncode(
+        strategyItems.values.map((e) => e.toJson()).toList(),
+      );
+      p.setString('strategyItems', json);
     } catch (_) {}
   }
 
@@ -6874,6 +12450,7 @@ class AppState extends ChangeNotifier {
             'APRS',
             'unknown',
             DateTime.now(),
+            source: 'local',
             info: raw.trim(),
           ),
         );
@@ -6923,7 +12500,8 @@ class AppState extends ChangeNotifier {
       // 会显示成两种样子（转发路径那段只有接收路径有：注入没有「路径」概念）
       if (hdr.relay.isNotEmpty) info = '$info  ·  [转递 ${hdr.relay}]';
       _pushPacket(
-        Packet(raw.trim(), src, 'APRS', type, DateTime.now(), info: info),
+        Packet(raw.trim(), src, 'APRS', type, DateTime.now(),
+            source: 'local', info: info),
       );
       _notify();
       return '已加入数据包（$src · $type）';
@@ -6936,6 +12514,7 @@ class AppState extends ChangeNotifier {
   void clearPackets() {
     packets.clear();
     packetsRx = 0;
+    acnRx = 0;
     _notify();
   }
 
@@ -6968,6 +12547,7 @@ class AppState extends ChangeNotifier {
     _groupReadAt.clear();
     packetsTx = 0;
     packetsRx = 0;
+    acnRx = 0;
     unreadMessages = 0;
     _saveStations();
     _saveMessages();
@@ -7003,6 +12583,26 @@ class AppState extends ChangeNotifier {
     _notify();
   }
 
+  /// 「打开策略地图」请求：从群聊消息点进来时，外壳据此**切到地图页签**，
+  /// 地图页再据此打开对应群的策略地图。
+  ///
+  /// 为什么要走序号 + 状态、而不是直接 `Navigator.push`：
+  /// 请求来自消息页（可能是窄屏左侧面板里的页面），而策略地图是**全屏页**；
+  /// 由外壳统一切页签、由地图页（永远挂在 IndexedStack 里）来 push，
+  /// 才不会在面板被裁切的上下文里推一个半截页面 —— 与 [focusOnMap] 同一套
+  /// 「页面 → 外壳 → 地图」的请求机制。
+  int strategyJumpSeq = 0;
+
+  /// 本次请求要打开的群呼号（空=让策略地图用默认群/弹群选择）。
+  String strategyJumpGroupCall = '';
+
+  /// 发起「打开策略地图」请求。[groupCall] 为空时按当前群/第一个群打开。
+  void openStrategyMap([String groupCall = '']) {
+    strategyJumpGroupCall = groupCall.toUpperCase();
+    strategyJumpSeq++;
+    _notify();
+  }
+
   /// 「把外壳的内容面板展开到最高档」的请求序号（见 [requestSheetExpand]）。
   int sheetExpandSeq = 0;
 
@@ -7019,6 +12619,21 @@ class AppState extends ChangeNotifier {
   /// 请求，这里沿用它 —— 一致性比「省一个字段」重要。
   void requestSheetExpand() {
     sheetExpandSeq++;
+    _notify();
+  }
+
+  /// 「切到某个页签」的请求序号与目标页签（见 [requestTab]）。
+  ///
+  /// 复用 [requestSheetExpand] 的「页面 → 外壳」请求模式：目标页签编号两套外壳
+  /// 一致（0 地图 / 1 台站 / 2 消息 / 3 数据 / 4 设置）。智能体把结果展示给用户时，
+  /// 需要先把界面切到对应页签，否则用户会觉得「它只说不动」。
+  int tabJumpSeq = 0;
+  int tabJumpIndex = 0;
+
+  /// 请求外壳切到页签 [index]（越界会被两套壳各自 clamp）。
+  void requestTab(int index) {
+    tabJumpIndex = index;
+    tabJumpSeq++;
     _notify();
   }
 
@@ -7090,8 +12705,14 @@ class AppState extends ChangeNotifier {
     // 这一类 bug 的根因是把「是否会发射」判断散落在两处，所以此处必须与
     // canAutoBeacon 用同一个条件（rfBeaconEnabled）。
     if (!rfBeaconEnabled) return BeaconPhase.rfDisabled;
-    // **顺序有讲究**：佳明优先于粗定位 —— 位置来自手表时，粗定位那条已经不生效
-    // （佳明新鲜时手机 GPS 整个让位，见 _onFix），显示「网络定位中」会是错的。
+    // 连上之后用户还没点「开始上报」：即使有坐标也**先不自动发**（见 user 要求，
+    // 与 canAutoBeacon 条件 ④ 同源）。这一档要盖过下面的来源/粗定位说明 ——
+    // 因为此刻用户首先要做的动作是「确认开始」，其它细节都是确认之后的事。
+    if (!beaconArmed) return BeaconPhase.needConfirm;
+    // **顺序有讲究**：外接 GPS 模块优先于佳明，佳明优先于粗定位 —— 位置来自
+    // 模组时，佳明那条与粗定位那条都已经不生效（见 _onFix 的接管顺序
+    // sim > 外接模块 > 佳明 > 手机），显示「佳明上报」/「网络定位中」都会是错的。
+    if (nmeaGpsSupplying) return BeaconPhase.spp;
     if (garmin.on && garmin.fresh) return BeaconPhase.garmin;
     // 粗定位（网络/基站）**不自动上报**（见 [canAutoBeacon]），所以也不能显示一个
     // 照走的倒计时 —— 那正是「倒计时结束什么也没发生」的老症状。
@@ -7104,7 +12725,10 @@ class AppState extends ChangeNotifier {
           ? BeaconPhase.coarseForced
           : BeaconPhase.coarseFix;
     }
-    if (!myHasFix) return BeaconPhase.waitingFix;
+    // 本轮还没重新拿到定位（当前只是上次保存的位置 / 系统交回的旧点）→
+    // 不能倒计时，如实报「等待定位」。否则倒计时走着，到点却因上报闸
+    // （myPositionReportable）拦住什么都不发 —— 又是「倒计时结束不发射」。
+    if (!myPositionReportable) return BeaconPhase.waitingFix;
     return beaconSecondsLeft > 0 ? BeaconPhase.counting : BeaconPhase.imminent;
   }
 
@@ -7118,6 +12742,8 @@ class AppState extends ChangeNotifier {
         return l.beaconNotConnected;
       case BeaconPhase.rfDisabled:
         return l.beaconRfBeaconOff;
+      case BeaconPhase.needConfirm:
+        return l.beaconNeedConfirm;
       case BeaconPhase.coarseFix:
         return l.beaconCoarseFix;
       case BeaconPhase.coarseForced:
@@ -7127,6 +12753,8 @@ class AppState extends ChangeNotifier {
         return '${beaconSecondsLeft}s';
       case BeaconPhase.garmin:
         return l.beaconGarminSource;
+      case BeaconPhase.spp:
+        return l.beaconSppSource;
       case BeaconPhase.waitingFix:
         return l.beaconWaitingFix;
       case BeaconPhase.imminent:
@@ -7152,9 +12780,12 @@ class AppState extends ChangeNotifier {
     if (connected) {
       // TNC 模式：明确标出「射频」，否则用户会以为走的是网络，
       // 从而忽略「发射要在自己呼号/执照下操作」这件事。
+      final radioName = audio.config.icomLan.model.id;
       parts.add(usingTnc
           ? l.notifTncConnected
-          : (usingAudio ? l.notifAudioConnected : l.notifConnected));
+          : (usingAudio
+              ? (isIcomLanTx ? '$radioName 已连接' : l.notifAudioConnected)
+              : l.notifConnected));
     } else if (connecting) {
       parts.add(l.notifConnecting);
     } else if (readOnlyMode) {
@@ -7163,9 +12794,12 @@ class AppState extends ChangeNotifier {
       // 通知栏却写「未连接」会让人以为链路坏了。
       parts.add(l.pkwdwplReadOnly);
     } else {
+      final radioName = audio.config.icomLan.model.id;
       parts.add(usingTnc
           ? l.notifTncDisconnected
-          : (usingAudio ? l.notifAudioDisconnected : l.notifDisconnected));
+          : (usingAudio
+              ? (isIcomLanTx ? '$radioName 未连接' : l.notifAudioDisconnected)
+              : l.notifDisconnected));
     }
     if (myHasFix) {
       parts.add('GPS·$myGrid');
@@ -7175,7 +12809,8 @@ class AppState extends ChangeNotifier {
     if (usingTnc) {
       parts.add('RF·${tnc.rxFrames}/${tnc.txFrames}');
     } else if (usingAudio) {
-      parts.add('AFSK·${audio.rxFrames}/${audio.txFrames}');
+      final radioName = audio.config.icomLan.model.id;
+      parts.add('${isIcomLanTx ? radioName : "AFSK"}·${audio.rxFrames}/${audio.txFrames}');
     }
     if (aprsIsOn) {
       parts.add(l.notifOnline('$online'));
@@ -7191,7 +12826,98 @@ class AppState extends ChangeNotifier {
         (!usingRf || (usingTnc ? tnc.config.rfBeacon : audio.config.rfBeacon))) {
       parts.add(l.notifBeacon(nextBeaconIn));
     }
-    loc.updateNotification(parts.join(' · '));
+    // 实时更新的胶囊里只放一行超短文本（建议 ≤7 字符），内容可选。
+    // 倒计时不能靠这行文本 —— 换一次要重发一次通知，而我们重发的时机
+    // 跟不上一秒一跳，胶囊会停在旧值上。所以倒计时交给系统的 chronometer
+    // （[countdown]），其余选项才用这行文本。
+    var short = '';
+    var countdown = 0;
+    final counting = beaconPhase == BeaconPhase.counting ||
+        beaconPhase == BeaconPhase.coarseForced;
+    switch (notifLiveText) {
+      case 'counts':
+        short = usingTnc
+            ? '${tnc.rxFrames}/${tnc.txFrames}'
+            : (usingAudio
+                ? '${audio.rxFrames}/${audio.txFrames}'
+                : (aprsIsOn ? '$packetsRx/$packetsTx' : ''));
+        break;
+      case 'msgs':
+        // 未读才是「有事发生」的那个数：已读的条数一直在涨，看它没意义。
+        short = '✉$unreadMessages';
+        break;
+      case 'near':
+        // 没定位就没有「附近」：写 0 会被读成「周围一个人都没有」，而真的没有
+        // 定位时胶囊应当说「--」，不是空着退回标题（空短文本 = 系统显示 App 名，
+        // 看起来像没在刷新）。
+        short = (myHasFix && myLat != null && myLng != null)
+            ? l.notifLiveNearShort(
+                '${nearbyStationCount(filterRadius.toDouble())}')
+            : l.notifLiveNearShort('--');
+        break;
+      case 'speed':
+        final sp = mySpeed;
+        short = sp == null ? '--km/h' : '${sp.round()}km/h';
+        break;
+      case 'alt':
+        final al = myAlt;
+        short = al == null ? '--m' : '${al.round()}m';
+        break;
+      case 'hr':
+        final bp = myHr;
+        final hat = myHrAt;
+        final hrFresh = bp != null &&
+            bp > 0 &&
+            hat != null &&
+            DateTime.now().difference(hat).inMinutes < 5;
+        short = hrFresh ? '❤$bp' : '❤--';
+        break;
+      case 'batt':
+        short = _battery >= 0 ? '$_battery%' : '--';
+        break;
+      case 'trip':
+        short = '${tripMileageKm.toStringAsFixed(1)}km';
+        break;
+      case 'grid':
+        short = myHasFix ? myGrid : '--';
+        break;
+      case 'course':
+        final c = myCourse;
+        short = c == null ? '--°' : '${c.round()}°';
+        break;
+      case 'beacon':
+        if (counting) {
+          // 只把「离下次上报还有多久」交给系统的 chronometer（countdown），
+          // 不塞一个会立刻不准的文字：那行字只在通知重建时才换，
+          // 中间十几秒里它一直是旧值，看起来像死掉了。
+          countdown = beaconSecondsLeft;
+          // 计时器只在部分 ROM 的胶囊里画得出来。这台 HyperOS 的胶囊只认
+          // 短文本，短文本空着就退回标题（用户实测：倒计时位置显示 APRSlocus）。
+          // 两者都给：画得出计时器就看计时器，画不出就看这行秒数。
+          short = '${beaconSecondsLeft}s';
+        } else if (beaconPhase == BeaconPhase.imminent) {
+          short = l.beaconSoon;
+        }
+        break;
+      default:
+        break;
+    }
+    loc.updateNotification(parts.join(' · '),
+        live: notifLiveUpdates, short: short, countdown: countdown);
+    // iOS：灵动岛与锁屏上的那条实时活动读同一份文案（Android 用的是
+    // 上面那条常驻通知的提升）。关掉实时更新就把活动收掉。
+    if (notifLiveUpdates) {
+      unawaited(LiveActivity.update(
+        call: myFullCall,
+        line: parts.join(' · '),
+        short: short,
+        endsAt: counting
+            ? DateTime.now().add(Duration(seconds: beaconSecondsLeft))
+            : null,
+      ));
+    } else {
+      unawaited(LiveActivity.end());
+    }
   }
 }
 
@@ -7199,7 +12925,19 @@ class AppState extends ChangeNotifier {
 ///
 /// 抽成枚举而不是字符串：界面要按它选文案/颜色，用中文串比较必然漂
 /// （本仓库在 [BeaconPhase] 上已经踩过一次）。
-enum PositionSourceNow { sim, garmin, phone, none }
+enum PositionSourceNow { sim, spp, garmin, phone, none }
+
+/// **哪个输入框的历史**（见 [AppState.rememberInput]）。
+///
+/// 抽成枚举的理由与 [PositionSourceNow] 一样：用裸字符串当键，早晚会在两个
+/// 调用点之间写歪一个字母，而错的那一处只表现为「历史没记住」。
+enum InputHistory {
+  /// 数据包页的搜索框
+  packetSearch,
+
+  /// 连接设置里的服务器地址
+  server,
+}
 
 /// 步数在界面上的四种状态（issue #23）。
 ///
@@ -7220,6 +12958,17 @@ enum StepsStatus {
   ok,
 }
 
+/// [AppState.toggleAutoReport] 的结果：界面据此提示「开了 / 关了 / 顺带开了射频信标」。
+class AutoReportResult {
+  /// 切换后自动上报是否开启。
+  final bool on;
+
+  /// 本次是否顺带打开了射频信标（只有打开时才可能为 true）。
+  final bool rfEnabled;
+
+  const AutoReportResult({required this.on, required this.rfEnabled});
+}
+
 /// 自动上报阶段（结构化，供 UI 本地化；见 [AppState.beaconPhase]）
 enum BeaconPhase {
   off,
@@ -7228,6 +12977,11 @@ enum BeaconPhase {
   /// 射频来源（TNC / 音频）未打开「射频信标」——此时不会自动发射，
   /// UI 必须显示原因并提供一键开启，而不是继续倒计时。
   rfDisabled,
+  /// 已连上服务器，但用户还没点「开始上报」（[AppState.beaconArmed] 为假）——
+  /// 此时不会自动发射，UI 必须给一个正式的「开始上报」按钮，而不是继续倒计时。
+  /// 这是每次连接的一次性确认（见 user 要求：手动确认后才开始上报）；
+  /// **计划外**的掉线自愈会保留确认，所以这档不会因为链路抖动反复回来。
+  needConfirm,
   /// 当前是**粗定位**（网络/基站/被动）——自动上报已暂停（见 [canAutoBeacon]），
   /// UI 必须说明原因，而不是继续倒计时。
   coarseFix,
@@ -7240,6 +12994,11 @@ enum BeaconPhase {
   /// 这一档不是「不能上报」，而是「要告诉用户**上报的是手表的位置**」——
   /// 否则用户看着倒计时会以为发的是手机定位，而两者可能差几十公里。
   garmin,
+  /// 位置来自**外接 GPS 模块**（蓝牙 SPP / 串口上的 NMEA 0183，常架在车顶或
+  /// 窗外，比手机与手表都准；见 [AppState.nmeaGpsSupplying]）。
+  /// 与 [garmin] 同理：不是「不能上报」，而是「要告诉用户上报的是**模组**的
+  /// 位置」—— 否则用户会以为发的是手机定位。
+  spp,
   waitingFix,
   counting,
   imminent,

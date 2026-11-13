@@ -32,3 +32,28 @@ Future<String?> saveBackupFile(
   String mimeType = 'application/json',
 }) async =>
     null;
+
+/// Web 上没有系统分享面板（也写不出文件），UI 据此隐藏分享按钮。
+bool get shareToSystemSupported => false;
+
+/// Web 变体：写不出「下载目录」，也拉不起系统分享面板。
+/// 图片导出与文本导出一样回 null / false，UI 据此如实提示。
+Future<String?> saveImageBytes(String filename, List<int> bytes) async => null;
+
+bool get shareImageSupported => false;
+
+Future<bool> shareImageBytes(String filename, List<int> bytes) async => false;
+
+/// Web 变体：无系统分享面板可用。
+Future<bool> shareTextFile(
+  String filename,
+  String content, {
+  String mimeType = 'text/plain',
+}) async =>
+    false;
+
+/// Web 上历史轨迹本身不落盘（无 dart:io），备份自然也无轨迹可带。
+Future<Map<String, Object?>> loadTrackDays() async => const {};
+
+/// Web 上无处可写轨迹文件，导入时忽略轨迹载荷（偏好键仍照常应用）。
+Future<int> applyTrackDays(Map<String, Object?> raw) async => 0;

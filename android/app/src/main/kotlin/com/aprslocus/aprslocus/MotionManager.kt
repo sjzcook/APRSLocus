@@ -48,25 +48,65 @@ class MotionManager(context: Context) : SensorEventListener {
         /** 线性加速度能量的指数平均系数。 */
         private const val ENERGY_ALPHA = 0.2
 
-        // ── 碰撞 / 摔倒检测（issue #26）──
+        // ── 碰撞 / 摔倒检测（issue #26；判据见下方 issue #32 的修正）──
         //
-        // 判据是**两段式**的，单看任何一段都不够：
-        //   ① **冲击**：线性加速度瞬时模超过 [IMPACT_G] g。车祸与摔倒都会给出一个
-        //      尖峰（线性加速度已去掉重力，所以「急刹」这类持续加速度不会被误判成尖峰）；
-        //   ② **随后静止**：冲击之后连续 [STILL_MS] 毫秒没有明显运动。
+        // 判据分两种事件，**碰撞的要求比摔倒更高**：
+        //   * **摔倒**：① 先有一段**失重/自由落体**（总加速度模 ≤ [FREEFALL_G] 持续
+        //     ≥ [FREEFALL_MIN_MS]）② 落地冲击瞬时模 ≥ 基准阈值；③ 随后静止。
+        //   * **碰撞**：没有失重可依据，就要求冲击 ≥ 基准 × [CRASH_BAR_MULT]；③ 同样。
+        //   ③ **随后静止**：冲击之后连续 [STILL_MS] 毫秒没有明显运动。
         //
-        // 为什么必须要求「随后静止」：只报冲击的话，**过减速带、手机掉桌上、甩一甩**
-        // 全都算 —— 那样的提醒每天会响好几次，用户第一件事就是把它关掉，等于没做。
-        // 而「人在动」时（走路/骑行/开车）几乎不可能同时满足「12 秒没有任何运动」，
-        // 于是误报被压到很低，代价是**轻微碰撞（人还能动）不会报** —— 这是刻意的：
-        // 这个功能的定位是「人已经动不了了」，而不是「发生过撞击」。
+        // 为什么「碰撞」要更狠（v2.0.29 修的误报）：原来只要求「冲击 + 静止」，
+        // 而**把手机放在桌上稍微使劲**恰好同时满足 —— 一个 3~8g 的尖峰，接着一动不动。
+        // 阈值调高救不了（放手机的尖峰本可高过任何合理的撞击阈值），这是判据问题。
+        // 区分开之后：放手机不会失重、尖峰也不够高 → 不报；真摔倒有失重佐证（阈值不翻倍），
+        // 真车祸峰值动辄 20g 以上 → 照样报。
         //
-        // ⚠ 它是启发式的，不是工程级碰撞检测：阈值固定、不看行车方向、不融合 GPS。
-        // 界面上必须如实这么说（见生命守护页的说明卡）。
-        private const val IMPACT_G = 3.2
+        // 为什么要有「随后静止」：只报冲击的话，**过减速带、手机掉桌上、甩一甩**全都算，
+        // 那样的提醒每天响好几次，用户第一件事就是关掉它。而「人在动」时几乎不可能同时
+        // 满足「12 秒没有任何运动」，误报因此很低；代价是**轻微碰撞（人还能动）不报** ——
+        // 这是刻意的：定位是「人已经动不了了」，不是「发生过撞击」。
+        //
+        // ⚠ 它是启发式的，不是工程级碰撞检测：阈值可调、不融合 GPS，判据只基于
+        // 加速度计。界面上必须如实这么说（见生命守护页的说明卡）。
+        //
+        // 冲击阈值做成了**三档灵敏度**（issue #32 的「优化算法」）：固定阈值无法同时
+        // 适配「手机放裤兜里踩单车」与「固定在车把上」——前者的正常颠簸就能越过
+        // 3.2g。用户换档即改这里的取用值（见 [impactThresholdG]），不必发版。
+        private const val SENS_GENTLE = 2.2
+        private const val SENS_STANDARD = 3.0
+        private const val SENS_FIRM = 4.0
+
+        // ── 摔倒判定（issue #32 的「优化算法」）──
+        // 单纯一个尖峰分不出「碰撞」和「摔倒」，但两者物理上不同：
+        //   * 摔倒（人/手机离手落地）几乎总是先有一段**自由落体**（总加速度模接近 0，
+        //     即「失重」），再是落地冲击；
+        //   * 车祸撞击不会有那段失重。
+        // 所以 [g] ≤ [FREEFALL_G] 持续 [FREEFALL_MIN_MS] 就记一次「自由落体」，
+        // 随后的冲击按**摔倒**解读；否则按**碰撞**。
+        //
+        // ⚠ 判失重必须用**含重力的总加速度**，不能用去掉重力的线性加速度 —— 后者在
+        // 静止时恒为 0，会把「放着不动」误判成「一直在自由落体」，于是每次冲击都被
+        // 当成摔倒、且失重闸门常开。见 [checkImpact] 的入参。
+        private const val FREEFALL_G = 0.35
+        private const val FREEFALL_MIN_MS = 80L
+
+        /** 自由落体之后多久内的冲击仍算作「摔倒」。 */
+        private const val FREEFALL_WATCH_MS = 2000L
 
         /** 冲击之后的观察窗口：这么久没有明显运动才算「人没动」。 */
         private const val STILL_MS = 12000L
+
+        // ── 为什么「碰撞」要比灵敏度阈值再高一截（issue #32 的误报修正）──
+        // 原来的判据是「冲击尖峰 + 之后静止」，而**把手机放在桌上稍微使劲**恰好同时
+        // 满足两段：一下 3~8g 的尖峰，机器接着就一动不动 —— 于是每次放手机都可能报。
+        // 单靠调阈值救不了（放手机的尖峰本来就可能超过任何还算合理的撞击阈值）。
+        //
+        // 现在把两种事件分开要求：
+        //   * **摔倒**：先有失重（自由落体）再冲击 —— 放手机绝不会失重，所以这条不误伤；
+        //   * **碰撞**：没有失重可依赖，就要求冲击**明显更狠** —— 阈值再乘 [CRASH_BAR_MULT]。
+        // 真实车祸的峰值动辄 20g 以上，翻倍照样抓得到；而轻放手机的 3~8g 会被挡掉。
+        private const val CRASH_BAR_MULT = 2.0
 
         /** 认为是「明显运动」的线性加速度（g）——超过它就撤销这次候选。 */
         private const val MOVE_G = 1.2
@@ -76,6 +116,16 @@ class MotionManager(context: Context) : SensorEventListener {
 
         /** 启动后的宽限期：刚启动时把设备拿起来/放下也会产生尖峰。 */
         private const val START_GRACE_MS = 20000L
+
+        // ── 持久化键（issue #32）──
+        // 把事件序号与上次告警时间落盘：原先只存在内存里，**杀进程重开就归零**，
+        // 于是①「重启后冷却被清空，马上误报一次」；②事件序号回 0，Dart 侧靠序号
+        // 发现新事件的判据也可能错乱。落盘后重启也能接上。
+        private const val PREF = "aprslocus.motion"
+        private const val PREF_SENS = "sensitivity"
+        private const val PREF_SEQ = "crashSeq"
+        private const val PREF_LAST_MS = "lastCrashMs"
+        private const val PREF_KIND = "lastKind"
     }
 
     private val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -112,15 +162,40 @@ class MotionManager(context: Context) : SensorEventListener {
     private var heading = -1.0             // 磁北航向（度）；<0 不可用
     private var steps = -1L                // 开机以来累计步数；<0 表示读不到（无传感器/无权限）
 
-    // ── 碰撞 / 摔倒（issue #26）──
+    // ── 碰撞 / 摔倒（issue #26 / #32）──
     private var wantMotion = true          // 上层是否要「在不在动 / 航向」（与计步分开）
     private var startedAtMs = 0L
     private var impactAtMs = 0L            // 最近一次冲击的时间；0 = 没有候选
     private var impactPeakG = 0.0          // 那次冲击的峰值（供上层显示/排查）
-    private var lastCrashMs = 0L           // 上次告警时间（冷却用）
-    private var crashSeq = 0               // 事件序号：Dart 侧靠它发现「又发生了一次」
+    private var impactKind = ""            // 候选来自自由落体 → "fall"，否则 "crash"
+    private var lastCrashMs = 0L           // 上次告警时间（冷却用，已落盘）
+    private var crashSeq = 0               // 事件序号：Dart 侧靠它发现「又发生了一次」（已落盘）
+    private var lastKind = ""              // 最近一次判定的类型（fall / crash）
+    // 自由落体探测：处于自由落体的起始时间；0 = 当前不在自由落体。
+    private var freefallStartMs = 0L
+    private var lastFreefallEndMs = 0L     // 最近一次自由落体结束时间（判「冲击是否紧跟着摔倒」）
+    private var sensitivity = "standard"   // gentle / standard / firm
     private var pitch = 0.0
     private var roll = 0.0
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences(PREF, Context.MODE_PRIVATE)
+
+    init {
+        // 从磁盘接回事件序号与上次告警时间（见 [PREF] 的说明）。
+        sensitivity = prefs.getString(PREF_SENS, "standard") ?: "standard"
+        crashSeq = prefs.getInt(PREF_SEQ, 0)
+        lastCrashMs = prefs.getLong(PREF_LAST_MS, 0L)
+        lastKind = prefs.getString(PREF_KIND, "") ?: ""
+    }
+
+    /** 当前灵敏度对应的冲击阈值（g）。 */
+    private val impactThresholdG: Double
+        get() = when (sensitivity) {
+            "gentle" -> SENS_GENTLE
+            "firm" -> SENS_FIRM
+            else -> SENS_STANDARD
+        }
 
     private val rotationMatrix = FloatArray(9)
     private val orientation = FloatArray(3)
@@ -140,6 +215,11 @@ class MotionManager(context: Context) : SensorEventListener {
                 result.success(null)
             }
             "sample" -> result.success(snapshot())
+            // issue #32：设置碰撞/摔倒灵敏度（gentle / standard / firm）。
+            "setSensitivity" -> {
+                setSensitivity(call.argument<String>("value") ?: "standard")
+                result.success(true)
+            }
             else -> result.notImplemented()
         }
     }
@@ -208,36 +288,79 @@ class MotionManager(context: Context) : SensorEventListener {
     }
 
     /**
-     * 碰撞/摔倒的两段式判据（见 [IMPACT_G] 的说明）。
+     * 碰撞/摔倒的判据（见 [IMPACT_G] / [FREEFALL_G] / [CRASH_BAR_MULT] 的说明）。
      *
-     * 这里用的是**瞬时**线性加速度模，不是那个指数平均的 [accelEnergy] ——
-     * 平均会把尖峰抹平，而尖峰正是要抓的东西。
+     * 两个入参是有意分开的：
+     *   * [linear] = **去重力**的线性加速度模（m/s²）：判「冲击」与「人还在动」；
+     *   * [total]  = **含重力**的总加速度模（m/s²）：判「失重/自由落体」。
+     * 判失重只能用 [total] —— [linear] 在静止时恒为 0，会把「放着不动」当成一直在失重。
+     *
+     * issue #32 的区分：
+     *   * **灵敏度**：基准阈值取 [impactThresholdG]，用户可换档；
+     *   * **摔倒 vs 碰撞**：冲击前若有失重（≤[FREEFALL_G] 持续 ≥[FREEFALL_MIN_MS]），
+     *     按「摔倒」且用基准阈值；否则按「碰撞」，要求冲击 ≥ 基准 × [CRASH_BAR_MULT]
+     *     （放手机的尖峰不大，且没有失重，于是被这条挡掉）。
      */
-    private fun checkImpact(mag: Double) {
+    private fun checkImpact(linear: Double, total: Double) {
         val now = System.currentTimeMillis()
-        val g = mag / 9.80665
+        val lg = linear / 9.80665
+        val tg = total / 9.80665
+
+        // ① 自由落体（失重）探测：用**总**加速度，正常静止≈1g，只有真失重才趋近 0。
+        if (tg <= FREEFALL_G) {
+            if (freefallStartMs == 0L) freefallStartMs = now
+        } else {
+            if (freefallStartMs != 0L) {
+                // 自由落体段结束：够长才作数，随后一段时间内出现的冲击按「摔倒」看。
+                if (now - freefallStartMs >= FREEFALL_MIN_MS) lastFreefallEndMs = now
+                freefallStartMs = 0L
+            }
+        }
+
         if (impactAtMs == 0L) {
             // 冷却期内不再起新候选：一次事故之后短时间内会连续出现多个尖峰
-            if (g >= IMPACT_G && now - lastCrashMs > CRASH_COOLDOWN_MS &&
+            val fallWindow = lastFreefallEndMs != 0L &&
+                now - lastFreefallEndMs <= FREEFALL_WATCH_MS
+            // 摔倒由失重佐证，用基准阈值；碰撞无佐证，要明显更狠才认（防「放手机」误报）。
+            val bar = if (fallWindow) impactThresholdG else impactThresholdG * CRASH_BAR_MULT
+            if (lg >= bar && now - lastCrashMs > CRASH_COOLDOWN_MS &&
                 now - startedAtMs > START_GRACE_MS
             ) {
                 impactAtMs = now
-                impactPeakG = g
+                impactPeakG = lg
+                impactKind = if (fallWindow) "fall" else "crash"
             }
             return
         }
-        if (g >= MOVE_G) {
+        if (lg >= MOVE_G) {
             // 人还在动（掉桌上的手机被捡起来 / 过减速带后继续开）→ 撤销候选
             impactAtMs = 0L
             impactPeakG = 0.0
+            impactKind = ""
             return
         }
         if (now - impactAtMs >= STILL_MS) {
             // 冲击之后连续静止 → 判定一次事件
             crashSeq++
             lastCrashMs = now
+            lastKind = if (impactKind.isNotEmpty()) impactKind else "crash"
             impactAtMs = 0L
+            impactKind = ""
+            // 落盘：事件序号与冷却时间都要能跨进程重启接上（见 [PREF]）。
+            prefs.edit()
+                .putInt(PREF_SEQ, crashSeq)
+                .putLong(PREF_LAST_MS, lastCrashMs)
+                .putString(PREF_KIND, lastKind)
+                .apply()
         }
+    }
+
+    /** 设置碰撞/摔倒检测灵敏度（gentle / standard / firm），立即落盘。 */
+    fun setSensitivity(value: String) {
+        val v = if (value in setOf("gentle", "standard", "firm")) value else "standard"
+        if (v == sensitivity) return
+        sensitivity = v
+        prefs.edit().putString(PREF_SENS, v).apply()
     }
 
     fun stop() {
@@ -253,6 +376,8 @@ class MotionManager(context: Context) : SensorEventListener {
         heading = -1.0
         impactAtMs = 0L
         impactPeakG = 0.0
+        impactKind = ""
+        freefallStartMs = 0L
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -282,7 +407,8 @@ class MotionManager(context: Context) : SensorEventListener {
                 accelVec[1] = v[1]
                 accelVec[2] = v[2]
                 hasAccel = true
-                checkImpact(sqrt(e))
+                // 冲击/移动用去重力的线性模；失重（自由落体）判据用含重力的总模。
+                checkImpact(sqrt(e), sqrt((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble()))
             }
 
             Sensor.TYPE_STEP_COUNTER -> {
@@ -341,6 +467,9 @@ class MotionManager(context: Context) : SensorEventListener {
             "hasCrashSensor" to (accel != null),
             "impactPending" to (impactAtMs != 0L),
             "impactPeakG" to (Math.round(impactPeakG * 10) / 10.0),
+            // issue #32：最近一次判定是摔倒还是碰撞，以及当前灵敏度（供设置页回显）。
+            "lastKind" to lastKind,
+            "sensitivity" to sensitivity,
         )
     }
 

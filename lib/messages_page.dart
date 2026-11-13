@@ -6,6 +6,8 @@ import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'theme.dart';
+import 'coord.dart';
+import 'coord_format.dart';
 import 'guide.dart';
 import 'models.dart';
 import 'back_router.dart';
@@ -17,6 +19,9 @@ import 'translate_page.dart';
 import 'widgets.dart';
 import 'group_chat.dart';
 import 'msg_limit.dart';
+import 'msg_len_counter.dart';
+import 'location_picker_page.dart';
+import 'material.dart';
 import 'station_detail.dart';
 import 'tracker_page.dart';
 
@@ -42,6 +47,12 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   final Set<String> _watched = {};
+
+  /// 已经播过出现动画的消息（以消息对象身份记账）。
+  ///
+  /// 列表是 reverse 的，滚动时元素回收又重建，不记账的话往回滑一下整屏
+  /// 气泡会集体再飘一次 —— 那个不是「出现」，是随手指节拍。
+  final Set<int> _shownBubbles = <int>{};
 
   void _onTransChanged() {
     if (mounted) setState(() {});
@@ -114,6 +125,8 @@ class _MessagesPageState extends State<MessagesPage> {
   final Set<String> _groupRecipients = {}; // 临时群发目标（创建群聊用）
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
+  // 输入框是否有内容：决定主操作键显示「+」（空）还是「发送」（有字）。
+  bool _composing = false;
   final _scroll = ScrollController();
   final _scrollGroup = ScrollController();
   final _scrollChat = ScrollController();
@@ -155,11 +168,22 @@ class _MessagesPageState extends State<MessagesPage> {
   @override
   void initState() {
     super.initState();
+    // 主操作键形态：聚焦（键盘弹起）或有内容 → 「发送」，否则「＋」。
+    _inputFocus.addListener(_onFocusChange);
+    _composing = _input.text.isNotEmpty;
+  }
+
+  /// 输入框聚焦/失焦时切换主操作键（＋ ↔ 发送）。
+  void _onFocusChange() {
+    if (!mounted) return;
+    final want = _inputFocus.hasFocus || _input.text.isNotEmpty;
+    if (want != _composing) setState(() => _composing = want);
   }
 
   @override
   void dispose() {
     _input.dispose();
+    _inputFocus.removeListener(_onFocusChange);
     _inputFocus.dispose();
     _scroll.dispose();
     _scrollGroup.dispose();
@@ -209,9 +233,10 @@ class _MessagesPageState extends State<MessagesPage> {
 
   /// 按呼号打开站台面板（找不到时用临时对象）
   void _openStation(AppState st, String call) {
+    final up = call.toUpperCase();
     Station? found;
     for (final x in st.stations) {
-      if (x.call == call) {
+      if (x.call.toUpperCase() == up) {
         found = x;
         break;
       }
@@ -219,7 +244,7 @@ class _MessagesPageState extends State<MessagesPage> {
     final station =
         found ??
         Station(
-          call: call,
+          call: up,
           symbol: '/',
           lat: st.myLat ?? 0,
           lng: st.myLng ?? 0,
@@ -299,7 +324,13 @@ class _MessagesPageState extends State<MessagesPage> {
         if (_selected.isEmpty && partners.isNotEmpty)
           _selected = partners.first;
 
-        return Column(
+        // 点聊天框以外任意处 → 收起键盘并取消输入框聚焦（用户反馈：点别处
+        // 取消不了聚焦）。用 opaque 让空白处也可命中；落在子控件（按钮、链接、
+        // 可点气泡）上的点击由子控件先消费，不会误触发。
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _inputFocus.unfocus(),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // 功能引导（首次进入显示；看过后不占位置）
@@ -375,12 +406,28 @@ class _MessagesPageState extends State<MessagesPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 页面标题。（原来这里还有「瀑布流 / 会话」切换器；瀑布流已按需求移除，
-                          // 只剩会话模式，切换器随之删掉 —— 一个只有一边的开关比没有更让人困惑。）
-                          Text(S.of(context).messages,
-                              style: T.h1,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          // 页面标题 + 右侧「发射位置信标」。（原来这里还有「瀑布流 / 会话」
+                          // 切换器；瀑布流已按需求移除，切换器随之删掉 —— 一个只有一边的
+                          // 开关比没有更让人困惑。）
+                          //
+                          // 标题用 Expanded 吃掉剩余宽度（与 _listHead 同理）：长标题（英文）
+                          // 否则会把右侧按钮顶出容器；窄面板（2.0 横屏把本页装进 ≤560 的
+                          // 左栏）下按钮降级成纯图标，文案走 Tooltip。
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(S.of(context).messages,
+                                    style: T.h1,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              const SizedBox(width: 10),
+                              _recvButton(context, st),
+                              const SizedBox(width: 8),
+                              _sendBeaconButton(context, st,
+                                  compact: _compactPane),
+                            ],
+                          ),
                           const SizedBox(height: 14),
                           Expanded(
                             child: narrow
@@ -411,7 +458,8 @@ class _MessagesPageState extends State<MessagesPage> {
               ),
             ),
           ],
-        );;
+          ),
+        );
       },
     );
   }
@@ -510,47 +558,311 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   // ─── 输入栏（瀑布流 / 会话共用） ───
-  /// 「译发」按钮：把当前输入译成对方的语言
-  Widget _outTranslateButton(AppState st) {
-    final pref = _pref;
-    final enabled = st.msgLenLimit >= 0; // 始终可点，上下文不足时给出提示
+  /// 主操作键左侧的「译发」按钮：把当前输入译成对方语言。
+  ///
+  /// 从「+」浮出菜单里**提出来常驻**（用户要求）：译发是高频动作，藏在菜单里
+  /// 每次都要两步。仅单聊提供（群聊对方语言不唯一，不做发送前翻译）。
+  Widget _translateBtnSmall(AppState st) {
+    final ready = TransDirection.canTranslateOutgoing(_pref);
+    final active = _outPreview != null;
     return GestureDetector(
-      onTap: !enabled || _outBusy ? null : () => _translateInput(st),
+      onTap: _outBusy ? null : () => _translateInput(st),
       child: Tooltip(
         message: S.of(context).translateInput,
         child: Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: _outPreview != null ? C.cyanBg : C.bgSoft,
+            color: active ? C.cyanBg : C.bgSoft,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _outPreview != null
-                  ? C.cyan.withValues(alpha: 0.5)
-                  : C.border,
+              color: active ? C.cyan.withValues(alpha: 0.5) : C.border,
             ),
           ),
-          child: _outBusy
-              ? const Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : Icon(
-                  Icons.translate_rounded,
-                  size: 18,
-                  color: _outPreview != null
-                      ? C.cyan
-                      : (TransDirection.canTranslateOutgoing(pref)
-                          ? C.slate
-                          : C.greyLight),
-                ),
+          child: Icon(
+            Icons.translate_rounded,
+            size: 20,
+            color: ready ? C.cyan : C.greyLight,
+          ),
         ),
       ),
     );
   }
+
+  /// 主操作键「＋」：打开浮出菜单（发送位置点等）。仅在未输入时显示。
+  Widget _moreButton(AppState st, {required bool canLocate}) {
+    return GestureDetector(
+      onTap: () => _showMoreSheet(st, canLocate: canLocate),
+      child: Tooltip(
+        message: S.of(context).chatMore,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: C.bgSoft,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: C.border),
+          ),
+          child: Icon(Icons.add_rounded, size: 22, color: C.slate),
+        ),
+      ),
+    );
+  }
+
+  /// 主操作键「发送」：输入框聚焦/有内容时替换掉「＋」。
+  Widget _sendButton() {
+    return GestureDetector(
+      onTap: _send,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: C.blue,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: elev2(),
+        ),
+        child: const Icon(
+          Icons.send_rounded,
+          color: Colors.white,
+          size: 18,
+        ),
+      ),
+    );
+  }
+
+  /// 「+」浮出菜单：发送位置点（译发已提到输入栏外，不在这里）。
+  void _showMoreSheet(AppState st, {required bool canLocate}) {
+    final s = S.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => MaterialSurface(
+        radius: 18,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: C.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ListTile(
+                  leading: Icon(Icons.place_rounded,
+                      color: canLocate ? C.blue : C.grey),
+                  title: Text(s.sendLocation, style: ts(13, w: FontWeight.w600)),
+                  enabled: canLocate,
+                  onTap: canLocate
+                      ? () {
+                          Navigator.pop(ctx);
+                          _pickLocationAndSend(st);
+                        }
+                      : null,
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 自由选点的小面板（用户要求）：位置点气泡点按后不直接跳，而是让用户选
+  /// 「在地图上查看」或「导航」。两者都复用既有机制（[AppState.focusOnMap] /
+  /// 系统地图 URI），不新增跳转通道。
+  void _showPointSheet(double lat, double lng, String label) {
+    final s = S.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => MaterialSurface(
+        radius: 18,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: C.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.location_on_rounded, size: 16, color: C.blue),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label.isEmpty ? s.msgLocation : label,
+                              style: ts(13, w: FontWeight.w700)),
+                          Text(
+                            fmtLatLng(lat, lng, widget.state.coordFmt),
+                            style: mono(10, c: C.slate),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _pointAction(
+                        Icons.map_rounded,
+                        s.openInMap,
+                        C.blue,
+                        () {
+                          Navigator.pop(ctx);
+                          widget.state.focusOnMap(
+                            Station(
+                              call: label.isEmpty ? s.msgLocation : label,
+                              symbol: '>',
+                              lat: lat,
+                              lng: lng,
+                              lastHeard: DateTime.now(),
+                              status: St.moving,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _pointAction(
+                        Icons.navigation_rounded,
+                        s.navigate,
+                        C.green,
+                        () {
+                          Navigator.pop(ctx);
+                          _navigateToPoint(lat, lng, label);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pointAction(
+      IconData icon, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 6),
+            Text(label, style: ts(12, c: color, w: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 用系统地图导航到某个坐标（WGS-84，geo: 直接吃）。
+  /// 依次尝试 geo:，失败退回浏览器 OSM，与台站面板的兜底一致。
+  Future<void> _navigateToPoint(double lat, double lng, String label) async {
+    Future<bool> tryLaunch(Uri uri) async {
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return true;
+        }
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final name = Uri.encodeComponent(label.isEmpty ? 'APRS' : label);
+    if (await tryLaunch(
+      Uri.parse('geo:$lat,$lng?q=$lat,$lng($name)'),
+    )) {
+      return;
+    }
+    if (await tryLaunch(
+      Uri.parse('https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=16/$lat/$lng'),
+    )) {
+      return;
+    }
+    _snack(S.of(context).navigationUnavailable, C.red);
+  }
+
+  /// 打开选点浮层（[LocationPickerPage]）→ 取回坐标 → 走 [AppState.sendLocation]。
+  Future<void> _pickLocationAndSend(AppState st) async {
+    if (_selected.isEmpty) return;
+    if (!st.connected) {
+      _snack(S.of(context).chatNeedConnect, C.red);
+      return;
+    }
+    final r = await Navigator.of(context).push<((double, double), String?)>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(state: st, call: _selected),
+      ),
+    );
+    if (r == null || !mounted) return;
+    final (ll, station) = r;
+    if (!st.sendLocation(_selected, ll.$1, ll.$2, asStation: station)) {
+      _snack(S.of(context).needFixToSendLocation, C.red);
+      return;
+    }
+    Future.delayed(const Duration(milliseconds: 80), () {
+      if (_scrollChat.hasClients) {
+        _scrollChat.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
 
   /// 翻译当前输入（不发送）。结果进了预览，用户可确认后再按发送。
   Future<void> _translateInput(AppState st) async {
@@ -666,6 +978,9 @@ class _MessagesPageState extends State<MessagesPage> {
     final group = inGroupChat
         ? st.chatGroups.where((g) => g.id == _selectedGroupId).firstOrNull
         : null;
+    // 浮出「+」菜单：把翻译（仅单聊）/ 位置点（仅单聊）收进加号，输入栏只剩
+    // 输入框与发送键 —— 与微信一致，主操作区干净。群聊暂不支持位置点。
+    final canLocate = !inGroupChat && _selected.isNotEmpty;
     // TNC（射频）模式：单条消息上限 67 字符（APRS101）。
     // 直接写进输入提示，比「打完发送才发现被拦」友好。
     final limit = st.msgLenLimit;
@@ -679,34 +994,17 @@ class _MessagesPageState extends State<MessagesPage> {
     // 长度计数器：APRS-IS 与射频都会「太长就解析不出来」，但此前只有
     // 射频侧在发送时才拦。这里把实际占用（字符 + 整包字节）实时显示出来，
     // 让用户在打字过程中就知道自己在逼近哪条线 —— 发送前的弹窗只作兜底。
-    final wired = _outPreview != null && _outPreviewSrc == _input.text.trim()
-        ? _outPreview!
-        : _input.text.trim();
-    final fit = MsgLimit.check(
+    //
+    // ⚠ 它**自己监听输入控制器**（见 [MsgLenCounter]），所以不需要在这里 setState。
+    //    以前这里直接读 `_input.text` 拼一行 —— 那只在页面因别的原因重建时才刷新，
+    //    用户看到的现象就是「数字不跟着打字变，要等输入框失去焦点才变」（用户上报）。
+    final counter = MsgLenCounter(
+      controller: _input,
       from: st.myFullCall,
       path: st.txPath,
       to: inGroupChat ? (group?.groupCall ?? '') : _selected,
-      text: wired,
-    );
-    final counter = Container(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
-      child: Row(children: [
-        Icon(
-          fit.fit == MsgFit.ok ? Icons.check_circle_outline_rounded
-              : fit.fit == MsgFit.overSpec ? Icons.warning_amber_rounded
-              : Icons.error_rounded,
-          size: 12,
-          color: fit.fit == MsgFit.ok ? C.grey
-              : fit.fit == MsgFit.overSpec ? C.orange : C.red,
-        ),
-        const SizedBox(width: 5),
-        Text(
-          S.of(context).msgLenCounter(fit.textChars, fit.packetBytes),
-          style: ts(9,
-              c: fit.fit == MsgFit.ok ? C.grey
-                  : fit.fit == MsgFit.overSpec ? C.orange : C.red),
-        ),
-      ]),
+      preview: _outPreview,
+      previewSrc: _outPreviewSrc,
     );
 
     // 射频模式的限制说明：紧贴输入栏，解释「为什么这里能做的事变少了」。
@@ -740,6 +1038,7 @@ class _MessagesPageState extends State<MessagesPage> {
       // 译发预览在输入栏正上方：用户能同时看到「要发的译文」与输入框里的原文
       _outPreviewBar(st),
       counter,
+      _sendAsBar(st),
       tncBanner,
       Container(
       decoration: BoxDecoration(
@@ -780,42 +1079,99 @@ class _MessagesPageState extends State<MessagesPage> {
                     ),
                   ),
                   onSubmitted: (_) => _send(),
+                  onTap: _onFocusChange,
                   // 输入一旦改动，之前基于旧文本的译文就失效 —— 否则会出现
-                  // 「改了字却发出去旧译文」（射频上不可撤销）
+                  // 「改了字却发出去旧译文」（射频上不可撤销）。
+                  // 同时切换主操作键：有内容=发送、清空=＋。
                   onChanged: (v) {
                     if (_outPreview != null && v.trim() != _outPreviewSrc) {
                       _clearOutPreview();
                     }
+                    _onFocusChange();
                   },
                 ),
               ),
               const SizedBox(width: 8),
-              // 译发按钮：把当前输入译成对方语言（RFC：对方语言未知时提示去设置）
-              _outTranslateButton(st),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _send,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: C.blue,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: elev2(),
-                  ),
-                  child: const Icon(
-                    Icons.send_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
+              // 译发常驻在外（用户要求）：单聊才有；群聊对方语言不唯一，不出。
+              if (!inGroupChat) ...[
+                _translateBtnSmall(st),
+                const SizedBox(width: 8),
+              ],
+              // 主操作键：未聚焦且无内容 = 「＋」（位置点）；否则 = 「发送」。
+              _composing
+                  ? _sendButton()
+                  : _moreButton(st, canLocate: canLocate),
             ],
           ),
         ),
       ),
       ),
       ],
+    );
+  }
+
+  /// 这个会话里「发给我的其他 SSID」的那些收件人（去重，含本机 ID）
+  List<String> _sendAsOptions(AppState st) {
+    final me = st.myFullCall.toUpperCase();
+    final base = me.split('-').first;
+    final names = <String>[me];
+    for (final m in st.messages) {
+      if (m.sent || m.groupId != null) continue;
+      if (_selected.isEmpty || m.from.toUpperCase() != _selected.toUpperCase()) {
+        continue;
+      }
+      final to = m.to.toUpperCase();
+      if (to == me) continue;
+      if (to.split('-').first != base) continue;
+      if (!names.contains(to)) names.add(to);
+    }
+    return names;
+  }
+
+  /// 「发送 ID」选择条：只有这个会话里真的收到过发给我另一个 SSID 的消息时才出现。
+  ///
+  /// 不放进输入框提示里：那不是一句提示能承载的选择，而且它改动的是
+  /// **下一条报文从哪个呼号发出**，必须一直看得见。
+  Widget _sendAsBar(AppState st) {
+    if (_selectedGroupId != null || _selected.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final opts = _sendAsOptions(st);
+    if (opts.length < 2) return const SizedBox.shrink();
+    final cur = st.msgSendCall;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: C.border, width: 0.6)),
+      ),
+      child: Row(children: [
+        Text(S.of(context).msgSendId, style: ts(10, c: C.grey, w: FontWeight.w600)),
+        const SizedBox(width: 8),
+        for (final c in opts) ...[
+          GestureDetector(
+            onTap: () => st.setMsgSendAs(c.toUpperCase() == st.myFullCall.toUpperCase() ? null : c),
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.toUpperCase() == cur.toUpperCase() ? C.blue : C.bgSoft,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: c.toUpperCase() == cur.toUpperCase() ? C.blue : C.border,
+                ),
+              ),
+              child: Text(
+                c,
+                style: ts(10,
+                    c: c.toUpperCase() == cur.toUpperCase()
+                        ? Colors.white
+                        : C.slate,
+                    w: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ]),
     );
   }
 
@@ -1009,6 +1365,151 @@ class _MessagesPageState extends State<MessagesPage> {
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, size: 15, color: fg),
+        ),
+      ),
+    );
+  }
+
+  /// 「消息接收」入口：收件人口径（要不要连其它 SSID 的消息一起收）。
+  ///
+  /// 用户反馈：设置里那张「消息接收」卡在「服务器」页底部，根本找不到。
+  /// 收什么消息是消息页的事，所以入口就放在消息页标题栏。
+  Widget _recvButton(BuildContext context, AppState st) {
+    return Tooltip(
+      message: S.of(context).msgRecvTitle,
+      child: GestureDetector(
+        onTap: () => _showRecvSheet(st),
+        child: Container(
+          height: 34,
+          width: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: C.purpleBg,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.tune_rounded, size: 17, color: C.purple),
+        ),
+      ),
+    );
+  }
+
+  void _showRecvSheet(AppState st) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final s = S.of(ctx);
+          return MaterialSurface(
+            radius: 18,
+            topOnly: true,
+            child: Container(
+              decoration: BoxDecoration(
+                color: C.sheetFill,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
+              ),
+              padding: const EdgeInsets.fromLTRB(18, 16, 14, 12),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s.msgRecvTitle, style: ts(15, w: FontWeight.w800)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(s.msgRecvSsid,
+                              style: ts(13, w: FontWeight.w600)),
+                        ),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: st.acceptOtherSsidMsgs,
+                          onChanged: (v) {
+                            st.setAcceptOtherSsidMsgs(v);
+                            setSheet(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 标题右侧「发射位置信标」：手动发一次位置信标（不改自动上报开关）。
+  ///
+  /// 与地图页的「立即上报」同源（[AppState.sendBeacon] → force），但按用户
+  /// 说法用「发射」措辞。窄面板（[compact]，2.0 横屏把消息页装进 ≤560 左栏）
+  /// 下标题已占满宽度，按钮降级成纯图标 + Tooltip，避免把标题压没。
+  Widget _sendBeaconButton(BuildContext context, AppState st,
+      {required bool compact}) {
+    final label = S.of(context).sendPositionBeacon;
+    // ⚠ 与地图页关键区别：不能 `Navigator.pop` —— 消息页不是弹层路由，pop 会把
+    // 整个页面/外壳弹掉，人还在消息页看着，点了却跳出应用。这里只用 SnackBar
+    // 反馈，不 pop。
+    void send() {
+      st.sendBeacon();
+      // 上报闸（myPositionReportable）会挡住「还没本轮定位」的点；如实反馈，
+      // 别弹一条假的「已发送」。
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(st.myPositionReportable
+              ? S.of(context).positionBeaconDetail(
+                  st.myGrid, st.beaconAttachedDetail)
+              : S.of(context).beaconWaitingFix),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    final fg = C.green;
+    final bg = C.greenBg;
+    if (compact) {
+      return Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: send,
+          child: Container(
+            height: 34,
+            width: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.send_rounded, size: 17, color: fg),
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: send,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.send_rounded, size: 16, color: fg),
+            const SizedBox(width: 6),
+            Text(label,
+                maxLines: 1,
+                style: ts(12.5, c: fg, w: FontWeight.w600)),
+          ],
         ),
       ),
     );
@@ -1334,6 +1835,22 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  /// 会话列表的最后一条预览。位置点消息给出可读文案（而不是空/坐标），
+  /// 分享台站则显示台站卡片前缀，一眼能分辨这条是什么。
+  String _convPreview(AprsMsg? m) {
+    if (m == null) return '';
+    if (m.type == 'location' && m.lat != null && m.lng != null) {
+      final s = S.of(context);
+      final call = m.stationCall;
+      if (call != null && call.isNotEmpty) {
+        return '${s.stationTapToView} · $call';
+      }
+      return '${s.msgLocation} · ${m.lat!.toStringAsFixed(3)}, '
+          '${m.lng!.toStringAsFixed(3)}';
+    }
+    return m.text;
+  }
+
   Widget _chatListItem(AppState st, String p) {
     final msgs = _chatWith(st, p);
     final last = msgs.isNotEmpty ? msgs.first : null;
@@ -1350,6 +1867,9 @@ class _MessagesPageState extends State<MessagesPage> {
           return;
         }
         widget.state.markConversationRead(p);
+        // 换会话就回到本机 ID：上一个会话里选的「用另一个 SSID 发」
+        // 如果带过来，下一条消息会从一个对方根本不认识的 ID 发出去。
+        widget.state.setMsgSendAs(null);
         setState(() {
           _selected = p;
           _selectedGroupId = null;
@@ -1405,7 +1925,7 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                   SizedBox(height: 2),
                   Text(
-                    last?.text ?? '',
+                    _convPreview(last),
                     style: ts(11, c: C.grey),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1973,10 +2493,167 @@ class _MessagesPageState extends State<MessagesPage> {
           );
   }
 
-  Widget _bubble(AprsMsg m, {String? groupSender, VoidCallback? onSenderTap}) {
+  /// 位置点气泡：显示坐标 + 提示，点一下把主地图聚焦到该点。
+  /// 若是「分享台站」（[AprsMsg.stationCall] 非空），改用台站卡片样式，点按打开
+  /// 该台站的详细面板 —— 与文本里呼号链接的行为一致。
+  ///
+  /// 复用 [AppState.focusOnMap]（「在地图查看」的同一机制），坐标包装成临时
+  /// Station —— 与策略地图「在地图查看」一致，不新增跳转通道。
+  Widget _locationBubble(AprsMsg m) {
     final mine = m.sent;
+    final s = S.of(context);
+    final call = m.stationCall;
+    final isStation = call != null && call.isNotEmpty;
+    final tint = isStation ? C.green : C.blue;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: () {
+          if (isStation) {
+            _openStation(widget.state, call!);
+          } else {
+            _showPointSheet(m.lat!, m.lng!, m.text);
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          constraints: const BoxConstraints(maxWidth: 240),
+          decoration: BoxDecoration(
+            color: mine ? C.blueBg : C.bgSoft,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: Radius.circular(mine ? 14 : 4),
+              bottomRight: Radius.circular(mine ? 4 : 14),
+            ),
+            border: Border.all(color: tint.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(15),
+                    bottomLeft: Radius.circular(mine ? 13 : 3),
+                  ),
+                ),
+                child: Icon(
+                  isStation
+                      ? Icons.radio_rounded
+                      : Icons.location_on_rounded,
+                  size: 22,
+                  color: tint,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(isStation ? call! : s.msgLocation,
+                        style: ts(12, w: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      fmtLatLng(m.lat!, m.lng!, widget.state.coordFmt),
+                      style: mono(10, c: C.slate),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isStation
+                              ? Icons.badge_outlined
+                              : Icons.map_rounded,
+                          size: 11,
+                          color: tint,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          isStation
+                              ? s.stationTapToView
+                              : s.locationTapToView,
+                          style: ts(9, c: tint, w: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 聊天气泡 + 出现动画。
+  ///
+  /// 动画只在某条消息**第一次**出现时播一遍（见 [_shownBubbles]）；
+  /// 已经出现过的直接给原样，滚动来回不会重播。
+  Widget _bubble(AprsMsg m, {String? groupSender, VoidCallback? onSenderTap}) {
+    final id = identityHashCode(m);
+    return _BubbleAppear(
+      // 必须带 key：列表按下标复用元素，新消息插在最前面时如果不带 key，
+      // 它会接手上一条已经播完的动画状态，于是「新消息没有动画」。
+      key: ValueKey<int>(id),
+      play: _shownBubbles.add(id),
+      child: _bubbleBody(m, groupSender: groupSender, onSenderTap: onSenderTap),
+    );
+  }
+
+  Widget _bubbleBody(
+    AprsMsg m, {
+    String? groupSender,
+    VoidCallback? onSenderTap,
+  }) {
+    final mine = m.sent;
+    // 位置点消息：可点气泡（跳主地图聚焦该坐标）。它不是系统消息，所以要在
+    // 系统消息分支之前单独处理 —— 否则会走普通文字气泡，用户只看到一个「位置点」。
+    if (m.type == 'location' && m.lat != null && m.lng != null) {
+      return _locationBubble(m);
+    }
     // 系统消息：居中灰色小字
     if (m.system) {
+      // 策略提示特殊：带 type=strategy，可点击跳进对应群的策略地图。
+      // 其余系统消息仍是不可点的纯文本。
+      if (m.type == 'strategy') {
+        return Center(
+          child: GestureDetector(
+            onTap: () => widget.state.openStrategyMap(m.to),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: C.blue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: C.blue.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.map_rounded, size: 13, color: C.blue),
+                  const SizedBox(width: 5),
+                  Text(
+                    localizedSystemMessage(context, m.text),
+                    style: ts(10, c: C.blue, w: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    '· ${S.of(context).strategySeeInMap}',
+                    style: ts(9, c: C.blue.withValues(alpha: 0.75)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
       return Center(
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 6),
@@ -2090,6 +2767,30 @@ class _MessagesPageState extends State<MessagesPage> {
                   ],
                 ],
               ),
+              // 这条是发给我的另一个 SSID 的：说清楚它不是发给本机 ID 的，
+              // 并给出「用哪个 ID 回」的选择（选择条在输入栏上方）
+              if (!mine &&
+                  m.groupId == null &&
+                  m.to.isNotEmpty &&
+                  m.to.toUpperCase() !=
+                      widget.state.myFullCall.toUpperCase())
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.alternate_email_rounded,
+                          size: 10, color: C.orange),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          S.of(context).msgOtherSsid(m.to.toUpperCase()),
+                          style: ts(9, c: C.orange, h: 1.35),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -2113,36 +2814,108 @@ class _MessagesPageState extends State<MessagesPage> {
     return _memberColors[h.abs() % _memberColors.length];
   }
 
-  /// 解析文本中的 URL，返回可点击的 RichText
+  /// 解析文本中的 URL 与**台站呼号**，返回可点击的 RichText。
+  ///
+  /// 呼号做成链接的判据：
+  ///   * 形如业余呼号（[AppState.isValidCallsign]：字母/数字前缀 + 后缀 + 可选 -SSID）；
+  ///   * 左右不能紧挨其它字母/数字/连字符（避免切进单词或 `BG7LZQ-9` 中间）；
+  ///   * **已经在台站列表里**（收得到信标）→ 实线下划线；仅是**格式合法**但暂时
+  ///     没收到的 → 虚线下划线，点了照样打开台站面板（面板会显示「未收到报文」）。
+  ///     这样「文本里明明写着呼号、却点不动」的情况不再出现。
+  /// 点击行为与网址一致：跳去打开该台站的详细面板。
   Widget _urlRichText(String text, TextStyle baseStyle) {
     final urlRe = RegExp(
       r'(https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+)',
       caseSensitive: false,
     );
+    // 与 [AppState._callRe] 同一形态：`前缀(字母/数字) + 后缀字母 (+ -SSID)`，
+    // 放开到「1~2 位字母/数字」以覆盖 9M2XYZ、2E0ABC 这类数字开头的呼号。
+    final callRe = RegExp(
+      r'(?:\d[A-Za-z]{1,2}|[A-Za-z]{1,2}\d{1,2})[A-Za-z]{1,3}(?:-\d{1,2})?',
+    );
+    final alnumRe = RegExp(r'[A-Za-z0-9-]');
+
+    final hits = <(int start, int end, String text, bool isUrl)>[];
+    for (final m in urlRe.allMatches(text)) {
+      hits.add((m.start, m.end, m.group(0)!, true));
+    }
+    bool boundaryOk(int s, int e) {
+      bool bad(int i) {
+        if (i < 0 || i >= text.length) return false;
+        return alnumRe.hasMatch(text[i]);
+      }
+
+      return !bad(s - 1) && !bad(e);
+    }
+
+    // 已知台站集合（大写）——只用来区分实线/虚线下划线，不再作为「是否可点」的闸门。
+    final known = widget.state.stations
+        .map((s) => s.call.toUpperCase())
+        .toSet();
+
+    for (final m in callRe.allMatches(text)) {
+      if (!boundaryOk(m.start, m.end)) continue;
+      final up = m.group(0)!.toUpperCase();
+      if (!AppState.isValidCallsign(up)) continue;
+      // 与 URL 重叠的跳过（URL 优先）
+      if (hits.any((h) => h.$4 && m.start < h.$2 && m.end > h.$1)) {
+        continue;
+      }
+      hits.add((m.start, m.end, m.group(0)!, false));
+    }
+    // 标记哪些是已知台站：借用第 4 位语义（URL=false 时另用一张集合记录）
+    final knownSpans = <int>{};
+    for (final h in hits) {
+      if (!h.$4 && known.contains(h.$3.toUpperCase())) knownSpans.add(h.$1);
+    }
+    hits.sort((a, b) => a.$1.compareTo(b.$1));
+
     final spans = <TextSpan>[];
     int lastEnd = 0;
-    for (final match in urlRe.allMatches(text)) {
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(text: text.substring(lastEnd, match.start)));
+    for (final h in hits) {
+      if (h.$1 < lastEnd) continue; // 与已处理区间重叠
+      if (h.$1 > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, h.$1)));
       }
-      final url = match.group(0)!;
-      final fullUrl = url.startsWith('http') ? url : 'https://$url';
-      spans.add(
-        TextSpan(
-          text: url,
-          style: TextStyle(
-            color: C.blue,
-            decoration: TextDecoration.underline,
-            decorationColor: C.blue,
-          ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => launchUrl(
-              Uri.parse(fullUrl),
-              mode: LaunchMode.externalApplication,
+      if (h.$4) {
+        final url = h.$3;
+        final fullUrl = url.startsWith('http') ? url : 'https://$url';
+        spans.add(
+          TextSpan(
+            text: url,
+            style: TextStyle(
+              color: C.blue,
+              decoration: TextDecoration.underline,
+              decorationColor: C.blue,
             ),
-        ),
-      );
-      lastEnd = match.end;
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => launchUrl(
+                Uri.parse(fullUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+          ),
+        );
+      } else {
+        final call = h.$3.toUpperCase();
+        final isKnown = knownSpans.contains(h.$1);
+        spans.add(
+          TextSpan(
+            text: h.$3,
+            style: TextStyle(
+              color: C.green,
+              decoration: TextDecoration.underline,
+              // 已知台站实线、未收到报文虚线，一眼能分辨。
+              decorationStyle: isKnown
+                  ? TextDecorationStyle.solid
+                  : TextDecorationStyle.dotted,
+              decorationColor: C.green,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => _openStation(widget.state, call),
+          ),
+        );
+      }
+      lastEnd = h.$2;
     }
     if (lastEnd < text.length) {
       spans.add(TextSpan(text: text.substring(lastEnd)));
@@ -2274,7 +3047,7 @@ class _MessagesPageState extends State<MessagesPage> {
                     .take(8)
                     .toList();
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: C.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -2307,6 +3080,23 @@ class _MessagesPageState extends State<MessagesPage> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  // 「从收藏台站开始」：不想手打呼号时，直接从收藏里挑一个。
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        // 先关掉本对话框，再弹收藏选择（同一时刻只留一层弹层）。
+                        Navigator.of(ctx).pop();
+                        _pickFavoriteAndStart(st);
+                      },
+                      icon: Icon(Icons.star_rounded,
+                          size: 16, color: C.orange),
+                      label: Text(
+                        S.of(context).startFromFavorites,
+                        style: ts(12, w: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -2390,12 +3180,85 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   /// 开始新会话
-  void _startConversation(AppState st, String callRaw) {
+  /// 「从收藏台站开始」：列出收藏台站，挑一个就直接开会话。
+  ///
+  /// 为什么要它：新建会话这条路要手打呼号，而收藏本来就是我们最常联系的那几个台站 ——
+  /// 有了这个入口，常用的两三个就是"点两下"的事。
+  Future<void> _pickFavoriteAndStart(AppState st) async {
+    final favs = st.stations.where((s) => s.favorite).toList()
+      ..sort((a, b) => a.call.compareTo(b.call));
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: C.pageFill,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: C.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(S.of(context).favoriteStations,
+                style: ts(14, w: FontWeight.w700)),
+            const SizedBox(height: 6),
+            if (favs.isEmpty)
+              // 没有收藏时不留空面板：直接说清怎么收藏（复用现有引导文案）。
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 22),
+                child: Text(
+                  S.of(context).addOrFavoriteContact,
+                  textAlign: TextAlign.center,
+                  style: ts(12, c: C.grey, h: 1.6),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: favs.length,
+                  itemBuilder: (_, i) {
+                    final f = favs[i];
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.star_rounded,
+                          size: 18, color: C.orange),
+                      title: Text(f.call, style: ts(13, w: FontWeight.w600)),
+                      onTap: () => Navigator.of(ctx).pop(f.call),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      _startConversation(st, picked, closeDialog: false);
+    }
+  }
+
+  void _startConversation(AppState st, String callRaw,
+      {bool closeDialog = true}) {
     final call = callRaw.trim().toUpperCase();
     if (call.isEmpty || call == st.myFullCall.toUpperCase()) return;
     // 添加到联系人（若不在列表）
     st.addManualStation(call);
-    Navigator.pop(context);
+    // 只有「新建会话对话框还开着」时才关它。
+    // ⚠ 从「收藏台站」进来时，对话框在弹收藏面板**之前**就已经被关掉了
+    //（见上面那个按钮的注释：同一时刻只留一层弹层）—— 这里若再 pop 一次，
+    // 弹掉的就不是对话框而是**整个消息页**，结果是一片黑屏。
+    if (closeDialog && mounted) Navigator.pop(context);
     setState(() {
       _selectedGroupId = null;
       _selected = call;
@@ -2429,7 +3292,7 @@ class _MessagesPageState extends State<MessagesPage> {
             return a.call.compareTo(b.call);
           });
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: C.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -2809,7 +3672,7 @@ class _MessagesPageState extends State<MessagesPage> {
             return a.call.compareTo(b.call);
           });
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: C.white,
             title: Row(
               children: [
                 Icon(Icons.group_add_rounded, size: 18, color: C.orange),
@@ -2913,6 +3776,38 @@ class _MessagesPageState extends State<MessagesPage> {
                         ],
                       ),
                     ),
+                    if (st.usingRf) ...[
+                      SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: C.blueBg,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.cell_tower_rounded,
+                              size: 15,
+                              color: C.blue,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                S.of(context).groupRfNotice,
+                                style: ts(
+                                  11,
+                                  c: C.blue,
+                                  w: FontWeight.w500,
+                                  h: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     Spacer(),
                   ],
                   // ─── 第2步：选择成员 ───
@@ -3135,7 +4030,14 @@ class _MessagesPageState extends State<MessagesPage> {
                   ),
                   onPressed: selected.isEmpty
                       ? null
-                      : () {
+                      : () async {
+                          // 用户要求：建群会立刻向每位勾选的成员发一条 INVITE
+                          // （一次操作发多条），先提示一次确认。
+                          final ok = await _confirmAction(
+                            S.of(context).invite,
+                            S.of(context).confirmCreateGroup(selected.length),
+                          );
+                          if (!ok || !mounted) return;
                           final g = widget.state.createGroup(
                             nameCtrl.text.trim(),
                             selected,
@@ -3179,7 +4081,7 @@ class _MessagesPageState extends State<MessagesPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: C.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -3478,7 +4380,7 @@ class _MessagesPageState extends State<MessagesPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: C.white,
         title: Text(
           S.of(context).deleteGroup,
           style: ts(16, w: FontWeight.w700),
@@ -3517,7 +4419,7 @@ class _MessagesPageState extends State<MessagesPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: C.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -3696,7 +4598,7 @@ class _MessagesPageState extends State<MessagesPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: C.white,
         title: Text(
           S.of(context).leaveGroup,
           style: ts(16, w: FontWeight.w700),
@@ -3761,7 +4663,7 @@ class _MessagesPageState extends State<MessagesPage> {
             list = list.where((s) => s.call.toUpperCase().contains(q)).toList();
           list.sort((a, b) => a.call.compareTo(b.call));
           return AlertDialog(
-            backgroundColor: Colors.white,
+            backgroundColor: C.white,
             title: Text(
               S.of(context).inviteMembersTo(group.name),
               style: ts(16, w: FontWeight.w700),
@@ -3822,22 +4724,29 @@ class _MessagesPageState extends State<MessagesPage> {
                       ),
                       SizedBox(width: 6),
                       GestureDetector(
-                        onTap: () {
+                        onTap: () async {
                           final call = manualCtrl.text.trim().toUpperCase();
-                          if (call.isNotEmpty && call.length >= 3) {
-                            widget.state.sendInvite(
-                              group.groupCall,
-                              call,
-                              group.name,
-                            );
-                            manualCtrl.clear();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(S.of(context).inviteSent(call)),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
+                          if (call.isEmpty || call.length < 3) return;
+                          // 用户要求：邀请前提示一次确认。
+                          final ok = await _confirmAction(
+                            S.of(context).invite,
+                            S.of(context).confirmInviteMember(call),
+                          );
+                          if (!ok || !mounted) return;
+                          widget.state.sendInvite(
+                            group.groupCall,
+                            call,
+                            group.name,
+                          );
+                          manualCtrl.clear();
+                          setDialogState(() {});
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(S.of(context).inviteSent(call)),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3875,13 +4784,21 @@ class _MessagesPageState extends State<MessagesPage> {
                               return GestureDetector(
                                 onTap: invited
                                     ? null
-                                    : () {
+                                    : () async {
+                                        // 用户要求：邀请前提示一次确认。
+                                        final ok = await _confirmAction(
+                                          S.of(context).invite,
+                                          S.of(context)
+                                              .confirmInviteMember(s.call),
+                                        );
+                                        if (!ok || !mounted) return;
                                         widget.state.sendInvite(
                                           group.groupCall,
                                           s.call,
                                           group.name,
                                         );
                                         setDialogState(() {});
+                                        if (!mounted) return;
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
@@ -4119,6 +5036,32 @@ class _MessagesPageState extends State<MessagesPage> {
     );
   }
 
+  /// 群发 / 邀请前的通用确认弹窗。返回 true = 用户点了确认。
+  ///
+  /// 用户要求：群发与邀请各提示一次确认 —— 这两类动作都是**一次操作发多条**
+  /// （群发 = 一条广播给全体成员；建群 = 一批 INVITE 私信），发出去不可撤回。
+  Future<bool> _confirmAction(String title, String message) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: T.h2),
+        content: Text(message, style: ts(13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(S.of(ctx).cancel, style: ts(13, c: C.slate)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.orange),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(S.of(ctx).confirm, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   /// 发送前的长度/可解析性预检。返回 true = 可以继续发送。
   ///
   /// 为什么必须在**发送前**问：APRS 消息发出去没有回滚（射频上更是如此），
@@ -4177,6 +5120,12 @@ class _MessagesPageState extends State<MessagesPage> {
   Future<void> _send() async {
     if (_input.text.isEmpty) return;
     final st = widget.state;
+    // 发送前的连接自检（用户要求）：未连接服务器（发射来源不可用）时，
+    // 发送只会本地记一笔、报文并不上天。直接拦下并直说，别让用户以为发出去了。
+    if (!st.connected) {
+      _snack(S.of(context).chatNeedConnect, C.red);
+      return;
+    }
     // 群聊发送
     if (_selectedGroupId != null) {
       final group = widget.state.chatGroups
@@ -4185,6 +5134,8 @@ class _MessagesPageState extends State<MessagesPage> {
       if (group != null) {
         final text = _input.text.trim();
         if (!await _confirmLength(st, group.groupCall, text)) return;
+        if (!mounted) return;
+        // 用户要求：群聊发送不再弹「确定/取消」确认，直接发。
         widget.state.sendGroupMessage(group.groupCall, text, groupId: group.id);
       }
       _input.clear();
@@ -4247,5 +5198,68 @@ class _MessagesPageState extends State<MessagesPage> {
     });
     // 保持输入焦点：回车/发送后继续打字
     _inputFocus.requestFocus();
+  }
+}
+
+/// 气泡出现动画：淡入 + 轻微上浮 + 从 96% 放大回 100%。
+///
+/// 只做这一个动作，没有弹跳、没有回弹曲线 —— 聊天里每来一条消息就弹一下，
+/// 看久了是噪音。`play == false` 时连控制器都不建，历史消息逐像素原样。
+class _BubbleAppear extends StatefulWidget {
+  final bool play;
+  final Widget child;
+  const _BubbleAppear({super.key, required this.play, required this.child});
+
+  @override
+  State<_BubbleAppear> createState() => _BubbleAppearState();
+}
+
+class _BubbleAppearState extends State<_BubbleAppear>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _c;
+  late final Animation<double> _t;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.play) {
+      final c = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 220),
+      );
+      _c = c;
+      _t = CurvedAnimation(parent: c, curve: Curves.easeOutCubic);
+      // 0.10 是「自下往上挪一丁点」：按气泡自身高度算，长消息不会飘一大段。
+      _slide = Tween<Offset>(
+        begin: const Offset(0, 0.10),
+        end: Offset.zero,
+      ).animate(_t);
+      _scale = Tween<double>(begin: 0.96, end: 1).animate(_t);
+      c.forward();
+    } else {
+      _t = const AlwaysStoppedAnimation<double>(1);
+      _slide = const AlwaysStoppedAnimation<Offset>(Offset.zero);
+      _scale = const AlwaysStoppedAnimation<double>(1);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_c == null) return widget.child;
+    return FadeTransition(
+      opacity: _t,
+      child: SlideTransition(
+        position: _slide,
+        child: ScaleTransition(scale: _scale, child: widget.child),
+      ),
+    );
   }
 }

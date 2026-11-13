@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:path_provider/path_provider.dart';
 
+import 'track_log.dart';
+
 /// 备份文件读写的平台实现（io 变体：Android / Windows / Linux / macOS）。
 ///
 /// 为什么不引第三方 file_picker：那要新增依赖与各平台插件配置，而本项目
@@ -184,3 +186,99 @@ Future<String?> saveBackupFile(
     return null;
   }
 }
+
+/// 把导出文本交给系统分享面板（微信 / QQ / 邮件 / 网盘…）。
+///
+/// 只有 Android 有：原生把内容写进 cacheDir/share/ 再经 FileProvider 分享
+/// （Android 7 起直接发 file:// 会崩）。桌面/Web 回 false，UI 据此不显示按钮。
+Future<bool> shareTextFile(
+  String filename,
+  String content, {
+  String mimeType = 'text/plain',
+}) async {
+  if (defaultTargetPlatform != TargetPlatform.android) return false;
+  try {
+    final r = await _exportChannel.invokeMethod<bool>('shareFile', {
+      'filename': filename,
+      'content': content,
+      'mimeType': mimeType,
+    });
+    return r == true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 当前平台有没有系统分享面板（决定导出提示里要不要出那个按钮）。
+bool get shareToSystemSupported =>
+    defaultTargetPlatform == TargetPlatform.android;
+
+/// 导出**图片**（PNG）：Android 走原生的「保存到下载目录」，桌面写下载目录。
+///
+/// 与 [saveBackupFile] 分开是因为二进制：文本那条按 UTF-8 写，PNG 直接
+/// 按字节落盘（原生侧是 `saveBytesToDownloads`，音频导出也在用它）。
+/// 返回用户可见的路径；失败返回 null。
+Future<String?> saveImageBytes(String filename, List<int> bytes) async {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      return await _exportChannel.invokeMethod<String>(
+        'saveBytesToDownloads',
+        {
+          'filename': filename,
+          'base64': base64Encode(bytes),
+          'mimeType': 'image/png',
+        },
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+  try {
+    final dir = await _downloadsDir();
+    final f = File('${dir.path}${Platform.pathSeparator}$filename');
+    await f.writeAsBytes(bytes, flush: true);
+    return f.path;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 桌面端的默认保存目录：优先系统「下载」，取不到再退到文档目录。
+Future<Directory> _downloadsDir() async {
+  try {
+    final d = await getDownloadsDirectory();
+    if (d != null) return d;
+  } catch (_) {}
+  return getApplicationDocumentsDirectory();
+}
+
+/// 把一段图片字节交给系统分享面板（只有 Android 有）。
+///
+/// 原生侧写进 cacheDir/share/ 再经 FileProvider 分享 —— 与文本版同一条路，
+/// 只是内容走 base64（PNG 不能当 UTF-8 字符串传）。
+bool get shareImageSupported =>
+    defaultTargetPlatform == TargetPlatform.android;
+
+Future<bool> shareImageBytes(String filename, List<int> bytes) async {
+  if (!shareImageSupported) return false;
+  try {
+    final r = await _exportChannel.invokeMethod<bool>('shareBytes', {
+      'filename': filename,
+      'base64': base64Encode(bytes),
+      'mimeType': 'image/png',
+    });
+    return r == true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 读取本机全部历史轨迹（原始按天 JSON：`day → DayTrack.toJson()`），
+/// 供导出时拼入备份。存储未就绪（初始化失败）时返回空表，导出照常进行。
+Future<Map<String, Object?>> loadTrackDays() =>
+    TrackLogStore.instance.exportRawDays();
+
+/// 把备份里携带的历史轨迹写回本机，返回写入（或替换）的天数。
+/// 以「天」为单位合并：备份里没有的天保持本地不动。
+Future<int> applyTrackDays(Map<String, Object?> raw) =>
+    TrackLogStore.instance.importRawDays(raw);

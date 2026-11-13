@@ -22,13 +22,30 @@ import 'translate.dart';
 ///    SharedPreferences 的 `getDouble` 读到 int 值会抛类型错误。故每个值写成
 ///    `{"s": …} / {"b": …} / {"i": …} / {"d": …} / {"l": […]}`，
 ///    导入时按标签调用对应的 setter —— 即使文件被手工改过类型也不会把应用写坏。
+///
+/// 另有一类**不走偏好键**的载荷：历史轨迹是按天落在文件里的
+/// （见 lib/track_log.dart），且**拼入**「设置配置」分组随备份一起走
+/// ——见 [kTrackPayloadKey]。它是整份 JSON 原样搬运，不参与上面的类型标签。
 
 /// 备份文件的身份标识。导入时先认这个字段，避免把任意 JSON 当备份解析。
 const String kBackupKind = 'aprslocus-backup';
 
 /// 备份格式版本。只增不减；导入时遇到**更高**的 schema 会拒绝而不是猜。
 /// v1：分组 + 带类型标签的值。
-const int kBackupSchema = 1;
+/// v2：设置分组内可携带历史轨迹（[kTrackPayloadKey]）。v2 仍能读 v1。
+const int kBackupSchema = 2;
+
+/// 设置分组内携带历史轨迹的载荷键。
+///
+/// 之所以**拼入**设置分组、而不单开一个「轨迹」分组：轨迹就是「跟着设置一起
+/// 搬走」的本机数据，单开一组会让导出页多出一个大多数人不会去动的勾选框。
+///
+/// 值形如 `{ "2026-10-07": {…DayTrack.toJson…}, … }`，直接来自
+/// TrackLogStore 的按天 JSON，原样搬运（不做类型标签）。
+///
+/// 取名 `__tracks`：带下划线前缀，保证与任何真实偏好键不可能撞名 —— 否则
+/// 万一撞上，`parseBackupJson` 会把它当成未知值丢掉，或更糟地写进偏好。
+const String kTrackPayloadKey = '__tracks';
 
 /// 备份内容分组。新增分组时同时补 [kBackupGroups] 与 l10n 文案。
 enum BackupCategory { settings, stations, messages, chats, translate, honors, theme }
@@ -71,14 +88,42 @@ const List<BackupGroupSpec> kBackupGroups = [
     // 地图页上报状态栏的样式（经典 / 详细）：与其它显示偏好同类 ——
     // 换机后当然希望屏幕还是自己调好的那副样子。
     'beaconBarDetailed',
+    // 历史轨迹要不要记录：与显示偏好同类，用户既然开了就说明他要继续记，
+    // 换机后回到「默认关」会让他以为新机上不再记录。
+    'trackLogOn',
+    // 云同步：开关、账号、上次同步时间与上传标记：换机后应当接着同步，
+    // 所以随设置走。服务器地址跟着「APRSNETCN」链路走，不单独存；
+    // 令牌与口令**不在**这里 —— 那是这台设备的登录，
+    // 换台机器要重新登（见 tool/check_backup_keys.py 的 EXCLUDE）。
+    'syncMode', 'syncAccount', 'syncDeviceId', 'syncCall',
+    'syncMsgAt', 'syncPullAt', 'syncTrackAt', 'syncMsgAllDone',
+    'syncTrackSig', 'syncServerSig',
+    'syncAutoMinutes', 'syncMessagesOn', 'syncTracksOn',
     // 纯网络定位时的台站符号 + 外置 GPS 待机 + 心率异常告警：三者都是
     // 「用户自己配的行为偏好」，换机后应当保留。
     'networkSymbol', 'extGpsStandby',
     'hrAlarmEnabled', 'hrAlarmHigh', 'hrAlarmLow',
     // 碰撞/摔倒提醒：与心率告警同属「安全策略」偏好，换机后应保留。
     'crashDetectEnabled',
+    // 碰撞检测灵敏度（issue #32）：同上 —— 是用户按自己携带方式调出来的，
+    // 换机后回到默认档会表现为「新机上又开始误报了」。
+    'crashSensitivity',
     // 信标是否附带步数（非标准字段，同 TRV/ODO 一类）：属于信标内容偏好。
     'beaconIncludeSteps',
+    // 信标是否附带卫星数（非标准字段，同 STEPS= 一类）：属于信标内容偏好。
+    'beaconIncludeSats',
+    'beaconIncludeDeskLoad',
+    'acceptOtherSsidMsgs',
+    // 订阅命中要不要弹系统通知：通知偏好，换机后应跟着走（否则新机上订阅
+    // 静悄悄，用户会以为订阅坏了）。
+    'subsNotify',
+    // 上报位置的模糊档位：隐私选择，换机后应跟着走（回到不模糊就等于把
+    // 用户刚降下来的精度自己抬回去）。
+    'beaconAmbiguity',
+    // 常驻通知要不要申请实时更新（Android 16 的 Live Updates）：通知显示偏好。
+    // 常驻通知的显示样式（普通 / 实时更新）：通知显示偏好。
+    'notifStyle',
+    'notifLiveText',
     'emergencyTel',
     // 里程附带（TRV/ODO）与累计总里程：属于「信标内容 + 累计数据」，
     // 换机后当然希望继续累计、按自己调的那样上报。
@@ -91,50 +136,114 @@ const List<BackupGroupSpec> kBackupGroups = [
     // 不该在换机后丢（重新找一遍设备/再问一次链接很烦）。
     'bleHrId', 'bleHrName', 'garminUrl',
     'coordDatum', 'darkMode', 'weatherEnabled', 'locale', 'themeColor',
+    // 经纬度显示格式：与坐标系同类的显示偏好，换机后没理由变回十进制度
+    'coordFormat',
+    // 地图中心读数：同属显示偏好（关掉的人换机后不该自己又冒出来）
+    'mapCenterCoord',
     // 公告横幅：与深色模式同类的**显示偏好** —— 用户关掉了它，
     // 换机后不该被静默打开（那会表现为「怎么又开始联网拉公告了」）。
     'noticeBanner',
     // 已提醒过的更新版本：与公告开关同属「显示/打扰偏好」——换机后不该
     // 因为丢了它而对已经提醒过的版本再弹一次（也不该阻止新版本提醒）。
     'updatePromptedVersion',
+    // 智能体配置（接口地址 / Key / 模型 / 权限开关）与聊天历史：都属于
+    // 「用户自己配的东西」，换机后不该丢（否则要重新填 Key、重新授权）。
+    'agentConfigJson', 'agentChatHistoryJson',
+    // 定时 / 消息触发任务：用户在自动化页一条条配出来的，换机后应保留。
+    'agentTasksJson',
+    // 长期记忆与对话摘要：和聊天历史一样属于「用户自己攒起来的东西」，
+    // 换机后不该丢（否则智能体忽然「失忆」，用户会以为坏了）。
+    'agentMemoryJson', 'agentHistorySummary',
+    // 智能体最小化气泡的位置：与其它界面显示偏好同类，换机后应保留
+    // （用户把气泡拖到了顺手的位置，不该在新机上弹回默认角落）。
+    'agentBubblePos',
     // 界面材质（磨砂玻璃 / 云母）：与深色模式、界面缩放同类的**显示偏好**，
     // 用户换机后当然希望屏幕还是他调好的那副样子。
     'uiMaterial',
     // 界面布局（1.0 经典 / 2.0 地图为基底）：同上 —— 换机后不该被静默换回 1.0，
     // 那会让用户以为「新机上的应用长得不一样」。
     'uiLayout',
-    'uiScale', 'mapType', 'updateChannel',
+    // 精简模式与自选模块：与 uiLayout 同类的显示偏好 —— 用户在旧机上关掉了
+    // 排行榜、开着精简模式，新机上当然还是那一套。
+    'liteMode', 'featuresOff',
+    // 关窗口时收进托盘（桌面三平台）：与上面几条同类的显示偏好 ——
+    // 用户在旧机上把这一档关了，新机上不该又被拦着关不掉窗口。
+    'closeToTray',
+    'uiScale', 'mapType', 'updateChannel', 'heatLevel',
+    // 装上新版以后那个安装包怎么处理（问 / 删 / 留）：用户自己的偏好，
+    // 换机后回到「每次询问」不算错，但他选过「自动删除」就该继续照做。
+    'updatePkgAction',
+    // 地图标签：与热力图档位同属**地图显示偏好** —— 换机后不该被静默关掉。
+    'mapLabelsAlways',
+    // 台站列表的排序方式：与上面那些一样是用户自己选的显示偏好，
+    // 换机后回到「按呼号排」会让人以为「记忆功能坏了」。
+    'stationSort',
+    // 台站面板的筛选条件（状态 / 类型 / 同款软件 / 设备 / 只看收藏）：同样是
+    // 用户自己调出来的显示偏好，换机后回到「全部」会让人以为筛选没记住。
+    'stationFilterJson',
+    // 地图的图层筛选（隐藏了哪些台站类型、是否套用台站面板的筛选）：同属
+    // 显示偏好，换机后回到「全部显示」会让人以为「筛选怎么又自己开了」。
+    'mapHiddenTypes', 'applyFilterToMap',
+    // 地图「锁定地图中心」的三态（关 / 正北朝上 / 航向朝上）：用户自己选的那一档，
+    // 换机后回到「关」会表现为「航向锁定怎么又忘了」。
+    'mapFollowMode',
     // 离线地图：缓存开关、仅离线模式，以及**区域记录**（只有范围与进度，
     // 瓦片本体是文件不随备份走 —— 换机后区域记录还在，重新点「继续」即可）
     'tileCacheOn', 'offlineOnly', 'offlineRegions',
     'adifMode', 'adifSubMode', 'adifBand', 'adifFreq', 'adifStripSsid',
     'locationMode', 'useSimLocation',
+    // GPS 采样间隔：用户为了省电/精度自己选的一档，换机后回到 1 秒
+    // 会表现为「省电设置又失效了」。
+    'gpsIntervalSec',
+    // 省电模式：它改的是 GPS 采样与地图动画，跟 `gpsIntervalSec` 是同一件事
+    // 的两种说法，换机后静默关掉会让用户以为「省电设置不管用」。
+    'powerSave',
     'filterLat', 'filterLng', 'filterRadius', 'maxStations', 'maxPackets',
     'onlineWindowMin', 'maxTrackPts', 'filterFollow',
+    // 台站保留天数（数据维护）：与 maxTrackPts 同属「本地保留多少数据」的设置，
+    // 换机后不该被静默重置回 0（关闭），否则用户会以为「自动清理怎么不工作了」。
+    'stationRetentionDays',
     'receiveCountries', 'receiveOthers', 'labLandscape', 'oobeDone',
     // 功能引导的「已看过」集合：与 oobeDone 同类（都是「新手引导走没走过」）。
     // 换机后不该把用户已经看过的提示卡再弹一遍 —— 那正是引导最烦人的地方。
     'guideSeen',
+    // 输入框历史（搜索词 / 服务器地址）：与上一条同类 —— 是用户自己攒下来的，
+    // 换机后清零表现为「最近用过的怎么全没了」，而它本来就是用来省重敲的。
+    'packetSearchHistory', 'serverHistory',
     'sensorAssist',
-    'server', 'port', 'passcode', 'dataSource', 'enabledSources',
+    'server', 'port', 'passcode', 'dataSource', 'dataSourceMsg',
+    'posTxExtra', 'enabledSources', 'advChannels',
+    // 名单账号口令（APRSNETCN 这类服务器才用得上）：和 passcode 同属「连这台
+    // 服务器要带的东西」，换机后重敲一遍最容易出错，所以一并进备份。
+    'aprsAccount', 'aprsPassword',
+    // APRSNETCN 那条互联网链路自己的账号口令与开关：它和 APRS-IS 是两条
+    // 并列的连接，换机后两个服务器都得重新填，所以一起进备份。
+    'acnAccount', 'acnPassword', 'acnPasscode', 'acnOn', 'acnServer', 'acnPort',
+    'acnHttpPort',
     'igateEnabled', 'igateTwoWay',
     'myLat', 'myLng',
-    // 链路配置（TNC / 声卡 TNC / PKWDWPL）与各自上次选的设备。
+    // 链路配置（TNC / 声卡 TNC / PKWDWPL / 小盒子 / 外接 GPS）与各自上次选的设备。
     //
-    // 这 5 个键是 tool/check_backup_keys.py 补强后「查」出来的：原先只扫
-    // 字面量键，而这几个是通过 `static const _kConfig` 这类常量读写的，
+    // tnc/audio/pkwdwpl/box 这 7 个键是 tool/check_backup_keys.py 补强后
+    // 「查」出来的：原先只扫字面量键，而这几个是通过 `static const _kConfig`
+    // 这类常量读写的，
     // 于是整套链路配置在备份里**静默缺失** —— 用户换机后要重新配蓝牙
     // 设备与串口。备份功能里这种缺失最致命：以为备了，直到恢复那天才发现。
     'tncConfigJson', 'tncDeviceJson',
     'audioConfigJson',
     'pkwdwplConfigJson', 'pkwdwplDeviceJson',
+    'boxConfigJson', 'boxDeviceJson',
+    // 外接 GPS（蓝牙 SPP / NMEA 0183）：绑定的模组与严格校验开关。
+    // 与上面几条同属「链路配置」，缺了它换机后要重新配对一次模组。
+    'gpsConfigJson', 'gpsDeviceJson',
   ]),
-  // 台站与联系人：整份 stations JSON（收藏/手动添加/备注）
-  BackupGroupSpec(BackupCategory.stations, ['stations']),
+  // 台站与联系人：整份 stations JSON（收藏/手动添加/备注）+ 本地屏蔽列表
+  // （用户主动隐藏的台站，属于「用户自己攒的台站偏好」，换机后应保留）。
+  BackupGroupSpec(BackupCategory.stations, ['stations', 'ignoredStations', 'subscriptions']),
   // 消息记录：单聊消息 + 两套已读时间点
   BackupGroupSpec(BackupCategory.messages, ['messages', 'readAt', 'groupReadAt']),
-  // 群聊：群组、成员状态
-  BackupGroupSpec(BackupCategory.chats, ['chatGroups']),
+  // 群聊：群组、成员状态、群内共享的策略地图元素（标点/线/圈/集合点）
+  BackupGroupSpec(BackupCategory.chats, ['chatGroups', 'strategyItems']),
   // 翻译设置：接口/密钥/语言；缓存（translateCacheJson）是可直接再生成的，
   // 不放进备份（导入旧缓存反而会把新翻译顶掉）
   BackupGroupSpec(
@@ -148,6 +257,8 @@ const List<BackupGroupSpec> kBackupGroups = [
     [
       'achievements', 'achCounts', 'firstFixHolders',
       'honorDefsJson', 'honorsCacheJson', 'primariesJson',
+      // 已见过的荣誉快照：换机后带上它，新机不会把既有荣誉再当「新授予」弹一次
+      'honorSeenKeys',
     ],
     prefixes: ['honorPrimary_'],
   ),
@@ -185,6 +296,9 @@ class BackupData {
   /// 分组 → （键 → 已解码的值）。只含白名单内的键。
   final Map<BackupCategory, Map<String, Object?>> groups;
 
+  /// 设置分组里携带的历史轨迹：`day → DayTrack.toJson()`。为空表示这份备份没带。
+  final Map<String, Object?> trackDays;
+
   /// 解析时被跳过的键数（白名单外/值类型不可识别）——用于向用户如实汇报
   final int skippedKeys;
 
@@ -194,6 +308,7 @@ class BackupData {
     required this.exportedAt,
     required this.platform,
     required this.groups,
+    this.trackDays = const {},
     this.skippedKeys = 0,
   });
 
@@ -209,6 +324,11 @@ class BackupData {
   }
 
   int countOf(BackupCategory id) => groups[id]?.length ?? 0;
+
+  /// 分组在 UI 上显示的条目数：设置分组把「带轨迹」也算作一项，
+  /// 否则用户会看到「设置配置 3」却不知道里面还夹着几天的轨迹。
+  int displayCountOf(BackupCategory id) =>
+      countOf(id) + (id == BackupCategory.settings ? trackDays.length : 0);
 }
 
 /// 解析失败的原因（由 UI 翻译成用户的提示语）
@@ -229,12 +349,16 @@ class BackupException implements Exception {
 /// 把一份偏好快照编码成备份 JSON 文本。
 ///
 /// [snapshot] 来自 [snapshotFromPrefs]；[categories] 是要包含的分组。
+/// [trackDays] 是「按天历史轨迹」的原始 JSON（`day → DayTrack.toJson()`），
+/// 只在勾选了设置分组时拼入。读盘与写盘都在 `TrackLogStore`，
+/// 这里保持纯逻辑、不碰 dart:io。
 String buildBackupJson({
   required Map<String, Object?> snapshot,
   required Set<BackupCategory> categories,
   required String appVersion,
   required String platform,
   DateTime? now,
+  Map<String, Object?> trackDays = const {},
 }) {
   final groups = <String, Map<String, Object?>>{};
   for (final spec in kBackupGroups) {
@@ -255,6 +379,14 @@ String buildBackupJson({
     });
     if (encoded.isEmpty) continue;
     groups[spec.id.name] = encoded;
+  }
+  // 历史轨迹拼入「设置配置」组。放在分组循环之后，是因为它有可能是该组**唯一**
+  // 的内容（例如用户只调过定位、偏好键为空快照）—— 那种情况下循环里的
+  // `encoded.isEmpty` 会跳过整组，这里再补挂就正好。
+  if (categories.contains(BackupCategory.settings) && trackDays.isNotEmpty) {
+    groups
+        .putIfAbsent(BackupCategory.settings.name, () => <String, Object?>{})
+        [kTrackPayloadKey] = trackDays;
   }
   final out = <String, Object?>{
     'kind': kBackupKind,
@@ -386,6 +518,7 @@ BackupData parseBackupJson(String text) {
 
   final byName = {for (final g in kBackupGroups) g.id.name: g.id};
   final groups = <BackupCategory, Map<String, Object?>>{};
+  final trackDays = <String, Object?>{};
   var skipped = 0;
   for (final entry in rawGroups.entries) {
     final id = byName['${entry.key}'];
@@ -402,6 +535,17 @@ BackupData parseBackupJson(String text) {
     final values = <String, Object?>{};
     for (final kv in m.entries) {
       final key = '${kv.key}';
+      // 历史轨迹是设置分组里的**非偏好载荷**：单独取出，绝不能落进下面的
+      // 白名单过滤（它本来就不在白名单里，硬套会被当未知键丢掉）。
+      if (id == BackupCategory.settings && key == kTrackPayloadKey) {
+        final td = kv.value;
+        if (td is Map) {
+          td.forEach((k, v) {
+            if (v is Map) trackDays['$k'] = v;
+          });
+        }
+        continue;
+      }
       final val = decodeBackupValue(kv.value);
       if (val == null || !backupKeyAllowed(id, key)) {
         skipped++;
@@ -410,6 +554,12 @@ BackupData parseBackupJson(String text) {
       values[key] = val;
     }
     if (values.isNotEmpty) groups[id] = values;
+  }
+  // 轨迹的存在意味着这份备份里有个设置分组（哪怕组里**只有**轨迹、没有偏好键，
+  // 例如只调过定位的机器）。补回这个组，否则 trackDays 会因为「设置组不存在」
+  // 而在下面被清掉，导入页也看不到它。
+  if (trackDays.isNotEmpty) {
+    groups.putIfAbsent(BackupCategory.settings, () => <String, Object?>{});
   }
   if (groups.isEmpty) {
     throw const BackupException(BackupErrorCode.empty);
@@ -422,6 +572,7 @@ BackupData parseBackupJson(String text) {
     exportedAt: at is String ? DateTime.tryParse(at) : null,
     platform: '${raw['platform'] ?? ''}',
     groups: groups,
+    trackDays: trackDays,
     skippedKeys: skipped,
   );
 }

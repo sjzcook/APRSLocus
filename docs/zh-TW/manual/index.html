@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>手冊首頁 — APRSlocus</title>
 <meta name="description" content="不知從哪開始？按下面五條路徑走，每條都指向具體頁面。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="手冊首頁 — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/index.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/index.html">
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
-<link rel="stylesheet" href="../../css/style.css?v=5">
+<link rel="stylesheet" href="../../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -170,6 +169,8 @@
 <thead><tr><th>我想…</th><th>去哪</th></tr></thead><tbody>
 <tr><td><b>第一次用</b>，從零跑到收到封包</td><td><a href="start.html">快速上手</a></td></tr>
 <tr><td><b>接上電臺</b>（藍牙/USB TNC、音訊、Kenwood）</td><td><a href="connections.html#rf">連線 → 接電臺</a></td></tr>
+<tr><td><b>只用國內伺服器</b>（APRSNETCN，位址自己填）</td><td><a href="connections.html#acn">連線 → APRSNETCN</a></td></tr>
+<tr><td><b>接外接 GPS 模組</b>（藍牙 NMEA）</td><td><a href="connections.html#extgps">連線 → 外接 GPS</a></td></tr>
 <tr><td><b>讓別人看到我</b>（信標上報）</td><td><a href="beacon.html">位置信標</a></td></tr>
 <tr><td><b>發訊息</b>、建組、跨語言聊天</td><td><a href="messaging.html">訊息與群組</a></td></tr>
 <tr><td><b>做閘道</b>（把射頻聽到的送上網際網路）</td><td><a href="connections.html#igate">閘道 iGate</a></td></tr>
@@ -182,7 +183,7 @@
 <ul class="m-index-list">
 <li><a href="start.html">快速上手</a> —— 安裝、七步引導、Passcode、收第一則封包</li>
 <li><a href="interface.html">介面導覽</a> —— 五個頁籤、面板手勢、返回鍵</li>
-<li><a href="connections.html">連線與資料來源</a> —— 四條鏈路、APRS-IS、接電臺、iGate、鏈路自檢</li>
+<li><a href="connections.html">連線與資料來源</a> —— 六條鏈路、兩條網際網路、外接 GPS、接電臺、iGate、鏈路自檢</li>
 <li><a href="beacon.html">位置信標</a> —— 間隔、速度分檔、無 GPS、封包示例</li>
 <li><a href="messaging.html">訊息與群組</a> —— 單聊、67/512 紅線、群組、翻譯</li>
 <li><a href="maps.html">地圖與顯示</a> —— 圖磚、座標校正、離線地圖、主題</li>
@@ -240,7 +241,7 @@
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../../js/main.js"></script>
+<script src="../../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

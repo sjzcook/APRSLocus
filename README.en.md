@@ -4,13 +4,13 @@
 
 # APRSlocus
 
-**APRS Tracking & Mapping**
+**APRS Tracking & Mapping · a local APRS client (no server address bundled)**
 
 A lightweight APRS client built for amateur radio enthusiasts — real-time positioning, station tracking, messaging, and map display, all in one place to keep you in touch with the airwaves.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20iOS%20%7C%20Linux%20%7C%20macOS%20%7C%20Web-lightgrey.svg)]()
-[![Version](https://img.shields.io/badge/Version-1.6.18-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.2.8-green.svg)]()
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blueviolet.svg)](https://flutter.dev)
 
 Author: [BG7LZQ (Darion)](https://theez.top) · Website: [aprslocus.theez.top](https://aprslocus.theez.top/) · Latest release: [GitHub Releases](https://github.com/dariondong/APRSLocus/releases)
@@ -42,7 +42,7 @@ Author: [BG7LZQ (Darion)](https://theez.top) · Website: [aprslocus.theez.top](h
 ## ✨ Features
 
 ### 🗺️ Real-Time Map Tracking
-- **Multiple map types**: AMap (Standard / Satellite) / Vector map / Carto (Light · Dark · Voyager) / OSM (Standard · Humanitarian) / OpenTopo terrain / Esri (Streets · Imagery), switchable in Settings with one tap
+- **Multiple map types**: AMap (Standard / Satellite) / Vector map / Carto (Light · Dark · Voyager) / OSM (Standard · Humanitarian) / Terrain (OpenTopo, Esri contours · relief · hillshade) / Tianditu (Vector · Imagery · Terrain) / Esri (Streets · Imagery), switchable in Settings with one tap
 - **Vector map**: rendered on-device with `flutter_map` + `vector_map_tiles`, low data usage and crisp zooming, **no API key required**, WGS-84 coordinates; supports my track and selected station track
 - **AMap tiles (GCJ-02)**: aligns seamlessly for domestic positioning in China, with built-in WGS-84 ↔ GCJ-02 conversion
 - **Live station display**: every station at a glance; online / moving / stationary / offline distinguished by green / blue / yellow / grey, active stations pulse-animated
@@ -88,13 +88,23 @@ Author: [BG7LZQ (Darion)](https://theez.top) · Website: [aprslocus.theez.top](h
 - **Debug log page**: leveled logs (debug / info / warn / error), one-tap copy / clear
 
 ### ⚡ Connection & Background
-- **Auto-connects to APRS-IS public servers**, stays online in background
+- **Several data sources, selectable at once**:
+  - **APRS-IS** - internet; your own callsign and passcode, reconnect handled automatically
+  - **TNC** - Bluetooth SPP or serial, KISS frames in and out, RX/TX
+  - **Audio** - microphone / speaker or a sound-card cable to the radio, AFSK 1200 (Bell 202)
+  - **PKWDWPL** - reads `$PKWDWPL` NMEA sentences from Kenwood radios, **RX only**
+  - **Icom WLAN** - direct Wi-Fi/Ethernet link to IC-705 / IC-9700 / IC-7610 / IC-905: PTT and tuning over CI-V, audio over the network (the audio port stays free)
+  - **Icom WLAN** - direct Wi-Fi/Ethernet link to IC-705 / IC-9700 / IC-7610 / IC-905: PTT and tuning over CI-V, audio over the network (the audio port stays free)
+
+  Several links can receive at the same time; **transmitting uses exactly one of them**
+  (the dot on the right marks the TX source).
 - TCP socket (desktop / mobile) and WebSocket (web) implementations
-- Default server `rotate.aprs2.net:14580`; parses `# logresp` for login verification; yellow banner on home if Passcode unverified
-- **Progressive reconnect** (8 → 16 → 32 → 60 s)
-- **Android foreground location service**: continuous GPS reporting + system notification; notification bar can connect / disconnect the server or exit the app in one tap
+- **No server address is bundled**: enter the address and port yourself (empty = connect to no server at all)
+- **Progressive reconnect** (8 -> 16 -> 32 -> 60 s)
+- **Android foreground location service**: continuous GPS reporting + a system notification whose buttons connect / disconnect and exit the app
 - Push notifications for received messages / group events
 - Country/region receive filter and lat/lng + radius range filter (50 / 100 / 200 / 500 / 1000 / 2000 km presets)
+
 
 ### 🎨 Personalization & UX
 - **Multi-language**: Simplified Chinese / Traditional Chinese / English / follow system, selectable on first launch
@@ -161,7 +171,7 @@ First launch enters a **6-step OOBE wizard**, fully visual:
 | 3️⃣ | Enter your amateur radio **callsign** (e.g. `BG7LZQ-3`) and pick an **SSID suffix** (mobile recommended `3`, HT recommended `7`) |
 | 4️⃣ | Pick the **symbol** representing your station type (car / house / person / truck / bike / RV / weather station / police) |
 | 5️⃣ | Choose which **stations to receive** by country/region (China by default); toggle "other stations" to receive digipeaters / weather / FMO / APRSlocus |
-| 6️⃣ | Configure server & **Passcode**; done — auto-connects to APRS-IS and starts beaconing |
+| 6️⃣ | Configure server & **Passcode** (**may be left empty** = connect to no server); if you fill it in, the app connects and starts beaconing |
 
 > **About Passcode**: entering `-1` lets you connect, but an **unverified Passcode cannot send/receive messages properly**. Generate your own at [APRS Passcode lookup](https://aprs.cool/AprsPG) and fill it in.
 
@@ -172,7 +182,7 @@ After the wizard the app connects to APRS-IS, starts reporting position, and rec
 ## 📚 User Guide
 
 ### 🗺️ Map Page
-- Switch map type: Settings → Display → Map type (AMap / AMap Satellite / Vector / Carto series / OSM series / OpenTopo / Esri)
+- Switch map type: Settings → Display → Map type (AMap / AMap Satellite / Vector / Carto series / OSM series / Terrain series / Tianditu series / Esri)
 - Toggle clustering from the map control bar
 - Show / hide my track and selected station track
 - Search box on top to jump to a station by callsign; tap a marker for details
@@ -237,7 +247,7 @@ Full **37 official symbol tables, 3571 standard icons**, all rendered from bundl
 | Category | Tech |
 |------|------|
 | **Framework** | [Flutter](https://flutter.dev) (Dart 3.x) |
-| **Maps** | [AMap](https://lbs.amap.com) (tiles), [flutter_map](https://pub.dev/packages/flutter_map), [vector_map_tiles](https://pub.dev/packages/vector_map_tiles), Carto, OpenStreetMap, OpenTopoMap, Esri ArcGIS |
+| **Maps** | [AMap](https://lbs.amap.com) (tiles), [Tianditu](https://www.tianditu.gov.cn) (tiles), [flutter_map](https://pub.dev/packages/flutter_map), [vector_map_tiles](https://pub.dev/packages/vector_map_tiles), Carto, OpenStreetMap, OpenTopoMap, Esri ArcGIS |
 | **Network** | APRS-IS (TCP Socket / WebSocket) |
 | **Protocol** | APRS 1.0 (position / message / weather / status / object / Mic-E …) |
 | **Location** | Android FusedLocationProvider + foreground service |
@@ -256,7 +266,7 @@ APRSLocus/
 │   ├── home_page.dart        # Main shell (5 tabs: map / stations / messages / packets / settings)
 │   ├── map_page.dart         # Map page
 │   ├── vector_map.dart       # Vector map (flutter_map)
-│   ├── tile_map.dart         # Tile maps (AMap / Carto / OSM / OpenTopo / Esri)
+│   ├── tile_map.dart         # Tile maps (AMap / Carto / OSM / Terrain / Tianditu / Esri)
 │   ├── stations_page.dart    # Station list
 │   ├── station_detail.dart   # Station detail
 │   ├── messages_page.dart    # Messages (private + group)
@@ -355,7 +365,7 @@ In OOBE step 6 or "Settings → Connection", generate a Passcode from your **ful
 <details>
 <summary><b>Q: Connection fails / keeps dropping?</b></summary>
 
-The app retries progressively (8 → 16 → 32 → 60 s). If it keeps failing, check your network, confirm the server (`rotate.aprs2.net:14580`) and that the port isn't blocked; switch servers in "Connection" then tap "Reconnect".
+The app retries progressively (8 → 16 → 32 → 60 s). If it keeps failing, check your network, confirm the server address (the one you entered) and that the port isn't blocked; switch servers in "Connection" then tap "Reconnect".
 </details>
 
 <details>
@@ -387,6 +397,7 @@ Since 1.5.2 Android uses the official release signature, identical between CI an
 ## 🙏 Thanks & Contributing
 
 - [AMap](https://lbs.amap.com) — map tiles / JS API
+- [Tianditu](https://www.tianditu.gov.cn) — national platform basemap tiles
 - [APRS-IS](https://aprs-is.net) — global APRS network
 - [flutter_map](https://pub.dev/packages/flutter_map) / [vector_map_tiles](https://pub.dev/packages/vector_map_tiles) — vector rendering
 - [OpenFreeMap](https://openfreemap.org) — free vector tiles

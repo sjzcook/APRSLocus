@@ -41,6 +41,9 @@ class _BackupPageState extends State<BackupPage> {
   /// 备份里是否带上主题引用的图片本体（默认带：备份的用途就是「换机搬走」）
   bool _withThemeImages = true;
 
+  /// 本机当前有多少天历史轨迹（设置分组把它算进去，也用于导出提示）
+  int _trackDayCount = 0;
+
   /// 本机各分组的条目数（用于告诉用户「这组有多少东西」）
   Map<BackupCategory, int> _counts = const {};
 
@@ -65,8 +68,16 @@ class _BackupPageState extends State<BackupPage> {
         snapshotFromPrefs(p),
         kBackupGroups.map((g) => g.id).toSet(),
       );
+      // 历史轨迹不走偏好键，单独数。失败当作 0：只是数字不准，不该让整页计数失败。
+      var days = 0;
+      try {
+        days = (await backup_io.loadTrackDays()).length;
+      } catch (_) {}
       if (!mounted) return;
-      setState(() => _counts = counts);
+      setState(() {
+        _counts = counts;
+        _trackDayCount = days;
+      });
     } catch (_) {}
   }
 
@@ -115,11 +126,20 @@ class _BackupPageState extends State<BackupPage> {
           if (images.isNotEmpty) snap[ThemeController.kPrefsKey] = attachImages(raw, images);
         }
       }
+      // 历史轨迹拼在「设置配置」组里一起走（见 backup.dart kTrackPayloadKey）。
+      // 轨迹文件可能不小，但它就是本机数据的一部分，故选了设置就带上。
+      var trackDays = const <String, Object?>{};
+      if (_expCats.contains(BackupCategory.settings)) {
+        try {
+          trackDays = await backup_io.loadTrackDays();
+        } catch (_) {}
+      }
       json = buildBackupJson(
         snapshot: snap,
         categories: _expCats.toSet(),
         appVersion: AppState.appVersion,
         platform: defaultTargetPlatform.name,
+        trackDays: trackDays,
       );
       if (!toFile) {
         await Clipboard.setData(ClipboardData(text: json));
@@ -273,9 +293,17 @@ class _BackupPageState extends State<BackupPage> {
 
     setState(() => _busy = true);
     BackupApplyResult? res;
+    var days = 0;
     try {
       res = await applyBackup(data, cats);
-      if (res.applied > 0) await st.reloadFromPrefs();
+      // 轨迹拼在设置分组里：本次勾了设置、且备份确实带了轨迹才写回。
+      // 以「天」为单位合并（见 TrackLogStore.importRawDays），不动本地其它天。
+      if (cats.contains(BackupCategory.settings) && data.trackDays.isNotEmpty) {
+        try {
+          days = await backup_io.applyTrackDays(data.trackDays);
+        } catch (_) {}
+      }
+      if (res.applied > 0 || days > 0) await st.reloadFromPrefs();
     } catch (_) {}
     if (!mounted) return;
     setState(() => _busy = false);
@@ -289,14 +317,15 @@ class _BackupPageState extends State<BackupPage> {
       _data = null;
       _impCats.clear();
     });
-    await _showImportedDialog(s, res);
+    await _showImportedDialog(s, res, days);
   }
 
-  Future<void> _showImportedDialog(S s, BackupApplyResult res) async {
+  Future<void> _showImportedDialog(S s, BackupApplyResult res, int days) async {
     final act = await showDialog<String>(
       context: context,
       builder: (ctx) {
         final parts = <String>[s.backupImported(res.applied)];
+        if (days > 0) parts.add(s.backupTracks(days));
         if (res.skipped > 0) parts.add(s.backupSkipped(res.skipped));
         parts.add(s.backupRestartHint);
         return AlertDialog(
@@ -417,6 +446,149 @@ class _BackupPageState extends State<BackupPage> {
     );
   }
 
+  // ─── 云端 ───
+
+  /// 把当前勾选的这几组传到云端。**不带历史轨迹**：轨迹在「云同步」里
+  /// 按天单独存，塞进备份会让一份文件变成几十兆，且两边删不干净。
+  Future<void> _cloudUpload() async {
+    final s = S.of(context);
+    if (!st.syncReady) {
+      _toast(s.syncNeedLogin);
+      return;
+    }
+    if (_expCats.isEmpty) {
+      _toast(s.backupNoSelection);
+      return;
+    }
+    setState(() => _busy = true);
+    String? json;
+    try {
+      await st.flushForBackup();
+      final p = await SharedPreferences.getInstance();
+      final snap = snapshotFromPrefs(p);
+      if (_withThemeImages && _expCats.contains(BackupCategory.theme)) {
+        final raw = snap[ThemeController.kPrefsKey];
+        if (raw is String && raw.isNotEmpty) {
+          final images = await ThemeController.instance.collectImagesForExport();
+          if (images.isNotEmpty) {
+            snap[ThemeController.kPrefsKey] = attachImages(raw, images);
+          }
+        }
+      }
+      json = buildBackupJson(
+        snapshot: snap,
+        categories: _expCats.toSet(),
+        appVersion: AppState.appVersion,
+        platform: defaultTargetPlatform.name,
+      );
+    } catch (_) {}
+    if (!mounted) return;
+    if (json == null) {
+      setState(() => _busy = false);
+      _toast(s.backupExportFailed);
+      return;
+    }
+    final code = await st.syncUploadBackup(json, defaultTargetPlatform.name);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    _toast(code.isEmpty ? s.backupCloudDone : '${s.backupCloudFailed}（$code）');
+  }
+
+  /// 从云端取一份回来：与文件、剪贴板两条路一样，先出预览，确认后才覆盖。
+  Future<void> _cloudRestore() async {
+    final s = S.of(context);
+    if (!st.syncReady) {
+      _toast(s.syncNeedLogin);
+      return;
+    }
+    setState(() => _busy = true);
+    var list = const <Map<String, dynamic>>[];
+    try {
+      list = await st.syncApi.backups();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (list.isEmpty) {
+      _toast(s.backupCloudEmpty);
+      return;
+    }
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      // 面板自己给底色（不透明），别让材质开着时半透明地透出下面
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: C.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                child: Row(
+                  children: [
+                    Text(s.backupCloudRestore,
+                        style: ts(13, w: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              for (final row in list)
+                ListTile(
+                  dense: true,
+                  leading: Icon(Icons.cloud_download_rounded,
+                      size: 18, color: C.purple),
+                  title: Text(
+                    _cloudLabel(row),
+                    style: ts(13, w: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    _cloudSize(row),
+                    style: ts(11, c: C.slate),
+                  ),
+                  onTap: () => Navigator.pop(ctx, (row['id'] as String?) ?? ''),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || pick == null || pick.isEmpty) return;
+    setState(() => _busy = true);
+    final text = await st.syncDownloadBackup(pick);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (text.startsWith('error:')) {
+      _toast('${s.backupCloudFailed}（${text.substring(6)}）');
+      return;
+    }
+    _loadPicked(s, 'cloud:$pick', text);
+  }
+
+  String _cloudLabel(Map<String, dynamic> row) {
+    final label = (row['label'] as String?) ?? '';
+    final created = (row['created'] as String?) ?? '';
+    final stamp = DateTime.tryParse(created)?.toLocal();
+    final when = stamp == null
+        ? created
+        : '${stamp.year}-${stamp.month.toString().padLeft(2, '0')}-'
+            '${stamp.day.toString().padLeft(2, '0')} '
+            '${stamp.hour.toString().padLeft(2, '0')}:'
+            '${stamp.minute.toString().padLeft(2, '0')}';
+    return label.isEmpty ? when : '$when · $label';
+  }
+
+  String _cloudSize(Map<String, dynamic> row) {
+    final size = (row['size'] as num?)?.toInt() ?? 0;
+    if (size <= 0) return '';
+    if (size < 1024) return '$size B';
+    if (size < 1024 * 1024) return '${(size / 1024).round()} KB';
+    return '${(size / 1024 / 1024).toStringAsFixed(1)} MB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context);
@@ -471,7 +643,11 @@ class _BackupPageState extends State<BackupPage> {
                   s: s,
                   title: _catName(s, spec.id),
                   desc: _catDesc(s, spec.id),
-                  count: _counts[spec.id] ?? 0,
+                  // 设置分组把「历史轨迹」的天数一并计入，与实际导出内容一致
+                  count: (_counts[spec.id] ?? 0) +
+                      (spec.id == BackupCategory.settings
+                          ? _trackDayCount
+                          : 0),
                   value: _expCats.contains(spec.id),
                   color: C.green,
                   onChanged: (v) => setState(() {
@@ -481,6 +657,15 @@ class _BackupPageState extends State<BackupPage> {
                       _expCats.remove(spec.id);
                     }
                   }),
+                ),
+              // 勾了设置又真有轨迹时，明说「这份备份会带上 N 天轨迹」——
+              // 轨迹是文件数据，用户看不到它在偏好列表里，不讲清楚会以为没备
+              if (_expCats.contains(BackupCategory.settings) &&
+                  _trackDayCount > 0)
+                _tip(
+                  s.backupTracks(_trackDayCount),
+                  C.green,
+                  Icons.route_rounded,
                 ),
               if (_lastPath != null)
                 _tip(
@@ -559,6 +744,54 @@ class _BackupPageState extends State<BackupPage> {
               if (_data != null) ..._preview(s, _data!),
             ],
           ),
+          const SizedBox(height: 16),
+
+          // ─── 云端 ───
+          SettingsSectionCard(
+            title: s.backupCloud,
+            subtitle: st.syncReady ? null : s.syncNeedLogin,
+            icon: Icons.cloud_rounded,
+            color: C.blue,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: C.blue,
+                          disabledBackgroundColor: C.greyBg,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed:
+                            (_busy || !st.syncReady) ? null : _cloudUpload,
+                        icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+                        label: Text(s.backupCloudUpload, style: ts(12)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(
+                              color: C.blue.withValues(alpha: 0.4)),
+                        ),
+                        onPressed:
+                            (_busy || !st.syncReady) ? null : _cloudRestore,
+                        icon: Icon(Icons.cloud_download_rounded,
+                            size: 16, color: C.blue),
+                        label: Text(s.backupCloudRestore,
+                            style: ts(12, c: C.blue)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SettingsHint(s.backupCloudHint),
+            ],
+          ),
         ],
       ),
     );
@@ -595,6 +828,14 @@ class _BackupPageState extends State<BackupPage> {
                 style: ts(10, c: C.orange, h: 1.4),
               ),
             ],
+            // 备份里带了几天轨迹：导入前就告诉用户，免得以为只有偏好
+            if (data.trackDays.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                s.backupTracks(data.trackDays.length),
+                style: ts(10, c: C.orange, h: 1.4),
+              ),
+            ],
           ],
         ),
       ),
@@ -603,7 +844,7 @@ class _BackupPageState extends State<BackupPage> {
           s: s,
           title: _catName(s, cat),
           desc: _catDesc(s, cat),
-          count: data.countOf(cat),
+          count: data.displayCountOf(cat),
           value: _impCats.contains(cat),
           color: C.orange,
           onChanged: (v) => setState(() {

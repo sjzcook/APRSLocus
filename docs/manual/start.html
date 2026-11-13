@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>快速上手 — APRSlocus</title>
 <meta name="description" content="目标：装好应用、跑完七步向导，让 APRS-IS 显示「已验证」并收到第一条报文。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="快速上手 — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/start.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/start.html">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="stylesheet" href="../css/style.css?v=5">
+<link rel="stylesheet" href="../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -185,7 +184,7 @@
 <li><b>呼号与 SSID</b> —— 输入完整呼号（含 SSID，如 <code>BG7LZQ-3</code>）；<b>留空无法继续</b>。</li>
 <li><b>台站符号</b> —— 代表台站类型，随每条信标发送。</li>
 <li><b>接收地区</b> —— 勾选要收的国家/地区；<b>不勾 = 全收</b>。</li>
-<li><b>服务器与 Passcode</b> —— 服务器默认 <code>rotate.aprs2.net</code> 可不动；Passcode 见下一节。</li>
+<li><b>服务器与 Passcode</b> —— 服务器地址自己填，软件不预置；Passcode 见下一节。</li>
 </ol>
 <div class="callout tip"><span class="co-ic">✅</span><div><p><b>怎么算完成：</b>向导最后一页点完成后，主页顶部的链路状态卡应显示<b>已连接</b>；
 若显示黄色「未验证」，说明 Passcode 还没填对，继续看下一节。</p></div></div>
@@ -195,10 +194,10 @@
 <div class="callout warn"><span class="co-ic">⚠️</span><div><p><b>Passcode 是 APRS-IS 的登录验证码</b>，把你的呼号验证到网络。
 留空或默认 <code>-1</code> 只能<b>连接</b>，消息与群组都收发不了。到
 <a href="https://aprs.cool/AprsPG" target="_blank" rel="noopener">APRS Passcode 查询</a>
-用<b>完整呼号</b>生成后填入 <b>设置 → 连接 → Passcode</b>。
+用<b>完整呼号</b>生成后填入 <b>设置 → 服务器 → APRS-IS 服务器 → Passcode</b>。
 填错时主页顶部会出现黄色「未验证」横幅 —— 那就是它。</p></div></div>
 <ul>
-<li><b>改完要保存</b>：连接页的改动点「保存并应用」才生效。</li>
+<li><b>改完自动保存</b>：地址、端口和 Passcode 都不用点按钮。接收过滤那张卡例外，它要点「保存并应用过滤」。</li>
 <li><b>要它一直上报</b>：系统设置里允许 APRSlocus 后台运行、关掉省电优化、允许自启动；通知栏可一键退出。</li>
 </ul>
   </section>
@@ -266,7 +265,7 @@
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../js/main.js"></script>
+<script src="../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

@@ -31,14 +31,45 @@ bool get webEmbedSupported =>
 /// 与项目其它「拿不到就如实说」的做法一致。
 class WebEmbed extends StatelessWidget {
   final String url;
+
+  /// 直接内嵌渲染的 HTML（可空）。给了它就优先用 [WebViewController.loadHtmlString]
+  /// 渲染 —— iOS 的 `WKWebView` **不支持**顶层 `data:` URL，用 loadRequest 会白屏，
+  /// 故内嵌内容走 html 字符串这条稳的路。[url] 仍保留给「在浏览器打开」兜底。
+  final String? html;
   final double height;
 
-  const WebEmbed({super.key, required this.url, this.height = 220});
+  /// 圆角半径。[height] 传 `double.infinity`（整页内嵌）时一般传 0。
+  final double radius;
+
+  /// 内嵌内容建好之后回传控制器（可空）。
+  ///
+  /// 给**需要在离开这一页之前跟页面说话**的地方用：故事页自带背景音乐，退栈前
+  /// 要先把它按停（见 `story_page.dart`）。[WebViewController] 本身没有
+  /// `dispose()`，`WebViewWidget` 也只管渲染 —— 「页面里的状态」（声音、定时器）
+  /// 得由调用方自己收拾。多数调用方用不到，保持 null。
+  ///
+  /// 注意：它是在 [_MobileEmbed] 的 `initState` 里被调用的，**回调里不要 setState**。
+  final void Function(WebViewController controller)? onCreated;
+
+  const WebEmbed({
+    super.key,
+    required this.url,
+    this.html,
+    this.height = 220,
+    this.radius = 12,
+    this.onCreated,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (!webEmbedSupported) return _FallbackCard(url: url, height: height);
-    return _MobileEmbed(url: url, height: height);
+    return _MobileEmbed(
+      url: url,
+      html: html,
+      height: height,
+      radius: radius,
+      onCreated: onCreated,
+    );
   }
 }
 
@@ -46,12 +77,17 @@ class WebEmbed extends StatelessWidget {
 class _EmbedFrame extends StatelessWidget {
   final Widget child;
   final double height;
-  const _EmbedFrame({required this.child, required this.height});
+  final double radius;
+  const _EmbedFrame({
+    required this.child,
+    required this.height,
+    this.radius = 12,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(radius),
       child: SizedBox(width: double.infinity, height: height, child: child),
     );
   }
@@ -60,8 +96,17 @@ class _EmbedFrame extends StatelessWidget {
 /// Android / iOS / macOS：webview_flutter
 class _MobileEmbed extends StatefulWidget {
   final String url;
+  final String? html;
   final double height;
-  const _MobileEmbed({required this.url, required this.height});
+  final double radius;
+  final void Function(WebViewController controller)? onCreated;
+  const _MobileEmbed({
+    required this.url,
+    this.html,
+    required this.height,
+    this.radius = 12,
+    this.onCreated,
+  });
 
   @override
   State<_MobileEmbed> createState() => _MobileEmbedState();
@@ -69,21 +114,63 @@ class _MobileEmbed extends StatefulWidget {
 
 class _MobileEmbedState extends State<_MobileEmbed> {
   late final WebViewController _controller;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(C.bgSoft);
-    _controller.loadRequest(Uri.parse(widget.url));
+      ..setBackgroundColor(C.bgSoft)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) setState(() => _loading = true);
+          },
+          onPageFinished: (_) {
+            if (mounted) setState(() => _loading = false);
+          },
+        ),
+      );
+    // 控制器先交出去，再开始加载：调用方（故事页）要在离开这一页之前用它把
+    // 页面里的声音按停。
+    widget.onCreated?.call(_controller);
+    final html = widget.html;
+    if (html != null) {
+      // baseUrl 给一个合法 https 源，避免相对资源/编码在某些 WebView 上被判非法。
+      _controller.loadHtmlString(html, baseUrl: 'https://theez.top/');
+    } else {
+      _controller.loadRequest(Uri.parse(widget.url));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return _EmbedFrame(
       height: widget.height,
-      child: WebViewWidget(controller: _controller),
+      radius: widget.radius,
+      child: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          // 加载指示：整页内嵌时首帧是空白，给个转圈避免「看起来坏了」
+          if (_loading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: C.bgSoft,
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: C.blue,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Guide Home — APRSlocus</title>
 <meta name="description" content="Not sure where to start? Five paths, each pointing at a concrete page.">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="Guide Home — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/index.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/index.html">
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
-<link rel="stylesheet" href="../../css/style.css?v=5">
+<link rel="stylesheet" href="../../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -170,6 +169,8 @@
 <thead><tr><th>I want to…</th><th>Go to</th></tr></thead><tbody>
 <tr><td><b>Use it for the first time</b>, from zero to a received packet</td><td><a href="start.html">Quick Start</a></td></tr>
 <tr><td><b>Hook up a radio</b> (Bluetooth/USB TNC, audio, Kenwood)</td><td><a href="connections.html#rf">Connections → into a radio</a></td></tr>
+<tr><td><b>Use a domestic server only</b> (APRSNETCN, address you supply)</td><td><a href="connections.html#acn">Connections → APRSNETCN</a></td></tr>
+<tr><td><b>Add an external GPS</b> (Bluetooth NMEA)</td><td><a href="connections.html#extgps">Connections → external GPS</a></td></tr>
 <tr><td><b>Be seen</b> by others (position beacon)</td><td><a href="beacon.html">Beaconing</a></td></tr>
 <tr><td><b>Send messages</b>, run a group, chat across languages</td><td><a href="messaging.html">Messaging</a></td></tr>
 <tr><td><b>Run an iGate</b> (relay RF onto the internet)</td><td><a href="connections.html#igate">iGate</a></td></tr>
@@ -182,7 +183,7 @@
 <ul class="m-index-list">
 <li><a href="start.html">Quick Start</a> — install, seven-step wizard, Passcode, first packet</li>
 <li><a href="interface.html">Interface</a> — five tabs, panel gestures, the Back key</li>
-<li><a href="connections.html">Connections</a> — four links, APRS-IS, radio hookup, iGate, self-test</li>
+<li><a href="connections.html">Connections</a> — six links, the two internet servers, external GPS, radio hookup, iGate, self-test</li>
 <li><a href="beacon.html">Beaconing</a> — interval, speed tiers, no GPS, frame example</li>
 <li><a href="messaging.html">Messaging</a> — direct chat, the 67/512 limits, groups, translation</li>
 <li><a href="maps.html">Maps &amp; Display</a> — tiles, datum correction, offline maps, themes</li>
@@ -240,7 +241,7 @@ organised by <b>task</b> — for “I need to get one thing done”.</p></div></
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../../js/main.js"></script>
+<script src="../../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

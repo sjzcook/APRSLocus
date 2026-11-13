@@ -292,10 +292,136 @@ final ValueNotifier<int> memberListVersion = ValueNotifier<int>(0);
 String _base(String call) => call.trim().toUpperCase().split('-').first;
 String _norm(String s) => s.trim().toUpperCase();
 
+// ─── 启动时检测「新获授的账号荣誉」并弹庆祝动画 ───
+//
+// 背景：荣誉由官网 members.json（以及 firstfix.json）下发，推送即生效、无需发版。
+// 用户在别处被授予称号后再次打开软件，应当有一个「恭喜获得」的仪式感提示。
+//
+// 判定与去重的关键设计（**只按「本地有没有记录」决定弹不弹**）：
+//   * 用一条持久化快照（`honorSeenKeys`）记住「已弹过 / 已阅读」的荣誉。
+//   * 判定就是一次简单差集：`当前拥有 − 已阅读`。
+//       - 本地有记录 → 只弹这次比记录多出来的（之后新授予的荣誉）；
+//       - **本地无记录**（全新安装、老版本升级、或开发者清了记录）→ 已阅读视为
+//         空集 ⇒ 当前拥有的**全部**荣誉都会被当成"新"弹一遍。这是刻意的：
+//         **不区分新老用户** —— 谁本地没有记录，谁就直接看到自己已有的所有荣誉。
+//   * 一次新增多枚时：每枚弹一次，关闭一枚补下一枚（队列），不吞掉。
+//   * 记录在用户看完庆祝动画后落盘（`markHonorsSeen`）；开发者选项可清除它
+//     （`resetHonorSeen`）以便重新预览。
+final List<Honor> _pendingQueue = [];
+bool _honorSeenLoaded = false;
+bool _membersLoaded = false; // ensureMembersLoaded() 是否已读完本地缓存
+Set<String> _knownHonorKeys = {};
+String _myHonorCall = '';
+
+/// 设置「要检测谁的新荣誉」并读入已见过快照、立即尝试一次对比。
+/// 在 App 首次进入主页时调用。
+Future<void> setHonorCelebrationCall(String call) async {
+  _myHonorCall = _base(call);
+  await _loadKnownHonors();
+  onHonorsUpdated();
+}
+
+/// 查看队首待弹项（不消费）。App 用它决定是否展示、展示哪一枚。
+Honor? peekPendingHonorCelebrations() =>
+    _pendingQueue.isEmpty ? null : _pendingQueue.first;
+
+/// 消费队首待弹项（动画关闭后调用），使下一枚可继续弹出。
+void consumeCurrentHonorCelebration() {
+  if (_pendingQueue.isNotEmpty) _pendingQueue.removeAt(0);
+}
+
+/// 读取上次记录的「已阅读荣誉」快照。键不存在 ⇒ 视为**空集**（没见过任何荣誉）
+/// —— 于是本地无记录的用户会把当前拥有的全部荣誉弹一遍（不区分新老）。
+Future<void> _loadKnownHonors() async {
+  if (_honorSeenLoaded) return;
+  _honorSeenLoaded = true;
+  try {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getString('honorSeenKeys');
+    if (raw != null) {
+      final list = jsonDecode(raw);
+      if (list is List) {
+        _knownHonorKeys =
+            list.map((e) => e.toString()).where((e) => e.isNotEmpty).toSet();
+      }
+    }
+  } catch (_) {}
+}
+
+/// 落盘「已阅读荣誉」快照（App 在用户看过庆祝动画后调用）。
+Future<void> markHonorsSeen(Iterable<String> keys) async {
+  _knownHonorKeys = keys.where((e) => e.isNotEmpty).toSet();
+  try {
+    final p = await SharedPreferences.getInstance();
+    await p.setString('honorSeenKeys', jsonEncode(_knownHonorKeys.toList()));
+  } catch (_) {}
+}
+
+/// 清空「已阅读荣誉」记录（开发者选项）。下次判定时已阅读视为空集 ⇒
+/// 当前拥有的全部荣誉会重新弹一遍。
+Future<void> resetHonorSeen() async {
+  _knownHonorKeys = {};
+  _pendingQueue.clear();
+  try {
+    final p = await SharedPreferences.getInstance();
+    await p.remove('honorSeenKeys');
+  } catch (_) {}
+}
+
+/// 纯函数：给定「当前拥有」与「已见过」，算出本次需要庆祝的新荣誉。
+/// 单独抽出来是为了可测（不碰 SharedPreferences / 网络）。
+/// **按展示顺序返回全部新增**（定义缺失的 key 跳过）—— 一次授予多枚时，
+/// App 会逐枚弹、关闭一枚补下一枚，不把其余吞掉。
+List<Honor> newHonorsToCelebrate(Set<String> owned, Set<String> seen) {
+  final fresh = owned.difference(seen);
+  if (fresh.isEmpty) return const [];
+  final ordered = displayHonorKeys.where(fresh.contains);
+  final out = <Honor>[];
+  for (final k in ordered) {
+    final h = _honorDefs[k];
+    if (h != null) out.add(h);
+  }
+  return out;
+}
+
+/// 对比「当前拥有」与「已阅读」，算出新增荣誉并挂起待弹。
+/// 触发时机：[online] 表示本次是**在线** members.json 解析后触发；
+/// 也可能由 [setHonorCelebrationCall] 在进入主页时、或清除记录后调用一次。
+void _updateKnownHonors({bool online = false}) {
+  // 本地荣誉表还没读完就先不判（否则会把「还没读到」误当「没有任何荣誉」）。
+  if (!_membersLoaded && !online) return;
+  if (_myHonorCall.isEmpty || !_honorSeenLoaded) return;
+  final owned = memberHonorKeys(_myHonorCall).toSet();
+  // 已阅读为空（无记录 / 刚清除）⇒ owned − {} = owned：全部荣誉都弹。
+  // 有记录 ⇒ 只弹这次比记录多出来的。不再区分新老用户、不再建基线。
+  final fresh = newHonorsToCelebrate(owned, _knownHonorKeys);
+  if (fresh.isEmpty) return;
+  // 去重：数据可能多次更新而「已阅读」要等用户关闭才记账，避免同一枚重复入队。
+  final queued = _pendingQueue.map((h) => h.key).toSet();
+  final toAdd = fresh.where((h) => !queued.contains(h.key)).toList();
+  if (toAdd.isEmpty) return;
+  _pendingQueue.addAll(toAdd);
+  memberListVersion.value++;
+}
+
+/// 本地或在线荣誉数据更新后调用：判断是否出现了新的已授予荣誉
+void onHonorsUpdated({bool online = false}) {
+  try {
+    _updateKnownHonors(online: online);
+  } catch (_) {}
+}
+
+/// 开发者选项「清除已阅读荣誉」用：删掉记录并立即重算待弹。
+/// 若这批荣誉此前已阅读过，清除后会重新弹一遍（供预览/自测）。
+Future<void> resetHonorsAndRecheck() async {
+  await resetHonorSeen();
+  onHonorsUpdated(online: true);
+}
+
 void _seedDefaults() {
   _honorsCache = {
-    'BG7LZQ': ['kaishan', 'developer', 'earlyMember'],
-    'BG2HCB': ['kaishan', 'developer', 'earlyMember'],
+    'BG7LZQ': ['kaishan', 'developer', 'earlyMember', 'sower', 'jadeGift'],
+    'BG2HCB': ['kaishan', 'developer', 'earlyMember', 'sower'],
     'BA4UAX': ['kaishan', 'developer', 'earlyMember'],
     'BD3QID': ['kaishan', 'developer', 'earlyMember'],
     'BA7KSM': ['developer'],
@@ -304,9 +430,20 @@ void _seedDefaults() {
     'BG7LMW': ['kaishan', 'earlyMember'],
     'BG7OSL': ['kaishan', 'earlyMember', 'jadeGift'],
     'BG2EFX': ['jadeGift'],
+    'BG2WX': ['jadeGift'],
+    'BD4TYW': ['jadeGift'],
     'BG4LZY': ['earlyMember'],
     'BA3RZL': ['earlyMember', 'mostBrain', 'jadeGift'],
     'BA7NFI': ['sower'],
+    'BH2WIX': ['jadeGift'],
+    'BI8AQ': ['sower'],
+    'BG7QZC': ['jadeGift'],
+    'BH4HGA': ['jadeGift'],
+    'BA7JKT': ['sower'],
+    'BG2GNI': ['jadeGift'],
+    'BG5AON': ['jadeGift'],
+    'BG5WRY': ['jadeGift'],
+    'BI2RPW': ['earlyMember'],
   };
   _primariesCache = {
     'BG7LZQ': 'kaishan',
@@ -319,9 +456,20 @@ void _seedDefaults() {
     'BG7LMW': 'kaishan',
     'BG7OSL': 'kaishan',
     'BG2EFX': 'jadeGift',
+    'BG2WX': 'jadeGift',
+    'BD4TYW': 'jadeGift',
     'BG4LZY': 'earlyMember',
     'BA3RZL': 'earlyMember',
     'BA7NFI': 'sower',
+    'BH2WIX': 'jadeGift',
+    'BI8AQ': 'sower',
+    'BG7QZC': 'jadeGift',
+    'BH4HGA': 'jadeGift',
+    'BA7JKT': 'sower',
+    'BG2GNI': 'jadeGift',
+    'BG5AON': 'jadeGift',
+    'BG5WRY': 'jadeGift',
+    'BI2RPW': 'earlyMember',
   };
 }
 
@@ -490,6 +638,8 @@ Future<void> refreshMembers() async {
       if (d is! Map) return;
       _parseMembers(d);
       memberListVersion.value++;
+      // 在线数据是新授予的唯一真源：解析完立刻对比快照，命中新增则挂起庆祝
+      onHonorsUpdated(online: true);
       try {
         final p = await SharedPreferences.getInstance();
         await p.setString('honorDefsJson', jsonEncode(_serializeDefs()));
@@ -593,6 +743,8 @@ Future<void> ensureMembersLoaded() async {
       } catch (_) {}
     }
   } catch (_) {}
+  _membersLoaded = true;
+  onHonorsUpdated();
   unawaited(refreshMembers());
 }
 
@@ -670,15 +822,15 @@ class _HonorWallSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final base = _base(call);
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF7F9FC),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: C.bgSoft,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Center(
           child: Container(width: 40, height: 4, decoration: BoxDecoration(
-              color: const Color(0xFFD5DBE8),
+              color: C.borderStrong,
               borderRadius: BorderRadius.circular(2))),
         ),
         const SizedBox(height: 14),
@@ -688,14 +840,15 @@ class _HonorWallSheet extends StatelessWidget {
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
                   fontFamily: 'monospace',
+                  fontFamilyFallback: kCjkFallback,
                   letterSpacing: 1.5,
                   height: 1.1)),
           const SizedBox(width: 12),
           Text(AppLocalizations.of(context).badgeWall,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF98A2B8))),
+                  color: C.grey)),
         ]),
         const SizedBox(height: 4),
         ValueListenableBuilder<int>(
@@ -707,8 +860,8 @@ class _HonorWallSheet extends StatelessWidget {
               Text(
                   AppLocalizations.of(context)
                       .honoredBadges('$ownedCount', '${wall.length}'),
-                  style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF98A2B8))),
+                  style: TextStyle(
+                      fontSize: 12, color: C.grey)),
               const SizedBox(height: 12),
               SizedBox(
                 height: MediaQuery.of(context).size.height * 0.62,
@@ -724,17 +877,17 @@ class _HonorWallSheet extends StatelessWidget {
                           _badgeTile(context, call, w.honor, w.owned),
                         const SizedBox(height: 8),
                         Row(children: [
-                          const Icon(Icons.emoji_events_outlined,
-                              size: 15, color: Color(0xFF9AA3B7)),
+                          Icon(Icons.emoji_events_outlined,
+                              size: 15, color: C.grey),
                           const SizedBox(width: 6),
                           Text(AppLocalizations.of(context).achievementWall,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF6A7590))),
+                                  color: C.slate)),
                           SizedBox(width: 8),
                           Expanded(
-                              child: Divider(color: Color(0xFFE4E8F1), height: 1)),
+                              child: Divider(color: C.border, height: 1)),
                         ]),
                         const SizedBox(height: 10),
                         for (final a in AchievementCenter.all)
@@ -757,25 +910,25 @@ class _HonorWallSheet extends StatelessWidget {
 ///
 /// 顶层函数没有 `context`，必须显式传入（否则 analyze 报 undefined_identifier）
 Widget _badgeTile(BuildContext context, String call, Honor h, bool owned) {
-  final c = owned ? h.color : const Color(0xFFC2CAD8);
-  final col = owned ? h.color : const Color(0xFFAEB7C7);
+  final c = owned ? h.color : C.greyLight;
+  final col = owned ? h.color : C.grey;
   return GestureDetector(
     onTap: owned ? () => openMemberCard(call) : null,
     child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: C.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: owned ? c.withValues(alpha: 0.35) : const Color(0xFFEBEEF5)),
+            color: owned ? c.withValues(alpha: 0.35) : C.border),
       ),
       child: Row(children: [
         Container(
           width: 46,
           height: 46,
           decoration: BoxDecoration(
-            color: owned ? c.withValues(alpha: 0.13) : const Color(0xFFF0F2F7),
+            color: owned ? c.withValues(alpha: 0.13) : C.greyBg,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(owned ? h.icon : Icons.lock_rounded, color: col, size: 23),
@@ -789,7 +942,7 @@ Widget _badgeTile(BuildContext context, String call, Honor h, bool owned) {
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: owned ? const Color(0xFF1B253C) : const Color(0xFF98A2B8))),
+                    color: owned ? C.ink : C.grey)),
             const SizedBox(height: 3),
             Text(
                 owned
@@ -800,15 +953,15 @@ Widget _badgeTile(BuildContext context, String call, Honor h, bool owned) {
                 style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
-                    color: owned ? const Color(0xFF68748F) : const Color(0xFFB4BCCB))),
+                    color: owned ? C.slate : C.greyLight)),
           ]),
         ),
         const SizedBox(width: 10),
         if (owned)
-          const Icon(Icons.open_in_new_rounded,
-              size: 16, color: Color(0xFFAAB4C6))
+          Icon(Icons.open_in_new_rounded,
+              size: 16, color: C.grey)
         else
-          const Icon(Icons.circle_outlined, color: Color(0xFFD5DAE5), size: 18),
+          Icon(Icons.circle_outlined, color: C.borderStrong, size: 18),
       ]),
     ),
   );
@@ -819,23 +972,23 @@ Widget _badgeTile(BuildContext context, String call, Honor h, bool owned) {
 Widget _achievementTile(
     BuildContext context, Achievement a, bool unlocked) {
   final lang = honorLangOf(context);
-  final Color c = unlocked ? a.color : const Color(0xFFC2CAD8);
-  final Color col = unlocked ? a.color : const Color(0xFFAEB7C7);
+  final Color c = unlocked ? a.color : C.greyLight;
+  final Color col = unlocked ? a.color : C.grey;
   return Container(
     margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: C.white,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(
-          color: unlocked ? c.withValues(alpha: 0.35) : const Color(0xFFEBEEF5)),
+          color: unlocked ? c.withValues(alpha: 0.35) : C.border),
     ),
     child: Row(children: [
       Container(
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: unlocked ? c.withValues(alpha: 0.13) : const Color(0xFFF0F2F7),
+          color: unlocked ? c.withValues(alpha: 0.13) : C.greyBg,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Icon(unlocked ? a.icon : Icons.lock_rounded, color: col, size: 23),
@@ -849,7 +1002,7 @@ Widget _achievementTile(
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
-                  color: unlocked ? const Color(0xFF1B253C) : const Color(0xFF98A2B8))),
+                  color: unlocked ? C.ink : C.grey)),
           const SizedBox(height: 3),
           Text(a.descOf(lang),
               maxLines: 2,
@@ -857,14 +1010,14 @@ Widget _achievementTile(
               style: TextStyle(
                   fontSize: 12,
                   height: 1.35,
-                  color: unlocked ? const Color(0xFF68748F) : const Color(0xFFB4BCCB))),
+                  color: unlocked ? C.slate : C.greyLight)),
         ]),
       ),
       const SizedBox(width: 10),
       if (unlocked)
-        const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF7FC98A))
+        Icon(Icons.check_circle_rounded, size: 18, color: C.green)
       else
-        const Icon(Icons.circle_outlined, color: Color(0xFFD5DAE5), size: 18),
+        Icon(Icons.circle_outlined, color: C.borderStrong, size: 18),
     ]),
   );
 }

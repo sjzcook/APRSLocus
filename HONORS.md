@@ -50,7 +50,8 @@
 > `contrib` / `quote` / `tags` 三语都写，但**只写在 `members.json` 一处**即可 ——
 > `member-card.html` 的 `toPeople()` 取值顺序是
 > `it.contrib || 兜底名单.contrib || 空`，**在线内容优先**；兜底名单那条保持精简，避免两处漂移。
-> 最近的完整范例：**BH7GZB**（v53，开发人员）、**BA7NFI**（v55，播种）。
+> 最近的完整范例：**BH7GZB**（v53，开发人员）、**BA7NFI**（v55，播种）、
+> **BI8AQ**（v63→v64，播种，昵称「前方无线电俱乐部」）、**BA7JKT**（v67，播种）。
 
 ### 示例
 
@@ -75,8 +76,8 @@
 
 惯例（以现有数据为准）：**追加称号时一般保持原 `primary` 不变**，不抢原主展示。
 
-> 参考：`[earlyMember, jadeGift]` 组合共 6 人，其中 5 人保持 `primary = earlyMember`
-> （BA4JLD / BG9KAG / BA4IUD / BD1FEH / BG0AVI），仅 BA3MDC 用 `jadeGift`。
+> 参考：`[earlyMember, jadeGift]` 组合共 7 人，其中 6 人保持 `primary = earlyMember`
+> （BA4JLD / BG9KAG / BA4IUD / BD1FEH / BG0AVI / BA8AZJ），仅 BA3MDC 用 `jadeGift`。
 
 ### `role` 要不要跟着改
 

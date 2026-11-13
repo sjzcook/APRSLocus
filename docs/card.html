@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APRSLocus 软件名片 · Software Card</title>
+<meta name="description" content="APRSLocus 软件简介名片（横版）：供友链 / 项目主页引用，或一键导出 PNG。">
+<link rel="stylesheet" href="css/theme.css?v=1">
+<script>
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）。
+   必须在首帧前执行，否则会闪一下亮底（token 的键在 <html data-theme> 上）。 */
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t !== 'dark' && t !== 'light') t = 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
+  } catch (e) {}
+})();
+</script>
+<style>
+  :root{
+    /* 全部指向共享 token（theme.css）：这里只留名字，颜色不写在页面里。
+       --line 故意不再定义 —— 直接用共享的那个，否则深色下会露出浅色描边。 */
+    --ink:var(--text);
+    --sub:var(--text-dim);
+    --brand:var(--cyan);
+    --brand2:var(--cyan-deep);
+    --card:var(--surface-1);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:18px;padding:26px 16px;
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",
+                system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans SC",
+                "Noto Sans CJK SC",sans-serif;
+    color:var(--ink);
+  }
+
+  /* ---------- 横版名片 ---------- */
+  .card{
+    position:relative;width:760px;max-width:100%;
+    background:var(--card);border-radius: var(--radius);overflow:hidden;
+    box-shadow:0 22px 55px -18px var(--shadow-color),
+               0 6px 16px -8px var(--shadow-color);
+  }
+  .accent{height:5px;background:linear-gradient(90deg,var(--brand),var(--brand2))}
+  .row{display:flex;align-items:center;gap:16px;padding:18px 24px}
+
+  .blogo{width:40px;height:40px;border-radius: var(--radius);object-fit:cover;flex:0 0 auto;
+    box-shadow:0 8px 18px -9px var(--shadow-cool)}
+  .name{display:flex;flex-direction:column;gap:2px;flex:0 0 auto}
+  .app{font-size:19px;font-weight:800;letter-spacing:.2px;line-height:1.1}
+  .sub{font-size:11.5px;color:var(--sub)}
+
+  .chips{display:flex;gap:7px;flex:1 1 auto;justify-content:center;flex-wrap:wrap}
+  .chip{
+    font-size:12px;font-weight:700;border-radius:999px;padding:6px 12px;line-height:1;
+    border:1px solid var(--line);color:var(--sub);background:var(--surface-1);white-space:nowrap;
+  }
+  .chip.hot{color:var(--brand);background:var(--surface-1);border-color:var(--line)}
+
+  .site{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:0 0 auto}
+  .plat{font-size:10.5px;font-weight:700;letter-spacing:.4px;color:var(--text-dim)}
+  .url{font-size:13px;font-weight:800;color:var(--brand);letter-spacing:.1px;white-space:nowrap}
+
+  /* ---------- 操作条 ---------- */
+  .bar{width:760px;max-width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .bar button{
+    font:inherit;font-size:14px;font-weight:700;cursor:pointer;
+    border:0;border-radius: var(--radius-sm);padding:11px 19px;color:var(--on-accent);
+    background:var(--grad);
+    box-shadow:0 10px 22px -12px var(--shadow-cool);
+  }
+  .bar button.ghost{background:var(--surface-1);color:var(--ink);border:1px solid var(--line);box-shadow:0 6px 16px -12px var(--shadow-color)}
+  .bar button:active{transform:translateY(1px)}
+  .lang{margin-left:auto;display:flex;gap:6px}
+  .lang button{padding:9px 12px;font-size:13px;background:var(--surface-1);color:var(--sub);border:1px solid var(--line);box-shadow:none}
+  .lang button.on{color:var(--brand);border-color:var(--line-cool);background:var(--surface-1)}
+  .hint{margin:0;font-size:12px;color:var(--text-dim);text-align:center}
+
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+    background:var(--code-bg);color:var(--on-code);font-size:13.5px;font-weight:600;
+    padding:11px 18px;border-radius: var(--radius);opacity:0;pointer-events:none;
+    transition:opacity .22s,transform .22s;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  /* 窄屏：换行堆叠（导出的仍是当前看到的版式） */
+  @media (max-width:680px){
+    .row{flex-wrap:wrap;gap:12px}
+    .chips{justify-content:flex-start}
+    .site{flex-direction:row;align-items:baseline;gap:10px;width:100%}
+    .card{width:100%}
+  }
+</style>
+</head>
+<body>
+
+  <div class="card" id="card">
+    <div class="accent" id="accent"></div>
+    <div class="row">
+      <img class="blogo" id="logo" src="assets/logo.png" alt="APRSLocus">
+      <div class="name">
+        <div class="app">APRSLocus</div>
+        <div class="sub i18n"
+             data-zh="业余无线电 · APRS 客户端"
+             data-tw="業餘無線電 · APRS 用戶端"
+             data-en="Amateur radio · APRS client">业余无线电 · APRS 客户端</div>
+      </div>
+
+      <div class="chips">
+        <span class="chip hot i18n" data-zh="实时地图" data-tw="即時地圖" data-en="Live map">实时地图</span>
+        <span class="chip i18n" data-zh="轨迹与消息" data-tw="軌跡與訊息" data-en="Tracks &amp; messaging">轨迹与消息</span>
+        <span class="chip i18n" data-zh="离线地图" data-tw="離線地圖" data-en="Offline maps">离线地图</span>
+        <span class="chip i18n" data-zh="开源免费" data-tw="開源免費" data-en="Open source">开源免费</span>
+      </div>
+
+      <div class="site">
+        <div class="plat">Android · Windows · iOS · macOS</div>
+        <div class="url">aprslocus.theez.top</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="save">保存图片</button>
+    <button id="copy" class="ghost">复制图片</button>
+    <div class="lang">
+    <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false" aria-label="切换深色模式" title="切换深色模式" data-label-dark="切换浅色模式" data-label-light="切换深色模式"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="tic-sun" d="M12 6.6a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8zM12 1.6v2.4M12 20v2.4M4.6 12H2.2M21.8 12h-2.4M6.75 6.75 5.05 5.05M18.95 18.95l-1.7-1.7M17.25 6.75l1.7-1.7M5.05 18.95l1.7-1.7"/><path class="tic-moon" d="M20.2 14.6A8.6 8.6 0 0 1 9.4 3.8a8.6 8.6 0 1 0 10.8 10.8z"/></svg></button>
+      <button data-lang="zh" class="on">中</button>
+      <button data-lang="zh-TW">繁</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </div>
+  <p class="hint">本站官网名片 · 横向 · 可供友链 / 项目主页引用 · 支持导出 PNG</p>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ======================================================================
+   把名片渲染成 PNG：读取页面上每个元素的几何与样式，在 canvas 上按 3 倍像素
+   重画一遍 —— 保存出来的图和你看到的完全一致，不用维护两套排版；中文用同一
+   套字体栈，不会变豆腐块。
+   ====================================================================== */
+var S = 3;
+/* 导出的 PNG 跟屏幕上看到的一致：颜色从 token 里读，深色下导出的就是深色名片 */
+function tok(name, fb){
+  var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fb;
+}
+
+function roundRect(c, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y,     x + w, y + h, r);
+  c.arcTo(x + w, y + h, x,     y + h, r);
+  c.arcTo(x,     y + h, x,     y,     r);
+  c.arcTo(x,     y,     x + w, y,     r);
+  c.closePath();
+}
+
+function rectOf(el, base){
+  var r = el.getBoundingClientRect();
+  return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
+}
+
+function fontOf(el){
+  var s = getComputedStyle(el);
+  var w = parseInt(s.fontWeight, 10);
+  if (isNaN(w)) w = 400;
+  // canvas 的 font 只认 400/700；写成 600/750 会让整条 font 判为非法并静默
+  // 退回 10px —— 导出图会突然「全部变小」。
+  w = (w >= 600) ? 700 : 400;
+  return s.fontStyle + " " + w + " " + s.fontSize + " " + s.fontFamily;
+}
+
+function txt(el){ return el ? el.textContent.trim() : ""; }
+
+function fillTextEl(c, el, o, base){
+  if (!el) return;
+  var r = rectOf(el, base);
+  var s = getComputedStyle(el);
+  c.font = fontOf(el);
+  c.fillStyle = o.color || s.color;
+  c.textAlign = o.align || "left";
+  c.textBaseline = o.baseline || "middle";
+  var x;
+  if (o.align === "center") x = r.x + r.w / 2;
+  else if (o.align === "right") x = r.x + r.w;
+  else x = r.x;
+  c.fillText(txt(el), x, r.y + r.h / 2 + (o.dy || 0));
+}
+
+/* 圆角胶囊：按元素的底色 / 描边色画 pill，再居中写字。 */
+function fillPill(c, el, base){
+  var r = rectOf(el, base);
+  var s = getComputedStyle(el);
+  roundRect(c, r.x, r.y, r.w, r.h, r.h / 2);
+  c.fillStyle = s.backgroundColor;
+  c.fill();
+  c.lineWidth = 1;
+  c.strokeStyle = s.borderTopColor;
+  c.stroke();
+  c.font = fontOf(el);
+  c.fillStyle = s.color;
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillText(txt(el), r.x + r.w / 2, r.y + r.h / 2 + 1);
+}
+
+/* 图片：可选圆角裁切，按元素显示尺寸绘制。 */
+function drawImg(c, el, base, radius){
+  if (!el || !el.complete || !el.naturalWidth) return;
+  var r = rectOf(el, base);
+  c.save();
+  if (radius){ roundRect(c, r.x, r.y, r.w, r.h, radius); c.clip(); }
+  c.drawImage(el, r.x, r.y, r.w, r.h);
+  c.restore();
+}
+
+function render(){
+  var card = document.getElementById("card");
+  var base = card.getBoundingClientRect();
+  var W = base.width, H = base.height;
+
+  var cv = document.createElement("canvas");
+  cv.width = Math.round(W * S);
+  cv.height = Math.round(H * S);
+  var c = cv.getContext("2d");
+  c.scale(S, S);
+
+  // 圆角底 = 页面底 + 卡片底两层，跟屏幕上看到的一致（导出即所见，深色也是深色）
+  roundRect(c, 0, 0, W, H, 12);
+  c.fillStyle = tok("--bg-1", "#f4f7fc");
+  c.fill();
+  roundRect(c, 0, 0, W, H, 12);
+  c.fillStyle = tok("--surface-1", "#ffffff");
+  c.fill();
+
+  // 顶部渐变条（裁进圆角）
+  var ac = document.getElementById("accent");
+  if (ac){
+    var ar = rectOf(ac, base);
+    c.save();
+    roundRect(c, 0, 0, W, H, 12);
+    c.clip();
+    var g = c.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, tok("--accent", "#ff6a00"));
+    g.addColorStop(1, tok("--accent-deep", "#c2410c"));
+    c.fillStyle = g;
+    c.fillRect(ar.x, ar.y, ar.w, ar.h);
+    c.restore();
+  }
+
+  // 左：logo + 名称
+  drawImg(c, document.getElementById("logo"), base, 11);
+  fillTextEl(c, card.querySelector(".app"), {}, base);
+  fillTextEl(c, card.querySelector(".sub"), {}, base);
+
+  // 中：特性胶囊
+  card.querySelectorAll(".chip").forEach(function(chip){ fillPill(c, chip, base); });
+
+  // 右：平台 + 官网（右对齐）
+  var site = card.querySelector(".site");
+  if (site){
+    fillTextEl(c, site.querySelector(".plat"), { align: "right" }, base);
+    fillTextEl(c, site.querySelector(".url"), { align: "right" }, base);
+  }
+
+  return cv;
+}
+
+/* ---------- 交互 ---------- */
+var toastEl = document.getElementById("toast");
+var toastT = null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(function(){ toastEl.classList.remove("on"); }, 1800);
+}
+
+document.getElementById("save").addEventListener("click", function(){
+  var cv = render();
+  var a = document.createElement("a");
+  a.download = "APRSLocus-card.png";
+  a.href = cv.toDataURL("image/png");
+  a.click();
+  toast("已保存 PNG");
+});
+
+document.getElementById("copy").addEventListener("click", function(){
+  var cv = render();
+  if (cv.toBlob && navigator.clipboard && window.ClipboardItem){
+    cv.toBlob(function(blob){
+      navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+        .then(function(){ toast("已复制到剪贴板"); })
+        .catch(function(){ toast("复制失败，请用「保存图片」"); });
+    }, "image/png");
+  } else {
+    toast("此浏览器不支持复制，请用「保存图片」");
+  }
+});
+
+/* 语言切换：只换带 data-* 的文案 */
+document.querySelectorAll(".lang button").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    var lang = btn.getAttribute("data-lang");
+    document.querySelectorAll(".lang button").forEach(function(b){
+      b.classList.toggle("on", b === btn);
+    });
+    var key = lang === "zh-TW" ? "tw" : (lang === "en" ? "en" : "zh");
+    document.querySelectorAll("[data-zh]").forEach(function(el){
+      var v = el.getAttribute("data-" + key);
+      if (v != null) el.textContent = v;
+    });
+  });
+});
+</script>
+<script src="js/theme.js?v=1" defer></script>
+</body>
+</html>

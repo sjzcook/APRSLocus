@@ -56,6 +56,49 @@ TncTransport createPkwdwplTransport() {
   }
 }
 
+/// APRSlocusBOX（小盒子）的传输层。
+///
+/// 与 TNC 一样**同时支持蓝牙 SPP 与 USB-OTG 串口**（盒子的两种线都可以），
+/// 由 [TncAutoTransport] 按绑定设备的 `kind` 自动选路。差别只在通道名 ——
+/// 原生侧是**独立实例**（独立 socket），所以「管盒子」不会打断正在收发的 TNC。
+TncTransport createBoxTransport() {
+  if (kIsWeb) return TncDesktopSerial();
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+      return TncAutoTransport(
+        bluetooth: TncNativeBluetooth(
+          methodChannel: 'com.aprslocus/box',
+          eventChannel: 'com.aprslocus/box_events',
+        ),
+        usb: TncNativeUsb(),
+      );
+    default:
+      return TncDesktopSerial();
+  }
+}
+
+/// 外接 GPS（NMEA 0183）的传输层。
+///
+/// 模组只有一条线 —— 蓝牙 SPP，所以这里**不带 USB 自动选路**：
+/// 移动端直接用蓝牙实现，桌面端（Windows / Linux / macOS）退回串口，
+/// 方便在电脑上拿 USB-TTL 接一个模组验证解析链路。
+/// 通道名独立（`/gps`）理由同 PKWDWPL：原生一次只维护一个 socket，
+/// 共用会让「接 GPS」把正在收发的 TNC 顶掉。
+TncTransport createGpsTransport() {
+  if (kIsWeb) return TncDesktopSerial();
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+      return TncNativeBluetooth(
+        methodChannel: 'com.aprslocus/gps',
+        eventChannel: 'com.aprslocus/gps_events',
+      );
+    default:
+      return TncDesktopSerial();
+  }
+}
+
 /// ─── Android / iOS：原生蓝牙 SPP ───
 ///
 /// Dart 侧不做任何协议处理，只搬运字节；KISS 组帧在 `kiss.dart`。
@@ -204,9 +247,20 @@ class TncNativeBluetooth implements TncTransport {
     if (!await supported) return 'unsupported';
     try {
       _listen();
-      await _ch.invokeMethod<bool>('connect', {'address': device.id});
+      // 原生侧现在是**异步**的（阻塞的 RFCOMM 连接挪到了工作线程）。这里的超时
+      // 是为了界面别卡在「连接中」：原生万一因为系统原因不回调，20 秒后如实报错，
+      // 而不是让上层以为"还在连"，重连逻辑也跟着卡住。
+      await _ch
+          .invokeMethod<bool>('connect', {'address': device.id})
+          .timeout(const Duration(seconds: 20));
       connected = true;
       return null;
+    } on TimeoutException {
+      connected = false;
+      // 把可能已经建立的连接拆掉：否则原生连上了、这边以为失败，
+      // 就会出现「界面说没连上、实际占着电台」的鬼状态。
+      unawaited(disconnect());
+      return 'connect-timeout';
     } on PlatformException catch (e) {
       connected = false;
       return e.message ?? e.code;

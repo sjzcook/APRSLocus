@@ -28,7 +28,11 @@ class MyPanel extends StatelessWidget {
   }
 
   Widget _body(BuildContext context) {
-    final fix = state.myHasFix;
+    // ⚠ 用 myPositionReportable 而不是 myHasFix：后者含「上次保存的位置」，
+    // 此时按钮若显示「立即上报」并弹「已发送」，其实 _sendBeaconNow 会被
+    // 上报闸挡回、什么都没发出去 —— 用户看到的是一条假的成功提示。
+    // 未重新定位时按钮显示「获取位置」，点它去开定位，拿到新点后自然可上报。
+    final fix = state.myPositionReportable;
     final locColor = fix
         ? C.green
         : state.loc.running
@@ -145,6 +149,7 @@ class MyPanel extends StatelessWidget {
                 // AppState.canAutoBeacon 同源，两处漂移就是「倒计时走着不发」）。
                 switch (state.beaconPhase) {
                   BeaconPhase.rfDisabled => S.of(context).beaconRfBeaconOff,
+                  BeaconPhase.needConfirm => S.of(context).beaconNeedConfirm,
                   BeaconPhase.coarseFix => S.of(context).beaconCoarseFix,
                   // 强制接受网络定位时它**会发射**，所以不再是「不报」而是
                   // 「报的是网络定位」—— 这一档也不能退回普通倒计时。
@@ -154,6 +159,7 @@ class MyPanel extends StatelessWidget {
                 },
                 style: ts(10,
                     c: (state.beaconNeedsRfEnable ||
+                            state.beaconPhase == BeaconPhase.needConfirm ||
                             state.beaconPhase == BeaconPhase.coarseFix ||
                             state.beaconPhase == BeaconPhase.coarseForced)
                         ? C.orange
@@ -227,7 +233,14 @@ class MyPanel extends StatelessWidget {
                         state.beaconEnabled
                             ? (state.smartBeaconEnabled
                                 ? '自动上报中 · 智能分档(每 ${state.beaconIntervalNow}s)'
-                                : '自动上报中 · 每 ${state.beaconInterval}s')
+                                // ⚠ 用 beaconIntervalNow 而不是 beaconInterval：
+                                // 后者只是「固定间隔」那一个字段，**纯网络模式**下
+                                // 生效值来自 beaconNetInterval —— 拿 beaconInterval
+                                // 会显示上一个 GPS 模式留下的旧值（用户报的
+                                // 「左下角一直固定显示 30 秒，改成 300 也不变，
+                                // 但倒计时是对的」正是这一处），与倒计时用的
+                                // beaconIntervalNow 对不上。
+                                : '自动上报中 · 每 ${state.beaconIntervalNow}s')
                             : '位置未上报 · 仅接收',
                         style: ts(
                           10.5,
@@ -236,100 +249,49 @@ class MyPanel extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (!state.beaconEnabled)
-                      GestureDetector(
-                        onTap: () {
-                          state.setBeaconEnabled(true);
-                          if (state.myHasFix) {
-                            state.sendBeacon();
-                          }
-                        },
-                        child: Text(
-                          '开启自动上报',
-                          style: ts(10, c: C.blue, w: FontWeight.w700),
-                        ),
-                      ),
                   ],
                 ),
               ),
             SizedBox(height: 10),
           ],
-          // 操作按钮
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  // 只读模式（只启用 PKWDWPL）下没有发射链路，按钮**置灰**
-                  // 并在文案里说明原因。不隐藏它：位置突然少一个按钮会让人
-                  // 找不到，而置灰 + 说明反而能直接回答「为什么发不出去」。
-                  onPressed: state.readOnlyMode
-                      ? null
-                      : () {
-                          if (state.myHasFix) {
-                            state.sendBeacon();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  state.connected
-                                      ? S
-                                            .of(context)
-                                            .beaconSentAprsIs(
-                                                state.myGrid)
-                                      : S
-                                            .of(context)
-                                            .beaconSentDemo(
-                                                state.myGrid),
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          } else {
-                            state.startTracking();
-                          }
-                        },
-                  icon: Icon(
-                    state.myHasFix
-                        ? Icons.send_rounded
-                        : Icons.my_location_rounded,
-                    size: 18,
-                  ),
-                  label: Text(
-                    state.readOnlyMode
-                        ? S.of(context).pkwdwplRxOnly
-                        : (state.myHasFix
-                            ? S.of(context).beaconNow
-                            : S.of(context).getLocation),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: state.readOnlyMode
-                        ? C.grey
-                        : (state.myHasFix ? C.green : C.blue),
-                    side: BorderSide(
-                      color: (state.readOnlyMode
-                              ? C.greyLight
-                              : (state.myHasFix ? C.green : C.blue))
-                          .withValues(alpha: 0.5),
-                    ),
-                    // 手动上报是主页最高频的动作，给足触摸目标
-                    // （44 高 ≈ Material 的最小可点区域，原 8 内边距只有 34）
-                    minimumSize: const Size(0, 44),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
-                    textStyle: ts(13, w: FontWeight.w700),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+          // 上报动作组（切换 自动上报 / 立即上报）——与地图状态栏、沉浸页同一份。
+          // 只读模式（只开 PKWDWPL）没有发射链路，整组说明原因；不隐藏它：
+          // 按钮突然消失会让人找不到，置灰 + 说明能直接回答「为什么发不出去」。
+          if (state.readOnlyMode)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: Text(S.of(context).pkwdwplRxOnly),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.grey,
+                      side: BorderSide(color: C.greyLight.withValues(alpha: 0.5)),
+                      minimumSize: const Size(0, 44),
+                      textStyle: ts(13, w: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(width: 8),
+              ],
+            )
+          else
+            ReportActions(state: state),
+          const SizedBox(height: 8),
+          // 连接按钮
+          Row(
+            children: [
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: state.toggleConnect,
                   icon: Icon(
                     state.connected
                         ? Icons.stop_circle_outlined
-                        : Icons.wifi_rounded,
+                        : (state.isIcomLanTx
+                            ? Icons.wifi_tethering_rounded
+                            : Icons.wifi_rounded),
                     size: 15,
                   ),
                   label: Text(
@@ -337,6 +299,8 @@ class MyPanel extends StatelessWidget {
                         ? S.of(context).disconnect
                         : state.connecting
                         ? S.of(context).connecting
+                        : state.isIcomLanTx
+                        ? '连接 ${state.audio.config.icomLan.model.id}'
                         : state.usingAudio
                         ? S.of(context).audioCaptureStart
                         : state.usingTnc

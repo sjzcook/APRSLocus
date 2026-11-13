@@ -107,23 +107,29 @@ class _HrAlarmWatcherState extends State<HrAlarmWatcher> {
     if (!isCrash && bpm == null) return;
     final s = S.of(context);
     _showing = true;
+    final isFall = isCrash && st.crashAlarmKind == 'fall';
     final action = await showDialog<String>(
       context: context,
       // 告警必须能一路回到「关掉它」，所以不允许点空白关（barrierDismissible
       // 会让用户以为处理过了，而告警标志还挂着）。
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: C.white,
         icon: Icon(
-          isCrash ? Icons.car_crash_rounded : Icons.favorite_rounded,
+          isCrash
+              ? (isFall ? Icons.personal_injury_rounded : Icons.car_crash_rounded)
+              : Icons.favorite_rounded,
           color: C.red,
           size: 34,
         ),
-        title: Text(isCrash ? s.crashAlarmTitle : s.hrAlarmTitle,
+        title: Text(
+            isCrash
+                ? (isFall ? s.crashFallAlarmTitle : s.crashAlarmTitle)
+                : s.hrAlarmTitle,
             style: ts(16, w: FontWeight.w800)),
         content: Text(
           isCrash
-              ? s.crashAlarmBody
+              ? (isFall ? s.crashFallAlarmBody : s.crashAlarmBody)
               : s.hrAlarmBody('$bpm', '${st.hrAlarmLow}', '${st.hrAlarmHigh}'),
           style: ts(13, h: 1.5),
         ),
@@ -196,7 +202,7 @@ class _HrAlarmWatcherState extends State<HrAlarmWatcher> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: C.white,
         title: Text(s.hrAlarmSendConfirmTitle, style: ts(15, w: FontWeight.w800)),
         content: Text(
           // 占位符在 arb 里声明为 String，所以这里显式插值 ——
@@ -227,7 +233,9 @@ class _HrAlarmWatcherState extends State<HrAlarmWatcher> {
     }
     // 正文刻意短：射频模式下单条消息上限 67 字符（见 AppState.tncMaxMsgLen），
     // 而求救信息最不该因为太长而被拒发/截断。
-    final pos = st.myHasFix
+    // ⚠ 位置用 myPositionReportable：没有**本轮**定位时宁可不报坐标（`--`），
+    // 也不要把「上次保存的位置」当成现在的位置发进求救信息（那是两个地方）。
+    final pos = st.myPositionReportable
         ? '${st.myLat!.toStringAsFixed(4)},${st.myLng!.toStringAsFixed(4)}'
         : '--';
     // 求助正文：碰撞/摔倒时没有新的心率读数，就报当前心率（可能为 0），

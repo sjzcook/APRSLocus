@@ -1,8 +1,13 @@
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
 import 'material.dart';
 import 'models.dart';
+import 'state.dart';
 import 'l10n/app_localizations.dart';
 
 /// 界面本地化便捷别名
@@ -150,6 +155,9 @@ String localizedLocationStatus(BuildContext context, String value) {
   // 这里是**白名单**，新增一个状态串不登记就会在非中文界面漏出中文
   // （tool/check_pos_quality.py 会把「所有 locStatus 字面量都已登记」当断言查）。
   if (value == '佳明 LiveTrack') return s.locationGarmin;
+  // 外接 GPS 模块（蓝牙 SPP / USB-TTL 上的 NMEA 0183）：与手机 GPS、
+  // 佳明并列的第三种来源。同样是白名单，不登记就会在非中文界面漏出中文。
+  if (value == '外接 GPS（蓝牙）') return s.locationExtGps;
   if (value == '请授予定位权限…') return s.locationPermission;
   if (value == 'GPS 定位中…') return s.gpsLocating;
   // 外置 GPS（佳明）与手机 GPS 的交接（issue #21-4）：三档都要登记 ——
@@ -193,8 +201,14 @@ String localizedMapTypeLabel(BuildContext context, String name) =>
       'osm' => S.of(context).mapTypeOsm,
       'osm_hot' => S.of(context).mapTypeOsmHot,
       'open_topo' => S.of(context).mapTypeOpenTopo,
+      'esri_topo' => S.of(context).mapTypeEsriTopo,
+      'esri_relief' => S.of(context).mapTypeEsriRelief,
+      'esri_hillshade' => S.of(context).mapTypeEsriHillshade,
       'esri_street' => S.of(context).mapTypeEsriStreet,
       'esri_sat' => S.of(context).mapTypeEsriSat,
+      'tianditu' => S.of(context).mapTypeTianditu,
+      'tianditu_img' => S.of(context).mapTypeTiandituImg,
+      'tianditu_ter' => S.of(context).mapTypeTiandituTer,
       _ => name,
     };
 
@@ -361,6 +375,56 @@ class StatusBadge extends StatelessWidget {
       ),
       child: Text(
         localizedStatusLabel(context, status),
+        style: ts(9, c: c, w: FontWeight.w700, ls: 0.5),
+      ),
+    );
+  }
+}
+
+/// 这台台站是从哪条链路听来的：APRS-IS / APRSNETCN / TNC / 声卡。
+///
+/// 同一台站可能从两条链路都收到，台站上只留最后一条的来源；`remote`（24 小时
+/// 台站接口补进来的）也算 APRSNETCN 那一档 —— 那时我们根本没收到过它。
+class SourceBadge extends StatelessWidget {
+  final String? via;
+  final bool remote;
+  const SourceBadge(this.via, {super.key, this.remote = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final v = via;
+    final String label;
+    final Color c;
+    if (v == AppState.srcAcn || (v == null && remote)) {
+      label = s.packetSrcAcn;
+      c = C.cyan;
+    } else if (v == AppState.srcTnc) {
+      label = s.dataSourceTnc;
+      c = C.orange;
+    } else if (v == AppState.srcAudio) {
+      label = s.dataSourceAudio;
+      c = C.orange;
+    } else if (v == AppState.srcPkwdwpl) {
+      label = 'PKWDWPL';
+      c = C.orange;
+    } else if (v == AppState.srcAcn) {
+      label = s.packetSrcAcn;
+      c = C.cyan;
+    } else if (v == AppState.srcAprsIs) {
+      label = s.dataSourceAprsIs;
+      c = C.blue;
+    } else {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
         style: ts(9, c: c, w: FontWeight.w700, ls: 0.5),
       ),
     );
@@ -595,6 +659,67 @@ class SettingRow extends StatelessWidget {
   }
 }
 
+/// ─── 音频声压条（主页状态条用）───
+///
+/// 用户要求：「若应用了音频输入功能，需要在主页的状态条上显示音频声压条」。
+/// 声卡 TNC 收报文时，最容易出错的就是**进来多大声音**——太小解不出帧、太大
+/// 削顶失真，而这两件事在手机上看不出来。所以把「音频」页那个电平表缩成一条
+/// 细条，摆在状态条最下面：只看它就能知道信道里有没有声、是不是快满刻度。
+///
+/// 数据源是 [AudioLink.levelNotifier]（采集回调里节流），不是每秒的 tick——
+/// 挂 tick 的话它一秒跳一格，看着像卡住。这一层订阅只重建这条三个像素的小条，
+/// 不惊动状态条里的文案与按钮。
+class AudioLevelStrip extends StatelessWidget {
+  /// 0~1 的实时电平
+  final ValueListenable<double> level;
+
+  /// 高度（状态条里给 3，独立显示时可以给大一点）
+  final double height;
+
+  const AudioLevelStrip({super.key, required this.level, this.height = 3});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: level,
+      builder: (_, v, _) {
+        final x = v.clamp(0.0, 1.0);
+        // 快到满刻度转橙：这就是「要削顶了」的信号，与音频页的电平表同口径
+        final c = x >= 0.9 ? C.orange : C.cyan;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(height),
+          child: SizedBox(
+            height: height,
+            child: Stack(
+              children: [
+                Positioned.fill(child: ColoredBox(color: C.greyBg)),
+                // 至少留一个像素：0 电平也要看得见这条轨存在（否则分不清
+                // 「没声」与「没面」）。
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: x <= 0.02 ? 0.02 : x,
+                      heightFactor: 1,
+                      child: ColoredBox(color: c),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 主页状态条要不要挂声压条：只在**声卡这条链路真的在收**的时候挂。
+///
+/// 只看「开了没有」不够：开关开着但采集没起来时，条子会一直贴在 0，
+/// 看起来就像「有声卡但一直没声」。
+bool showAudioLevel(AppState st) => st.audioOn && st.audio.connected;
+
 /// 给**自绘**的可点区域一个桌面端手型指针。
 ///
 /// 为什么需要它：`GestureDetector` **没有** `mouseCursor` 参数（那是 `InkWell` /
@@ -604,6 +729,12 @@ class SettingRow extends StatelessWidget {
 ///
 /// 包一层 `MouseRegion` 是最小的做法，而且它只改指针、**不抢手势**：
 /// 命中测试先走子节点，`GestureDetector` 仍然在命中路径上。
+/// 顶栏 / 上报条里小胶囊的统一高度。
+///
+/// 天气、连接状态、连接按钮、快捷按钮、上报动作组经常并排出现；之前
+/// 26 / 26 / 29 / 32 混着，看起来像几套控件。统一用这一个值。
+const double kChipControlHeight = 30;
+
 class ClickCursor extends StatelessWidget {
   final Widget child;
   const ClickCursor({super.key, required this.child});
@@ -612,6 +743,270 @@ class ClickCursor extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: child,
       );
+}
+
+/// ─── 上报动作组（地图状态栏 / 我的位置面板 / 沉浸页 共用）───
+///
+/// 用户反馈「上报的开关散得到处都是，很乱」。整改后只有一条规则：
+///
+///   **自动上报与手动上报是同一件事的两个按钮，永远并排出现。**
+///
+///   * 左：**状态切换**胶囊 —— 显示当前模式（自动 / 单次），点一下切换；
+///   * 右：**立即上报** —— 无论哪个模式都立刻发一次。
+///
+/// 这三个界面以前各写了一套「立即上报」的逻辑与文案，慢慢长歪；现在只有这一份。
+/// 「自动上报」背后其实不止一个开关（射频信标 / 粗定位强制 / 智能分档），
+/// 但**用户只需要面对这一个总开关**：打开时若卡在射频信标，[AppState.toggleAutoReport]
+/// 会顺手一并打开（并如实提示），免得又出现「点了没反应」。
+///
+/// 布局刻意用短标签（自动 / 单次）而不是整句：这三处都很窄（横屏竖条内的
+/// 「我的位置」面板只有约 184px 可用），整句一定溢出。完整含义放在 tooltip 与
+/// 无障碍标签里（`reportToggleHint` / `reportAutoStart`）。
+class ReportActions extends StatelessWidget {
+  final AppState state;
+
+  /// 深色底（沉浸页的黑卡片）：用浅色文字与描边。
+  final bool onDark;
+
+  const ReportActions({
+    super.key,
+    required this.state,
+    this.onDark = false,
+  });
+
+  /// 三枚按钮（切换 / 立即上报 / 开始上报）共用同一套尺寸：
+  /// 一样高、一样圆角、一样字号与图标 —— 并排时不再高低不齐。
+  static const double _h = kChipControlHeight;
+  static const double _r = 9;
+  static const double _icon = 14;
+  static const double _font = 11;
+
+  Future<void> _toggle(BuildContext context) async {
+    final r = await state.toggleAutoReport();
+    if (!context.mounted) return;
+    final s = S.of(context);
+    final msg = !r.on
+        ? s.reportDisabledToast
+        : (r.rfEnabled ? s.reportRfEnabledToast : s.reportEnabledToast);
+    _toast(context, msg);
+  }
+
+  void _reportNow(BuildContext context) {
+    final s = S.of(context);
+    final reportable = state.myPositionReportable;
+    final connected = state.connected;
+    state.sendBeacon();
+    // 上报闸会挡住「还没本轮定位」的点；未连接时也只是本地点、不会真的发出去。
+    // 两种情况都如实提示 —— 别弹一个假的「已发送」让用户以为按钮没反应。
+    _toast(
+      context,
+      !reportable
+          ? s.beaconWaitingFix
+          : (!connected
+              ? s.beaconNotConnected
+              : s.positionBeaconDetail(state.myGrid, state.beaconAttachedDetail)),
+    );
+  }
+
+  /// 用户点了正式的「开始上报」：确认坐标有效后开始（本次连接内）自动上报。
+  void _startReporting(BuildContext context) {
+    final s = S.of(context);
+    state.beginReporting();
+    _toast(context, s.reportEnabledToast);
+  }
+
+  static void _toast(BuildContext context, String m) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    final on = state.beaconEnabled;
+
+    // ── 上报前的正式确认 ──
+    //
+    // 用户要求：连上服务器后**不要**自动上报；给一个正式的「开始上报」按钮，
+    // 由用户手动确认后再开始。做成一枚醒目的实心按钮，而不是弹窗（用户明确说
+    // 不用提示、只要按钮）。坐标还没拿到本轮定位时按钮置灰 —— 「确认坐标有效」
+    // 之后它才可点（与 myPositionReportable 同源）。
+    //
+    // ⚠ 这枚按钮**不取代**左边那枚模式开关（用户 2026-10-24 报的问题）：
+    // 以前它是整块替换，于是「连着但还没点开始上报」的那段时间里首页只剩下
+    // 这一枚按钮 —— 界面上看不到自动/单次的开关，想再开自动就只能跑设置页。
+    final needsConfirm =
+        state.connected && !state.beaconArmed && state.beaconEnabled;
+    final ready = state.myPositionReportable;
+
+    // 状态胶囊：绿=自动上报中；灰=单次。文字直接写模式，点它切换。
+    final toggleFg = on ? Colors.white : (onDark ? Colors.white : C.slate);
+    final toggleBg = on
+        ? C.green
+        : (onDark ? Colors.white.withValues(alpha: 0.16) : C.greyBg);
+    final toggle = ClickCursor(
+      child: GestureDetector(
+        // opaque + 更大的纵向留白：地图上的小胶囊不能只靠 13px 高那点命中区，
+        // 手指稍微一动就会被地图的缩放手势吃掉（表现为「点了没反应」）。
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _toggle(context),
+        child: Tooltip(
+          message: s.reportToggleHint,
+          child: Semantics(
+            button: true,
+            label: on ? s.reportAutoStop : s.reportAutoStart,
+            child: Container(
+              height: _h,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: toggleBg,
+                borderRadius: BorderRadius.circular(_r),
+                border: Border.all(
+                  color: on ? C.green : (onDark ? Colors.white30 : C.grey),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    on
+                        ? Icons.pause_circle_filled_rounded
+                        : Icons.play_circle_fill_rounded,
+                    size: _icon,
+                    color: toggleFg,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    on ? s.reportTagAuto : s.reportTagOnce,
+                    style: ts(_font, c: toggleFg, w: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // 立即上报：始终可用（关自动上报时它就是唯一的上报方式）。
+    final now = ClickCursor(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _reportNow(context),
+        child: Container(
+          height: _h,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: onDark ? Colors.white : C.blue,
+            borderRadius: BorderRadius.circular(_r),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.send_rounded,
+                  size: _icon, color: onDark ? C.blue : Colors.white),
+              const SizedBox(width: 4),
+              Text(s.reportNow,
+                  style: ts(_font,
+                      c: onDark ? C.blue : Colors.white, w: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // 动作按钮两选一：还没接过本次连接时是「开始上报」（实心绿，确认那一下），
+    // 其余时候都是「立即上报」（发一次）。模式开关永远在它左边 —— 两枚一起出现，
+    // 用户不必为了开关自动上报而离开当前页。
+    final action = needsConfirm
+        ? ClickCursor(
+            child: FilledButton.icon(
+              // 不要用 onPressed:null：按钮会**彻底没反应**，用户只能反复点。
+              // 没拿到本轮定位时也让它可点，点了如实说「等待定位」。
+              onPressed: () {
+                if (!ready) {
+                  _toast(context, s.beaconWaitingFix);
+                  return;
+                }
+                _startReporting(context);
+              },
+              icon: Icon(
+                ready ? Icons.send_rounded : Icons.location_searching_rounded,
+                size: _icon,
+              ),
+              label: Text(
+                ready ? s.reportStartNow : s.beaconWaitingFix,
+                style: ts(_font,
+                    w: FontWeight.w700, c: ready ? Colors.white : C.slate),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: ready ? C.green : C.greyBg,
+                foregroundColor: ready ? Colors.white : C.slate,
+                disabledBackgroundColor: C.greyBg,
+                disabledForegroundColor: C.slate,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, _h),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_r),
+                ),
+              ),
+            ),
+          )
+        : now;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [toggle, const SizedBox(width: 6), action],
+    );
+  }
+}
+
+/// 上报状态条那一句话：当前档位 → 文案。
+///
+/// 地图页底部那条横杠与精简模式的状态条共用这一份。以前这段 switch 只活在地图页
+/// 里，精简模式想要一句同样的文案就只能再拄一遍 —— 两套文案分开演化过一次，
+/// 结果是同一件事在两个界面上说法不一样。
+String beaconBarText(BuildContext context, AppState st) {
+  final s = S.of(context);
+  return switch (st.beaconPhase) {
+    BeaconPhase.off => s.beaconOffChip,
+    BeaconPhase.rfDisabled => s.beaconRfBeaconOff,
+    // 连上但还没点「开始上报」：提示去点那个正式按钮（见 ReportActions）。
+    BeaconPhase.needConfirm => s.beaconNeedConfirm,
+    BeaconPhase.coarseFix => s.beaconCoarseFix,
+    // 开了「强制接受网络定位自动上报」时它**会真的发射**，所以这一档跟的是
+    // 倒计时；但文案里必须点明「发的是网络定位（粗）」。
+    BeaconPhase.coarseForced => s.beaconCoarseForced(st.nextBeaconIn),
+    // 佳明档：把**来源**说清楚 + 心率（用户明确要「主屏能看到心率」）。
+    BeaconPhase.garmin => s.beaconGarminNext(
+        st.nextBeaconIn,
+        st.myHr == null ? '--' : '${st.myHr}',
+      ),
+    // 外接 GPS 模块档：同理把来源说清楚；模块没带心率，所以没有那一段。
+    BeaconPhase.spp => s.beaconSppNext(st.nextBeaconIn),
+    BeaconPhase.imminent => s.beaconImminent,
+    BeaconPhase.counting => s.beaconNextIn(st.nextBeaconIn),
+    BeaconPhase.disconnected => s.beaconNotConnected,
+    BeaconPhase.waitingFix => st.nextBeaconIn,
+  };
+}
+
+/// 上报状态条的颜色：非绿 = 「现在这一发不能当作正常 GPS 上报看」。
+///
+/// 与 [beaconBarText] 同源，两处界面共用的就是这一份判据。
+Color beaconBarColor(AppState st) {
+  if (!st.beaconEnabled) return C.slate;
+  return switch (st.beaconPhase) {
+    BeaconPhase.needConfirm => C.orange,
+    BeaconPhase.coarseFix => C.orange,
+    BeaconPhase.coarseForced => C.orange,
+    BeaconPhase.garmin => C.red,
+    _ => C.green,
+  };
 }
 
 /// Round small button
@@ -731,6 +1126,132 @@ class _LogoPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+/// ─── 方位角「小角角」指示器 ───
+///
+/// 叠在「我的位置」圆点上，从圆边缘朝**航向**（真北顺时针，与 [Station.course]
+/// 一致）伸出一个三角箭头。为什么要有它：地图页原来只有一个圆点 + 内部图标，
+/// 完全看不出「我朝哪边走」（而其它移动台站的符号本身带方向）。
+///
+/// 造型是**两色三角**：白色描边的三角 + 内部 [accent] 填充，与圆点「蓝底白边」
+/// 同一套视觉语言 —— 一眼就认得出是朝外指的箭头，而不是圆边上长了个疙瘩。
+/// 三角的**底边落在圆点内部**（[inset] 缩进量），被叠在上面的圆点盖住，
+/// 于是屏幕上只剩圆环外露出的那个尖角，看起来就是圆点长出的一个尖鼻子。
+///
+/// 与 [Transform.rotate] 的 `child` 叠加使用：外层负责缩放（脉冲/尺寸），
+/// 本组件负责按 [course] 旋转。航向朝上（0°）时角角指向正上方。
+///
+/// **务必将本组件叠在圆点 *之下***（Stack 里放在圆点 Container 前面）：三角底边
+/// 落在圆点内部，被圆点本体盖住，屏幕上只剩圆环外露出的那个尖角 —— 否则底边
+/// 会在蓝圆上留下一道白疤。所以 [inset] 要大于 0，让底边缩进圆内。
+///
+/// **无航向时不画**（[course] 为 null / 负值 / 静止未取得航向）：宁可没有角标，
+/// 也不要拿一个猜的方向误导用户。
+class HeadingCornerIndicator extends StatelessWidget {
+  final double? course;
+
+  /// 圆环**中心线**半径（即圆点半径，描边以它为中心）。
+  final double radius;
+
+  /// 箭头伸出圆环外的长度。
+  final double size;
+
+  /// 三角底边的半宽。
+  final double halfWidth;
+
+  /// 底边相对圆环中心线向内缩进，让底边完全藏进圆点、不留白疤。
+  final double inset;
+
+  /// 描边/外三角颜色。
+  final Color color;
+
+  /// 内三角填充色；为 null 则画成纯色三角。
+  final Color? accent;
+  const HeadingCornerIndicator({
+    super.key,
+    required this.course,
+    this.radius = 13,
+    this.size = 9,
+    this.halfWidth = 8,
+    this.inset = 5,
+    this.color = Colors.white,
+    this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final crs = course;
+    if (crs == null || crs < 0) return const SizedBox.shrink();
+    // 画布要容得下「圆心到箭头尖」这一整段，且以圆心为正中心。
+    final reach = radius + size;
+    final d = reach * 2 + 4;
+    return Transform.rotate(
+      angle: crs * math.pi / 180,
+      child: CustomPaint(
+        size: Size.square(d),
+        painter: _HeadingCornerPainter(
+          radius: radius,
+          size: size,
+          halfWidth: halfWidth,
+          inset: inset,
+          color: color,
+          accent: accent,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadingCornerPainter extends CustomPainter {
+  final double radius, size, halfWidth, inset;
+  final Color color;
+  final Color? accent;
+  _HeadingCornerPainter({
+    required this.radius,
+    required this.size,
+    required this.halfWidth,
+    required this.inset,
+    required this.color,
+    required this.accent,
+  });
+
+  /// 以原点为中心、朝屏幕上方的一组三角路径（y 轴向下，故取负）。
+  Path _tri(double apexR, double baseR, double hw) => Path()
+    ..moveTo(0, -apexR)
+    ..lineTo(-hw, -baseR)
+    ..lineTo(hw, -baseR)
+    ..close();
+
+  @override
+  void paint(Canvas canvas, Size canvasSize) {
+    canvas.translate(canvasSize.width / 2, canvasSize.height / 2);
+    // 注意：这里的成员 size（箭头长度）会与 paint 的 Size 形参重名，
+    // 故形参命名 canvasSize，避免遮蔽成员。
+    final baseR = radius - inset;
+    // 外三角：白边 + 尖端，从圆环中心线一路伸到 radius+size。
+    canvas.drawPath(
+      _tri(radius + size, baseR, halfWidth),
+      Paint()..color = color,
+    );
+    // 内三角：同色于圆点本体（蓝），与外三角的白边组成「蓝底白边」的箭头。
+    final acc = accent;
+    if (acc != null) {
+      canvas.drawPath(
+        _tri(radius + size * 0.58, baseR + 1.5, halfWidth * 0.5),
+        Paint()..color = acc,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeadingCornerPainter old) =>
+      old.radius != radius ||
+      old.size != size ||
+      old.halfWidth != halfWidth ||
+      old.inset != inset ||
+      old.color != color ||
+      old.accent != accent;
+}
+
 /// 真实 APRS 官方符号图标：优先加载官方符号表 PNG（透明底彩色），
 /// 资源缺失/超出范围回退 Material 图标；offline 等场景可整图灰度弱化。
 class AprsSymbolImage extends StatelessWidget {
@@ -738,12 +1259,17 @@ class AprsSymbolImage extends StatelessWidget {
   final String symbolTable; // 符号表字符，默认主表 '/'
   final double size;
   final bool grayscale;
+
+  /// 可读性光晕：图案四周描一圈柔和深色，让图标压在明亮/花哨的卫星影像上
+  /// 也分辨得出。默认关（大多数场合底图够干净，不需要多这一层）。
+  final bool halo;
   const AprsSymbolImage(
     this.symbol,
     this.symbolTable, {
     super.key,
     this.size = 20,
     this.grayscale = false,
+    this.halo = false,
   });
 
   /// 灰度滤镜：保留透明度，只把彩色像素去饱和，用于离线台站弱化
@@ -773,10 +1299,39 @@ class AprsSymbolImage extends StatelessWidget {
         errorBuilder: (_, __, ___) => fallback,
       );
     }
-    if (!grayscale) return child;
-    return ColorFiltered(
+    if (!grayscale) return _maybeHalo(child);
+    return _maybeHalo(ColorFiltered(
       colorFilter: const ColorFilter.matrix(_grayscale),
       child: child,
+    ));
+  }
+
+  /// 在图案四周画一圈深色柔光：把图案染成深色、糊一层、垫在原图背后。
+  ///
+  /// 只用一个 `ImageFilter.blur`（而不是铺 8 个方向的偏移副本）：模糊本身
+  /// 就会把剪影**向四周**扩散，原图盖住中心后剩下的就是一圈均匀的通边暗环，
+  /// 代价固定且与图案形状无关。`ImageFilter.dilate` 本该更合适，但它在
+  /// Impeller 上并不保证可用，宁可要这一层「软但一定画得出」的光晕。
+  Widget _maybeHalo(Widget child) {
+    if (!halo) return child;
+    // 光晕宽度随图标大小走：大图标要更宽才看得见
+    final double r = (size * 0.14).clamp(1.2, 3.5).toDouble();
+    return Stack(
+      alignment: Alignment.center,
+      clipBehavior: Clip.none,
+      children: [
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: r, sigmaY: r),
+          child: ColorFiltered(
+            colorFilter: const ColorFilter.mode(
+              Color(0xE6101418),
+              BlendMode.srcIn,
+            ),
+            child: child,
+          ),
+        ),
+        child,
+      ],
     );
   }
 }

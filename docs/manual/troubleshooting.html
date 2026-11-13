@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>故障排查 — APRSlocus</title>
 <meta name="description" content="目标：用三个入口把问题定位到「链路 / 筛选 / 配置」中的哪一层。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="故障排查 — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/troubleshooting.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/troubleshooting.html">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="stylesheet" href="../css/style.css?v=5">
+<link rel="stylesheet" href="../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -180,9 +179,9 @@ TNC 另有初始化串与发射自检（状态包，不含坐标）。</li>
     <h2 id="matrix">症状 → 原因 → 动作<a class="hdr-anchor" href="#matrix" aria-label="本节永久链接" title="本节永久链接">#</a></h2>
 <div class="doc-table-wrap"><table class="doc-table">
 <thead><tr><th>症状</th><th>最可能的原因</th><th>动作</th></tr></thead><tbody>
-<tr><td>黄色「未验证」横幅</td><td>Passcode 空 / 错</td><td>设置 → 连接 → 填正确 Passcode → 保存并应用</td></tr>
-<tr><td>连不上服务器</td><td>网络 / 服务器地址 / 端口</td><td>核对 <code>rotate.aprs2.net:14580</code>；断线会自动 8→16→32→60s 重连，等一轮</td></tr>
-<tr><td>数据包页一条都没有</td><td>没勾数据来源 / 范围过滤太窄</td><td>设置 → 连接：勾 APRS-IS；范围半径调大 → 保存并应用</td></tr>
+<tr><td>黄色「未验证」横幅</td><td>Passcode 空 / 错</td><td>设置 → 服务器 → APRS-IS 服务器：填对 Passcode</td></tr>
+<tr><td>连不上服务器</td><td>网络 / 服务器地址 / 端口</td><td>核对填的服务器地址与端口；断线会自动 8→16→32→60s 重连，等一轮</td></tr>
+<tr><td>数据包页一条都没有</td><td>没勾数据来源 / 范围过滤太窄</td><td>设置 → 服务器：打开 APRS-IS 开关；范围半径调大 → 保存并应用过滤</td></tr>
 <tr><td>收到但地图上看不到</td><td>列表筛选挡住了</td><td>台站页点「清除筛选」；核对状态/类型筛选</td></tr>
 <tr><td>自己位置不显示/乱跳</td><td>没定位权限 / 用了网络粗定位</td><td>给定位权限；设置 → 定位上报 → 定位模式选纯 GPS</td></tr>
 <tr><td>TNC 能收不能发</td><td>停在命令模式 / 线速不匹配</td><td>发送初始化串（<code>KISS ON</code>）；核对 9600~115200 与电台一致</td></tr>
@@ -249,7 +248,7 @@ TNC 另有初始化串与发射自检（状态包，不含坐标）。</li>
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../js/main.js"></script>
+<script src="../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>导出 · 备份 · 轨迹 — APRSlocus</title>
 <meta name="description" content="目标：把日志导出成 ADIF、把整机设置打包备份、翻看历史轨迹。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="导出 · 备份 · 轨迹 — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/data.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/data.html">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="stylesheet" href="../css/style.css?v=5">
+<link rel="stylesheet" href="../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -180,7 +179,7 @@
 <li><b>导出</b>（设置 → 备份与恢复 → 导出备份）：设置配置（电台、信标、地图、筛选、数据来源、服务器等）
 与本地数据进<b>一个 JSON</b>；可勾选是否包含图片。</li>
 <li><b>导入</b>：选择备份文件（或从剪贴板粘贴）→ 导入后<b>重启应用</b>生效。</li>
-<li>换机 / 重装的顺序：装应用 → 导入 → 重启 → 核对「设置 → 连接」的服务器与 Passcode。</li>
+<li>换机 / 重装的顺序：装应用 → 导入 → 重启 → 核对「设置 → 服务器」里两条链路的地址与 Passcode。</li>
 </ol>
 <div class="callout warn"><span class="co-ic">🔐</span><div><p><b>白名单导入</b>：只认该分组白名单内的键 —— 来路不明的 JSON 改不了内部设置；
 更高版本的备份会被拒绝并提示先升级。<b>备份文件含呼号、服务器口令与 API 密钥，请妥善保管。</b></p>
@@ -192,6 +191,7 @@
 <ol class="m-steps">
 <li>入口：<b>设置 → 历史轨迹</b>。</li>
 <li>按天落盘：<code>tracklog/YYYY-MM-DD.json</code>，记录经纬度、速度、航向、海拔、精度 —— 退出重进还在。</li>
+<li><b>导出 GPX</b>：可选今天 / 7 天 / 30 天 / 365 天 / 自定义区间。文件落在下载目录（桌面端是文档目录），导出后还能直接分享。没有轨迹点的那天不会生成空轨道。</li>
 <li>每天一屏：总里程、平均与最高速度、<b>移动时长</b>、轨迹点数；可按天删除或一键清空。
 移动时长只累计确实在动的段 —— 中途停车吃饭的两小时不算开车。</li>
 <li><b>点进某天可回放</b>：底图与主地图同一套（同缓存、同坐标纠偏）；轨迹随播放生长、可拖进度、
@@ -246,7 +246,7 @@
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../js/main.js"></script>
+<script src="../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'early_member.dart' show onHonorsUpdated;
+
 /// 单个成就定义
 class Achievement {
   final String key;
@@ -213,6 +215,8 @@ class AchievementCenter {
             await p.setString('firstFixHolders',
                 jsonEncode(_firstFixHolders.toList()));
           } catch (_) {}
+          // FIRST FIX 名单变化也会改变「当前拥有」→ 通知荣誉庆祝检测对比一次
+          onHonorsUpdated();
         }
       } finally {
         client.close(force: true);
@@ -265,4 +269,15 @@ class AchievementCenter {
 
   /// 是否已解锁全部 7 项（FIRST FIX 申请前置）
   bool get allUnlocked => AchievementCenter.all.every((a) => isUnlocked(a.key));
+
+  /// 恢复出厂：清空本地成就进度。
+  ///
+  /// 供「清除所有数据并重新初始化」调用（AppState.factoryReset）。只清内存，
+  /// 磁盘由 factoryReset 的 `p.clear()` 统一处理；联网的官方名单
+  /// （[_firstFixHolders]）是**远端**授予、不属本地数据，保留不动。
+  void resetToDefaults() {
+    _unlocked.clear();
+    _counts.clear();
+    version.value++;
+  }
 }

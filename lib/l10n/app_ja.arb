@@ -129,6 +129,14 @@
   "mapTypeOsm": "OSM 標準",
   "mapTypeOsmHot": "OSM 人道",
   "mapTypeOpenTopo": "OpenTopo 地形",
+  "terrainGroup": "地形",
+  "mapTypeEsriTopo": "Esri 地形(等高線)",
+  "mapTypeEsriRelief": "Esri 陰影起伏",
+  "mapTypeEsriHillshade": "Esri 陰影",
+  "tiandituGroup": "天地図",
+  "mapTypeTianditu": "天地図 ベクター",
+  "mapTypeTiandituImg": "天地図 衛星写真",
+  "mapTypeTiandituTer": "天地図 地形",
   "mapTypeEsriStreet": "Esri ストリート",
   "mapTypeEsriSat": "Esri 航空写真",
   "simulatedKeepAlive": "シミュレーション位置 · バックグラウンド維持",
@@ -262,7 +270,7 @@
   "oobeWelcomeIs": "APRS-IS 接続",
   "oobeCallTitle": "あなたのコールサイン",
   "oobeSymbolTitle": "局のシンボルを選択",
-  "oobeServerTitle": "APRS-IS サーバーに接続",
+  "oobeServerTitle": "サーバー（任意）",
   "weatherData": "気象データ",
   "fmoInfo": "FMO 局情報",
   "aprslocusInfo": "APRSlocus 情報",
@@ -284,13 +292,13 @@
   "invalidCoords": "有効な緯度・経度・半径を入力してください",
   "filterSaved": "フィルターを保存して適用しました",
   "stationsShown": "局",
-  "settingsDesc": "無線局・位置情報・接続を設定",
+  "settingsDesc": "無線局・位置情報・リンク・データ",
   "radioCat": "無線局",
   "radioCatDesc": "コールサイン · SSID · シンボル",
   "beaconCat": "位置ビーコン送信",
   "beaconCatDesc": "GPS · ビーコン · 手動位置",
-  "connectionCat": "接続",
-  "connectionCatDesc": "サーバー · フィルター範囲",
+  "connectionCat": "サーバー",
+  "connectionCatDesc": "2 つの回線とフィルター範囲",
   "displayCat": "表示",
   "displayCatDesc": "座標 · テーマ",
   "chatCat": "チャット",
@@ -307,13 +315,13 @@
   "oobeWelcomeDesc": "APRS 無線局の設定を始めましょう",
   "oobeCallDesc": "コールサインを入力してください",
   "oobeSymbolDesc": "シンボルは局の種類を表し、位置ビーコンと一緒に送信されます",
-  "oobeServerDesc": "接続すると世界中の APRS 局のデータを受信できます。既定の設定のままでも使えます",
+  "oobeServerDesc": "空欄のままにすると、どのサーバーにも接続しません（本機のみで動作）。本ソフトはサーバーアドレスの提供も推奨も行いません。オンラインにする場合は、ご自身が信頼するサーバーとポートを入力してください。",
   "wizard": "セットアップウィザード",
   "setStep": "ステップ",
   "chooseSymbol": "局のシンボルを選択",
   "settingsSubtitle": "地図座標と表示の好み",
   "stationSettingsSubtitle": "コールサイン・シンボル・ビーコン",
-  "connectionSettingsSubtitle": "APRS-IS サーバーと受信範囲",
+  "connectionSettingsSubtitle": "2 つの回線は同時に接続でき、パケットは両方に 1 通ずつ届きます。",
   "chatSettingsSubtitle": "メッセージ履歴と連絡先",
   "dataSettingsSubtitle": "ローカルデータの管理",
   "advancedSettingsSubtitle": "ラボと開発者ツール",
@@ -329,11 +337,350 @@
   "showTrails": "軌跡を表示",
   "showStations": "局を表示",
   "aboutTitle": "このアプリについて",
-  "aboutSubtitle": "APRS 追跡と地図",
+  "aboutSubtitle": "APRS クライアント・位置情報と地図",
   "author": "作者",
   "codeContributions": "コード貢献",
   "codeContributionI18n": "国際化 / 英語 UI",
   "codeContributionZhTw": "繁体字中国語 UI",
+  "@icomLinkConnected": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomBindHint": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectRadio": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomSwitchTitle": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomCardActive": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingTo": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectTitle": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingSub": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      },
+      "tnc": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescRadio": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "icomTitleSubtitle": "Icom 無線機へ LAN 直結（IC-705 / IC-9700 / IC-7610 / IC-905）。12 kHz PCM 音声と CI-V 制御",
+  "icomLinkStatusTitle": "無線機リンク状態",
+  "icomLinkConnected": "{model} と LAN 直結しました",
+  "icomLinkHandshaking": "未接続、またはハンドシェイク中",
+  "icomBindHint": "オンにすると、APRS 音声の送受信元は {model} の LAN 直結に束ねられます",
+  "icomLinkPhase": "リンク段階",
+  "icomRfStats": "RF 送受信統計",
+  "icomAudioFmt": "12000 Hz（LPCM 16bit モノラル）",
+  "icomProcessing": "処理中...",
+  "icomDisconnectRadio": "無線機を切断",
+  "icomConnectRadio": "今すぐ {model} に接続",
+  "icomNetworkTitle": "無線機ネットワーク設定",
+  "icomNetworkSubtitle": "無線機プリセットを選び、IP と Network User の資格情報を設定します",
+  "icomModelPreset": "無線機プリセット",
+  "icomIpHint": "無線機の IP アドレス",
+  "icomUserHint": "無線機の Network User 名",
+  "icomPassHint": "無線機の Network User パスワード",
+  "icomCredHint": "ヒント：ユーザー名とパスワードは無線機本体の Network User Setting と完全に一致させてください。",
+  "icomCivTitle": "CI-V 制御と送信設定",
+  "icomCivSubtitle": "PTT 自動制御・プリアンブル遅延・ビーコン設定",
+  "icomRfBeaconHint": "無線機の RF で自動的にビーコン送信することを許可します（半二重。送信中は受信をミュート）。",
+  "icomTxDelayLabel": "送信プリアンブル遅延 (TX Delay, ms)",
+  "icomCivAddrLabel": "無線機の CI-V アドレス（16 進）",
+  "icomControllerAddr": "コントローラアドレス",
+  "icomControllerAddrValue": "0xE0（既定）",
+  "icomGuideTitle": "無線機の設定ガイド",
+  "icomGuideSubtitle": "Icom 無線機側で必要な準備手順",
+  "icomGuide1Title": "ネットワーク接続",
+  "icomGuide1Body": "IC-705 は MENU → SET → WLAN Set で Connect to Network を選んでルーターの Wi-Fi に接続するか、Access Point でスマホ直結用のホットスポットを立てます。IC-9700 / IC-7610 / IC-905 はルーターの LAN ポートに接続するか、無線ブリッジで LAN に参加させます。",
+  "icomGuide2Title": "ネットワークユーザーを追加",
+  "icomGuide2Body": "WLAN Set / Network Set → Network User Setting でユーザーを追加し（ユーザー名とパスワードを設定）、接続を許可します。",
+  "icomGuide3Title": "CI-V アドレスとポートを確認",
+  "icomGuide3Body": "MENU → SET → Connectors → CI-V で CI-V Address と制御ポートを確認します。",
+  "icomGuide4Title": "モードと周波数を設定",
+  "icomGuide4Body": "該当バンドのモードを FM-D に設定します。",
+  "icomLogTitle": "無線機通信の診断ログ",
+  "icomLogSubtitle": "Icom LAN 制御パケットと CI-V 通信の記録を表示",
+  "icomLogEmpty": "通信ログはまだありません",
+  "icomPhaseOpeningSockets": "ポートを開いています…",
+  "icomPhaseDiscovering": "無線機を検出しています…",
+  "icomPhaseAuthenticating": "無線機にログインしています…",
+  "icomPhaseNegotiating": "音声ストリームをネゴシエーション中…",
+  "icomPhaseOpeningStreams": "ストリームを開いています…",
+  "icomPhaseReady": "接続済み（音声待ち）",
+  "icomPhaseReceiving": "接続済み（受信中）",
+  "icomPhaseReconnect": "接続が切れました。再接続中…",
+  "icomPhaseFailed": "接続に失敗しました",
+  "icomPhaseUnsupported": "このプラットフォームは IC-705 の LAN 直結に対応していません",
+  "icomSwitchTitle": "WLAN 無線機（{model}）",
+  "icomLanAddr": "無線機アドレス",
+  "icomCardActive": "現在 {model} の LAN 直結モードが有効です。",
+  "icomConnectingTo": "{radio} に接続中",
+  "icomConnectTitle": "{radio} 無線機に接続",
+  "icomConnectingSub": "{radio}（{tnc}）に接続中…",
+  "icomDescHost": "{host} · LAN 直結で無線機を送受信・CI-V 制御",
+  "icomDescRadio": "LAN 直結で {radio} 無線機の送受信と制御",
+  "modelIc705Desc": "ポータブル全モード QRP 無線機（Wi-Fi AP / STA 内蔵）",
+  "modelIc9700Desc": "VHF/UHF/1.2GHz 全モード基地局（Ethernet LAN / Wi-Fi）",
+  "modelIc7610Desc": "HF/50MHz デュアル受信 SDR 基地局（Ethernet LAN）",
+  "modelIc905Desc": "144MHz〜10GHz 全モードマイクロ波無線機（Ethernet LAN）",
+  "modelCustomName": "カスタム / その他 (Custom)",
+  "modelCustomDesc": "Icom 無線機の CI-V アドレスとポートをカスタム設定",
+  "assetWindowsPackage": "Windows インストーラー",
+  "assetApkPackage": "APK パッケージ",
+  "honorTagPerseverance": "養生",
+  "@agentTestOk": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentError": {
+    "placeholders": {
+      "msg": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentToolCalling": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "agentMode": "エージェントモード",
+  "agentModeDesc": "AI チャットボックスを表示します。設定変更・メッセージ送信・局検索を会話で行えます（API キーはご自身で用意）",
+  "agentSettings": "エージェント設定",
+  "agentSettingsDesc": "API のベース URL / キー / モデルと、エージェントに許可する操作",
+  "agentEnabled": "エージェントを有効化",
+  "agentBaseUrl": "API ベース URL",
+  "agentApiKey": "API キー",
+  "agentModel": "モデル",
+  "agentPreset": "プリセット",
+  "agentPresetCustom": "カスタム",
+  "agentSystemPrompt": "システムプロンプト（任意）",
+  "agentAllowSend": "メッセージ送信を許可",
+  "agentAllowSendDesc": "エージェントに DM・グループメッセージ・ビーコンの送信を許可",
+  "agentAllowSettings": "設定変更を許可",
+  "agentAllowSettingsDesc": "エージェントにアプリ設定の変更を許可（オフ＝閲覧のみ）",
+  "agentTest": "接続テスト",
+  "agentTesting": "テスト中…",
+  "agentTestOk": "接続に成功しました：{model}",
+  "agentNeedConfig": "API ベース URL・キー・モデルを入力してください",
+  "agentChatTitle": "エージェントアシスタント",
+  "agentInputHint": "エージェントに依頼を入力…",
+  "agentSend": "送信",
+  "agentClear": "会話を消去",
+  "agentClearConfirm": "この会話を消去しますか？",
+  "agentWelcome": "こんにちは。APRSLocus のエージェントアシスタントです。設定変更・メッセージ送信・局検索を依頼できます。まず「エージェント設定」で API キーを設定してください。",
+  "agentThinking": "考えています…",
+  "agentError": "エラー：{msg}",
+  "agentConfirmTitle": "エージェントが操作を要求しています",
+  "agentConfirmRun": "許可",
+  "agentConfirmDeny": "拒否",
+  "agentDenied": "操作を拒否しました",
+  "agentExecuted": "実行しました",
+  "agentToolResult": "ツール結果",
+  "agentStopped": "停止しました",
+  "agentStop": "停止",
+  "agentOpenSettings": "エージェント設定",
+  "agentNeedsEnable": "まず実験機能で「エージェントモード」を有効にしてください",
+  "agentToolCalling": "実行中：{name}",
+  "agentMinimize": "最小化",
+  "agentApiKeyTip": "キーは本端末にのみ保存され、APRSlocus のサーバーには送信されません。",
+  "agentPresetHint": "API URL とモデルをすばやく入力",
+  "agentInterfaceSection": "API 設定",
+  "agentPermissions": "権限",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentMemory": "長期記憶",
+  "agentMemoryDesc": "エージェントに好みを会話をまたいで記憶させます",
+  "agentMemoryOn": "長期記憶を有効化",
+  "agentMemoryHint": "エージェントが記憶/忘却ツールを使えます。「…を覚えて」と頼んでも可。本機にのみ保存されます。",
+  "agentMemoryEmpty": "まだありません。「…を覚えて」と伝えると追加できます。",
+  "agentMemoryClear": "すべての記憶を消去",
+  "agentMemoryClearConfirm": "長期記憶をすべて消去しますか？元に戻せません。",
+  "agentCompress": "会話の圧縮",
+  "agentCompressDesc": "履歴が長くなると古い会話を要約に畳み、コンテキストを節約します",
+  "agentCompressOn": "自動圧縮を有効化",
+  "agentCompressHint": "約 40 件を超えると自動圧縮。要約はシステムプロンプトに残り、直近の会話は変わりません。",
+  "agentCompressNow": "今すぐ圧縮",
+  "agentCompressNothing": "圧縮する内容がありません",
+  "agentCompressDone": "会話を圧縮しました",
+  "agentAllowNetwork": "ネットワーク要求を許可",
+  "agentAllowNetworkDesc": "エージェントが HTTP リクエスト（GET / POST / PUT / DELETE…）を送れるようにします。既定はオフ。実行前に毎回確認します。",
+  "agentNoFinalAnswer": "このターンの連続操作回数の上限に達し、結論を出せませんでした。「続けて」と送ると続きを実行します。",
+  "agentTool_http_request": "ネットワーク要求",
+  "agentTool_save_memory": "情報を記憶",
+  "agentTool_list_memories": "記憶を表示",
+  "agentTool_forget_memory": "情報を忘却",
+  "huangyanTitle": "黄岩島",
+  "huangyanBadge": "隠し局 · 中国の固有の領土",
+  "huangyanTagline": "南シナ海・中沙諸島東部の環礁、中国の固有の領土",
+  "huangyanShort": "中国の固有の領土 · 南シナ海 中沙諸島東部の環礁",
+  "huangyanGrid": "OL98gd",
+  "huangyanGeoHead": "地理",
+  "huangyanGeoBody": "黄岩島（別名スカボロー礁）は南シナ海の中沙諸島東部に位置する、ほぼ二等辺三角形の大型環礁で、周囲約55km、礁原面積は約150平方キロ、長さ約15kmのラグーンを内包する。礁縁の大半は水面下にあり、干潮時に一部が海面上に現れ、中沙諸島で唯一海面上に出る島礁である。",
+  "huangyanHistoryHead": "歴史",
+  "huangyanHistory1": "中国には古くから黄岩島に関する歴史的記録がある。元代の天文学者・郭守敬は「四海測験」の命により1297年にこの海域へ観測点を設けた。以降、歴代の官製地図や航海文献は黄岩島を中国の版図に含め、海南・広東の漁民は代々この海域で操業し「黄岩」と呼んだ。西洋海図は後に Scarborough Shoal の名を用いた。",
+  "huangyanHistory2": "現代においても中国政府は黄岩島およびその周辺海域で主権と管轄を行使し続けている。1983年、中国地名委員会が標準名称「黄岩島」を正式に公布した。",
+  "huangyanHamHead": "アマチュア無線",
+  "huangyanHamBody": "アマチュア無線では、黄岩島は DXCC エンティティのコールサイン接頭辞 BS7 で知られる。1995年、中国と各国のアマチュアが BS7H の DXペディションを敢行し、この環礁が初めて世界中のログに載り、希少な DX 目的地として知られるようになった。",
+  "huangyanLegal": "本カードの資料はアマチュア無線の教育・紹介のみを目的とする。黄岩島は中国の固有の領土であり、中国はその周辺海域とともに争う余地のない主権を有する。",
+  "huangyanTagReef": "珊瑚環礁",
+  "huangyanTagDxcc": "DXCC BS7",
+  "huangyanTagAxis": "中沙諸島",
+  "huangyanFootNote": "公開された地理・歴史資料を基に、参考としてまとめたものです。",
+  "huangyanOpen": "紹介ページを開く",
+  "agentTabConnection": "接続",
+  "agentTabPermissions": "権限",
+  "agentTabAutomation": "自動化",
+  "agentSystemPromptHint": "空欄なら内蔵プロンプトを使用",
+  "agentAlwaysAllow": "常に許可",
+  "agentAlwaysAllowDesc": "許可済みのツールは確認なしで実行されます。確認バーの「常に許可」で追加できます。",
+  "agentAlwaysAllowEmpty": "まだありません。確認バーの「常に許可」で追加できます。",
+  "agentAlwaysAllowClear": "すべて消去",
+  "agentAutoReply": "自動返信",
+  "agentAutoReplyDesc": "新着メッセージにエージェントが自動返信します（実験的）",
+  "agentAutoReplyOn": "自動返信を有効化",
+  "agentAutoReplyHint": "DM のみ。静音時間とクールダウンの対象。メッセージ送信の許可が必要です。",
+  "agentReplyGroups": "グループにも返信",
+  "agentReplyGroupsDesc": "グループでの自動発言はリスクが高いため既定でオフ",
+  "agentQuietHours": "静音時間",
+  "agentQuietHoursDesc": "例 23:00-07:00。空欄＝制限なし。この時間帯は自動返信しません。",
+  "agentTasks": "スケジュールタスク",
+  "agentTasksDesc": "指定時刻にエージェントが指示を自動実行します",
+  "agentTasksEmpty": "スケジュールタスクはありません",
+  "agentTaskNew": "スケジュールタスクを追加",
+  "agentTaskPrompt": "指示",
+  "agentTaskPromptHint": "例：直近1時間に受信した局を要約",
+  "agentTaskInterval": "間隔（分）",
+  "agentTaskIntervalHint": "0 = 1 回のみ。繰り返しは最短 1 分",
+  "agentTaskCreate": "作成",
+  "agentTaskDelete": "削除",
+  "agentTaskEvery": "{n} 分ごと",
+  "agentTaskOnce": "1 回のみ",
+  "agentAutoReplyPrompt": "【自動返信】{from} からのメッセージ：{text}\n読み取り専用ツール（局・メッセージなど）で事実を調べてもよいですが、設定変更や送信はしないでください。返信する一文だけを出力してください。",
+  "agentTool_get_app_state": "アプリ状態を取得",
+  "agentTool_list_groups": "グループ一覧",
+  "agentTool_search_stations": "局を検索",
+  "agentTool_list_stations": "局を一覧",
+  "agentTool_station_detail": "局の詳細",
+  "agentTool_read_messages": "メッセージを読む",
+  "agentTool_send_message": "メッセージ送信",
+  "agentTool_send_beacon_now": "今すぐビーコン送信",
+  "agentTool_set_preferences": "環境設定を変更",
+  "agentTool_set_station_filters": "局フィルタを変更",
+  "agentTool_set_nickname": "コールサイン情報を変更",
+  "agentTool_navigate": "画面を切り替え",
+  "agentTool_create_task": "スケジュールタスク作成",
+  "agentTool_list_tasks": "スケジュールタスク一覧",
+  "agentTool_cancel_task": "スケジュールタスク取消",
+  "agentTool_set_connection_server": "サーバーを変更",
+  "agentTool_set_connection_source": "接続方法を変更",
+  "agentTool_connect": "接続",
+  "agentTool_disconnect": "切断",
+  "agentTool_nearby_stations": "近くの局",
+  "agentTool_reply_message": "メッセージに返信",
+  "agentTool_send_group_message": "グループへ送信",
+  "agentTool_create_group": "グループを作成",
+  "agentTool_set_task_enabled": "タスクの一時停止/再開",
+  "agentTool_list_strategy": "戦略マップを一覧",
+  "agentTool_strategy_add_point": "マーカーを追加",
+  "agentTool_strategy_add_rally": "集合点を追加",
+  "agentTool_strategy_add_circle": "円を追加",
+  "agentTool_strategy_add_line": "線を追加",
+  "agentTool_strategy_update": "戦略要素を編集",
+  "agentTool_strategy_delete": "戦略要素を削除",
+  "agentTool_strategy_clear": "戦略マップを消去",
+  "agentTool_strategy_request_snapshot": "マップの再送を要求",
+  "agentTool_unknown": "操作を実行",
+  "agentMessageTasks": "メッセージトリガー",
+  "agentMessageTasksDesc": "新着メッセージ受信時にエージェントが指示を実行します",
+  "agentMessageTasksEmpty": "メッセージトリガーはありません",
+  "agentMessageTaskNew": "メッセージトリガーを追加",
+  "agentMessageTaskPromptHint": "例：このメッセージ内の位置を記録する",
+  "agentMessageTaskEvery": "メッセージ受信時",
+  "agentMessageTaskRunPrompt": "【メッセージトリガー】{n} 番目のメッセージトリガータスクが発火しました。\nタスク指示：{task}\n受信メッセージ（{from}）：{text}\nこのタスク指示を実行し、結果または結論のみを出力してください。この説明は出力しないでください。",
+  "agentNoticeTitle": "エージェント利用に関する告知",
+  "agentNoticeAccept": "同意して有効化",
+  "agentNoticeDecline": "今はしない",
+  "agentNoticeBody": "エージェントは、あなたとの会話内容と、それが読み取った端末内データ（局・位置・メッセージ・設定など）を、あなたが設定したサードパーティのモデルサービス（OpenAI、DeepSeek、自前のエンドポイント等）に送信して処理します。会話に国家機密・企業秘密・個人のプライバシー・機微な位置情報を含めないでください。\n\n選択したモデルサービスの適法性はご自身で確認し、データの越境移転や個人情報の処理に起因する責任を負ってください。当方は当該サービスを運営しておらず、提携・代理・協力関係もありません。\n\nエージェントは既定で読み取りのみ可能です。メッセージ送信や設定変更など副作用のある操作は、チャット欄での個別の許可と都度の確認が必要で、いつでも無効化できます。\n\n「同意して有効化」を押すと、上記を読み・理解し・受け入れたものとみなされます。",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentStreamReply": "逐次表示",
+  "agentStreamReplyDesc": "モデルの生成に合わせて順次表示します。バックエンドがストリーム非対応なら一括表示に切り替わります（返答が減ることはありません）。",
+  "agentToolHistory": "ツール操作履歴",
+  "agentToolHistoryEmpty": "ツール操作の履歴はまだありません。エージェントに何か頼むと、ここに記録されます。",
+  "agentToolWorking": "実行中：{tool}",
+  "agentToolDenied": "拒否",
+  "agentToolFailed": "失敗",
+  "@agentToolWorking": {"placeholders": {"tool": {"type": "String"}}},
   "codeContributionTranslation": "翻訳",
   "dataSourceTxHint": "複数のリンクを同時に有効にして受信できますが、**送信は 1 つだけ**です（右側のドット）。同じコールサインを 2 つのリンクから送ると重複パケットになります。",
   "dataSourceTxBadge": "送信",
@@ -366,13 +713,58 @@
   "grpNameTooLong": "グループ名は最大 {max} 文字です（長すぎると招待が APRS メッセージ上限を超えます）",
   "grpInviteSent": "{n} 名に招待を送信しました",
   "grpSelfPending": "管理者の確認待ち",
-  "@grpSysJoined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysLeft": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysJoinReq": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysDeclined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpInviteBody": {"placeholders": {"from": {"type": "String"}, "name": {"type": "String"}}},
-  "@grpNameTooLong": {"placeholders": {"max": {"type": "int"}}},
-  "@grpInviteSent": {"placeholders": {"n": {"type": "int"}}},
+  "@grpSysJoined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysLeft": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysJoinReq": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysDeclined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpInviteBody": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpNameTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "@grpInviteSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deviceOverviewTitle": "デバイス",
   "deviceOverviewSubtitle": "データソース・リンク状態・自己診断",
   "deviceCurrentLink": "現在のリンク",
@@ -401,18 +793,60 @@
   "tncTxTestOk": "TNC に書き込みました（累計 {n} フレーム）。無線機が送信しない場合は TNC 側の問題です。初期化文字列を試すか TxDelay を確認してください。",
   "tncTxTestFail": "書き込み失敗：{err}",
   "tncNeedConnected": "先に TNC へ接続してください",
-  "@tncInitSent": {"placeholders": {"n": {"type": "int"}}},
-  "@tncTxTestOk": {"placeholders": {"n": {"type": "String"}}},
-  "@tncTxTestFail": {"placeholders": {"err": {"type": "String"}}},
+  "@tncInitSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@tncTxTestOk": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncTxTestFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "msgLenCounter": "{chars}/67 文字 · パケット {bytes}/512 バイト",
   "msgOverSpecAsk": "このメッセージは {chars} 文字で、APRS 規格の上限 67 文字を超えています。多くのクライアントは表示できますが、一部のクライアント／ゲートウェイは切り捨てまたは拒否するため、相手が解釈できない可能性があります。送信しますか？",
   "msgOverServerLimit": "パケットが {bytes} バイトで、APRS-IS の 1 行上限 512 バイトを超えています。サーバーがパケットごと破棄する可能性があります（ヘッダーも届きません）。約 {over} バイト短くしてください。",
   "msgSendAnyway": "それでも送信",
   "msgSpecLimitHint": "APRS 規格では 1 通のメッセージは 67 文字以内が推奨です。長すぎる文本は一部のクライアントで欠けたり解析に失敗します。",
   "msgBlockedTooLong": "送信を中止：パケットが APRS-IS の上限を超えています",
-  "@msgLenCounter": {"placeholders": {"chars": {"type": "int"}, "bytes": {"type": "int"}}},
-  "@msgOverSpecAsk": {"placeholders": {"chars": {"type": "int"}}},
-  "@msgOverServerLimit": {"placeholders": {"bytes": {"type": "int"}, "over": {"type": "int"}}},
+  "@msgLenCounter": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      },
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverSpecAsk": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverServerLimit": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "over": {
+        "type": "int"
+      }
+    }
+  },
   "beaconRfBeaconOff": "RF ビーコンがオフ",
   "beaconRfEnableHint": "RF ソースでの自動送信には「RF ビーコン」を明示的に有効にする必要があります。それまでは位置を自動送信しません（カウントダウンも進みません）。",
   "beaconRfEnableAction": "RF ビーコンを有効化",
@@ -475,22 +909,124 @@
   "audioRestart": "オーディオリンクを再起動",
   "audioTxDisabled": "「送信を許可」がオフ — 受信のみ",
   "audioLoopbackHint": "自己検査は実際に変調→復調を行います。Android では送信中マイクを一時停止します（半二重）",
-  "@diagPassed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagFailed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagAx25Mismatch": {"placeholders": {"got": {"type": "String"}}},
-  "@diagTncLoopbackOk": {"placeholders": {"len": {"type": "int"}}},
-  "@diagAfskLoopbackOk": {"placeholders": {"samples": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagAfskLoopbackFail": {"placeholders": {"n": {"type": "int"}}},
-  "@diagPlatformOk": {"placeholders": {"name": {"type": "String"}}},
-  "@diagCaptureOk": {"placeholders": {"bytes": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagCaptureFailed": {"placeholders": {"err": {"type": "String"}}},
-  "@diagSpeakerFail": {"placeholders": {"err": {"type": "String"}}},
-  "@diagFileIoOk": {"placeholders": {"rate": {"type": "int"}}},
-  "@diagFileWriteFail": {"placeholders": {"err": {"type": "String"}}},
-  "@testTxFail": {"placeholders": {"err": {"type": "String"}}},
-  "@audioStatRx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatTx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatDrop": {"placeholders": {"n": {"type": "int"}}},
+  "@diagPassed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFailed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAx25Mismatch": {
+    "placeholders": {
+      "got": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagTncLoopbackOk": {
+    "placeholders": {
+      "len": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackOk": {
+    "placeholders": {
+      "samples": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackFail": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagPlatformOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagCaptureOk": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagCaptureFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagSpeakerFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagFileIoOk": {
+    "placeholders": {
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFileWriteFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@testTxFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioStatRx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatTx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatDrop": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "notifAudioConnected": "オーディオリンク接続中",
   "notifAudioDisconnected": "オーディオリンク切断",
   "connConnectingAudio": "オーディオを開いています（{name}）…",
@@ -544,16 +1080,79 @@
   "audioWavFound": "{n} 件のパケットを復調",
   "audioWavWritten": "{path} に書き出しました",
   "audioWavFailed": "ファイル入出力に失敗：{err}",
-  "@connConnectingAudio": {"placeholders": {"name": {"type": "String"}}},
-  "@connAudioConnected": {"placeholders": {"rate": {"type": "String"}}},
-  "@connRetryAudio": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connRetryAudioDetail": {"placeholders": {"detail": {"type": "String"}, "seconds": {"type": "int"}}},
-  "@connAudioLinkLost": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connAudioPositionSent": {"placeholders": {"call": {"type": "String"}}},
-  "@audioBadFrames": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavFound": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavWritten": {"placeholders": {"path": {"type": "String"}}},
-  "@audioWavFailed": {"placeholders": {"err": {"type": "String"}}},
+  "@connConnectingAudio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioConnected": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryAudio": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryAudioDetail": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioLinkLost": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioPositionSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioBadFrames": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavFound": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavWritten": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioWavFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "connTncConnected": "TNC 接続済み · {arg}",
   "connTncPositionSent": "TNC 接続済み · 位置を送信しました ({arg})",
   "connRetryTnc": "TNC 接続失敗 · {n} 秒後に再試行…",
@@ -664,23 +1263,143 @@
   "translateNotNeeded": "翻訳の必要がない内容です（数字 / 記号 / コールサイン）",
   "translateBubbleCount": "{n} 件を翻訳",
   "translatePrivacyNote": "翻訳はメッセージ本文を選択した第三者のサービスへ送信します。プライバシーはご自身でご判断ください",
-  "@connTncConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@connTncPositionSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connRetryTnc": {"placeholders": {"n": {"type": "int"}}},
-  "@connRetryTncDetail": {"placeholders": {"e": {"type": "String"}, "n": {"type": "int"}}},
-  "@connTncLinkLost": {"placeholders": {"n": {"type": "int"}}},
-  "@translateCustomBodyTip": {"placeholders": {"text": {"type": "String"}, "from": {"type": "String"}, "to": {"type": "String"}}},
-  "@translateFreeFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateAutoAllFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateOutPreview": {"placeholders": {"text": {"type": "String"}}},
-  "@translateOutPreviewHint": {"placeholders": {"lang": {"type": "String"}}},
-  "@translateSentAs": {"placeholders": {"text": {"type": "String"}}},
-  "@translateTooLongAfter": {"placeholders": {"n": {"type": "int"}}},
-  "@translateTestOk": {"placeholders": {"text": {"type": "String"}}},
-  "@translateFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateBubbleCount": {"placeholders": {"n": {"type": "int"}}},
-  "@dateDividerFull": {"placeholders": {"y": {"type": "int"}, "m": {"type": "int"}, "d": {"type": "int"}, "w": {"type": "String"}}},
-  "@dateWeekday": {"placeholders": {"d": {"type": "String"}}},
+  "@connTncConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncPositionSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryTnc": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryTncDetail": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connTncLinkLost": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateCustomBodyTip": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFreeFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateAutoAllFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreview": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreviewHint": {
+    "placeholders": {
+      "lang": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateSentAs": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateTooLongAfter": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateTestOk": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateBubbleCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@dateDividerFull": {
+    "placeholders": {
+      "y": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      },
+      "d": {
+        "type": "int"
+      },
+      "w": {
+        "type": "String"
+      }
+    }
+  },
+  "@dateWeekday": {
+    "placeholders": {
+      "d": {
+        "type": "String"
+      }
+    }
+  },
   "notifTncConnected": "TNC 接続済み",
   "notifTncDisconnected": "TNC 未接続",
   "dataSourceTitle": "データソース",
@@ -690,6 +1409,96 @@
   "dataSourceTnc": "TNC",
   "dataSourceTncDesc": "Bluetooth／シリアルの TNC 経由で無線機から直接送受信",
   "dataSourceSwitchHint": "データソースを切り替えると現在の接続は切断されます",
+  "honorResetRow": "既読の名誉を消去",
+  "honorResetTitle": "既読の名誉を消去しますか？",
+  "honorResetConfirm": "「既読」の記録を消去します。次回起動時に、現在持っている名誉がすべて再表示されます。",
+  "honorResetButton": "消去",
+  "honorResetDone": "既読の名誉を消去しました",
+  "heatLevel": "ヒートマップの強さ",
+  "heatLevelLow": "弱",
+  "heatLevelMid": "中",
+  "heatLevelHigh": "強",
+  "mapLabelsAlways": "地図ラベルを常に表示",
+  "mapLabelsAlwaysDesc": "台局数やズームに関係なく、すべての局のコールサインラベルを地図に表示します。",
+  "startFromFavorites": "お気に入りの局から始める",
+  "boxConnectAction": "ボックスに接続",
+  "boxLinkUnsupported": "このプラットフォームはボックス接続に対応していません（Bluetooth または USB シリアルが必要）",
+  "boxNoDevicePaired": "デバイスが見つかりません。先にシステムの Bluetooth 設定でボックスをペアリングするか、USB シリアルケーブル（OTG）を接続してください",
+  "dataNoticeTitle": "データとネットワークの告知",
+  "dataNoticeBody": "サードパーティの APRS サーバーに接続するかどうかは、ご自身の判断です。本ソフトはサーバーアドレスの提供・運営・推奨を一切行いません。\n\n接続すると、コールサイン・位置・メッセージなどが当該サーバーと APRS-IS 網を通じて送信され、第三者が受信・保存・公開アーカイブする可能性があります。APRS は平文です。国家機密・営業秘密・個人情報・機微な位置情報を送らないでください。\n\n接続するサーバーとご自身の利用が法令に適合していることをご自身で確認し、国外移転・個人情報の処理・無線管理などに伴う責任を負っていただきます。当方はいかなるサーバーも運営しておらず、第三者サーバーとの提携・代理関係もありません。\n\n「同意して接続」を押すと、上記を読み・理解し・受け入れたものとみなします（利用規約 2.4／2.5／4.8 参照）。",
+  "dataNoticeAccept": "同意して接続",
+  "dataNoticeDecline": "今はしない",
+  "blTitle": "この端末は利用を制限されています",
+  "agentAuthTitle": "エージェントには認可が必要です",
+  "agentAuthBody": "エージェントは一般ユーザーには公開されていません。承諾書をダウンロードして記入し、下記のメールアドレスへ送信してください。承認されると、あなたのコールサインが認可リストに追加され、アプリが公式サイトから取得します。",
+  "agentAuthCallLabel": "この端末のコールサイン",
+  "agentAuthStep1Title": "承諾書をダウンロード",
+  "agentAuthStep1Desc": "下の「承諾書をダウンロード」をタップすると、ブラウザで承諾書全文が開きます。",
+  "agentAuthStep2Title": "記入して送信",
+  "agentAuthStep2Desc": "承諾書に記入のうえ、次の宛先へ送信してください：",
+  "agentAuthStep3Title": "審査後に再確認",
+  "agentAuthStep3Desc": "承認後「再確認」をタップすると有効になります。リストはブロックリストと同じ仕組みで、公式サイトから取得します。",
+  "agentAuthDownload": "承諾書をダウンロード",
+  "agentAuthEmail": "メールで送信",
+  "agentAuthMailTo": "申請先：",
+  "agentAuthMailSubject": "エージェント認可申請",
+  "agentAuthMailBody": "こんにちは。APRSLocus のエージェント機能の利用を申請します。承諾書の内容を正確に記入し、遵守することを約束します。私のコールサインは次のとおりです：",
+  "agentAuthRecheck": "認可を再確認",
+  "agentAuthChecking": "確認中…",
+  "agentAuthBack": "今はしない",
+  "agentAuthGranted": "認可を確認しました。エージェントを有効にしました",
+  "agentAuthStillPending": "まだ認可を確認できません。審査中かもしれません",
+  "agentAuthHint": "エージェント機能の利用には認可が必要です。このコールサインは認可リストにありません。",
+  "blBody": "利用規約 8.2 に基づき、規約に違反する方の利用を制限・停止・終了できるものとします。この端末（コールサインまたはインストール識別子）は制限リストに含まれているため、本ソフトは利用できません。",
+  "blReason": "理由",
+  "blMatched": "一致した項目",
+  "blId": "インストール識別子",
+  "blContact": "誤りだと思われる場合は、GitHub リポジトリで Issue を作成し、上のインストール識別子を添えてください。照合できるのはそれだけです。",
+  "blRetry": "再確認",
+  "blChecking": "確認中…",
+  "donateNotice": "ご支援は完全に任意です：機能・優先サポート・サービスを約束するものではなく、返金もできません。未成年の方は保護者の同意を得てからお願いします。",
+  "boxDeviceTitle": "APRSlocusBOX",
+  "boxDeviceDesc": "小箱：接続してスマホから設定変更・位置供給・ビーコン送信",
+  "boxBindTitle": "箱の接続",
+  "boxModeTip": "箱のリンクモードを bt か both にしないと Bluetooth は使えません。wifi モードでは USB シリアルで接続してください。link と bt は箱の再起動で反映されます。",
+  "boxBtLinkWarn": "箱は link = wifi です：Bluetooth 管理は使えません。bt/both に変えて再起動するか、USB シリアルを使ってください。",
+  "boxBaud": "シリアル速度（USB / デスクトップ）",
+  "boxStatTitle": "箱の状態",
+  "boxStatLinkMode": "リンクモード",
+  "boxStatBeacon": "自動ビーコン",
+  "boxStatHost": "APRS-IS サーバー",
+  "boxStatGps": "GPS ボーレート",
+  "boxStatEvents": "イベント数",
+  "boxLastEvent": "最新イベント",
+  "boxNoEventYet": "イベントはまだありません",
+  "boxCfgTitle": "箱の設定",
+  "boxCfgSubtitle": "キー名は箱のドキュメントと同じです。項目をタップして変更します",
+  "boxCfgRead": "設定を読み込む",
+  "boxCfgEmpty": "設定はまだ読めていません — 接続してから読み込んでください",
+  "boxCfgRebootHint": "link と bt は起動時設定です：箱の再起動で反映されます",
+  "boxCfgSent": "箱へ送信しました",
+  "boxCfgEditTitle": "設定を変更",
+  "boxCfgEditHint": "CFG キー=値を送信します。空欄は値を消去します",
+  "boxCfgMasked": "パスワードは表示されません：空欄なら変更なし、新しい値だけ書き込まれます",
+  "boxCfgNoChange": "変更なし（パスワードは非表示）",
+  "boxFeedTitle": "位置を箱へ供給",
+  "boxFeedSubtitle": "箱に GPS がないときに使います。供給した位置は 60 秒有効です",
+  "boxFeedAuto": "自動で位置を供給（30 秒ごと）",
+  "boxFeedSend": "現在位置を送信",
+  "boxFeedStop": "供給を停止",
+  "boxFeedNoFix": "スマホ側にまだ位置がありません — 先にホームで測位してください",
+  "boxActTitle": "箱の操作",
+  "boxActBeacon": "今すぐビーコン",
+  "boxActStatus": "ステータス",
+  "boxActNet": "APRS-IS 再接続",
+  "boxActClear": "局リストを消去",
+  "boxActTest": "書式セルフテスト",
+  "boxActReboot": "箱を再起動",
+  "boxPushTitle": "スマホの状態を箱へ",
+  "boxPushStatus": "リアルタイム状態を送る（心拍 / 速度 / カウントダウン / 距離 / 近くの局）",
+  "boxPushHint": "箱の PHONE ページに表示します。箱の画面に描くだけで電波は出しません。位置の供給とは別物です。",
+  "boxPassHint": "箱の APRS-IS passcode が -1（**受信のみ**）です：送信するには下の `pass` を自分の passcode に変えてください（**SSID 無しの基本コールサイン**のものです）",
+  "boxEvtTitle": "箱のイベント",
   "dataSourcePkwdwpl": "PKWDWPL（ケンウッド航点）",
   "dataSourcePkwdwplDesc": "Bluetooth/シリアルで無線機が出力する Kenwood $PKWDWPL 航点文を読み取ります（受信のみ）",
   "dataSourcePkwdwplHint": "PKWDWPL は**受信専用**リンクです。局を受信しますが送信には使われません（送信は APRS-IS / TNC / オーディオを使用）",
@@ -706,7 +1515,13 @@
   "deviceInUseByTnc": "TNC が使用中 — 重複して割り当てられません",
   "deviceInUseByPkwdwpl": "PKWDWPL が使用中 — 重複して割り当てられません",
   "rxOnlyBanner": "{arg} 接続済み · 受信のみ（送信元が未接続）",
-  "@rxOnlyBanner": {"placeholders": {"arg": {"type": "String"}}},
+  "@rxOnlyBanner": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
   "pkwdwplTip": "無線機のメニューで PC / GPS ポートの出力形式を \"$PKWDWPL\" に設定してください（通常 4800 8N1）。このリンクは受信専用で、一切送信しません。",
   "pkwdwplStrictChecksum": "厳格なチェックサム（不一致は破棄）",
   "pkwdwplStrictChecksumTip": "既定ではオフ。不一致は破棄せず記録とログのみ行います。ローカル接続での不一致はファームウェアの書式差であることが多く、すべて破棄すると画面が空になり、かえって原因を追いにくくなります。",
@@ -717,9 +1532,27 @@
   "pkwdwplStatMismatch": "チェックサム不一致",
   "pkwdwplStatIgnored": "その他の NMEA 文（無視）",
   "pkwdwplLogEmpty": "PKWDWPL のログはまだありません",
-  "@connConnectingPkwdwpl": {"placeholders": {"arg": {"type": "String"}}},
-  "@connPkwdwplConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@pkwdwplStats": {"placeholders": {"rx": {"type": "String"}}},
+  "@connConnectingPkwdwpl": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connPkwdwplConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkwdwplStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      }
+    }
+  },
   "tncBindTitle": "Bluetooth TNC",
   "tncBindSubtitle": "無線機側の TNC を登録して接続します",
   "tncBoundDevice": "登録済みデバイス",
@@ -776,9 +1609,30 @@
   "tncGroupDisabled": "RF モードではグループ配信は利用できません",
   "tncMsgLimitHint": "1 通あたり {n} 文字（APRS 仕様）",
   "tncMsgTooLong": "RF モードの 1 通あたりの文字数上限を超えています",
-  "@tncStats": {"placeholders": {"rx": {"type": "String"}, "tx": {"type": "String"}}},
-  "@connectingToTnc": {"placeholders": {"name": {"type": "String"}}},
-  "@tncMsgLimitHint": {"placeholders": {"n": {"type": "String"}}},
+  "@tncStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      },
+      "tx": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectingToTnc": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncMsgLimitHint": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "licenseSection": "ライセンス",
   "licenseName": "GNU GPL v3",
   "licenseStatement": "本ソフトウェアは GNU GPL v3 に基づいて公開されています。ライセンス条項を守る限り、実行・調査・改変・再配布が可能です。改変・再配布の際は GPL v3 の該当義務を守る必要があります。本ソフトウェアはいかなる保証も伴いません。",
@@ -796,8 +1650,9 @@
   "features": "機能",
   "openSource": "オープンソース謝辞",
   "feedback": "フィードバック",
+  "feedbackEntryDesc": "リポジトリで Issue",
+  "openLinkFailed": "リンクを開けませんでした",
   "officialWebsite": "公式サイト",
-  "qqGroup": "QQ グループ",
   "projectRepo": "リポジトリ",
   "testMembers": "テストメンバー",
   "aiSupport": "AI 計算リソース提供",
@@ -818,9 +1673,9 @@
   "chatSettings2": "チャット設定",
   "dataSettings2": "データ設定",
   "advancedSettings2": "詳細設定",
-  "connectionSettings2": "接続設定",
+  "connectionSettings2": "サーバー",
   "myCallsign": "マイコールサイン",
-  "beaconEnabled": "位置ビーコンを有効化",
+  "beaconEnabled": "自動送信",
   "smartBeacon": "スマートビーコン（速度別）",
   "packetConsole": "パケットコンソール",
   "rawMode": "生データ",
@@ -1156,8 +2011,8 @@
   "disconnect": "切断",
   "connectAprsIs": "APRS-IS に接続",
   "packetsReceived": "受信",
-  "passcodeUnverified": "Passcode 未検証",
-  "passcodeWarning": "ログイン用 Passcode が誤っている可能性があり、メッセージの送受信が正常に行えない場合があります",
+  "passcodeUnverified": "ログイン未検証",
+  "passcodeWarning": "Passcode かアカウントのパスワードが違う可能性があり、メッセージの送受信が正常に行えない場合があります",
   "goSettings": "設定へ",
   "connectingServer": "サーバーに接続中…",
   "notConnectedAprsServer": "APRS-IS サーバーに未接続",
@@ -1166,7 +2021,6 @@
   "connectAction": "接続",
   "backgroundRunTip": "バックグラウンド動作のヒント：バックグラウンドでの位置送信を維持するため、システム設定で APRSlocus のバックグラウンド動作を許可し、省電力最適化を無効にし、自動起動を許可してください。",
   "connectedAprsIs": "APRS-IS に接続しました",
-  "qqGroupDesc": "APRSlocus · 不具合報告・情報交換",
   "reselectPoint": "選び直す",
   "disableClustering": "クラスタリングを無効化",
   "enableClustering": "クラスタリングを有効化",
@@ -1222,11 +2076,11 @@
   "nameLabel": "名前",
   "viewSponsorDetails": "作者とスポンサーの詳細を見る →",
   "thanks": "ありがとう",
-  "qqSoftwareName": "APRSlocus",
   "usageNotice": "本ソフトウェアはアマチュア無線家の学習・交流目的のみに使用してください。\n現地の無線関連法規を遵守してください",
   "licenseNotice": "GNU GPL v3 · Copyright © BG7LZQ",
   "appInfoText": "APRSlocus v{version}\n作者：BG7LZQ (Darion)\nサイト：Theez.top",
   "eggBg7lzq": "おっと、何してるの〜",
+  "eggCuriosityWorld": "好奇心を持ち続けて、世界を探検しよう。",
   "eggBg7pgw": "本気？",
   "eggBg7lmw": "黙ったまま…",
   "eggBg7osl": "度胸あるね",
@@ -1354,7 +2208,7 @@
   "locModeNetwork": "ネットワークのみ",
   "locModeNetworkDesc": "基地局 / Wi-Fi のみ（誤差は数百 m）。最も省電力で、GPS のない端末向け",
   "locModeNetworkHint": "ネットワークのみモードでは基地局 / Wi-Fi のみで測位します。誤差は数百 m になることがあり、軌跡と履歴には**記録しません**。「粗い測位でも自動送信を強制」をオンにしない限り自動送信しません。",
-  "beaconingSection": "ビーコン送信",
+  "beaconingSection": "自動送信",
   "beaconIntervalTip": "位置ビーコンの送信間隔（最短 5 秒）",
   "beaconNetInterval": "ネットワークのみの送信間隔（秒）",
   "beaconNetIntervalTip": "ネットワークのみモードでは固定間隔を使用します。基地局/Wi-Fi 測位には信頼できる速度がないため、スマートビーコン（速度 / 距離 / 旋回）は使いません",
@@ -1482,6 +2336,7 @@
   "vectorMapLoadFailed": "ベクター地図の読み込みに失敗しました\n{error}",
   "loadingVectorMap": "ベクター地図を読み込み中…",
   "updateChannel": "更新チャネル",
+  "updateChannelQinglingHint": "自前ミラーチャネル（清零）",
   "serverReturned": "サーバーの応答：{code}",
   "invalidResponseData": "応答データの形式が不正です",
   "noVersionsFound": "バージョンが見つかりません",
@@ -1529,7 +2384,7 @@
   "settingsStationIdentitySubtitle": "コールサイン・SSID・メモ",
   "settingsDisplayInfoSubtitle": "マイシンボルと現在の位置",
   "settingsLocSourceSubtitle": "座標のソースを選択",
-  "settingsBeaconSubtitle": "送信間隔と送信内容",
+  "settingsBeaconSubtitle": "送信スイッチ・間隔・内容",
   "settingsManualLocSubtitle": "測位できない場合は手動入力または地図で選択",
   "settingsManualLocHint": "自動測位できない場合は、緯度・経度を手動入力するか地図で地点を選べます。ビーコン送信と局との距離計算に使われます。",
   "settingsConnStatusSubtitle": "接続状態と情報",
@@ -1738,7 +2593,7 @@
   "chatRecords": "チャット履歴",
   "chatRecordsCleared": "チャット履歴を消去しました",
   "deviceCat": "デバイス",
-  "deviceCatDesc": "無線機 · 準備中",
+  "deviceCatDesc": "データソース・リンク・iGate",
   "deviceSettings2": "デバイス設定",
   "deviceSettingsSubtitle": "無線機を接続",
   "underConstruction": "工事中・未公開",
@@ -1766,6 +2621,8 @@
   "achievementsProgress": "実績 {n}/{m}",
   "beaconNotConnected": "未接続",
   "beaconWaitingFix": "測位を待機中",
+  "beaconNeedConfirm": "送信の確認待ち",
+  "reportStartNow": "送信を開始",
   "beaconSoon": "まもなく",
   "beaconNextIn": "次回送信まで {s}",
   "beaconImminent": "まもなく送信…",
@@ -2032,19 +2889,35 @@
   "sysLinkOff": "未使用",
   "sysRx": "受信 {n}",
   "@sysRx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysTx": "送信 {n}",
   "@sysTx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysBeacon": "ビーコン {t}",
   "@sysBeacon": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "sysStations": "局数 {n}",
   "@sysStations": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysFixOk": "測位済み",
   "sysLinkAudio": "オーディオ",
@@ -2062,10 +2935,14 @@
   "backupCopyDone": "バックアップをクリップボードにコピーしました",
   "backupSavedTo": "保存先：{path}",
   "@backupSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "backupCatSettings": "設定",
-  "backupCatSettingsDesc": "局、ビーコン、地図、フィルター、接続先、サーバー",
+  "backupCatSettingsDesc": "局、ビーコン、地図、フィルター、接続先、サーバー、走行履歴",
   "backupCatStations": "局とコンタクト",
   "backupCatStationsDesc": "お気に入り・手動追加した局とメモ",
   "backupCatMessages": "メッセージ履歴",
@@ -2078,7 +2955,11 @@
   "backupCatHonorsDesc": "解除記録、カウント、既定バッジ",
   "backupItems": "{n} 件",
   "@backupItems": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSelectAll": "すべて選択",
   "backupNoSelection": "グループを 1 つ以上選んでください",
@@ -2090,22 +2971,38 @@
   "backupPreview": "バックアップの内容",
   "backupFromVersion": "書き出し元 {v}",
   "@backupFromVersion": {
-    "placeholders": {"v": {"type": "String"}}
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
   },
   "backupExportedAt": "書き出し日時 {t}",
   "@backupExportedAt": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "backupImportSelected": "選択した項目を読み込む",
   "backupImportConfirmTitle": "読み込みますか？",
   "backupImportConfirm": "選択したグループは上書きされ、元に戻せません。先に現在のデータを書き出すことをおすすめします。",
   "backupImported": "{n} 件を読み込みました",
   "@backupImported": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSkipped": "不明な {n} 件をスキップしました",
   "@backupSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupImportNothing": "選択したグループのデータがバックアップにありません",
   "backupRestartTitle": "読み込み完了",
@@ -2148,7 +3045,11 @@
   "themeDelete": "テーマを削除",
   "themeDeleteConfirm": "テーマ「{name}」を削除しますか？元に戻せません。",
   "@themeDeleteConfirm": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeReset": "既定に戻す",
   "themeResetAll": "このテーマをリセット",
@@ -2163,7 +3064,11 @@
   "themeIconImportHint": "PNG/JPG/WebP/GIF/BMP/SVG、2MB まで",
   "themeIconImportDone": "アイコンを読み込みました：{name}",
   "@themeIconImportDone": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeIconWebHint": "Web 版では画像を読み込めません。内蔵アイコンを使ってください",
   "themeIconErrFormat": "未対応の画像形式です（PNG/JPG/WebP/GIF/BMP/SVG）",
@@ -2178,7 +3083,11 @@
   "themeImportPaste": "クリップボードから読み込む",
   "themeImportDone": "{n} 件のテーマを読み込みました",
   "@themeImportDone": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "themeErrNotJson": "ファイルが有効な JSON ではありません",
   "themeErrNotTheme": "APRSlocus のテーマファイルではありません",
@@ -2218,13 +3127,21 @@
   "themeExportWithImages": "書き出しに画像を含める",
   "themeExportWithImagesHint": "書き出しファイルに画像本体（約 {size}）が含まれ、受け取った側でも同じ背景とアイコンが表示されます。その代わり手編集には向かなくなります。",
   "@themeExportWithImagesHint": {
-    "placeholders": {"size": {"type": "String"}}
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   },
   "themeExportNoImages": "このテーマは画像を参照していません。書き出しには色と文字だけが含まれます",
   "themeExportClipboardTooBig": "画像が大きいためクリップボードでは渡せません。「すべてのテーマを書き出す」でファイルに保存してください",
   "themeImportImagesSkipped": "{n} 件の画像を読み込めませんでした（大きすぎるか未対応形式）",
   "@themeImportImagesSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupThemeImagesHint": "バックアップにテーマが参照する画像本体を含めます。含めない場合、復元後にテーマは内蔵アイコンに戻ります。",
   "backupThemeImagesOff": "画像を含めません。バックアップは小さくなりますが、復元したテーマでは背景とカスタムアイコンが欠けます",
@@ -2280,7 +3197,11 @@
   "audioWavExportToDownloads": "ダウンロードへ書き出し",
   "audioWavSavedTo": "保存先: {path}",
   "@audioWavSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "audioWavCopyPath": "パスをコピー",
   "audioWavPathCopied": "パスをコピーしました",
@@ -2292,27 +3213,56 @@
   "audioTxLevelTip": "送信前にメディア音量を最大にし、マイク入力を一時停止します。ピークが低すぎてもクリップしても相手は復調できません",
   "audioTxPeak": "ピーク {p}% · {sec}s · プリアンブル {flags} フラグ",
   "@audioTxPeak": {
-    "placeholders": {"p": {"type": "int"}, "sec": {"type": "String"}, "flags": {"type": "int"}}
+    "placeholders": {
+      "p": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "String"
+      },
+      "flags": {
+        "type": "int"
+      }
+    }
   },
   "audioTxLevelClip": "クリップしています：出力振幅を 0.8 未満に下げてください（高調波が出ます）",
   "audioTxLevelLow": "レベルが低い：相手が復調できない可能性があります。振幅と音量を上げてください",
   "audioWiringHint": "無線機へはオーディオケーブルで（イヤホン出力 → データ/マイク端子）。スマホのスピーカーは 2200Hz が大きく減衰し、音響結合ではまず復調できません。相手が Direwolf なら、まず書き出した WAV で確認を：それで復調できれば問題は音声経路であってプロトコルではありません",
   "packetLimitRf": "パケット {bytes} バイト · 無線フレーム上限 {max} バイト",
   "@packetLimitRf": {
-    "placeholders": {"bytes": {"type": "int"}, "max": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
   },
   "packetLimitIs": "パケット {bytes} バイト · APRS-IS 1 行上限 512 バイト",
   "@packetLimitIs": {
-    "placeholders": {"bytes": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      }
+    }
   },
   "packetTcpipWarning": "TCPIP* を含みます：無線では自動的に除去されます（APRS-IS のパス）",
   "packetSent": "リンクへ送信しました：{line}",
   "@packetSent": {
-    "placeholders": {"line": {"type": "String"}}
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
   },
   "packetSendFailed": "送信していません：{err}",
   "@packetSendFailed": {
-    "placeholders": {"err": {"type": "String"}}
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
   },
   "tncSerialBaud": "シリアル通信速度 (bd)",
   "tncSerialBaudTip": "USB シリアルケーブルと無線機のデータ端子は同じ速度にする必要があり、違うと 1 バイトも通りません。よく使う値：9600 / 19200 / 38400 / 57600 / 115200。Bluetooth SPP には速度の概念がなく、Bluetooth 機器ではこの設定は無効です。",
@@ -2337,7 +3287,7 @@
   "uiLayoutSheetDesc": "地図は常に全画面。台站 / メッセージ / パケット / 設定は下部のドラッグできるカードに入り、上スワイプかハンドルのタップで開きます",
   "uiLayoutHint": "すぐに反映されます。両レイアウトの設定は別々に保持されます。カードを畳むと地図上のボタンが自動で上に移動します",
   "linkNotConnected": "未接続",
-  "linkTapForSettings": "タップして接続設定を開く",
+  "linkTapForSettings": "タップしてサーバー設定を開く",
   "uiMaterialGlassFull": "フルすりガラス",
   "uiMaterialGlassFullDesc": "最も透明で最もぼかしが強く、**小さな部品も一緒にぼかします**（地図のツールボタン・凡例・ヒント）。見た目は最も重く、GPU 負荷も最大です",
   "posAccuracy": "位置精度",
@@ -2367,11 +3317,23 @@
   "tierMinDist": "移動距離 (m)",
   "tierMinDistHint": "前回の報告からこの距離を移動したら追加で報告します。0 = オフ（間隔のみ）",
   "orMoveM": "または {dist} m",
-  "@orMoveM": {"placeholders": {"dist": {"type": "String"}}},
+  "@orMoveM": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "tierMinTurn": "方位変化 (度)",
   "tierMinTurnHint": "この角度を曲がったら追加で報告します（10〜180）。0 = オフ。走行中のみ有効（停車中は方位がノイズ）",
   "orTurnDeg": "または {deg}°",
-  "@orTurnDeg": {"placeholders": {"deg": {"type": "String"}}},
+  "@orTurnDeg": {
+    "placeholders": {
+      "deg": {
+        "type": "String"
+      }
+    }
+  },
   "inputTapHint": "タップして入力",
   "callCommentEmpty": "未設定 · タップして入力",
   "noticeTitle": "お知らせ",
@@ -2379,9 +3341,21 @@
   "noticeLoading": "取得中…",
   "noticeReadMore": "全文を読む",
   "noticeCached": "キャッシュ · {ago}",
-  "@noticeCached": {"placeholders": {"ago": {"type": "String"}}},
+  "@noticeCached": {
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
   "noticeOfflineCache": "オフラインのコピー · {time}（オンラインになると自動更新）",
-  "@noticeOfflineCache": {"placeholders": {"time": {"type": "String"}}},
+  "@noticeOfflineCache": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "timeJustNow": "たった今",
   "refresh": "更新",
   "noticeEntryDesc": "公式サイトの最新お知らせを見る",
@@ -2468,31 +3442,67 @@
   "garminUrlHint": "livetrack.garmin.com/session/…/token/…",
   "beaconGarminSource": "Garmin LiveTrack から送信",
   "beaconGarminNext": "Garmin · {s} · ❤{hr}",
-  "@beaconGarminNext": {"placeholders": {"s": {"type": "String"}, "hr": {"type": "String"}}},
+  "@beaconGarminNext": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      },
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceLabel": "位置ソース",
   "hrSourceLabel": "心拍ソース",
   "ownSourcePhoneGps": "スマホ GPS",
   "positionBeaconDetail": "位置ビーコン · グリッド {grid} · {detail}",
   "beaconAttachedHr": "心拍 {hr}",
   "beaconAttachedNone": "心拍なし",
-  "@positionBeaconDetail": {"placeholders": {"grid": {"type": "String"}, "detail": {"type": "String"}}},
-  "@beaconAttachedHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@positionBeaconDetail": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "@beaconAttachedHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceIdle": "未追跡（位置情報オフ）",
   "ownSourceGarminLive": "追跡中（スマホ GPS は待機）",
   "ownSourceGarminStale": "リンクは有効だが新しい点がありません",
   "ownSourceHrIdle": "未接続（タップして接続）",
   "hrLineHr": "心拍 {hr}",
-  "@hrLineHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@hrLineHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "garminShareNoLink": "共有された内容に Garmin LiveTrack のリンクが見つかりません",
   "hrFromGarmin": "心拍は Garmin LiveTrack（ウォッチ）から",
-  "sourceMovedHint": "データソース（リンク）の有効化・切り替えは「設定 → デバイス」で行います",
-  "posSourcePrecedence": "同時に使える場合の優先順位：シミュレート/手動 › Garmin（ウォッチに实时データがある間）› スマホ GPS",
+  "sourceMovedHint": "無線リンク（TNC・WLAN 無線機・オーディオ）は「設定 → デバイス」で有効にします",
+  "posSourcePrecedence": "同時に使える場合の優先順位：シミュレート/手動 › 外付け GPS モジュール › Garmin（ウォッチにリアルタイムのデータがある間）› スマホ GPS",
   "posSourceUsing": "現在使用中：{src}",
   "posSrcSim": "シミュレート/手動",
   "posSrcGarmin": "Garmin LiveTrack",
   "posSrcPhone": "スマホ GPS",
   "posSrcNone": "未測位",
-  "@posSourceUsing": {"placeholders": {"src": {"type": "String"}}},
+  "@posSourceUsing": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
   "garminNotStarted": "追跡していません",
   "garminAutoFilled": "共有リンクを自動入力しました",
   "garminLinkOk": "リンクは有効",
@@ -2500,7 +3510,13 @@
   "beaconForceCoarseHint": "既定ではオフ：ネットワーク測位（基地局 / Wi-Fi）は数百メートルずれることが多く、自動送信すると誤った座標を全員に知らせることになります。GPS の無い端末（タブレットなど）でのみオンにしてください。地図と軌跡は従来どおり粗い点を除外するので乱れません。手動の「今すぐ送信」はこのスイッチの影響を受けません。",
   "beaconCoarseForced": "ネットワーク測位（粗）· {s}",
   "beaconCoarseForcedNote": "ネットワーク測位（粗）で送信中",
-  "@beaconCoarseForced": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconCoarseForced": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "advancedMenu": "詳細設定",
   "aprsStatus": "独立ステータスパケット",
   "aprsStatusHint": "ここで送るのは**独立した 1 帧**のステータスパケットです（`>` で始まり、座標を含まず、aprs.fi 上の位置も動きません）。上のメモとは別種の APRS パケットです。空欄の場合は組み込みの APRSlocus オンライン フレームを送信します。",
@@ -2511,22 +3527,64 @@
   "beaconAntHeightLabel": "アンテナ高（フィート）",
   "beaconGainLabel": "利得（dB）",
   "beaconPhgPreview": "電文には次が含まれます：{phg}",
-  "@beaconPhgPreview": {"placeholders": {"phg": {"type": "String"}}},
+  "@beaconPhgPreview": {
+    "placeholders": {
+      "phg": {
+        "type": "String"
+      }
+    }
+  },
   "beaconPhgTip": "電力・アンテナ高・利得は同一の PHG データ拡張で、いずれかに入力すると 3 つまとめて符号化・送信されます（規格上は固定 7 バイトの 1 フィールド）。電力は実値を超えない最大の段を選びます（25 W は 25、30 W も 25）—— 大きく書くと到達範囲を過大申告することになります。アンテナ高は「周辺の平均地面からの高さ」で、上で自動送信される/A= の海抜とは別の量です。",
+  "phgTitle": "PHG アンテナ",
+  "phgPower": "出力",
+  "phgHeight": "高さ",
+  "phgGain": "利得",
+  "phgDirection": "方向",
+  "phgOmni": "無指向",
   "beaconPowerLabel": "電力（W）",
   "txButton": "送信",
   "txPartPosition": "位置パケット",
   "txPartStatus": "ステータスパケット",
   "txSent": "送信しました：{parts}",
-  "@txSent": {"placeholders": {"parts": {"type": "String"}}},
+  "@txSent": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
   "txNoFixKeptStatus": "送信しました：{parts}（測位がないため PHG 付きの位置パケットは送信されませんでした）",
   "connStatusSent": "接続済み · ステータスパケット送信済み ({call})",
   "connTncStatusSent": "TNC 接続済み · ステータスパケット送信済み ({arg})",
   "connAudioStatusSent": "オーディオ送信済み · ステータスパケット送信済み ({call})",
-  "@txNoFixKeptStatus": {"placeholders": {"parts": {"type": "String"}}},
-  "@connStatusSent": {"placeholders": {"call": {"type": "String"}}},
-  "@connTncStatusSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connAudioStatusSent": {"placeholders": {"call": {"type": "String"}}},
+  "@txNoFixKeptStatus": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "@connStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncStatusSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
   "codeContribution": "コード貢献",
   "historyCharts": "グラフ",
   "historyChartsShow": "グラフを表示",
@@ -2548,18 +3606,57 @@
   "beaconBarTierNetwork": "ネットワーク測位・固定間隔",
   "beaconBarTierSmart": "スマート段",
   "beaconBarTierSmartFrom": "スマート段 · ≥{speed} km/h",
-  "@beaconBarTierSmartFrom": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTierSmartFrom": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTierFixed": "固定間隔",
   "beaconBarTimeLeft": "時間 {time}",
-  "@beaconBarTimeLeft": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTimeLeft": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarDistLeft": "距離 {dist}",
-  "@beaconBarDistLeft": {"placeholders": {"dist": {"type": "String"}}},
+  "@beaconBarDistLeft": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLeft": "旋回 {cur}° / {need}°",
-  "@beaconBarTurnLeft": {"placeholders": {"cur": {"type": "String"}, "need": {"type": "String"}}},
+  "@beaconBarTurnLeft": {
+    "placeholders": {
+      "cur": {
+        "type": "String"
+      },
+      "need": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLowSpeed": "旋回待機 · ≥{speed} km/h が必要",
-  "@beaconBarTurnLowSpeed": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTurnLowSpeed": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnWait": "旋回待機 · {time} 後に判定",
-  "@beaconBarTurnWait": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTurnWait": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "netSymbol": "ネットワーク測位時の局アイコン",
   "netSymbolHint": "ネットワーク測位は数百メートル〜数キロずれることがあります。別のアイコンにすると「ネットワーク測位の位置」だと一目で分かります。既定では自分の記号に従います。",
   "netSymbolFollow": "自分の記号に従う",
@@ -2582,7 +3679,19 @@
   "hrAlarmTelTip": "アラームの「発信」で使う番号。既定は 120。地域や状況に応じて 112 や仲間の番号に変更できます。",
   "hrAlarmTitle": "心拍異常",
   "hrAlarmBody": "心拍 {bpm} bpm は設定した {low}〜{high} の範囲外です。\n\n体調が悪い場合はすぐに救急へ電話してください。100 km 以内の局に救援メッセージを送ることもできます。",
-  "@hrAlarmBody": {"placeholders": {"bpm": {"type": "String"}, "low": {"type": "String"}, "high": {"type": "String"}}},
+  "@hrAlarmBody": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmDismiss": "問題なし",
   "hrAlarmCall": "救急へ電話",
   "hrAlarmSendNearby": "近隣局に救援依頼",
@@ -2590,11 +3699,32 @@
   "hrAlarmNoNearby": "100 km 以内に既知の局がありません",
   "hrAlarmSendConfirmTitle": "救援依頼を送信しますか",
   "hrAlarmSendConfirmBody": "最も近い {n} 局それぞれに1通送ります：\n{calls}\n\n相手の端末に表示されます。確認してから送信してください。",
-  "@hrAlarmSendConfirmBody": {"placeholders": {"n": {"type": "String"}, "calls": {"type": "String"}}},
+  "@hrAlarmSendConfirmBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "calls": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmSent": "{n} 局に救援依頼を送信しました",
-  "@hrAlarmSent": {"placeholders": {"n": {"type": "String"}}},
+  "@hrAlarmSent": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmNotif": "心拍異常 {bpm} bpm",
-  "@hrAlarmNotif": {"placeholders": {"bpm": {"type": "String"}}},
+  "@hrAlarmNotif": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      }
+    }
+  },
   "locExtGpsActive": "外部 GPS 使用中 · スマホ GPS 待機",
   "locExtGpsLost": "外部 GPS が失効 · スマホ GPS に切替",
   "locPhoneGpsActive": "スマホ GPS が引き継ぎ",
@@ -2616,7 +3746,13 @@
   "beaconIncludeSteps": "歩数",
   "stepsTodayLabel": "今日の歩数",
   "stepsCount": "{n} 歩",
-  "@stepsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@stepsCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "stepsUnsupported": "この端末に歩数センサーがありません",
   "stepsNeedPermission": "権限が必要です",
   "stepsGrant": "「身体活動」権限を許可",
@@ -2641,7 +3777,16 @@
   "downloadCanceled": "ダウンロードを中止しました",
   "downloadBackgroundHint": "この画面を離れても、アプリをバックグラウンドにしてもダウンロードは続きます（進捗は通知にも表示されます）。ただしプロセスが終了されると中断します。",
   "notifUpdateDownload": "更新 {tag} をダウンロード中 · {pct}%",
-  "@notifUpdateDownload": {"placeholders": {"tag": {"type": "String"}, "pct": {"type": "String"}}},
+  "@notifUpdateDownload": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
   "notifUpdateReady": "更新パッケージを取得済み · 更新ページからインストール",
   "notifUpdateFailed": "更新パッケージの取得に失敗",
   "sportRankGateNoSensor": "この端末には歩数センサーがないため、オンにしても**実際には歩数を送りません**（送る歩数が無いため）。オンにすることでランキングが見られるようになります。相互公開のルールに同意した扱いです。",
@@ -2649,11 +3794,752 @@
   "crashCard": "衝突・転倒の検知",
   "crashCardSub": "スマホの加速度で判断し、検知したら通知します（テスト）",
   "crashEnabled": "衝突・転倒の通知を有効にする",
-  "crashHowItWorks": "判定は**2段階**です：① 加速度に鋭いスパイク（事故でも転倒でも出ます）、② その後12秒間ほとんど動かない。両方を満たしたときだけ通知します。\n\n2段目が必要な理由：スパイクだけだと**段差・机に落とした・振った**だけで該当し、1日に何度も鳴る通知は誰も見なくなります。代わりに**軽い衝突（まだ動ける）では鳴りません** ——この機能は「動けない状態」のためのもので、「衝突があったこと」ではありません。",
+  "crashHowItWorks": "判定は二通り。**転倒**は①まず自由落下（無重力 —— 総加速度がほぼ 0）②着地の衝撃③その後約 12 秒ほぼ動かない、のすべてが必要。**衝突**は無重力の裏付けが無いので、衝撃が**はっきり強い**こと（おおよそ感度の 2 倍）と、同じく約 12 秒動かないことを求めます。\n\nなぜここまでするか：尖峰ひとつだけだと**スマホを少し強く置く・段差・振る**が全部該当し、1 日に何度も鳴る通知は誰も見なくなります。「転倒（無重力あり）」と「衝突（無重力なし・より強い必要）」を分けるのは、まさに「スマホを置く」ような日常動作を弾くため。代償は**軽い衝突では通知しない**こと —— この機能は「人がもう動けない」ためのもので、「衝撃があった」ためのものではありません。",
   "crashNoSensor": "この端末に加速度センサーがないため検知できません",
   "crashPending": "衝撃を検知 — 経過観察中",
   "crashFalsePositive": "**誤報はあります**：段差のあと赤信号で12秒止まると2段階の条件を満たします。通知の最初のボタンが「問題なし」なので、押して消せば他に影響しません。",
   "crashAlarmTitle": "衝突または転倒の可能性を検知",
-  "crashAlarmBody": "強い衝撃のあと、約12秒間ほとんど動きがありませんでした。\n\n問題なければ「問題なし」を押してください。体調が悪い、または動けない場合は、すぐに救急へ電話するか、100 km 以内の局に救援メッセージを送ってください。\n\n**これはヒューリスティックな判定で、工学レベルの衝突検知ではありません**：段差や落下でも鳴ることがあります。",
-  "crashNotif": "ライフガード：衝突の可能性を検知"
+  "crashAlarmBody": "スマホが強い衝撃を検出し、その後およそ 12 秒間はっきりした動きがありません。\n\n問題なければ「大丈夫」を押してください。体調が悪い、または動けない場合は、すぐに救急へ電話するか、100km 以内の局へ救助メッセージを送ってください。\n\n**これはヒューリスティックな判定で、工学レベルの衝突検出ではありません**。",
+  "crashNotif": "ライフガード：衝突の可能性を検知",
+  "icomLanTitle": "IC-705 Wi-Fi (radio direct)",
+  "icomLanEnable": "Enable IC-705 LAN link",
+  "icomLanHost": "Radio IP",
+  "icomLanPort": "Control port",
+  "icomLanUsername": "Username (Network User)",
+  "icomLanPassword": "Password (Network User)",
+  "icomLanHint": "Enable remote control in the radio WLAN settings, set the Network User name/password, and keep the phone on the same subnet. IC-705 LAN audio is fixed at 12000 Hz.",
+  "codeContributionIcomLan": "IC-705 radio link",
+  "honorCelebrateTitle": "新しい名誉を獲得",
+  "honorCelebrateOk": "やった！",
+  "confirmSendToGroup": "{group} に送信しますか？",
+  "@confirmSendToGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmInviteMember": "{call} をグループチャットに招待しますか？",
+  "@confirmInviteMember": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmCreateGroup": "グループを作成し、{n} 名を招待しますか？",
+  "@confirmCreateGroup": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "choosePackage": "パッケージを選ぶ",
+  "pkgRecommended": "推奨",
+  "choosePackageHint": "64 ビット版はほとんどのスマホ向け（アプリ内更新が取得するのはこれです）。_armeabi-v7a は古い 32 ビット機、_x86_64 はエミュレータ / Chromebook 専用です。行をタップするとそのパッケージのダウンロード先を開きます。",
+  "lifeGuardStrongHint": "アラームは**優先度の高いシステム通知**（音 / 振動 / ロック画面バナー）でも鳴ります。アプリ内ダイアログだけでは、ポケットの中や画面を見ていないときに気づけません。本アプリの通知を許可し、このチャンネルをサイレントにしないでください。",
+  "crashSensitivity": "検出感度",
+  "crashSensGentle": "敏感",
+  "crashSensStandard": "標準",
+  "crashSensFirm": "振動に強い",
+  "crashSensHint": "感度は「どれだけ強い衝撃を数えるか」を決めます：転倒はこの閾値、衝突は約 2 倍を要求します。ポケットに入れて自転車に乗るなら「強い（firm）」、ハンドル固定も同様。既定は「標準」。感度は**検出**（どの衝撃を数えるか）だけに影響し、その後の警報動作には影響しません。",
+  "crashFallAlarmTitle": "転倒の可能性を検知",
+  "crashFallAlarmBody": "スマホが自由落下した後に着地の衝撃を受け、その後およそ 12 秒間はっきりした動きがありません —— 転倒に典型的な加速度の特徴です。\n\n問題なければ「大丈夫」を押してください。体調が悪い、または動けない場合は、すぐに救急へ電話するか、100km 以内の局へ救助メッセージを送ってください。\n\n**これはヒューリスティックな判定で、工学レベルの検出ではありません**。",
+  "crashKindHint": "**衝突**と**転倒**を区別します：転倒はほぼ必ず自由落下（無重力 —— 総加速度がほぼ 0）の後に着地衝撃が来ますが、車の衝突にはそれがありません。したがって判定は —— 無重力があれば「転倒」（感度の閾値を使用）、無ければ「衝突」とし、閾値の約 2 倍の衝撃を要求します（これにより「スマホを置く」などの動作は誤報しません）。これは判定をより正確に述べるだけで、両者の扱いはまったく同じです（大丈夫 / 電話 / 救助要請）。",
+  "stationRetention": "局の保持日数",
+  "stationRetentionTip": "この日数を超えて受信していない局は、起動時に自動で整理されます。0 = 自動整理オフ（手動整理は可能）。お気に入り・手動追加・自分の局は整理されません。",
+  "pruneOldData": "古い局を整理",
+  "pruneOldDataDesc": "しばらく受信していない局を削除して、必要なものだけ残す",
+  "pruneHint": "整理されるのは通常の局だけです。お気に入りと手動追加は残ります。元に戻せません。",
+  "pruneNone": "整理する局はありません",
+  "pruneConfirm": "{n} 日間受信していない局 {m} 件を整理します（お気に入り・手動追加は残ります）。元に戻せません。",
+  "pruneDone": "古い局を {n} 件整理しました",
+  "retentionOff": "自動整理はオフです（保持日数 0）。手動で整理するか、日数を設定してください",
+  "@pruneConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@pruneDone": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "prunePreview": "{n} 件を整理します",
+  "@prunePreview": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "nDays": "{n} 日",
+  "retentionDaysOff": "オフ（自動整理なし）",
+  "pruneWithin": "〇日前の局を整理",
+  "pruneWithinTip": "手動整理で使う日数です。上の自動整理の保持日数とは**別々**に指定でき、選んだ日数だけ再受信の無い一般局を削除します。",
+  "prunePickDays": "先に日数を選んでください",
+  "factoryReset": "全データを消去して初期化",
+  "factoryResetDesc": "コールサインと全設定も消去し、初回ガイドをやり直します",
+  "factoryResetIntro": "アプリを「インストール直後」の状態に戻します：",
+  "factoryResetCallsign": "コールサインと SSID",
+  "factoryResetSettings": "サーバー・ビーコン・表示など全設定",
+  "factoryResetWarn": "元に戻せません。初回ガイドが再実行されます。先にバックアップを書き出してください。",
+  "factoryResetButton": "全データを消去して再初期化",
+  "factoryResetConfirm": "コールサイン・サーバー・ビーコン・表示などの**全設定**、および局・メッセージ・ログ・軌跡などの**全データ**を消去し、初回ガイドを再実行します。**元に戻せません**。続行しますか？",
+  "@nDays": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActions": "レポート",
+  "reportNow": "今すぐ送信",
+  "reportAutoStart": "自動送信を開始",
+  "reportAutoStop": "自動送信を停止",
+  "reportTagAuto": "自動",
+  "reportTagOnce": "単発",
+  "reportStatusAuto": "自動送信中",
+  "reportStatusOnce": "単発送信",
+  "reportToggleHint": "タップで切替：自動＝間隔 / 距離 / ターンで自動送信、単発＝「今すぐ送信」を押したときだけ送信（どちらも手動送信は可能）。",
+  "reportRfEnabledToast": "RF ビーコンを有効化し、自動送信を開始しました",
+  "reportEnabledToast": "自動送信を開始しました",
+  "reportDisabledToast": "自動送信を停止しました（単発のみ）",
+  "autoReportEntryHint": "このスイッチはメイン画面でいつでも変更できます：地図左下/下部の「自動 / 単発」ボタンをタップで切替、隣の「今すぐ送信」で即時送信します。",
+  "backupTracks": "{n} 日分の走行履歴を含む",
+  "@backupTracks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sendPositionBeacon": "位置ビーコンを送信",
+  "strategyMap": "戦略マップ",
+  "strategyMapHint": "同じグループの仲間とポイント・ルート・集合場所を APRS メッセージで共有",
+  "strategyPickGroup": "グループを選択",
+  "strategyNeedGroup": "先にグループに参加または選択してください",
+  "strategyNoGroup": "戦略マップを使うにはグループに参加してください",
+  "strategyAddPoint": "ポイント",
+  "strategyAddLine": "ライン",
+  "strategyAddCircle": "円",
+  "strategyAddRally": "集合場所",
+  "strategyNavigate": "ナビ",
+  "strategyEditInfo": "情報を編集",
+  "strategyDeleteItem": "削除",
+  "strategyClearAll": "レイヤーを消去",
+  "strategyClearConfirm": "このグループの共有ポイント・ルート・集合場所をすべて消去しますか？全員に同期されます。",
+  "strategyLabel": "名前",
+  "strategyLabelHint": "このポイントの名前（任意）",
+  "strategyRadius": "半径（m）",
+  "strategyRadiusHint": "半径（m）、例：800",
+  "strategySend": "共有",
+  "strategyShared": "グループに共有しました",
+  "strategyEmpty": "レイヤーは空です —— 下のツールでポイントや集合場所を置いてください",
+  "strategySnapshot": "同期",
+  "strategyLineHint": "地図をタップして点を置く（2 点以上）、「完了」で終了",
+  "strategyNeedTwoPoints": "ラインには 2 点以上必要です",
+  "strategyItemOf": "{call} が共有",
+  "@strategyItemOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyPan": "移動",
+  "strategySendFailed": "ローカルには表示、送信は未完了（接続を確認）",
+  "strategyTeammates": "仲間の位置",
+  "strategyTeammateOf": "{call} の位置",
+  "strategyColor": "色",
+  "strategyColorDefault": "既定",
+  "strategySeeInMap": "タップして戦略マップを表示",
+  "strategySharedItem": "{call} が{kind}を共有しました",
+  "@strategyTeammateOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategySharedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyRetry": "未確認を再送",
+  "strategyRetryAll": "すべて再送",
+  "strategyAckPending": "{n} 件が未確認（RF で欠落したら再送）",
+  "strategyAckOk": "仲間が受信を確認しました",
+  "strategyRetryNone": "未確認のフレームはありません",
+  "@strategyAckPending": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "groupRfNotice": "RF モード：グループチャットと戦略フレームはブロードキャスト送信され、同じチャンネルを守聴する仲間に届きます。戦略フレームは仲間の ACK で確認し、欠落時は戦略マップで再送します。",
+  "chatNeedConnect": "サーバーに未接続のため送信できません。まずデータソースに接続してください。",
+  "strategyUpdatedItem": "{call} が{kind}を更新しました",
+  "strategyDeletedItem": "{call} が{kind}を削除しました",
+  "strategyClearedMsg": "{call} が共有レイヤーを消去しました",
+  "@strategyUpdatedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyDeletedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyClearedMsg": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "sendLocation": "位置を送信",
+  "needFixToSendLocation": "測位がまだないため位置を送信できません",
+  "msgLocation": "位置",
+  "locationTapToView": "タップして地図で表示",
+  "locationPickTitle": "送る位置を地図で選択",
+  "locationPickHint": "地図をタップして座標を選択",
+  "locationMyPos": "現在地",
+  "locationSendTo": "{call} に送信",
+  "@locationSendTo": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMore": "その他",
+  "stationTapToView": "タップして局を見る",
+  "locationPickStations": "局を選ぶ",
+  "locationSearchHint": "コールサイン / 別名で検索",
+  "locationNoStation": "一致する局がありません",
+  "locationPrevPage": "前へ",
+  "locationNextPage": "次へ",
+  "shareStation": "局を共有",
+  "shareStationPick": "どの会話に送りますか？",
+  "shareStationSent": "{call} を共有しました",
+  "locationPageInfo": "{n} / {m} ページ",
+  "@locationPageInfo": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@shareStationSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "packetSource": "ソース",
+  "packetSrcLocal": "ローカル",
+  "packetSrcAprsIs": "APRS-IS",
+  "packetSrcTnc": "TNC",
+  "packetSrcAudio": "サウンドカード",
+  "packetSrcPkwdwpl": "Kenwood",
+  "audioTxAmplitude": "出力振幅（0.05~1.0）",
+  "audioTxAmplitudeTip": "送信波形の相対振幅。クリップ（≥99%）は高調波を生み FSK スペクトルを壊し、低すぎると相手のSNRが足りません。既定 0.6 は約 4dB の余裕。無線機へは 0.5~0.7 から試し、送信診断のピークを確認してください。",
+  "audioTxSourceRow": "送信ソース",
+  "audioTxSourceYes": "このリンク",
+  "audioTxNotSourceWarn": "音声リンクは接続済みですが、現在の送信ソースはこれではありません — メッセージとビーコンは「{src}」から送信されます。音声で送信するには「設定 → デバイス」で音声を送信ソースに選んでください。",
+  "@audioTxNotSourceWarn": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTxPttHint": "音声リンクは無線機の PTT を押しません — AFSK 音声を再生するだけです。実際に送信させるには無線機側でキーイングが必要です：VOX（音声起動）に設定するか、音声/データ端子からの PTT に対応したケーブルを使ってください。無線機が送信しない場合はまずここを確認してください。",
+  "updateChannelAliyunHint": "⚠️ 開発チームが費用を負担しているため、控えめにご利用ください 🙏",
+  "connectingAliyun": "Alibaba Cloud OSS で更新を確認中 ☁️",
+  "icomAudioSampleRate": "オーディオサンプルレート",
+  "icomAudioFmtValue": "12000 Hz (LPCM 16-bit モノラル)",
+  "icomLanHotspotRoutingHint": "無線機のホットスポットに接続すると、無線機の通信は Wi-Fi に、APRS-IS はモバイルデータに振り分けられます。システムがこのホットスポットを既定のインターネット経路にした場合は、その Wi-Fi の詳細設定で「自動ネットワーク切り替え」をオフにしてください。",
+  "posSrcSpp": "外付け GPS モジュール",
+  "locationExtGps": "外付け GPS（Bluetooth）",
+  "dataSourceNmeaGps": "外付け GPS（Bluetooth）",
+  "dataSourceNmeaGpsDesc": "GPS モジュールが出力する NMEA 0183 の測位文を読み、この端末自身の位置として使います（受信のみ）",
+  "dataSourceNmeaGpsHint": "このリンクが供給するのはこの端末の位置です（他局のパケットではありません）。接続すると優先的に使われ、モジュールの送信が 30 秒止まるとスマートフォンの GPS に戻ります",
+  "extGpsDeviceTitle": "外付け GPS",
+  "extGpsDeviceDesc": "Bluetooth SPP / シリアル経由の NMEA 0183 位置ソース",
+  "extGpsBindTitle": "デバイスと接続",
+  "extGpsBindSubtitle": "ペアリング済みのデバイスをスキャンしてバインドします（Bluetooth 権限は他のリンクと共用）",
+  "extGpsTip": "接続後はモジュールの位置を優先します（屋根や窓辺に置くことが多く、スマートフォンや時計より正確）。最後の測位から 30 秒たつとスマートフォンの GPS に戻ります。",
+  "extGpsReadOnly": "受信のみ：モジュールは位置を出力するだけで送信には関与しません",
+  "extGpsStatTitle": "測位の受信",
+  "extGpsStats": "測位を {rx} 件受信",
+  "extGpsStatNoFix": "文は有効だが未測位",
+  "extGpsStatMismatch": "チェックサム不一致",
+  "extGpsStatRejected": "破棄/無効な文",
+  "extGpsStatIgnored": "その他の NMEA 文（無視）",
+  "extGpsSatellites": "衛星",
+  "extGpsAccuracy": "精度",
+  "extGpsWaitingFix": "接続済み、衛星を捕捉中（まだ有効な測位がありません）",
+  "extGpsSilent": "接続済みですが文が一切届きません（給電と、他のアプリが占有していないかを確認してください）",
+  "extGpsLogEmpty": "外付け GPS のログはまだありません",
+  "ownSourceExtGpsLive": "モジュールが位置を供給中（スマートフォン GPS は待機）",
+  "deviceInUseByOther": "他のリンクが使用中のため重複バインドできません",
+  "extGpsStrictChecksum": "厳格なチェックサム（不一致は破棄）",
+  "extGpsStrictChecksumTip": "既定でオン：GPS モジュールは規格どおりの文を送るため、チェックサム不一致はほぼ配線ノイズです。1 バイトの破損で測位がずれないよう文ごと破棄します。安価なモジュールには実際に誤ったチェックサムを送るものもあり、その場合はここをオフにしてください（破棄数とログは表示され続けます）。",
+  "beaconSppSource": "外付け GPS から送信",
+  "beaconSppNext": "外付け GPS · {s}",
+  "linkScanAction": "デバイスをスキャン",
+  "linkConnectAction": "デバイスに接続",
+  "linkBoundDevice": "バインド済みデバイス",
+  "linkNotBound": "未バインド",
+  "linkNoPaired": "デバイスが見つかりません · 先にシステムの Bluetooth 設定でペアリングするか、USB シリアルケーブル（OTG）を接続してください",
+  "beaconIncludeSats": "衛星数",
+  "beaconSatsNow": "現在の衛星数",
+  "beaconSatsHint": "衛星数は現在位置を供給している側（スマートフォン GPS（Android）または外付け GPS モジュールの GGA）から取ります。SAT=nn は非標準のコメント欄（STEPS= と同類）で、サードパーティの地図ではコメント文字列として表示されるだけです。供給側が値を出さないときは 0 ではなく何も送りません。",
+  "extGpsFixTitle": "現在の測位",
+  "extGpsFixSubtitle": "モジュールが最後に報告した測位 —— 座標と経過時間がこの画面で一番見るべき数字です",
+  "extGpsFixAge": "最新の測位",
+  "extGpsFixType": "測位種別",
+  "extGpsFixType2d": "2D 測位",
+  "extGpsFixType3d": "3D 測位",
+  "extGpsFixTypeNoFix": "未測位（GSA が未測位と報告）",
+  "extGpsFixTypeNone": "報告なし（GSA 未対応）",
+  "extGpsFixUtc": "モジュール時刻（UTC）",
+  "extGpsFixSource": "トリガー文",
+  "extGpsFixRaw": "最新の文",
+  "extGpsFixHint": "精度は HDOP からの推定値（約 HDOP × 5 m）で、実測値ではありません。測位種別は GSA 文に由来するため、RMC/GGA しか出さないモジュールにはこの行がありません。モジュール時刻は衛星由来なので、まだ同期していない場合があります。",
+  "beaconSatsUnknown": "現在の取得元は衛星数を提供していません。ネットワーク測位（基地局 / Wi-Fi）に衛星はなく、一部の Android 端末 / ROM もこのデータを返しません。",
+  "lockMapCenter": "地図の中心を固定",
+  "unlockMapCenter": "地図の中心の固定を解除",
+  "partners": "パートナー",
+  "partnerAprsnetCnDesc": "ビーコンは止まらず、こだまは消えない",
+  "serverMissing": "未設定",
+  "serverMissingWarning": "サーバーアドレスが未入力 · APRS-IS に接続できません。先に入力してから接続してください",
+  "historyExportGpx": "GPX を書き出す",
+  "gpxRangeTitle": "書き出す期間を選ぶ",
+  "gpxRangeToday": "今日",
+  "gpxRangeWeek": "過去 7 日間",
+  "gpxRangeMonth": "過去 30 日間",
+  "gpxRangeYear": "過去 1 年",
+  "gpxRangeCustom": "期間を指定",
+  "gpxRangeEmpty": "この期間に軌跡点がありません。",
+  "gpxExported": "{days} 日分・{points} 点を書き出しました",
+  "gpxExportFailed": "書き出しに失敗しました。ストレージの権限や空き容量を確認してください。",
+  "gpxSavedTo": "保存先：{path}",
+  "@gpxExported": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@gpxSavedTo": {"placeholders": {"path": {"type": "String"}}},
+  "permCheckTitle": "権限がオフになっています",
+  "permCheckLocation": "位置情報の権限がオフです。地図に自分の位置が出ず、送信もできません。",
+  "permCheckNotify": "通知の権限がオフです。リマインダーとライフアラームが表示されません。",
+  "searchHistoryTitle": "最近の検索",
+  "serverHistoryTitle": "最近接続したサーバー",
+  "serverAccountTitle": "アカウント",
+  "serverAccountHint": "サーバーが発行したアカウント",
+  "serverPasswordTitle": "パスワード",
+  "serverPasswordHint": "サーバーが発行したパスワード",
+  "serverAccountNote": "APRSNETCN のようなサーバーだけが必要です。標準の APRS-IS では空のままで構いません。",
+  "acnSyncTitle": "24 時間の局を同期",
+  "acnSyncLast": "前回の同期",
+  "acnSyncDone": "サーバーに {total} 局、新しく {added} 局",
+  "acnSyncNoAccount": "アカウントとパスワードを入れると同期できます。",
+  "@acnSyncDone": {"placeholders": {"total": {"type": "String"}, "added": {"type": "String"}}},
+  "stationSource": "ソース",
+  "acnCardTitle": "APRSNETCN SERVER",
+  "acnCardSubtitle": "APRSNETCN SERVER プロトコルに基づくサーバーです。送受信ともこちらで行えます。",
+  "acnLinkSwitch": "APRSNETCN",
+  "acnLinkStatus": "回線の状態",
+  "acnLinkNote": "送信は各回線のカードで選んだ回線から行います。ここで受信した局はサーバー由来として表示され、ゲートウェイ転送は行いません。",
+  "acnAccountNote": "サーバーがホワイトリストの局に発行するアカウントとパスワードです。空欄なら passcode のみで受信します。",
+  "packetSrcAcn": "APRSNETCN",
+  "acnLoginTitle": "ログイン",
+  "acnLoginOk": "検証済み",
+  "acnLoginRejected": "アカウントかパスワードが違います",
+  "acnSyncNow": "今すぐ同期",
+  "acnSyncing": "同期中…",
+  "acnSyncHint": "ボタンを押したときだけ取得します。接続しても取得しません。",
+  "sourceGroupInternet": "インターネット回線",
+  "sourceGroupRadio": "無線回線",
+  "acnPageLead": "APRSNETCN SERVER プロトコルに基づく APRS-IS サーバーです。アドレスは「設定 → サーバー」に入れ、送受信のどちらもこの回線で行います。2 本の回線は同時に接続でき、それぞれ受信します。",
+  "acnServerProto": "サーバー協定",
+  "acnServerRetention": "位置は {hours} 時間保持",
+  "acnDefaultFilter": "既定の購読",
+  "acnAllPackets": "すべてのパケット",
+  "acnOpenMap": "局の地図",
+  "@acnServerRetention": {"placeholders": {"hours": {"type": "String"}}},
+  "channelsSubtitle": "2 台のサーバーを同時に接続できます。受信はそれぞれで行います。",
+  "acnOpenSettings": "アドレスとアカウント",
+  "acnFilterTitle": "絞り込み",
+  "acnFilterSubtitle": "半径内の局と、ここに並べたコールサイン。",
+  "acnFilterRadius": "半径（km）",
+  "acnFilterCalls": "このコールサインも",
+  "acnFilterCallsHint": "コールサイン、Enter で追加",
+  "txChannel": "送信経路",
+  "txChannelHint": "パケットはこの 1 回線だけから送ります。",
+  "translateProviderBili": "Bilibili Index-Translate",
+  "translateProviderBiliDesc": "キー不要で無料。Bilibili が公開している翻訳モデル。公共の窓口なので可用性は保証されません。",
+  "translateBiliUrl": "エンドポイント",
+  "translateBiliModel": "モデル",
+  "translateBiliTip": "公共の窓口は制限がかかる場合があります。自前で立てる場合はアドレスとモデルを差し替えてください。",
+  "txSourcePick": "この回線で送信",
+  "acnPasscodeHint": "空欄なら APRS-IS 側の passcode を使います",
+  "aprsIsServerTitle": "APRS-IS サーバー",
+  "aprsIsServerLead": "アドレス、ポート、passcode はここに入力します。",
+  "aprsIsCardSubtitle": "ログイン設定と接続状態",
+  "aprsIsEntryDesc": "アドレス、ポート、passcode",
+  "txKindPosition": "位置と状態のパケット",
+  "notifLiveTitle": "リアルタイム通知",
+  "notifLiveHint": "Android 16 では常駐通知がステータスバーのカプセルに昇格し、iPhone ではダイナミックアイランドとロック画面に出ます。何を出すかは下で選びます。未対応のときは通常の常駐通知のままです。",
+  "notifTitle": "通知",
+  "notifStyleTitle": "通知の表示スタイル",
+  "notifStylePlain": "通常の常駐通知",
+  "notifStylePlainDesc": "通知領域に常駐通知が 1 件。開くと全文が読めます。",
+  "notifStyleLive": "リアルタイム更新",
+  "notifDiag": "通知の診断",
+  "notifDiagDesc": "この端末がリアルタイム更新・焦点通知に対応しているかを見ます。",
+  "notifStyleFocus": "Xiaomi 焦点通知",
+  "notifStyleFocusDesc": "Xiaomi・Redmi・POCO では Xiaomi の焦点通知（スーパーアイランド）を試します。ベンダー許可がないときはリアルタイム更新か通常通知に戻ります。",
+  "notifLiveTextTitle": "リアルタイム更新の文字",
+  "notifLiveTextDefault": "既定",
+  "notifLiveTextCounts": "送受信数",
+  "notifLiveTextGrid": "グリッド",
+  "notifLiveTextCourse": "方位",
+  "notifLiveTextBeacon": "ビーコンまでのカウントダウン",
+  "notifLiveOff": "この項目は一時停止中です。一部の端末では常駐通知が消えてしまいます。今は通常の常駐通知として出します。",
+  "notifLiveTextMsgs": "未読メッセージ",
+  "notifLiveTextNear": "近くの局",
+  "notifLiveTextSpeed": "速度",
+  "notifLiveTextAlt": "高度",
+  "notifLiveTextHr": "心拍数",
+  "notifLiveTextBatt": "バッテリー",
+  "notifLiveTextTrip": "今回の走行距離",
+  "notifLiveNearShort": "{n} 局",
+  "@notifLiveNearShort": {"placeholders": {"n": {"type": "String"}}},
+  "consentTitle": "アップロードと送信の個別同意",
+  "consentLead": "アップロードや送信を有効にする前に、次の三点を個別に確認してください。",
+  "consentNatureTitle": "情報の性質",
+  "consentNatureBody": "これから送信する内容には行動履歴が含まれ、中国の個人情報保護法における機微な個人情報にあたります。",
+  "consentNeedTitle": "なぜ必要か",
+  "consentNeedBody": "APRS は位置を公開ネットワークへ送ることで機能します。送らずに同じ機能を実現する代替手段はありません。",
+  "consentImpactTitle": "個人の権利への影響",
+  "consentImpactBody": "APRS-IS に入ったデータは第三者のサーバーに保存され、公開サーバーによっては位置を 180 日以上保持します。公開ネットワークに入ったデータは取り消しも削除もできません。",
+  "consentAgree": "同意する",
+  "consentScopeInternet": "APRS-IS ビーコンのアップロード",
+  "consentScopeRf": "無線でのビーコン送信",
+  "consentScopeIgate": "iGate 転送",
+  "consentAccept": "同意して有効にする",
+  "consentCancel": "今は有効にしない",
+  "consentPickOne": "有効にする機能を一つ以上選んでください。",
+  "consentPickAgree": "先に「同意する」にチェックしてください。",
+  "consentSection": "個別同意",
+  "consentSectionHint": "一つを切ると、その機能はすぐに新しいデータを送らなくなります。送信済みのデータは取り消せません。",
+  "consentLogTitle": "同意ログ",
+  "consentLogEmpty": "まだ記録がありません。",
+  "consentLogClear": "同意ログを消去",
+  "consentLogClearHint": "ログだけを消します。すでに与えた同意は変わりません。",
+  "consentLogCleared": "同意ログを消去しました",
+  "consentActGrant": "同意",
+  "consentActRevoke": "撤回",
+  "autoStartTitle": "アプリを開いたとき",
+  "autoStartNone": "何もしない",
+  "autoStartConnect": "自動接続",
+  "autoStartReport": "自動送信",
+  "autoStartNoneHint": "アプリを開いても何もしません。",
+  "autoStartConnectHint": "アプリを開くとサーバーに自動で接続します。送信は自分で押す必要があります。",
+  "autoStartReportHint": "アプリを開くとサーバーに自動で接続し、そのまま位置の送信を始めます。",
+  "autoStartAskTitle": "オンにしますか",
+  "autoStartAskConnect": "これからアプリを開くたびにサーバーへ自動で接続します。",
+  "autoStartAskReport": "これからアプリを開くたびにサーバーへ自動で接続し、位置の送信を始めます。",
+  "autoStartAskOk": "オンにする",
+  "autoStartAskCancel": "キャンセル",
+  "mvTitle": "アップデートが必要です",
+  "mvBody": "このバージョンはサポートを終了しました。{min} 以降に更新すると続けて使えます。",
+  "mvCurrent": "現在のバージョン",
+  "mvRequired": "最低バージョン",
+  "mvReason": "説明",
+  "mvUpdate": "アップデートする",
+  "mvExit": "アプリを終了",
+  "mvChecking": "確認中…",
+  "@mvBody": {"placeholders": {"min": {"type": "String"}}},
+  "featureCat": "機能",
+  "featureCatDesc": "モジュールと軽量モード",
+  "featureLite": "軽量モード",
+  "featureLiteDesc": "APRS の送受信だけを残し、画面を最小限の構成にします。",
+  "featureModules": "モジュール",
+  "featureLiteBlocks": "軽量モードではモジュールは切です。軽量モードを切ってから選んでください。",
+  "featureWeather": "天気",
+  "featureTranslate": "翻訳",
+  "manualTitle": "マニュアル",
+  "ssidCustom": "任意のサフィックス",
+  "ssidCustomHint": "数字か英字 1〜2 文字",
+  "ssidInvalid": "サフィックスは数字か英字 1〜2 文字です",
+  "ssidUse": "これを使う",
+  "icomTxTailLabel": "送信後ディレイ (Post TX Delay, ms)",
+  "cracCertTitle": "操作免許の照会",
+  "cracCertName": "氏名",
+  "cracCertNumber": "免許番号",
+  "cracCertId": "身分証明書 ID",
+  "cracCertPrivacy": "氏名と証明書番号はこの照会の確認にだけ使います。サーバーもアプリも収集しません。結果は本機にだけ残ります。",
+  "cracCertQuery": "照会",
+  "cracCertQuerying": "照会中…",
+  "cracCertResult": "照会結果",
+  "cracCertNeedName": "先に氏名を入れてください",
+  "cracCertNeedKey": "免許番号を入れてください",
+  "cracCertNotFound": "記録が見つかりません",
+  "cracCertFailed": "照会に失敗：",
+  "cracCertSaved": "コールサイン {call} に記録しました",
+  "cracCertOtherCall": "この記録は {call} のものです。現在のコールサインには記録しません",
+  "cracCertType": "免許の種類",
+  "cracCertCall": "コールサイン",
+  "cracCertPassDate": "合格日",
+  "cracCertIssueDate": "交付日",
+  "cracCertRegion": "場所",
+  "cracCertValid": "有効期限",
+  "cracCertBadge": "{type} 級免許",
+  "@cracCertSaved": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertOtherCall": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertBadge": {"placeholders": {"type": {"type": "String"}}},
+  "cracCertInfo": "証明書",
+  "cracCertChecked": "照会日時",
+  "cracCertClear": "証明書を削除",
+  "cracCertClearAsk": "削除するとこのページの証明書表示が消えます。いつでも照会し直せます。",
+  "cracCertClearDone": "証明書を削除しました",
+  "devLockTitle": "開発者用の合言葉",
+  "devLockTip": "ロック中。長押しで合言葉を入力",
+  "devLockWrong": "合言葉が違います",
+  "cracCertVerified": "確認済み",
+  "gpsSampleTitle": "GPS サンプリング間隔",
+  "gpsSampleSec": "{s} 秒",
+  "@gpsSampleSec": {"placeholders": {"s": {"type": "String"}}},
+  "historyRecord": "履歴を記録",
+  "historyEmptyOff": "記録は切っています。上のスイッチを入れると記録します。",
+  "cracCertClosed": "未公開",
+  "cracCertWhyRequired": "APRS-IS プロトコルでは、利用者がアマチュア無線家であることを確認する責任と義務がソフトウェア開発者にあります。",
+  "cracCertEntry": "操作資格の確認",
+  "cracCertVoluntary": "認証は任意です。しなくても同じように使えます。",
+  "cracCertLocal": "照合はプログラムが行い、人手の審査はありません。結果はこの端末にだけ戻り、通過と資格クラスだけを残します。",
+  "oobeCallInvalid": "コールサインの形式が正しくありません。例：BG7LZQ、JA1AA。",
+  "oobeSsidInvalid": "SSID は数字か英字の 1〜2 文字です。",
+  "oobeFinishLocal": "完了",
+  "oobeDoneTitle": "設定できました",
+  "oobeDoneLocalNote": "アドレス未入力なので、いまはローカルだけで動きます。オンラインにするときは設定のサーバーに入力してください。",
+  "oobeDoneConnectNote": "「完了」を押すと {link} に接続します。",
+  "oobeDoneSymbolLabel": "シンボル",
+  "oobeDoneUnset": "未入力",
+  "oobeDoneMap": "局を見る",
+  "oobeDoneMapDesc": "近くの局は地図と局のタブに出ます。",
+  "oobeDoneBeacon": "位置を送る",
+  "oobeDoneBeaconDesc": "接続すると、地図ページの下に開始ボタンが出ます。",
+  "oobeDoneManualDesc": "設定にマニュアルがあります。無線機のつなぎ方や送れないときの調べ方が書いてあります。",
+  "@oobeDoneConnectNote": {"placeholders": {"link": {"type": "String"}}},
+  "oobeRestore": "バックアップから復元",
+  "trayCloseToTray": "閉じたらトレイに格納",
+  "trayMenuShow": "ウィンドウを表示",
+  "trayMenuHide": "トレイに格納",
+  "trayMenuQuit": "APRSLocus を終了",
+  "beaconFuzz": "位置ぼかし",
+  "beaconFuzzOff": "オフ",
+  "beaconFuzz200m": "約 200 m",
+  "beaconFuzz2km": "約 2 km",
+  "beaconFuzz20km": "約 20 km",
+  "subsTitle": "購読",
+  "subsLead": "局・デジピーター・パケット内の語を監視します。一致したものは下に残ります。",
+  "subsAdd": "購読を追加",
+  "subsKindStation": "局",
+  "subsKindDigi": "デジ",
+  "subsKindKeyword": "キーワード",
+  "subsFieldStation": "コールサイン（SSID 省略可）",
+  "subsFieldDigi": "デジかゲートウェイのコールサイン",
+  "subsFieldKeyword": "パケットに出る語",
+  "subsEmpty": "まだ購読はありません",
+  "subsEmptyNote": "追加すると、一致したパケットがここに出ます。",
+  "subsHitsTitle": "一致した記録",
+  "subsNoHits": "まだ一致はありません。",
+  "subsHitsCount": "{n} 件",
+  "subsClear": "消去",
+  "subsAdded": "{v} を購読しました",
+  "subsExists": "{v} はすでに購読済みです",
+  "subsRemoved": "購読をやめました",
+  "subsMenuOn": "この局を購読",
+  "subsMenuOff": "購読をやめる",
+  "subsCopied": "パケットをコピーしました",
+  "@subsHitsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@subsAdded": {"placeholders": {"v": {"type": "String"}}},
+  "@subsExists": {"placeholders": {"v": {"type": "String"}}},
+  "msgSendId": "送信 ID",
+  "msgOtherSsid": "このメッセージは別の SSID 宛てに届きました。{to} でも本機 ID でも送信できます。",
+  "@msgOtherSsid": {"placeholders": {"to": {"type": "String"}}},
+  "beaconIncludeLoad": "パソコンの CPU・メモリ使用率",
+  "myOtherSsidLabel": "自分の他の SSID",
+  "ssidCmdActivate": "起動",
+  "ssidCmdBeacon": "ビーコン送信",
+  "ssidCmdStop": "送信停止",
+  "ssidCmdSent": "{call} に送信しました：{cmd}",
+  "ssidCmdNoLink": "リンクが繋がっていないため送信できません",
+  "@ssidCmdSent": {"placeholders": {"call": {"type": "String"}, "cmd": {"type": "String"}}},
+  "msgRecvTitle": "メッセージ受信",
+  "msgRecvSsid": "他の SSID 宛てのメッセージも受信",
+  "subsRoleTitle": "何をするか",
+  "subsRoleSource": "自分が発信したもの",
+  "subsRolePath": "中継したもの",
+  "subsPacketTitle": "パケット",
+  "subsPacketAll": "すべて",
+  "subsPacketBeacon": "ビーコン",
+  "subsPacketMessage": "メッセージ",
+  "subsHitSource": "発信",
+  "subsHitPath": "中継",
+  "myOtherSsidNone": "同じコールサインの他の SSID はまだ受信していません",
+  "subsEdit": "購読を編集",
+  "subsNotify": "通知",
+  "subsNotifyTitle": "購読ヒット · {value}",
+  "subsNotifyMore": "ほか {n} 件",
+  "@subsNotifyTitle": {"placeholders": {"value": {"type": "String"}}},
+  "@subsNotifyMore": {"placeholders": {"n": {"type": "String"}}},
+  "coordFormat": "緯度経度の書式",
+  "coordFormatDec": "十進度",
+  "coordFormatDm": "度分",
+  "coordFormatDms": "度分秒",
+  "mapCenterCoord": "中心の緯度経度",
+  "oobeServerSkip": "スキップ（あとで設定に入力）",
+  "advChannels": "送信先の詳細設定",
+  "codeContributionEncoding": "中国語エンコード",
+  "oobeFeatureTitle": "使う機能",
+  "oobeFeatureDesc": "オフにしたモジュールは設定に出てきません。あとから「設定 → 機能」で変えられます。",
+  "historyOverlay": "履歴の重ね表示",
+  "historyOverlayShare": "画像を共有",
+  "historyOverlayExport": "画像を書き出す",
+  "historyOverlayExportFailed": "画像を書き出せませんでした",
+  "historyOverlayEmpty": "重ねて表示できる履歴がまだありません。",
+  "historyOverlayAll": "すべて表示",
+  "historyOverlaySummary": "{days}/{total} 日 · {km}",
+  "@historyOverlaySummary": {"placeholders": {"days": {"type": "String"}, "total": {"type": "String"}, "km": {"type": "String"}}},
+  "powerSave": "省電力モード",
+  "powerSaveTip": "GPS は 30 秒ごと、地図上の局のアニメーションも停止します。",
+  "lowBatteryWarn": "バッテリー残量 {level}%。省電力モードにしますか？",
+  "@lowBatteryWarn": {"placeholders": {"level": {"type": "String"}}},
+  "syncTitle": "クラウド同期",
+  "syncLead": "メッセージと履歴はサーバーに置かれ、端末を替えても戻せます。",
+  "syncAccount": "アカウント",
+  "syncPassword": "パスワード",
+  "syncLogin": "ログイン",
+  "syncLogout": "ログアウト",
+  "syncLoggedIn": "{call} でログイン中",
+  "syncNeedLogin": "先にログイン",
+  "syncMode": "同期方法",
+  "syncModeOff": "オフ",
+  "syncModeManual": "手動",
+  "syncModeAuto": "自動",
+  "syncModeAutoHint": "自動は起動時に一度、その後は上の間隔で動きます。",
+  "syncMessages": "メッセージ",
+  "syncTracks": "履歴",
+  "syncNow": "今すぐ同期",
+  "syncRunDone": "同期しました",
+  "syncClear": "クラウドのデータを消す",
+  "syncClearHint": "サーバー上のこのコールサインのメッセージ・履歴・バックアップを消します。端末側は変わりません。",
+  "syncClearAsk": "クラウドのデータを消しますか？",
+  "syncClearDone": "クラウドのデータを消しました",
+  "syncPlainHint": "接続は平文 HTTP です。パスワードも内容も暗号化されません。",
+  "syncLastAt": "前回の同期",
+  "syncNever": "まだ同期していません",
+  "syncFailed": "同期に失敗しました",
+  "syncTrackSummary": "{days} 日 · {points} 点",
+  "syncMsgSummary": "{n} 件",
+  "syncBackupElsewhere": "クラウドバックアップは「バックアップと復元」ページで扱います。",
+  "syncNoWeb": "ウェブ版では使えません",
+  "syncBusy": "同期中",
+  "backupCloud": "クラウドバックアップ",
+  "backupCloudUpload": "クラウドに保存",
+  "backupCloudRestore": "クラウドから戻す",
+  "backupCloudHint": "クラウドバックアップに履歴は含みません。履歴はクラウド同期が別に保存します。",
+  "backupCloudDone": "クラウドに保存しました",
+  "backupCloudEmpty": "クラウドにまだバックアップがありません",
+  "backupCloudFailed": "クラウド操作に失敗しました",
+  "@syncLoggedIn": {"placeholders": {"call": {"type": "String"}}},
+  "@syncTrackSummary": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@syncMsgSummary": {"placeholders": {"n": {"type": "String"}}},
+  "syncServer": "サーバー",
+  "syncServerNow": "使用中のアドレス",
+  "syncServerHint": "アドレスを変えると再ログインになります。前のサーバーのデータは移りません。",
+  "syncCloudData": "サーバー上のデータ",
+  "syncAccountHint": "アカウントはサーバーの許可リストにあるもの。APRSNETCN リンクのページと同じです。",
+  "syncContent": "同期する内容",
+  "syncContentHint": "両方オフにするとログインだけになり、送受信しません。",
+  "syncAutoEvery": "自動同期の間隔",
+  "syncEveryMin": "{n} 分",
+  "syncDevicesTitle": "ログイン中の端末",
+  "syncDeviceThis": "この端末",
+  "syncDeviceRemove": "削除",
+  "syncDeviceRemoved": "削除しました。次回の同期には再ログインが必要です。",
+  "syncBackups": "クラウドのバックアップ",
+  "syncBackupsCount": "計 {n} 件",
+  "syncDeviceHint": "このサーバーにログインした端末の一覧です。削除した端末は次回の同期で再ログインが必要です。",
+  "@syncEveryMin": {"placeholders": {"n": {"type": "String"}}},
+  "@syncBackupsCount": {"placeholders": {"n": {"type": "String"}}},
+  "syncNoServer": "先に上の APRSNETCN サーバーのアドレスを入れてください。",
+  "acnHttpPort": "HTTP ポート",
+  "updatePkgWelcomeTitle": "バージョン {v} へようこそ",
+  "updatePkgWelcomeBody": "新しいバージョンをインストールしました。今回のパッケージは「ダウンロード」に残っています。別の端末に入れるなら残し、容量を空けるなら削除してください。",
+  "updatePkgInDownloads": "ダウンロード内",
+  "updatePkgRemember": "次回から同じように処理する",
+  "updatePkgDelete": "パッケージを削除",
+  "updatePkgKeep": "残しておく",
+  "updatePkgKept": "パッケージは「ダウンロード」に残しました",
+  "updatePkgSigOk": "署名を確認済み",
+  "updatePkgSigBad": "パッケージの署名がこの端末と一致しないため削除しました。公式の経路から取り直してください。",
+  "updatePkgSigUnknown": "パッケージの署名を読めなかったため削除しました。もう一度ダウンロードしてください。",
+  "updatePkgNoFile": "「ダウンロード」にこのパッケージが見つかりません。もう一度ダウンロードしてください。",
+  "updatePkgAction": "更新パッケージ",
+  "updatePkgAfterUpdate": "更新したあと",
+  "updatePkgActionAsk": "毎回たずねる",
+  "updatePkgActionDelete": "自動で削除",
+  "updatePkgActionKeep": "常に残す",
+  "@updatePkgWelcomeTitle": {"placeholders": {"v": {"type": "String"}}},
+  "updatePkgSigChecking": "署名を確認しています",
+  "updatePkgSigMismatch": "署名がこの端末と一致しません",
+  "updatePkgSigUnchecked": "署名を読み取れません",
+  "connectingChannel": "{name} に接続しています",
+  "@connectingChannel": {"placeholders": {"name": {"type": "String"}}},
+  "updateCheckChecking": "オンラインで確認中",
+  "updateCheckOk": "オンライン確認済み。バージョン・ダイジェスト・署名が一致",
+  "updateCheckOffline": "オンラインでないため、バージョンの一致を確認できません",
+  "updateCheckNotFound": "このバージョンのダイジェストが見つからず、確認できません",
+  "updateCheckVersion": "パッケージ内のバージョンがこのリリースと違います",
+  "updateCheckSha": "パッケージのダイジェストがリポジトリのものと違います",
+  "updatePkgWhatsNew": "このバージョンの変更点",
+  "updatePkgWelcomeHello": "新しいバージョンをインストールしました。",
+  "updatePkgDeleteTitle": "インストーラーを残しますか",
+  "updatePkgUnverifiedTitle": "このパッケージは確認できませんでした",
+  "updatePkgUnverifiedBody": "オンラインでないか、リリースに比較できるダイジェストがありません。それでもインストールする場合は自己責任です。",
+  "installAnyway": "このままインストール",
+  "updatePkgUnreadable": "このパッケージを読み取れません"
 }

@@ -4,12 +4,16 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'theme.dart';
 import 'material.dart';
+import 'huangyan_island.dart';
 import 'models.dart';
+import 'services.dart';
 import 'state.dart';
 import 'widgets.dart';
 import 'coord.dart';
+import 'coord_format.dart';
 import 'early_member.dart';
 import 'honor_wall_page.dart';
+import 'station_note.dart';
 
 class StationDetail extends StatefulWidget {
   final AppState state;
@@ -163,6 +167,61 @@ class _StationDetailState extends State<StationDetail> {
     ),
   );
 
+  /// 一行「标签 + 内容」：台站备注与状态报文各用它排一行。
+  ///
+  /// 标签是给「这是哪种报文」的，字号比正文小一档、灰一档，读的时候不会
+  /// 抢正文；两行的正文颜色也不同（备注灰、状态紫），扫一眼就能分开。
+  /// 标签宽度固定，两行的正文从同一条竖线开始。
+  Widget _noteLine(String label, Widget value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 62,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Text(label, style: ts(10, c: C.greyLight)),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: value),
+      ],
+    );
+  }
+
+  /// 台站备注与状态报文：两种报文各占一行，整宽给足。
+  ///
+  /// 原来挤在呼号下面那一小列里，稍长一点的备注就折成四五行；现在按「设备
+  /// 识别」那张卡的形状单独成卡，一行说一种。
+  Widget? _textCard(BuildContext context, Station s) {
+    final note = (s.comment ?? '').trim();
+    final status = (s.statusText ?? '').trim();
+    if (note.isEmpty && status.isEmpty) return null;
+    return SoftCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (note.isNotEmpty)
+            _noteLine(
+              S.of(context).callComment,
+              StationNote(note, style: ts(12, c: C.slate)),
+            ),
+          if (note.isNotEmpty && status.isNotEmpty) const SizedBox(height: 8),
+          if (status.isNotEmpty)
+            _noteLine(
+              S.of(context).txPartStatus,
+              StationNote(
+                status,
+                style: ts(12, c: C.purple),
+                icon: Icons.campaign_rounded,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.station;
@@ -218,7 +277,11 @@ class _StationDetailState extends State<StationDetail> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
                                     children: [
                                       Text(
                                         s.call,
@@ -228,43 +291,20 @@ class _StationDetailState extends State<StationDetail> {
                                           ls: -0.4,
                                         ),
                                       ),
-                                      SizedBox(width: 10),
                                       // 用 effectiveStatus：超过 5 分钟未上报即显示离线，
                                       // 避免标签一直停留在「在线」
                                       StatusBadge(s.effectiveStatus),
+                                      // 从哪条链路听来的：主链路、第二条链路、
+                                      // 电台接线，一台台站只留最后一条。
+                                      SourceBadge(s.heardVia,
+                                          remote: s.remote),
                                     ],
                                   ),
                                   SizedBox(height: 3),
                                   Text(
-                                    '${localizedAprsSymbolName(context, s.symbol)} · ${s.comment ?? ''}',
+                                    localizedAprsSymbolName(context, s.symbol),
                                     style: ts(12, c: C.slate),
                                   ),
-                                  // 独立状态报文（DTI `>`）：与上面那行「位置报文备注」
-                                  // 是两种报文，所以**分两行**显示、用紫色区分 ——
-                                  // 中继台常把「设备来源」（Powered by …）写在状态报文里，
-                                  // 而把「频点」写在位置备注里；混成一行就分不出哪个是哪个。
-                                  if (s.statusText != null &&
-                                      s.statusText!.isNotEmpty) ...[
-                                    SizedBox(height: 3),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Icon(
-                                          Icons.campaign_rounded,
-                                          size: 13,
-                                          color: C.purple,
-                                        ),
-                                        SizedBox(width: 5),
-                                        Expanded(
-                                          child: Text(
-                                            s.statusText!,
-                                            style: ts(11, c: C.purple),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -314,6 +354,46 @@ class _StationDetailState extends State<StationDetail> {
                                       SizedBox(width: 10),
                                       Text(
                                         S.of(ctx).copyCallsign,
+                                        style: ts(13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'share',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.share_location_rounded,
+                                        size: 18,
+                                        color: C.cyan,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        S.of(ctx).shareStation,
+                                        style: ts(13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'sub',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        widget.state
+                                                .isSubscribedStation(s.call)
+                                            ? Icons.notifications_off_rounded
+                                            : Icons.notifications_active_rounded,
+                                        size: 18,
+                                        color: C.blue,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        widget.state
+                                                .isSubscribedStation(s.call)
+                                            ? S.of(ctx).subsMenuOff
+                                            : S.of(ctx).subsMenuOn,
                                         style: ts(13),
                                       ),
                                     ],
@@ -403,6 +483,11 @@ class _StationDetailState extends State<StationDetail> {
                         ),
                         // 台站荣誉徽章（该呼号在荣誉墙名单中时展示）
                         _honorRow(s.call),
+                        // 黄岩岛彩蛋：命中 BS7H 时在标准面板里追加「介绍 + 历史由来」网页卡
+                        if (isHuangyanCall(s.call)) ...[
+                          const SizedBox(height: 14),
+                          const HuangyanIntroCard(),
+                        ],
                         if (related.isNotEmpty) ...[
                           SizedBox(height: 14),
                           // 相关台站（同基础呼号）
@@ -531,6 +616,13 @@ class _StationDetailState extends State<StationDetail> {
                             ),
                           ],
                         ),
+                        // PHG（功率 / 天线高度 / 增益 / 方向）：报文里带了才出现。
+                        // 做成一张**独立小卡片**、四项各自带标签 —— 上一版是一行
+                        // 灰字（`4W · 6.1m · 2dB · omni`），不显眼也不好读。
+                        if (AprsPhg.decode(s.comment ?? '') case final phg?) ...[
+                          const SizedBox(height: 12),
+                          _phgCard(S.of(context), phg),
+                        ],
                         const SizedBox(height: 12),
                         // 快捷操作（Wrap 自动换行，窄屏不溢出）
                         Wrap(
@@ -591,6 +683,11 @@ class _StationDetailState extends State<StationDetail> {
                             ),
                           ],
                         ),
+                        // 台站备注 / 状态文本（两种报文各一行）
+                        if (_textCard(context, s) != null) ...[
+                          SizedBox(height: 14),
+                          _textCard(context, s)!,
+                        ],
                         // 设备识别信息（官方 tocalls 目的呼号识别）
                         if (_deviceCard(context, s) != null) ...[
                           SizedBox(height: 14),
@@ -688,13 +785,13 @@ class _StationDetailState extends State<StationDetail> {
                               SizedBox(height: 8),
                               KV(
                                 S.of(context).latitude,
-                                s.lat.toStringAsFixed(5),
+                                fmtLat(s.lat, widget.state.coordFmt),
                                 icon: Icons.explore_rounded,
                               ),
                               SizedBox(height: 8),
                               KV(
                                 S.of(context).longitude,
-                                s.lng.toStringAsFixed(5),
+                                fmtLng(s.lng, widget.state.coordFmt),
                                 icon: Icons.explore_rounded,
                               ),
                               SizedBox(height: 8),
@@ -971,11 +1068,11 @@ class _StationDetailState extends State<StationDetail> {
                                 color: C.bgSoft,
                                 borderRadius: BorderRadius.circular(8),
                               ),
+                              // 原始报文整条折行显示。详情面板正是给人逐字核对
+                              // 报文的地方，省略号藏起来的恰好是要看的尾巴。
                               child: Text(
                                 p.raw,
                                 style: mono(10, c: C.slate),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
@@ -1356,8 +1453,99 @@ class _StationDetailState extends State<StationDetail> {
   }
 
   /// 台站操作菜单：收藏 / 复制呼号 / 删除台站
+  /// 「更多 → 分享台站」：选一个会话，把该台站的**坐标 + 呼号**作为一条位置
+  /// 消息发过去（走既有的 [AppState.sendLocation]，与私聊里的「发送位置点」同一
+  /// 套协议 —— APRS 位置点报文 + 呼号，接收端渲染成台站卡片）。
+  Future<void> _shareStation(Station s) async {
+    final st = widget.state;
+    final loc = S.of(context);
+    final partners = AppState.partnersOf(
+        st.messages, st.chatGroups, st.stations)
+      ..remove(s.call);
+    if (!st.connected) {
+      _toast(loc.chatNeedConnect);
+      return;
+    }
+    final target = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MaterialSurface(
+        radius: 18,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: C.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          loc.shareStationPick,
+                          style: ts(14, w: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (partners.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                    child: Text(loc.noConversations, style: ts(12, c: C.grey)),
+                  )
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final p in partners)
+                          ListTile(
+                            dense: true,
+                            leading: Icon(Icons.person_rounded,
+                                size: 18, color: C.blue),
+                            title: Text(p, style: ts(13, w: FontWeight.w600)),
+                            onTap: () => Navigator.pop(ctx, p),
+                          ),
+                        const SizedBox(height: 6),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (target == null || !mounted) return;
+    if (st.sendLocation(target, s.lat, s.lng, asStation: s.call)) {
+      _toast(loc.shareStationSent(s.call));
+    } else {
+      _toast(loc.needFixToSendLocation);
+    }
+  }
+
   Future<void> _onStationAction(String action, Station s) async {
     final st = widget.state;
+    if (action == 'share') {
+      await _shareStation(s);
+      return;
+    }
     if (action == 'fav') {
       st.toggleFavorite(s.call);
       if (!mounted) return;
@@ -1368,6 +1556,13 @@ class _StationDetailState extends State<StationDetail> {
       await Clipboard.setData(ClipboardData(text: s.call));
       if (!mounted) return;
       _toast(S.of(context).callsignCopied);
+      return;
+    }
+    if (action == 'sub') {
+      final on = st.toggleStationSubscription(s.call);
+      if (!mounted) return;
+      setState(() {});
+      _toast(on ? S.of(context).subsAdded(s.baseCall) : S.of(context).subsRemoved);
       return;
     }
     if (action != 'delete') return;
@@ -1516,6 +1711,52 @@ class _StationDetailState extends State<StationDetail> {
       builder: (_) => StationDetail(state: widget.state, station: target),
     );
   }
+
+  /// PHG 卡片：一张橙色小卡，四项（功率 / 高度 / 增益 / 方向）各自带标签。
+  Widget _phgCard(S l, ({int watts, int heightM, int gainDb, String dir}) phg) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: C.orangeBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.orange.withValues(alpha: 0.25)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.bolt_rounded, size: 15, color: C.orange),
+          const SizedBox(width: 6),
+          Text(l.phgTitle,
+              style: ts(12, c: C.orange, w: FontWeight.w800, ls: 0.3)),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: _phgCell(l.phgPower, '${phg.watts} W')),
+          Expanded(child: _phgCell(l.phgHeight, '${phg.heightM} m')),
+          Expanded(child: _phgCell(l.phgGain, '${phg.gainDb} dB')),
+          Expanded(
+            child: _phgCell(
+              l.phgDirection,
+              phg.dir == '360°' ? l.phgOmni : phg.dir,
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  /// PHG 卡片里的一格：上面小标签、下面加粗数值。
+  Widget _phgCell(String label, String value) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: ts(9, c: C.slate, ls: 0.2)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: ts(13, c: C.orange, w: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ],
+      );
 
   Widget _metric(String label, String value, IconData icon, Color c) {
     return SoftCard(

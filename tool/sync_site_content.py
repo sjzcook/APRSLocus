@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""把「功能卡片 + 更新日志重点版本」同步到官网三个语言页。
+"""把「功能清单 + 更新日志重点版本」同步到官网三个语言页。
 
-背景：官网的功能卡片与更新日志是**静态手写**的（页面本身只由
+背景：官网的功能条目与更新日志原本都是**静态手写**的（页面本身只由
 `docs/js/main.js` 动态替换版本号），所以每次发版都要人来补 —— 实践下来
 就落后了：v1.6.19~v1.6.107 的功能官网全没有，更新日志停在 v1.6.18。
+功能清单后来也从首页整表收进来了：它是三语各手写一份的，改一句要动三个
+文件，跟更新日志同一个毛病。
 
 这个脚本用「标记块」做幂等写入：
     <!-- site-sync:features -->...<!-- /site-sync:features -->
@@ -40,163 +42,375 @@ def T(zh, zh_TW, en):
     return {'zh': zh, 'zh_TW': zh_TW, 'en': en}
 
 
-# ─────────────────────────── 功能卡片 ───────────────────────────
-# 顺序即展示顺序；图标类名 c1~c18 见 docs/css/style.css。
-# 总数 18：4 列时 4×4+2（末行 2 张）、2 列时 9 行，两种断点都不会剩孤零零一张。
+# ─────────────────────────── 功能清单（#features） ───────────────────────────
+# 顺序即展示顺序；序号 01~18 由 render_cards() 按列表位置自动排（不写死在数据里，
+# 增删条目不会漏改编号）。分组只影响展示 —— 每组开头一行小标题。
+# 首页**不再手写功能条目**：早先 c1~c8 是手写在 index.html 里的（三语各一份，
+# 改一句要动三个文件），现已全部收进这张表。
+GROUPS = [
+    ('map',  T('地图与追踪', '地圖與追蹤', 'Maps & tracking')),
+    ('link', T('通信与网关', '通訊與閘道', 'Messaging & gateway')),
+    ('data', T('台站与数据', '臺站與資料', 'Stations & data')),
+    ('sys',  T('系统与体验', '系統與體驗', 'System & experience')),
+]
+GROUP_NAME = {g: t for g, t in GROUPS}
+
 CARDS = [
     {
-        'icon': 'c9', 'fa': 'fa-tower-cell',
-        'title': T('四种数据来源', '四種資料來源', 'Four Data Sources'),
+        'group': 'map', 'fa': 'fa-location-dot',
+        'title': T(
+            '实时地图追踪',
+            '實時地圖追蹤',
+            'Real-time Map Tracking'),
         'desc': T(
-            '互联网（APRS-IS）、蓝牙 / 串口 TNC（KISS）、声卡音频 AFSK 1200（Bell 202 软 TNC），'
-            '以及读取 Kenwood 电台输出的 <code>$PKWDWPL</code> 航点语句（只收不发）。'
-            '几条链路可以同时收报文，发射来源单独指定一条。',
-            '網際網路（APRS-IS）、藍牙 / 串列埠 TNC（KISS）、音效卡音訊 AFSK 1200（Bell 202 軟 TNC），'
-            '以及讀取 Kenwood 電台輸出的 <code>$PKWDWPL</code> 航點語句（唯讀、不發射）。'
-            '數條鏈路可以同時收報文，發射來源單獨指定一條。',
-            'Internet (APRS-IS), Bluetooth / serial TNC over KISS, a sound-card AFSK 1200 '
-            '(Bell 202) software TNC, and reading the <code>$PKWDWPL</code> waypoint sentences '
-            'a Kenwood radio outputs (receive-only). Several links can receive at once, while '
-            'the transmit source is picked separately.'),
-        'tags': {'zh': ['APRS-IS', 'TNC', '音频', 'PKWDWPL'],
-                 'zh_TW': ['APRS-IS', 'TNC', '音訊', 'PKWDWPL'],
-                 'en': ['APRS-IS', 'TNC', 'Audio', 'PKWDWPL']},
+            '高德瓦片 / 高德卫星 / 矢量 / Carto（浅色·深色·航行者）/ '
+            'OSM（标准·人道）/ OpenTopo / Esri 十多种底图可切。一台站一个标记（'
+            'v1.6.149 起去掉聚合），也能看轨迹回放，低缩放密度看热力图。',
+            '高德瓦片 / 高德衛星 / 矢量 / Carto（淺色·深色·航行者）/ '
+            'OSM（標準·人道）/ OpenTopo / Esri 十多種底圖可切。一臺站一個標記（'
+            'v1.6.149 起去掉聚合），也能看軌跡回放，低縮放密度看熱力圖。',
+            'Many tile sources: AMap tiles, AMap satellite, Vector, Carto '
+            '(light/dark/voyager), OSM (standard/humanitarian), OpenTopo, and '
+            'Esri. One marker per station (clustering removed in v1.6.149), with '
+            'trail playback support; the heatmap shows density when zoomed out.'),
+        'tags': T(['GCJ-02 / WGS-84', '热力图', '轨迹显示'],
+                  ['GCJ-02 / WGS-84', '熱力圖', '軌跡顯示'],
+                  ['GCJ-02 / WGS-84', 'Heatmap', 'Trail Display']),
     },
     {
-        'icon': 'c10', 'fa': 'fa-right-left',
-        'title': T('网关（iGate）', '閘道（iGate）', 'Gateway (iGate)'),
+        'group': 'map', 'fa': 'fa-compass',
+        'title': T(
+            '沉浸地图（导航风格）',
+            '沉浸地圖（導航風格）',
+            'Immersive Drive View'),
         'desc': T(
-            '把射频收到的报文转到 APRS-IS，自动带 <code>qAr</code> / <code>qAR</code> 来路标识；'
-            '带环路防护（含 <code>TCPIP*</code> 或已有 q 构造的报文绝不送回），'
-            '同一帧 30 秒内只注入一次。可选双向模式会把网络侧发给「刚在射频上听到过」的台站的消息送到射频。',
-            '把射頻收到的報文轉到 APRS-IS，自動帶 <code>qAr</code> / <code>qAR</code> 來路標識；'
-            '具備環路防護（含 <code>TCPIP*</code> 或已有 q 構造的報文絕不送回），'
-            '同一幀 30 秒內只注入一次。可選雙向模式會把網路側發給「剛在射頻上聽到過」的台站的訊息送到射頻。',
-            'Relays RF packets into APRS-IS, tagging them with <code>qAr</code> / <code>qAR</code>; '
-            'loop protection is built in (packets already carrying <code>TCPIP*</code> or a '
-            'q-construct are never echoed back), and the same frame is injected once per 30 '
-            'seconds. Optional two-way mode sends messages to stations recently heard on RF.'),
-        'tags': {'zh': ['RF→IS', '防环', '去重'],
-                 'zh_TW': ['RF→IS', '防環', '去重'],
-                 'en': ['RF→IS', 'Loop-safe', 'De-duplication']},
+            '专为「边开车边看」设计的导航风格页面：大字号方向 / 距离 / '
+            '速度，左侧「附近台站」面板，目标台站居中，Android 与 Windows '
+            '都能用。',
+            '專為「邊開車邊看」設計的導航風格頁面：大字號方向 / 距離 / '
+            '速度，左側「附近台站」面板，目標台站居中，Android 與 Windows '
+            '都能用。',
+            'A navigation-style page built for glancing at while driving: large '
+            'heading / distance / speed readouts, a nearby-stations panel, and '
+            'the target station centred.'),
+        'tags': T(['导航风格', '附近台站', '大字号'],
+                  ['導航風格', '附近台站', '大字號'],
+                  ['Navigation style', 'Nearby stations', 'Large type']),
     },
     {
-        'icon': 'c11', 'fa': 'fa-language',
-        'title': T('双向聊天翻译', '雙向聊天翻譯', 'Two-way Chat Translation'),
+        'group': 'map', 'fa': 'fa-map-location-dot',
+        'title': T(
+            '离线地图',
+            '離線地圖',
+            'Offline Maps'),
         'desc': T(
-            '内置多引擎翻译，默认走免费接口、<b>无需任何密钥</b>。收到的和发出的消息都能译，'
-            '可对照原文，也能在发送前先把自己的输入译成对方的语言。',
-            '內建多引擎翻譯，預設走免費介面、<b>無需任何金鑰</b>。收到的和發出的訊息都能譯，'
-            '可對照原文，也能在發送前先把自己的輸入譯成對方的語言。',
-            'Built-in multi-engine translation that works out of the box on a free endpoint, '
-            '<b>no API key required</b>. Translate both incoming and outgoing messages, compare '
-            'against the original, or translate your text into the other station\'s language '
-            'before sending.'),
-        'tags': {'zh': ['免密钥', '对照翻译', '发送前翻译'],
-                 'zh_TW': ['免金鑰', '對照翻譯', '發送前翻譯'],
-                 'en': ['No API key', 'Side-by-side', 'Pre-send']},
+            '把当前视图整片瓦片下到本机（断点续传、单区域上限 20 '
+            '万张），断网、无信号也能看；四级降级保证地图始终可看可点。',
+            '把當前視圖整片瓦片下載到本機（斷點續傳、單區域上限 20 '
+            '萬張），斷網、無訊號也能看；四級降級保證地圖始終可看可點。',
+            'Download the tiles of the current view to the device (resumable, '
+            '200k tiles per region) and keep the map with no network at all; a '
+            'four-step fallback keeps it readable and clickable.'),
+        'tags': T(['按视图下载', '断点续传', '四级降级'],
+                  ['按視圖下載', '斷點續傳', '四級降級'],
+                  ['Download view', 'Resumable', '4-step fallback']),
     },
     {
-        'icon': 'c12', 'fa': 'fa-compass',
-        'title': T('沉浸地图（导航风格）', '沉浸地圖（導航風格）', 'Immersive Drive View'),
+        'group': 'link', 'fa': 'fa-tower-broadcast',
+        'title': T(
+            '位置信标',
+            '位置信標',
+            'Position Beacon'),
         'desc': T(
-            '专为「边开车边看」设计的导航风格页面：大字号方向 / 距离 / 速度，'
-            '左侧「附近台站」面板，目标台站居中，Android 与 Windows 都能用。',
-            '專為「邊開車邊看」設計的導航風格頁面：大字號方向 / 距離 / 速度，'
-            '左側「附近台站」面板，目標台站居中，Android 與 Windows 都能用。',
-            'A navigation-style page built for glancing at while driving: large heading / '
-            'distance / speed readouts, a nearby-stations panel, and the target station centred.'),
-        'tags': {'zh': ['导航风格', '附近台站', '大字号'],
-                 'zh_TW': ['導航風格', '附近台站', '大字號'],
-                 'en': ['Navigation style', 'Nearby stations', 'Large type']},
+            '一键上报位置，按 APRS 1.0 标准格式发送，自动带上高度、速度、航向和电'
+            '量，上报间隔可调。',
+            '一鍵上報位置，按 APRS 1.0 標準格式發送，自動帶上高度、速度、航向和電'
+            '量，上報間隔可調。',
+            'One-tap position reporting in standard APRS 1.0 format. '
+            'Auto-includes altitude, speed, heading, and battery level. Report '
+            'interval is configurable.'),
+        'tags': T(['标准格式', '自动附带信息', '演示模式'],
+                  ['標準格式', '自動附帶信息', '演示模式'],
+                  ['Standard Format', 'Auto Attachments', 'Demo Mode']),
     },
     {
-        'icon': 'c13', 'fa': 'fa-chart-line',
-        'title': T('天气 · 统计 · 荣誉', '天氣 · 統計 · 榮譽', 'Weather · Statistics · Honors'),
+        'group': 'link', 'fa': 'fa-message',
+        'title': T(
+            '消息通信',
+            '消息通信',
+            'Messaging'),
         'desc': T(
-            '天气面板（动态背景跟随实时天气强度变化）、台站统计面板（最近上报 / 最远距离 / 报文速率），'
-            '以及荣誉墙。',
-            '天氣面板（動態背景跟即時天氣強度變化）、台站統計面板（最近上報 / 最遠距離 / 報文速率），'
-            '以及榮譽牆。',
-            'A weather panel whose dynamic background follows the actual conditions, station '
-            'statistics (latest spot, farthest distance, packet rate), and an honors wall.'),
-        'tags': {'zh': ['天气面板', '统计面板', '荣誉墙'],
-                 'zh_TW': ['天氣面板', '統計面板', '榮譽牆'],
-                 'en': ['Weather', 'Statistics', 'Honors']},
+            '单聊、群聊统一在会话列表里，带 ACK 确认。支持群聊邀请、成员管理、未'
+            '读角标，中文消息也没问题。',
+            '單聊、群聊統一在會話列表裡，帶 ACK 確認。支持群聊邀請、成員管理、未'
+            '讀角標，中文消息也沒問題。',
+            'Private and group chat in a unified conversation list with ACK '
+            'confirmation. Supports group invites, member management, unread '
+            'badges, and Chinese text.'),
+        'tags': T(['ACK 确认', '群聊管理', '中文兼容'],
+                  ['ACK 確認', '群聊管理', '中文兼容'],
+                  ['ACK Confirmation', 'Group Chat', 'Chinese Compatible']),
     },
     {
-        'icon': 'c14', 'fa': 'fa-file-export',
-        'title': T('数据导出', '資料匯出', 'Data Export'),
+        'group': 'link', 'fa': 'fa-language',
+        'title': T(
+            '双向聊天翻译',
+            '雙向聊天翻譯',
+            'Two-way Chat Translation'),
         'desc': T(
-            '一键导出 ADIF —— 业余无线电通用的日志交换格式，频率可自定义，'
-            '导出后可直接导入其它日志软件。',
-            '一鍵匯出 ADIF —— 業餘無線電通用的日誌交換格式，頻率可自訂，'
-            '匯出後可直接匯入其它日誌軟體。',
-            'One-tap ADIF export — the standard amateur-radio log interchange format — with a '
-            'configurable frequency, ready to import into other logging software.'),
-        'tags': {'zh': ['ADIF', '频率自定义'],
-                 'zh_TW': ['ADIF', '頻率自訂'],
-                 'en': ['ADIF', 'Custom frequency']},
+            '内置多引擎翻译，默认走免费接口、<b>无需任何密钥</b>。收到的和发出的'
+            '消息都能译，可对照原文，也能在发送前先把自己的输入译成对方的语言。',
+            '內建多引擎翻譯，預設走免費介面、<b>無需任何金鑰</b>。收到的和發出的'
+            '訊息都能譯，可對照原文，也能在發送前先把自己的輸入譯成對方的語言。',
+            'Built-in multi-engine translation that works out of the box on a '
+            'free endpoint, <b>no API key required</b>. Translate both incoming '
+            'and outgoing messages, compare against the original, or translate '
+            "your text into the other station's language before sending."),
+        'tags': T(['免密钥', '对照翻译', '发送前翻译'],
+                  ['免金鑰', '對照翻譯', '發送前翻譯'],
+                  ['No API key', 'Side-by-side', 'Pre-send']),
     },
     {
-        'icon': 'c15', 'fa': 'fa-table-cells-large',
-        'title': T('桌面小组件', '桌面小組件', 'Home-screen Widgets'),
+        'group': 'link', 'fa': 'fa-right-left',
+        'title': T(
+            '网关（iGate）',
+            '閘道（iGate）',
+            'Gateway (iGate)'),
+        'desc': T(
+            '把射频收到的报文转到 APRS-IS，自动带 <code>qAr</code> / '
+            '<code>qAR</code> 来路标识；带环路防护（含 <code>TCPIP*</code> '
+            '或已有 q 构造的报文绝不送回），同一帧 30 '
+            '秒内只注入一次。可选双向模式会把网络侧发给「刚在射频上听到过」的台站'
+            '的消息送到射频。',
+            '把射頻收到的報文轉到 APRS-IS，自動帶 <code>qAr</code> / '
+            '<code>qAR</code> 來路標識；具備環路防護（含 <code>TCPIP*</code> '
+            '或已有 q 構造的報文絕不送回），同一幀 30 '
+            '秒內只注入一次。可選雙向模式會把網路側發給「剛在射頻上聽到過」的台站'
+            '的訊息送到射頻。',
+            'Relays RF packets into APRS-IS, tagging them with <code>qAr</code> '
+            '/ <code>qAR</code>; loop protection is built in (packets already '
+            'carrying <code>TCPIP*</code> or a q-construct are never echoed '
+            'back), and the same frame is injected once per 30 seconds. Optional '
+            'two-way mode sends messages to stations recently heard on RF.'),
+        'tags': T(['RF→IS', '防环', '去重'],
+                  ['RF→IS', '防環', '去重'],
+                  ['RF→IS', 'Loop-safe', 'De-duplication']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-shield',
+        'title': T(
+            '台站识别与筛选',
+            '臺站識別與篩選',
+            'Station Recognition &amp; Filter'),
+        'desc': T(
+            '接入 aprs.org 官方设备库，从报文目的呼号识别台站所用设备（厂商 + '
+            '型号 + 车台 / 手台 / 跟踪器 / App / 网关…）。列表可筛状态、类型、设'
+            '备类别与具体型号；详情页可跳 QRZ 呼号库与 aprs.fi 看轨迹。',
+            '接入 aprs.org 官方設備庫，從報文目的呼號識別臺站所用設備（廠商 + '
+            '型號 + 車臺 / 手臺 / 跟蹤器 / App / 網關…）。列表可篩狀態、類型、設'
+            '備類別與具體型號；詳情頁可跳 QRZ 呼號庫與 aprs.fi 看軌跡。',
+            'Recognizes station devices via the official aprs.org database '
+            '(tocalls): vendor + model + device class (rig / HT / tracker / app '
+            '/ gateway…). Filter by status, type, device class or exact model; '
+            'jump to QRZ callsign DB or aprs.fi for tracks from the details page.'),
+        'tags': T(['官方设备识别', '类别 / 型号筛选', 'QRZ / aprs.fi'],
+                  ['官方設備識別', '類別 / 型號篩選', 'QRZ / aprs.fi'],
+                  ['Official Device ID', 'Class / Model Filter', 'QRZ / aprs.fi']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-file-lines',
+        'title': T(
+            '数据包与日志',
+            '數據包與日誌',
+            'Packet &amp; Log Viewer'),
+        'desc': T(
+            '原始报文用等宽字体展示，长按可复制；解析结果按位置 / 消息 / 气象 / '
+            '状态分类。内置分级日志方便排查问题。',
+            '原始報文用等寬字體展示，長按可複製；解析結果按位置 / 消息 / 氣象 / '
+            '狀態分類。內置分級日誌方便排查問題。',
+            'Raw packets displayed in monospace with long-press copy. Parsed '
+            'results sorted by type: position, message, weather, status. '
+            'Built-in hierarchical logs for debugging.'),
+        'tags': T(['原始报文', '类型筛选', '调试日志'],
+                  ['原始報文', '類型篩選', '調試日誌'],
+                  ['Raw Packet View', 'Type Filtering', 'Debug Logs']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-tower-cell',
+        'title': T(
+            '五种数据来源',
+            '五種資料來源',
+            'Five Data Sources'),
+        'desc': T(
+            '互联网（APRS-IS）、蓝牙 / 串口 TNC（KISS）、声卡音频 AFSK '
+            '1200（Bell 202 软 TNC）、Kenwood 航点 <code>$PKWDWPL</code>（只收不'
+            '发），以及 WLAN 电台直连（支持 IC-705 / IC-9700 / IC-7610 / IC-905 '
+            '等 Wi-Fi / 以太网型号，CI-V 控制与局域网音频）。多条链路可以同时收报'
+            '文，发射来源单独指定一条。',
+            '網際網路（APRS-IS）、藍牙 / 串列埠 TNC（KISS）、音效卡音訊 AFSK '
+            '1200（Bell 202 軟 TNC）、Kenwood 航點 <code>$PKWDWPL</code>（唯讀、'
+            '不發射），以及 WLAN 電台直連（支援 IC-705 / IC-9700 / IC-7610 / '
+            'IC-905 等 Wi-Fi / 乙太網路型號，CI-V 控制與區域網路音訊）。數條鏈路'
+            '可以同時收報文，發射來源單獨指定一條。',
+            'Internet (APRS-IS), Bluetooth / serial TNC (KISS), sound-card AFSK '
+            '1200 (Bell 202 software TNC), Kenwood <code>$PKWDWPL</code> '
+            'waypoints (receive-only), and WLAN radio direct link (supporting '
+            'IC-705 / IC-9700 / IC-7610 / IC-905 over Wi-Fi / Ethernet with CI-V '
+            'and LAN audio). Multiple links can receive simultaneously, while '
+            'the transmit link is picked separately.'),
+        'tags': T(['APRS-IS', 'TNC', '音频', 'PKWDWPL', 'WLAN 电台'],
+                  ['APRS-IS', 'TNC', '音訊', 'PKWDWPL', 'WLAN 電台'],
+                  ['APRS-IS', 'TNC', 'Audio', 'PKWDWPL', 'WLAN Radio']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-chart-line',
+        'title': T(
+            '天气 · 统计 · 荣誉',
+            '天氣 · 統計 · 榮譽',
+            'Weather · Statistics · Honors'),
+        'desc': T(
+            '天气面板（动态背景跟随实时天气强度变化）、台站统计面板（最近上报 / '
+            '最远距离 / 报文速率），以及荣誉墙。',
+            '天氣面板（動態背景跟即時天氣強度變化）、台站統計面板（最近上報 / '
+            '最遠距離 / 報文速率），以及榮譽牆。',
+            'A weather panel whose dynamic background follows the actual '
+            'conditions, station statistics (latest spot, farthest distance, '
+            'packet rate), and an honors wall.'),
+        'tags': T(['天气面板', '统计面板', '荣誉墙'],
+                  ['天氣面板', '統計面板', '榮譽牆'],
+                  ['Weather', 'Statistics', 'Honors']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-file-export',
+        'title': T(
+            '数据导出',
+            '資料匯出',
+            'Data Export'),
+        'desc': T(
+            '一键导出 ADIF —— 业余无线电通用的日志交换格式，频率可自定义，导出后'
+            '可直接导入其它日志软件。',
+            '一鍵匯出 ADIF —— 業餘無線電通用的日誌交換格式，頻率可自訂，匯出後可'
+            '直接匯入其它日誌軟體。',
+            'One-tap ADIF export — the standard amateur-radio log interchange '
+            'format — with a configurable frequency, ready to import into other '
+            'logging software.'),
+        'tags': T(['ADIF', '频率自定义'],
+                  ['ADIF', '頻率自訂'],
+                  ['ADIF', 'Custom frequency']),
+    },
+    {
+        'group': 'data', 'fa': 'fa-satellite-dish',
+        'title': T(
+            '短波与电离层传播',
+            '短波與電離層傳播',
+            'HF & Ionospheric Propagation'),
+        'desc': T(
+            '短波面板与独立组件：SFI / Kp / A 指数、黑子、X '
+            '射线、太阳风，四个波段对的「日 / 夜」条件一眼看清；数据来自 '
+            'hamqsl.com（N0NBH），30 分钟缓存。',
+            '短波面板與獨立元件：SFI / Kp / A 指數、黑子、X '
+            '射線、太陽風，四個波段對的「日 / 夜」條件一眼看清；資料來自 '
+            'hamqsl.com（N0NBH），30 分鐘快取。',
+            'An HF panel plus a standalone widget: SFI / Kp / A index, sunspots, '
+            'X-rays, solar wind, and day/night conditions for four band pairs at '
+            'a glance. Data comes from hamqsl.com (N0NBH) with a 30-minute cache.'),
+        'tags': T(['SFI / Kp / A', '日 · 夜', '30 分钟缓存'],
+                  ['SFI / Kp / A', '日 · 夜', '30 分鐘快取'],
+                  ['SFI / Kp / A', 'Day / night', '30-min cache']),
+    },
+    {
+        'group': 'sys', 'fa': 'fa-wifi',
+        'title': T(
+            '连接与后台',
+            '連接與後臺',
+            'Connectivity &amp; Background'),
+        'desc': T(
+            '自动连 APRS-IS 公共服务器，TCP / WebSocket 都支持，断线按 8 → 16 → '
+            '32 → 60 秒渐进重连。Android 用前台服务保持在线。',
+            '自動連 APRS-IS 公共伺服器，TCP / WebSocket 都支持，斷線按 8 → 16 → '
+            '32 → 60 秒漸進重連。Android 用前臺服務保持在線。',
+            'Auto-connects to APRS-IS public servers over TCP or WebSocket. '
+            'Progressive reconnect: 8 → 16 → 32 → 60 seconds. Android uses a '
+            'foreground service to stay online.'),
+        'tags': T(['自动重连', '前台服务', '系统通知'],
+                  ['自動重連', '前臺服務', '系統通知'],
+                  ['Auto Reconnect', 'Foreground Service', 'System Notifications']),
+    },
+    {
+        'group': 'sys', 'fa': 'fa-arrows-rotate',
+        'title': T(
+            '自动更新',
+            '自動更新',
+            'Auto Updates'),
+        'desc': T(
+            '应用内检查更新，GitHub / GitCode 两个渠道可切，按平台分流下载，也能'
+            '装历史版本。',
+            '應用內檢查更新，GitHub / GitCode 兩個渠道可切，按平臺分流下載，也能'
+            '裝歷史版本。',
+            'In-app update checker with two channels (GitHub / GitCode). '
+            'Platform-aware download routing and historical version access.'),
+        'tags': T(['双渠道', '按平台分流', '历史版本'],
+                  ['雙渠道', '按平臺分流', '歷史版本'],
+                  ['Dual Channels', 'Platform Routing', 'Historical Versions']),
+    },
+    {
+        'group': 'sys', 'fa': 'fa-palette',
+        'title': T(
+            '个性化体验',
+            '個性化體驗',
+            'Personalization'),
+        'desc': T(
+            '简体中文 / 繁體中文 / English / 日本語 / Indonesia / Español '
+            '可切换，支持深色模式和自定义主题色，界面可缩放 85% ~ '
+            '130%。首次启动有六步引导。',
+            '簡體中文 / 繁體中文 / English / 日本語 / Indonesia / Español '
+            '可切換，支持深色模式和自定義主題色，界面可縮放 85% ~ '
+            '130%。首次啟動有六步引導。',
+            'Simplified Chinese / Traditional Chinese / English / Japanese / '
+            'Indonesian / Spanish UI, dark mode, custom accent colors, scalable '
+            'UI (85%–130%). Six-step onboarding wizard on first launch.'),
+        'tags': T(['六种语言', '深色模式', 'OOBE 引导'],
+                  ['六種語言', '深色模式', 'OOBE 引導'],
+                  ['Six Languages', 'Dark Mode', 'OOBE Wizard']),
+    },
+    {
+        'group': 'sys', 'fa': 'fa-table-cells-large',
+        'title': T(
+            '桌面小组件',
+            '桌面小組件',
+            'Home-screen Widgets'),
         'desc': T(
             'Android 桌面小组件：天气（4 档自适应尺寸）、短波传播、系统状态三套；'
             '组件不自己联网，由应用单向推送快照，省电可控。',
             'Android 桌面小組件：天氣（4 種自適應尺寸）、短波傳播、系統狀態三套；'
             '小組件不自己連線，由應用單向推送快照，省電可控。',
-            'Android home-screen widgets: weather (four adaptive sizes), HF propagation and '
-            'system status. The widgets never open a connection themselves — the app pushes '
-            'a snapshot to them, which keeps them cheap on battery.'),
-        'tags': {'zh': ['Android', '4 档自适应', '不自行联网'],
-                 'zh_TW': ['Android', '4 種自適應', '不自行連線'],
-                 'en': ['Android', '4 adaptive sizes', 'No direct network']},
+            'Android home-screen widgets: weather (four adaptive sizes), HF '
+            'propagation and system status. The widgets never open a connection '
+            'themselves — the app pushes a snapshot to them, which keeps them '
+            'cheap on battery.'),
+        'tags': T(['Android', '4 档自适应', '不自行联网'],
+                  ['Android', '4 種自適應', '不自行連線'],
+                  ['Android', '4 adaptive sizes', 'No direct network']),
     },
     {
-        'icon': 'c16', 'fa': 'fa-satellite-dish',
-        'title': T('短波与电离层传播', '短波與電離層傳播', 'HF & Ionospheric Propagation'),
+        'group': 'sys', 'fa': 'fa-paintbrush',
+        'title': T(
+            '主题与备份',
+            '主題與備份',
+            'Themes & Backup'),
         'desc': T(
-            '短波面板与独立组件：SFI / Kp / A 指数、黑子、X 射线、太阳风，'
-            '四个波段对的「日 / 夜」条件一眼看清；数据来自 hamqsl.com（N0NBH），30 分钟缓存。',
-            '短波面板與獨立元件：SFI / Kp / A 指數、黑子、X 射線、太陽風，'
-            '四個波段對的「日 / 夜」條件一眼看清；資料來自 hamqsl.com（N0NBH），30 分鐘快取。',
-            'An HF panel plus a standalone widget: SFI / Kp / A index, sunspots, X-rays, solar '
-            'wind, and day/night conditions for four band pairs at a glance. Data comes from '
-            'hamqsl.com (N0NBH) with a 30-minute cache.'),
-        'tags': {'zh': ['SFI / Kp / A', '日 · 夜', '30 分钟缓存'],
-                 'zh_TW': ['SFI / Kp / A', '日 · 夜', '30 分鐘快取'],
-                 'en': ['SFI / Kp / A', 'Day / night', '30-min cache']},
-    },
-    {
-        'icon': 'c17', 'fa': 'fa-map-location-dot',
-        'title': T('离线地图', '離線地圖', 'Offline Maps'),
-        'desc': T(
-            '把当前视图整片瓦片下到本机（断点续传、单区域上限 20 万张），断网、无信号也能看；'
-            '四级降级保证地图始终可看可点。',
-            '把當前視圖整片瓦片下載到本機（斷點續傳、單區域上限 20 萬張），斷網、無訊號也能看；'
-            '四級降級保證地圖始終可看可點。',
-            'Download the tiles of the current view to the device (resumable, 200k tiles per '
-            'region) and keep the map with no network at all; a four-step fallback keeps it '
-            'readable and clickable.'),
-        'tags': {'zh': ['按视图下载', '断点续传', '四级降级'],
-                 'zh_TW': ['按視圖下載', '斷點續傳', '四級降級'],
-                 'en': ['Download view', 'Resumable', '4-step fallback']},
-    },
-    {
-        'icon': 'c18', 'fa': 'fa-paintbrush',
-        'title': T('主题与备份', '主題與備份', 'Themes & Backup'),
-        'desc': T(
-            '主题不只是换色：颜色、图标、文字、背景图都能改（17 个颜色令牌），可导出成 JSON 分享；'
-            '设置与数据可整体备份，换机一键导入。',
-            '主題不只是換色：顏色、圖示、文字、背景圖都能改（17 個顏色權杖），可匯出成 JSON 分享；'
-            '設定與資料可整體備份，換機一鍵匯入。',
-            'Themes go beyond colour: icons, text and your own background image (17 colour '
-            'tokens), exported as JSON to share; settings and data back up as one file for a '
-            'one-tap restore.'),
-        'tags': {'zh': ['17 色令牌', 'JSON 分享', '一键备份'],
-                 'zh_TW': ['17 色權杖', 'JSON 分享', '一鍵備份'],
-                 'en': ['17 tokens', 'JSON export', 'One-tap backup']},
+            '主题不只是换色：颜色、图标、文字、背景图都能改（17 '
+            '个颜色令牌），可导出成 JSON 分享；设置与数据可整体备份，换机一键导入'
+            '。',
+            '主題不只是換色：顏色、圖示、文字、背景圖都能改（17 '
+            '個顏色權杖），可匯出成 JSON 分享；設定與資料可整體備份，換機一鍵匯入'
+            '。',
+            'Themes go beyond colour: icons, text and your own background image '
+            '(17 colour tokens), exported as JSON to share; settings and data '
+            'back up as one file for a one-tap restore.'),
+        'tags': T(['17 色令牌', 'JSON 分享', '一键备份'],
+                  ['17 色權杖', 'JSON 分享', '一鍵備份'],
+                  ['17 tokens', 'JSON export', 'One-tap backup']),
     },
 ]
 
@@ -204,6 +418,2906 @@ CARDS = [
 # new / up / fix 对应页面既有的三个圆点颜色（绿 / 琥珀 / 红）。
 # 只列「重点版本」：中间几十个纯修 bug 的版本归纳进文字说明，完整记录指向 Releases。
 CL = [
+    {
+        'ver': 'v2.2.8', 'date': '2026-11-13',
+        'items': [
+            ('fix',
+             T('联网校验会去官方仓库查摘要，镜像渠道也不再一律说无法校验。',
+               '連網校驗會去官方倉庫查摘要，鏡像渠道也不再一律說無法校驗。',
+               'The online check asks the official repository for the digest, so mirror channels '
+               'no longer always fail it.')),
+            ('fix',
+             T('摘要对不上时，那一行写出两边的摘要前几位。',
+               '摘要對不上時，那一行寫出兩邊的摘要前幾位。',
+               'On a mismatch the row shows the first characters of both digests.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.7', 'date': '2026-11-13',
+        'items': [
+            ('up',
+             T('强提醒的正文有了小标题与条目，证书指纹用等宽字排。',
+               '強提醒的正文有了小標題與條目，憑證指紋用等寬字排。',
+               'A strong notice body has headings and rows, with fingerprints in a monospaced block.')),
+            ('fix',
+             T('强提醒每次打开都重新去官网拉一次，改了内容下次打开就生效。',
+               '強提醒每次打開都重新去官網拉一次，改了內容下次打開就生效。',
+               'The notice is fetched again on every launch, so an edit takes effect next time.')),
+            ('fix',
+             T('同一条改了文字会重新弹一次。',
+               '同一條改了文字會重新彈一次。',
+               'Editing the text of a notice makes it pop once more.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.6', 'date': '2026-11-13',
+        'items': [
+            ('fix',
+             T('强提醒每次打开只弹一次，关掉以后不会再跳出来。',
+               '強提醒每次打開只彈一次，關掉以後不會再跳出來。',
+               'A strong notice shows once per launch and no longer pops back after you close it.')),
+            ('fix',
+             T('从后台切回应用时也会补拉一次强提醒。',
+               '從後台切回應用時也會補拉一次強提醒。',
+               'The notice is also fetched when the app returns from the background.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.5', 'date': '2026-11-13',
+        'items': [
+            ('up',
+             T('欢迎与「安装包要不要留」分成两步问。',
+               '歡迎與「安裝包要不要留」分成兩步問。',
+               'The welcome step and the installer question are separate.')),
+            ('fix',
+             T('无法校验安装包时，安装前要你再确认一次。',
+               '無法校驗安裝包時，安裝前要你再確認一次。',
+               'When the package cannot be verified, installing asks you to confirm first.')),
+            ('new',
+             T('打开应用时可能整页弹出一条强提醒，内容由官网下发。',
+               '打開應用時可能整頁彈出一條強提醒，內容由官網下發。',
+               'A strong notice can fill the screen when you open the app; its text comes from '
+               'the official site.')),
+            ('new',
+             T('过滤范围多了一个按钮，点一下就把过滤中心设成你现在的位置。',
+               '過濾範圍多了一個按鈕，點一下就把過濾中心設成你現在的位置。',
+               'The receive range has a button that puts the filter centre on where you are now.')),
+            ('up',
+             T('数据上限搬到数据页的最上面。',
+               '資料上限搬到資料頁的最上面。',
+               'Data limits now sit at the top of the data page.')),
+            ('up',
+             T('更新页会联网核对安装包的版本号、仓库里那份的摘要和签名。',
+               '更新頁會連網核對安裝包的版本號、倉庫裡那份的摘要和簽章。',
+               'The update page checks the package online: version, digest and signature.')),
+            ('new',
+             T('没联网时更新页会说明无法校验版本号。',
+               '沒連網時更新頁會說明無法校驗版本號。',
+               'Offline, the update page says it cannot verify the version.')),
+            ('new',
+             T('装上新版的第一屏列出这一版改了什么。',
+               '裝上新版的第一屏列出這一版改了什麼。',
+               'The first screen after an update lists what changed.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.3', 'date': '2026-11-12',
+        'items': [
+            ('up',
+             T('更新页会显示这个安装包的签名校没校。',
+               '更新頁會顯示這個安裝包的簽名校沒校。',
+               "The update page shows whether the package's signature was checked.")),
+            ('new',
+             T('更新渠道的清单改由官网下发，渠道地址变了不用等新版。',
+               '更新渠道的清單改由官網下發，渠道位址變了不用等新版。',
+               'The channel list comes from the official site, so an address change does '
+               'not wait for a new version.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.2', 'date': '2026-11-12',
+        'items': [
+            ('up',
+             T('下载的安装包放在手机的「下载」文件夹里。',
+               '下載的安裝包放在手機的「下載」資料夾裡。',
+               'The downloaded update package goes into the phone Downloads folder.')),
+            ('new',
+             T('下载完会核对签名，对不上的包不会留下来。',
+               '下載完會核對簽名，對不上的包不會留下來。',
+               'The package signature is checked, and a package that does not match is '
+               'removed.')),
+            ('new',
+             T('装上新版第一次打开时问一句要不要删掉安装包。',
+               '裝上新版第一次打開時問一句要不要刪掉安裝包。',
+               'The first start after updating asks whether to delete the package.')),
+        ],
+    },
+    {
+        'ver': 'v2.2.1', 'date': '2026-11-12',
+        'items': [
+            ('new',
+             T('「设置 → 服务器 → APRSNETCN」多了 HTTP 端口一格，默认 8899。',
+               '「設定 → 伺服器 → APRSNETCN」多了 HTTP 埤一格，預設 8899。',
+               'Settings → Server → APRSNETCN has an HTTP port field, 8899 by default.')),
+            ('new',
+             T('24 小时台站与云同步按这一格连。',
+               '24 小時台站與雲端同步按這一格連。',
+               'The 24-hour station list and cloud sync connect on that port.')),
+            ('fix',
+             T('云端把历史轨迹全部留下，换一台机器登录后能拉回每一天。',
+               '雲端把歷史軌跡全部留下，換一台機器登入後能拉回每一天。',
+               'The cloud keeps every day of track history, and another device pulls '
+               'all of it back.')),
+            ('fix',
+             T('首次引导第 3 步的「从备份恢复」按钮点不动，现在能用了。',
+               '首次引導第 3 步的「從備份恢復」按鈕點不動，現在能用了。',
+               'The restore-from-backup button on step 3 of the first-run guide was dead; '
+               'it works now.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.43', 'date': '2026-11-06',
+        'items': [
+            ('fix',
+             T('云同步的地址跟着「APRSNETCN SERVER」那条链路走，地址填了才连。',
+               '雲端同步的地址跟著「APRSNETCN SERVER」那條鏈路走，地址填了才連。',
+               'Cloud sync uses the address of the APRSNETCN SERVER link, and only calls it '
+               'once an address is filled in.')),
+            ('fix',
+             T('服务器地址空着时，同步卡那一行写「未填」，不再自己找一台服务器。',
+               '伺服器地址空著時，同步卡那一行寫「未填」，不再自己找一台伺服器。',
+               'With the address blank, the sync card shows Empty in that row instead of '
+               'falling back to a server of its own.')),
+            ('fix',
+             T('没填地址就点同步，会提示先在上面填 APRSNETCN 服务器地址。',
+               '沒填地址就點同步，會提示先在上面填 APRSNETCN 伺服器地址。',
+               'Tapping sync without an address asks you to fill in the APRSNETCN server '
+               'address above first.')),
+            ('new',
+             T('别人发给你的、你发给别人的消息，服务器看到了都记一份。',
+               '別人發給你的、你發給別人的訊息，伺服器看到了都記一份。',
+               'Messages others send you and messages you send others are both kept on the '
+               'server.')),
+            ('new',
+             T('第一次同步把云端的消息整份拉回来，重装以后记录还在。',
+               '第一次同步把雲端的訊息整份拉回來，重裝以後記錄還在。',
+               'The first sync pulls the whole message history back, so it survives a '
+               'reinstall.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.42', 'date': '2026-11-06',
+        'items': [
+            ('up',
+             T('云同步搬到了「设置 → 服务器 → APRSNETCN SERVER」，跟那条链路在同一页配。',
+               '雲端同步搬到「設定 → 伺服器 → APRSNETCN SERVER」，跟那條鏈路在同一頁配。',
+               'Cloud sync moved to Settings -> Server -> APRSNETCN SERVER, on the page of the '
+               'link that holds the data.')),
+            ('new',
+             T('「设置 → 功能」多了一个云同步开关。关掉之后不再联网，两条链路照旧收发。',
+               '「設定 → 功能」多了一個雲端同步開關。關掉之後不再連網，兩條鏈路照舊收發。',
+               'Settings -> Features gained a cloud sync switch. Turn it off and no cloud '
+               'requests are made; both links keep working.')),
+            ('new',
+             T('同步内容可以分开选：消息、历史轨迹各一个开关。',
+               '同步內容可以分開選：訊息、歷史軌跡各一個開關。',
+               'What syncs is a choice: messages and track history each have their own switch.')),
+            ('new',
+             T('自动同步的间隔可以选五分钟、十五分钟或一小时。',
+               '自動同步的間隔可以選五分鐘、十五分鐘或一小時。',
+               'Auto sync can run every five minutes, fifteen minutes or an hour.')),
+            ('new',
+             T('云端数据里多了备份份数，还能看到哪几台设备登录过，别的设备可以移出。',
+               '雲端資料裡多了備份份數，還能看到哪幾台裝置登入過，別的裝置可以移出。',
+               'The server figures gained the number of cloud backups, and signed-in devices can '
+               'be listed with the others removed.')),
+        ],
+    },
+{
+        'ver': 'v2.1.41', 'date': '2026-11-06',
+        'items': [
+            ('new',
+             T('云同步：登录 APRSNETCN 账号之后，收发的消息与每天的历史轨迹存到服务器上，'
+               '换一台设备登录同一个呼号就都回来了。',
+               '雲端同步：登入 APRSNETCN 帳號之後，收發的訊息與每天的歷史軌跡存到伺服器上，'
+               '換一台裝置登入同一個呼號就都回來了。',
+               'Cloud sync: sign in with an APRSNETCN account and messages plus each day\'s track '
+               'history go to the server. Sign in with the same callsign on another device and '
+               'both come back.')),
+            ('new',
+             T('云端备份：备份页可以把勾选的几组存到云端，也能从云端取回，云端留最新三份。',
+               '雲端備份：備份頁可以把勾選的幾組存到雲端，也能從雲端取回，雲端留最新三份。',
+               'Cloud backup: the backup page uploads the selected groups to the cloud and '
+               'restores them from there. The three newest are kept.')),
+            ('up',
+             T('云同步在「设置 → 服务器」里，跟两条互联网链路挨着。服务器地址跟着 APRSNETCN 链路走。',
+               '雲端同步在「設定 → 伺服器」裡，跟兩條網際網路鏈路挨著。伺服器位址跟著 APRSNETCN 鏈路走。',
+               'Cloud sync sits in Settings -> Server, next to the two internet links. The '
+               'server address follows the APRSNETCN link.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.40', 'date': '2026-11-05',
+        'items': [
+            ('new',
+             T('历史轨迹叠层：历史轨迹页多了一个入口，把台账里每一天画在同一张底图上。'
+               '一天一条线、一个颜色，底部一排日期片点一下就能藏起或放回那一天，'
+               '视野一次套到所有选中的点上。导出一张 PNG，Android 存到下载目录或直接拉起分享面板，'
+               '桌面写进下载目录。',
+               '歷史軌跡疊層：歷史軌跡頁多了一個入口，把記錄裡每一天畫在同一張底圖上。'
+               '一天一條線、一個顏色，底部一排日期片點一下就能藏起或放回那一天，'
+               '視野一次套到所有選取的點上。匯出一張 PNG，Android 存到下載目錄或直接拉起分享面板，'
+               '桌面寫進下載目錄。',
+               'Track overlay: a new entry on the history page draws every day from the log on one '
+               'map. One line and one colour per day, a row of date chips at the bottom to hide or '
+               'bring back a single day, and one tap fits the view to everything still shown. It '
+               'exports a PNG: the download folder or the share sheet on Android, the download '
+               'folder on desktop.')),
+            ('fix',
+             T('地图浮层不再互相压住：工具列的底部预留改成「两道横幅都挂着时的顶部锚点」与'
+               '「上报横杠出现时的底部占用」两者取大，列数仍然只跟窗口尺寸走并封顶三列；'
+               '顶端那两条一次性提示并进左上那一列，不再糊在信息条上。',
+               '地圖浮層不再互相壓住：工具列的底部預留改成「兩道橫幅都掛著時的頂端錨點」與'
+               '「上報橫條出現時的底部佔用」兩者取大，欄數仍然只跟視窗尺寸走並封頂三欄；'
+               '頂端那兩條一次性提示並進左上那一欄，不再糊在資訊條上。',
+               'Overlays no longer cover each other: the toolbar reserves the larger of the top '
+               'anchor with both banners up and the bottom space once the report bar appears, and '
+               'the column count still follows the window size only and is capped at three. The two '
+               'one-off hints at the top belong to the top-left column now instead of lying across '
+               'the info line.')),
+            ('new',
+             T('省电模式（设置 → 定位）：GPS 采样压到不低于 30 秒，自己选的那一档不被改掉，'
+               '关掉省电模式就回来；地图上移动台站的脉冲动画也停下。'
+               '低电量 20% / 10% / 5% 各提一次，充电中不提，电量回到 25% 以上重新计数，'
+               '提醒上带一个直接开启省电模式的按钮。',
+               '省電模式（設定 → 定位）：GPS 取樣壓到不低於 30 秒，自己選的那一檔不被改掉，'
+               '關掉省電模式就回來；地圖上移動臺站的脈衝動畫也停下。'
+               '低電量 20% / 10% / 5% 各提一次，充電中不提，電量回到 25% 以上重新計數，'
+               '提醒上帶一個直接開啟省電模式的按鈕。',
+               'Power saving (Settings → Location): GPS sampling is clamped to at least 30 seconds '
+               'without overwriting your own choice, and the pulse animation on moving stations '
+               'stops as well. One low battery reminder at 20% / 10% / 5%, skipped while charging, '
+               'with the count restarting above 25%. The reminder carries a button that switches '
+               'power saving on.')),
+            ('up',
+             T('更新渠道页去掉付费提示：顶部那条「阿里云 OSS 由开发团队付费」整条删掉，'
+               '两条阿里云渠道的副标题换成它们真正的地址，与 GitCode 那一行同一个口径。',
+               '更新通道頁去掉付費提示：頂部那條「阿里雲 OSS 由開發團隊付費」整條刪掉，'
+               '兩條阿里雲通道的副標題換成它們真正的位址，與 GitCode 那一行同一個口徑。',
+               'The update channel page drops the paid-usage note: the line saying Aliyun OSS is '
+               'paid for by the developer team is gone, and both Aliyun channels show their real '
+               'addresses in the subtitle, the same way the GitCode row does.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.39', 'date': '2026-10-31',
+        'items': [
+            ('fix',
+             T('音频输出跟随耳机 / Type-C / 蓝牙：本 App 的播放原来被标成「提示音」内容类型，'
+               '部分 ROM 会直接送扬声器 —— 别的 App 插上耳机就转耳机，只有本 App 还在外放。'
+               '现在按媒体内容处理，并显式绑定到系统当前已连接的输出设备；没有外接时仍走系统默认。',
+               '音訊輸出跟隨耳機 / Type-C / 藍牙：本 App 的播放原本被標成「提示音」內容類型，'
+               '部分 ROM 會直接送揚聲器 —— 別的 App 插上耳機就轉耳機，只有本 App 還在外放。'
+               '現在按媒體內容處理，並顯式綁定到系統目前已連線的輸出裝置；沒有外接時仍走系統預設。',
+               'Audio output follows a plugged-in headset / Type-C / Bluetooth: playback was tagged '
+               'as sonification and some ROMs sent that straight to the speaker - other apps '
+               'switched to the headset while this one stayed on the loudspeaker. It is media now '
+               'and bound explicitly to the connected output device; with nothing plugged in the '
+               'system default is kept.')),
+            ('fix',
+             T('「位置上报」按钮更可靠：加大命中区并由按钮自己吃掉手势，地图底部横杠不再抢点击'
+               '（长按也不会误弹身份面板）；还没拿到本轮定位时给出「等待定位」提示而不是禁用，'
+               '未连接时明确说没发出去、不再显示「已发送」。',
+               '「位置回報」按鈕更可靠：加大命中區並由按鈕自己吃掉手勢，地圖底部橫條不再搶點擊'
+               '（長按也不會誤彈身分面板）；還沒取得本輪定位時給出「等待定位」提示而不是停用，'
+               '未連線時明確說沒送出去、不再顯示「已送出」。',
+               'More reliable "report now" button: bigger hit targets and the button claims its own '
+               'gesture, so the map bottom bar no longer steals the tap (a long press no longer '
+               'opens the identity sheet); before a fix exists it says "waiting for a fix" instead '
+               'of being disabled, and when disconnected it says so rather than claiming it was sent.')),
+            ('up',
+             T('顶栏与上报条的按钮尺寸统一：天气、连接状态、连接按钮、快捷按钮、上报动作组都是 30px 高，'
+               '圆角与字号也一致，并排时不再高低不齐。',
+               '頂欄與上報條的按鈕尺寸統一：天氣、連線狀態、連線按鈕、快捷按鈕、上報動作組都是 30px 高，'
+               '圓角與字號也一致，並排時不再高低不齊。',
+               'Top bar and report bar controls share one size: weather, link status, connect, quick '
+               'panel and the report actions are all 30px high with the same corner radius and text '
+               'size, so they no longer sit at different heights.')),
+            ('fix',
+             T('横屏地图操作控件不再被导航栏遮挡：横屏时系统导航栏 / 挖孔在屏幕右侧，'
+               '地图原来只让了底部安全区 —— 贴右的工具列、上报横杠、底部坐标条会被盖住。'
+               '现在右侧安全区一并计算，搜索与选点提示也相对可见地图区居中。',
+               '橫屏地圖操作控件不再被導航列遮擋：橫屏時系統導航列 / 挖孔在螢幕右側，'
+               '地圖原本只讓了底部安全區 —— 貼右的工具列、上報橫條、底部座標條會被蓋住。'
+               '現在右側安全區一併計算，搜尋與選點提示也相對可見地圖區居中。',
+               'Landscape map controls are no longer hidden behind the navigation bar: in '
+               'landscape the system bar / notch sits on the right, while the map only respected '
+               'the bottom inset - the right-hand toolbar, beacon bar and bottom coordinate bar '
+               'were covered. The right inset is applied now, and the search/pick hints centre '
+               'inside the visible map area.')),
+        ],
+    },
+
+    {
+        'ver': 'v2.1.38', 'date': '2026-10-29',
+        'items': [
+            ('fix',
+             T('地图右侧那排按钮只跟窗口尺寸走。拉开内容面板不再让它换列或换位置。',
+               '地圖右側那排按鈕只跟視窗尺寸走。拉開內容面板不再讓它換欄或換位置。',
+               'The button column on the map now follows the window size alone. Opening a content pane no longer re-columns or moves it.')),
+            ('fix',
+             T('启用一条通道，这条通道的位置发射也跟着打开；设备页去掉重复的小字，每条链路只留名字和通没通。',
+               '啟用一條通道，這條通道的位置發射也跟着打開；裝置頁去掉重複的小字，每條鏈路只留名字和通沒通。',
+               'Turning a channel on also turns on its position transmit, and the device page lost its repeated small print: each link keeps its name and whether it is up.')),
+            ('new',
+             T('声卡在收报文时，地图的上报横条底下多一条声压条。',
+               '聲卡在收報文時，地圖的上報橫條底下多一條聲壓條。',
+               'While the sound card is receiving, the map beacon bar carries a level strip.')),
+            ('new',
+             T('度分、度分秒的分与秒补到两位，读数位数不再跳；消息里的位置气泡也按设置里的格式显示。',
+               '度分、度分秒的分與秒補到兩位，讀數位數不再跳；訊息裡的位置氣泡也按設定裡的格式顯示。',
+               'Minutes and seconds are padded to two digits in the degree-minute formats, so the readout stops changing width; position bubbles in messages follow the chosen format too.')),
+            ('new',
+             T('首次引导加一步「要哪些功能」：天气和七个模块在那里就能选，关掉的不出现在设置里。',
+               '首次引導加一步「要哪些功能」：天氣和七個模組在那裡就能選，關掉的不出現在設定裡。',
+               'Onboarding gained a "Which extras do you want" step: weather and the seven modules are picked there, and a module you turn off leaves the settings page.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.37', 'date': '2026-10-28',
+        'items': [
+            ('fix',
+             T('位置报文同时发往射频和互联网时，两条链路各用各的报头。射频那份不再带 TCPIP*，中继路径保住了。',
+               '位置報文同時發往射頻和網際網路時，兩條鏈路各用各的報頭。射頻那份不再帶 TCPIP*，中繼路徑保住了。',
+               'When a position packet goes out on radio and on the internet at once, each link uses its own header. The radio copy no longer carries TCPIP*, so its digipeater path survives.')),
+            ('new',
+             T('设备面板新增「高级连接通道设置」，默认关。关着时位置与状态报文发给所有已连上的链路，消息仍按上次勾的那条发。',
+               '裝置面板新增「高階連線通道設定」，預設關。關着時位置與狀態報文發給所有已連上的鏈路，訊息仍按上次勾的那條發。',
+               'The device panel gained a "Per-link sending" switch, off by default. While it is off, position and status packets go out on every connected link, while messages keep going on the link picked last.')),
+            ('fix',
+             T('右侧那排按钮的分栏不再跟屏幕上的临时占位走。横幅出现、开始上报、拉开面板都不会让它重排。',
+               '右側那排按鈕的分欄不再跟螢幕上的臨時佔位走。橫幅出現、開始上報、拉開面板都不會讓它重排。',
+               'The button column on the right no longer re-flows with whatever is temporarily on screen. A banner appearing, reporting starting or the panel opening no longer rearranges it.')),
+            ('fix',
+             T('收到的报文自动识别 UTF-8 和 GBK，中文不再变成乱码。中心经纬度读数默认关，想看在右侧工具列点那颗准星。',
+               '收到的報文自動識別 UTF-8 和 GBK，中文不再變成亂碼。中心經緯度讀數預設關，想看在右側工具列點那顆準星。',
+               'Incoming packets are detected as UTF-8 or GBK, so Chinese no longer turns into mojibake. The centre coordinate readout is off by default; tap the crosshair in the tool column to see it.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.36', 'date': '2026-10-27',
+        'items': [
+            ('new',
+             T('经纬度可以按度分、度分秒显示，地图读数、我的位置、台站详情都跟着变。报文和存储仍是十进制。',
+               '經緯度可以按度分、度分秒顯示，地圖讀數、我的位置、臺站詳情都跟著變。報文和儲存仍是十進位。',
+               'Latitude and longitude can read as degrees-minutes or degrees-minutes-seconds across the map readout, my position and station details. Packets and storage stay decimal.')),
+            ('new',
+             T('屏幕正中多了一个中心标记和经纬度读数，手机没有悬停也能看中心在哪。设置 → 显示 → 地图 可以关。',
+               '螢幕正中多了一個中心標記和經緯度讀數，手機沒有懸停也能看中心在哪。設定 → 顯示 → 地圖 可以關。',
+               'A centre mark and coordinate readout now sit on the map centre, so a phone without hover can still tell where the centre is. Settings → Display → Map hides it.')),
+            ('new',
+             T('订阅命中弹一条系统通知，标题是订阅值，正文是呼号和报文内容。同一条规则 30 秒内只计数，不刷屏。',
+               '訂閱命中彈一條系統通知，標題是訂閱值，正文是呼號和報文內容。同一條規則 30 秒內只計數，不刷屏。',
+               'A subscription match raises a system notification with the callsign and the packet text. The same rule counts once per 30 seconds instead of flooding.')),
+            ('fix',
+             T('往一个方向拖地图，经度不再越滚越大。右侧按钮按剩下的高度分列，最下面那颗不再被上报条压住。',
+               '往一個方向拖地圖，經度不再越滾越大。右側按鈕按剩下的高度分列，最下面那顆不再被上報條壓住。',
+               'Dragging one way no longer makes the longitude climb without end, and the right-hand buttons split into columns by the height left on screen, so the bottom one is no longer buried under the report bar.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.35', 'date': '2026-10-26',
+        'items': [
+            ('new',
+             T('沉浸地图不再用一色圆点，换成台站自己的 APRS 符号，离线台站去饱和。单击台站后那条小条重排成卡片，贴近屏幕边缘时会夹回画面。',
+               '沉浸地圖不再用一色圓點，換成台站自己的 APRS 符號，離線臺站去飽和。單擊臺站後那條小條重排成卡片，貼近螢幕邊緣時會夾回畫面。',
+               'The immersive map now draws each station\u2019s own APRS symbol instead of a single-colour dot, with offline stations desaturated. The chip that follows a tapped station is re-laid out as a card and clamped to the screen edges.')),
+            ('new',
+             T('设置 → 订阅：盯住一个台站、一个中继，或者报文里的一个词。命中集中在一页，能看到原文；台站面板里也能直接订阅这一台。',
+               '設定 → 訂閱：盯住一個臺站、一個中繼，或者報文裡的一個詞。命中集中在一頁，能看到原文；臺站面板裡也能直接訂閱這一臺。',
+               'Settings → Subscriptions: watch a station, a digipeater, or a word inside a packet. Matches collect on one page with the raw line, and the station panel can watch that station directly.')),
+            ('new',
+             T('发给我其他 SSID 的消息也收下了，气泡上会标出来，输入栏上方可选「发送 ID」。设备快捷面板多了「我的其他 SSID」，装 APRSlocus 的那几台可远程激活、发信标、停止上报。',
+               '發給我其他 SSID 的訊息也收下了，氣泡上會標出來，輸入欄上方可選「傳送 ID」。裝置快捷面板多了「我的其他 SSID」，裝 APRSlocus 的那幾臺可遠端啟用、發信標、停止上報。',
+               'Messages addressed to another SSID of your callsign are accepted and marked in the bubble, with a Send as row above the input. The device quick panel gained My other SSIDs; the ones running APRSlocus can be woken, sent one beacon, or told to stop reporting.')),
+            ('fix',
+             T('卫星弱又没开强制网络上报时，轨迹点放稀，精度太差就不记，等下一次有效定位。地图缩小时不再整片闪一下。',
+               '衛星弱又沒開強制網路回報時，軌跡點放稀，精度太差就不記，等下一次有效定位。地圖縮小時不再整片閃一下。',
+               'With a weak satellite fix and no forced network reporting, track points thin out and a fix too poor to trust is skipped until the next valid one. Zooming the map no longer flashes the whole tile grid.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.34', 'date': '2026-10-24',
+        'items': [
+            ('new',
+             T('设置 → 自动上报 多了「定位模糊」一档：关、约 200 米、约 2 公里、约 20 公里。默认关。'
+               '按 APRS101 的位置模糊，把最低位的几个数字换成空格，对方看到一片方格而不是一个点。'
+               '只改发出去的那一包，本机地图与轨迹仍按真实坐标。',
+               '設定 → 自動上報 多了「定位模糊」一檔：關、約 200 公尺、約 2 公里、約 20 公里。預設關。'
+               '照 APRS101 的位置模糊，把最低位的幾個數字換成空格，對方看到一片方格而不是一個點。'
+               '只改送出去的那一包，本機地圖與軌跡仍按真實座標。',
+               'Settings → Auto reporting gained Location fuzz: off, about 200 m, 2 km, 20 km, off by default. '
+               'It follows APRS101 position ambiguity, replacing the lowest digits with spaces so a receiver '
+               'sees a square instead of a point. Only the outgoing packet changes; the local map and track '
+               'still use the real coordinates.')),
+            ('fix',
+             T('首页的自动/单次开关不再被「开始上报」按钮挤掉。连着但还没确认上报时，两枚并排出现，两个方向随时切。',
+               '首頁的自動/單次開關不再被「開始上報」按鈕擠掉。連著但還沒確認上報時，兩枚並排出現，兩個方向隨時切。',
+               'The auto/single switch on the home screen is no longer pushed out by the start button. While a '
+               'link is up but reporting is unconfirmed, both sit side by side and switch either way at any time.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.33', 'date': '2026-10-23',
+        'items': [
+            ('new',
+             T('桌面版多了系统托盘。关窗口不再退出，窗口收进托盘，托盘菜单里可以显示主窗口、隐藏到托盘、退出。设置里有「关闭窗口时最小化到托盘」一档，默认开着。',
+               '桌面版多了系統匣。關視窗不再結束，視窗收進系統匣，系統匣選單裡可以顯示主視窗、隱藏到系統匣、結束。設定裡有「關閉視窗時最小化到系統匣」一檔，預設開著。',
+               'The desktop build gained a system tray. Closing the window no longer quits; it goes to the tray, '
+               'and the tray menu can show the window, hide it again, or quit. Settings carries Minimize to tray '
+               'on close, on by default.')),
+            ('fix',
+             T('台站备注不再截到 60 字，台站列表、详情面板与地图浮窗都显示全文。台站详情面板里的原始报文改为整条折行。',
+               '臺站備註不再截到 60 字，臺站列表、詳情面板與地圖浮窗都顯示全文。臺站詳情面板裡的原始報文改為整條折行。',
+               'A station note is no longer cut at 60 characters: the station list, the detail panel and the map '
+               'popup show it in full. Raw packets in the detail panel wrap instead of ending in an ellipsis.')),
+            ('up',
+             T('1.0 界面收拾了一遍：侧栏与顶栏对齐，窄屏底栏与侧栏同一套选中态，未连接与验证码两条横幅同一个形状。',
+               '1.0 介面收拾了一遍：側欄與頂欄對齊，窄屏底欄與側欄同一套選中態，未連線與驗證碼兩條橫幅同一個形狀。',
+               'A pass over the 1.0 shell: the sidebar and top bar line up, the narrow bottom bar shares the '
+               'sidebar selected state, and the two banners share one shape.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.32', 'date': '2026-10-22',
+        'items': [
+            ('new',
+             T('新手引导重做成八步：语言、用户协议、欢迎、呼号、符号、接收筛选、服务器、配置完成。每一步只问一件事。',
+               '新手引導重做成八步：語言、用戶協議、歡迎、呼號、符號、接收篩選、伺服器、設定完成。每一步只問一件事。',
+               'The setup wizard is reworked into eight steps: language, terms, welcome, callsign, symbol, '
+               'receive filter, server, done. Each step asks one thing.')),
+            ('up',
+             T('呼号按软件里同一套规则校验，形状不对就停在原地提示。把 -SSID 直接写在呼号框里也行，会自动拆到后缀，下面实时显示完整呼号。',
+               '呼號按軟體裡同一套規則校驗，形狀不對就停在原地提示。把 -SSID 直接寫在呼號框裡也行，會自動拆到後綴，下面即時顯示完整呼號。',
+               'The callsign is checked with the same rules the app uses, and a wrong shape stops you there. '
+               'You can also type -SSID straight into the box; it is split into the suffix and the full '
+               'callsign shows below as you type.')),
+            ('up',
+             T('服务器的最后一步跟着地址走，地址留空时按钮只写「完成」。新增的最后一页回读呼号、符号和服务器，再指出看台站、发位置、使用手册三处地方。',
+               '伺服器的最後一步跟著地址走，地址留空時按鈕只寫「完成」。新增的最後一頁回讀呼號、符號和伺服器，再指出看臺站、發位置、使用手冊三處地方。',
+               'The last step follows the address, and with it empty the button reads Finish only. A new final '
+               'page reads back the callsign, symbol and server, then points at the stations, sending a '
+               'position, and the manual.')),
+            ('new',
+             T('欢迎页多了一个「从备份恢复」。换机或重装的人在这里整份导入备份，不用先走完七步再进设置，呼号、符号、筛选和服务器跟着一起回来。',
+               '歡迎頁多了一個「從備份還原」。換機或重裝的人在這裡整份匯入備份，不用先走完七步再進設定，呼號、符號、篩選和伺服器跟著一起回來。',
+               'The welcome page gained Restore from a backup. On a new phone or after a reinstall you import '
+               'the whole backup here instead of walking seven steps first, and the callsign, symbol, filter '
+               'and server come back with it.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.31', 'date': '2026-10-22',
+        'items': [
+            ('new',
+             T('电台页多了一块「操作证验证」，点进去是单独一页，先读说明再点我同意，才出现表单。填姓名和证书编号，程序向 CRAC 的验证接口查一次，结果只回本机、只保留是否通过和证书类别。验证自愿，只有内地呼号显示这一块。',
+               '電台頁多了一塊「操作證驗證」，點進去是單獨一頁，先讀說明再點我同意，才出現表單。填姓名和證書編號，程式向 CRAC 的驗證介面查一次，結果只回本機、只保留是否通過和證書類別。驗證自願，只有內地呼號顯示這一塊。',
+               'The station page gained a licence check block. It opens a page of its own, and the form only '
+               'appears after you read the notes and tap I agree. Type your name and licence number, the app '
+               'asks the CRAC check endpoint once, and the result comes back to this device only, keeping just '
+               'the pass and the class. Verification is voluntary and only mainland China callsigns see it.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.30', 'date': '2026-10-22',
+        'items': [
+            ('fix',
+             T('历史轨迹以前一直在记，现在默认关。要记就在历史轨迹页顶部把开关打开，关着时那一页会直接说记录没开。已经记下的那些天照旧能看、能删、能导出。',
+               '歷史軌跡以前一直在記，現在預設關。要記就在歷史軌跡頁頂端把開關打開，關著時那一頁會直接說記錄沒開。已經記下的那些天照舊能看、能刪、能匯出。',
+               'Track history used to record all the time; it is off by default now. Turn it on at the top '
+               'of the track history page. Days you already recorded stay viewable, deletable and '
+               'exportable.')),
+            ('new',
+             T('精简模式的页签下面补回上报状态条，左边是现在这一发是什么，右边是自动或单次与立即上报，手动发一包不用再去设置页。',
+               '精簡模式的頁籤下面補回上報狀態條，左邊是現在這一發是什麼，右邊是自動或單次與立即上報，手動發一包不用再去設定頁。',
+               'Lite mode puts the reporting bar back under the tabs: what this beacon is on the left, '
+               'auto or single plus send now on the right, so a manual beacon no longer means a trip to '
+               'settings.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.29', 'date': '2026-10-22',
+        'items': [
+            ('fix',
+             T('GPS 模式下偶发停在「已保存位置」不再定位，切到模拟位置再切回来才恢复。现在启动会等配置加载完成再起定位，回到前台也会补一次检查。',
+               'GPS 模式下偶發停在「已儲存位置」不再定位，切到模擬位置再切回來才恢復。現在啟動會等設定載入完成再起定位，回到前景也會補一次檢查。',
+               'In GPS mode the app could stay on "saved position" and stop locating until you switched '
+               'to simulated location and back. Start-up now waits for the settings to load before '
+               'locating, and coming back to the foreground checks once more.')),
+            ('new',
+             T('GPS 采样间隔可以自己调，1 秒到 30 秒六档，默认 1 秒。只在 Android 且不是纯网络模式时出现。',
+               'GPS 取樣間隔可以自己調，1 秒到 30 秒六檔，預設 1 秒。只在 Android 且不是純網路模式時出現。',
+               'The GPS sampling interval is adjustable in six steps from 1 to 30 seconds, 1 second by '
+               'default. It shows on Android outside network-only mode.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.28', 'date': '2026-10-21',
+        'items': [
+            ('fix',
+             T('IC-705 走 WLAN 发射时，报尾不会在松 PTT 前被切掉。后置发射延迟默认 200 ms，可在 IC-705 页调整。',
+               'IC-705 走 WLAN 發射時，報尾不會在鬆 PTT 前被切掉。後置發射延遲預設 200 ms，可在 IC-705 頁調整。',
+               'Over WLAN on an IC-705 the tail of a packet is no longer cut before PTT drops. '
+               'The post-TX delay defaults to 200 ms and is adjustable on the IC-705 page.')),
+            ('new',
+             T('iPhone 的灵动岛和锁屏显示当前状态，与 Android 16 的状态栏胶囊同源。需 iOS 16.2 及以上。',
+               'iPhone 的靈動島和鎖屏顯示目前狀態，與 Android 16 的狀態列膠囊同源。需 iOS 16.2 及以上。',
+               'The Dynamic Island and lock screen on iPhone show the current state, the same content '
+               'as the Android 16 status bar pill. Needs iOS 16.2 or later.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.27', 'date': '2026-10-20',
+        'items': [
+            ('new',
+             T('设置里新增「功能」页，排行榜、荣誉墙、赞助、生命守护、翻译、轨迹、ADIF、天气都能单独关掉。'
+               '关掉只是收起入口，重新打开就回来。',
+               '設定裡新增「功能」頁，排行榜、榮譽牆、贊助、生命守護、翻譯、軌跡、ADIF、天氣都能單獨關掉。'
+               '關掉只是收起入口，重新打開就回來。',
+               'Settings gained a "Features" page that switches the leaderboard, honours, sponsors, '
+               'life guard, translation, tracks, ADIF and weather off one by one. Off only hides the '
+               'entry; switch it back on and it returns.')),
+            ('new',
+             T('新增精简模式：上面一行状态，下面四个页签，只留 APRS 收发。',
+               '新增精簡模式：上面一行狀態，下面四個頁籤，只留 APRS 收發。',
+               'Lite mode: one status line and four tabs, keeping only APRS sending and receiving.')),
+            ('new',
+             T('设置里新增「使用手册」，在应用内打开官网手册，跟着系统语言走。',
+               '設定裡新增「使用手冊」，在應用程式內打開官網手冊，跟著系統語言走。',
+               'Settings gained a manual entry that opens the official manual inside the app, '
+               'following the system language.')),
+            ('up',
+             T('呼号后缀支持自定义输入，1-2 位数字或字母都行。字母后缀只有自家的 APRSNETCN 服务器收。',
+               '呼號後綴支援自訂輸入，1-2 位數字或字母都行。字母後綴只有自家的 APRSNETCN 伺服器收。',
+               'The SSID field takes custom input: 1-2 digits or letters. Only our own APRSNETCN '
+               'server accepts a letter suffix.')),
+            ('up',
+             T('设置页去掉大半解释性小字，只留会让人做错的那几条。',
+               '設定頁去掉大半解釋性小字，只留會讓人做錯的那幾條。',
+               'Settings dropped most of the small print that explained a switch, keeping only the '
+               'lines that prevent a mistake.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.26', 'date': '2026-10-20',
+        'items': [
+            ('new',
+             T('低于官网要求的最低版本时，软件只显示更新页，返回键直接退出应用。'
+               '更新到下限以上之后闸门自己消失。',
+               '低於官網要求的最低版本時，軟體只顯示更新頁，返回鍵直接結束應用程式。'
+               '更新到下限以上之後閘門自己消失。',
+               'Below the minimum version the official site asks for, the app shows only the '
+               'update page and the back key quits. Above it the gate disappears on its own.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.25', 'date': '2026-10-20',
+        'items': [
+            ('new',
+             T('地图上双击就放大一级，围绕你点的那一点，与右下角的「+」同一档动画。',
+               '地圖上雙擊就放大一級，圍繞你點的那一點，與右下角的「+」同一檔動畫。',
+               'Double-tapping the map zooms in one level around the point you tapped, with the '
+               'same animation as the "+" button.')),
+            ('new',
+             T('上报设置里新增「打开软件时」三档：不做操作、自动连接服务器、直接进入上报。'
+               '默认不做操作，换档前会先弹确认框。',
+               '上報設定裡新增「打開軟體時」三檔：不做操作、自動連線伺服器、直接進入上報。'
+               '預設不做操作，換檔前會先彈確認框。',
+               'Beacon settings gained a "When I open the app" row with three choices: do '
+               'nothing, connect to the server, or go straight into reporting. The default is do '
+               'nothing, and switching asks for confirmation first.')),
+            ('fix',
+             T('自动上报没有开启时，点「待确认上报」只发报一次，不再顺手把自动上报打开。',
+               '自動上報沒有開啟時，點「待確認上報」只發報一次，不再順手把自動上報打開。',
+               'With auto-report off, tapping the pending-confirmation button sends one beacon '
+               'instead of turning auto-report on along the way.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.24', 'date': '2026-10-20',
+        'items': [
+            ('new',
+             T('第一次开自动上报、开射频信标或开网关之前，先用单独一页把信息性质、必要性、'
+               '对个人权益的影响讲清楚，三个功能项按项勾选，默认全不勾。',
+               '第一次開自動上報、開射頻信標或開閘道之前，先用單獨一頁把信息性質、必要性、'
+               '對個人權益的影響講清楚，三個功能項按項勾選，預設全不勾。',
+               'Before the first auto-report, RF beacon or iGate is turned on, a page of its own '
+               'spells out what the data is, why it is necessary and what it means for you, with '
+               'the three features ticked one by one and all unticked by default.')),
+            ('up',
+             T('用户协议升到 V2.0，三语 59 条，新增第五章「信标上传与发射：须经单独同意」'
+               '与附件一。设置里新增「单独同意」卡，可以随时撤回并查看同意日志。',
+               '使用者條款升到 V2.0，三語 59 條，新增第五章「信標上傳與發射：須經單獨同意」'
+               '與附件一。設定裡新增「單獨同意」卡，可以隨時撤回並檢視同意日誌。',
+               'Terms of Use raised to V2.0 with 59 clauses in three languages, including the new '
+               'chapter on separate consent for beacon upload and transmission, plus Appendix 1. '
+               'A consent card in settings lets you withdraw at any time and read the log.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.23', 'date': '2026-10-19',
+        'items': [
+            ('new',
+             T('顶栏点一下就呼出设备快捷面板，两条互联网链路与各路电台一屏切换。新版外壳那颗'
+               '定位换成了它，经典布局的顶栏也加了一颗。',
+               '頂欄點一下就呼出裝置快面板，兩條網際網路鏈路與各路電台一屏切換。新版外殼那顆'
+               '定位換成了它，經典佈局的頂欄也加了一顆。',
+               'One tap in the top bar opens the device quick panel: both internet links and every '
+               'radio link on one sheet. It replaces the locate button in the 2.0 shell, and the '
+               'classic layout\'s top bar has one too.')),
+            ('new',
+             T('聊天气泡淡入着出现，往上挪一点点再落稳，同一条只播一次。长按地图页的上报'
+               '状态条直接弹出电台身份面板，呼号与备注改完即存。',
+               '聊天氣泡淡入著出現，往上挪一點點再落定，同一條只播一次。長按地圖頁的上報'
+               '狀態條直接彈出電台身份面板，呼號與備註改完即存。',
+               'Chat bubbles fade in with a small rise, once per message. Long-press the beacon '
+               'bar on the map page to get the station identity panel, saved as you type.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.22', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('通知栏的小图标换成 APP 自己的剪影，大图标用启动图标；实时更新的胶囊里'
+               '也是这颗。小米焦点通知那一档删掉了——要厂商白名单，没授权只会被系统忽略。',
+               '通知列的小圖示換成 APP 自己的剪影，大圖示用啟動圖示；即時更新的膠囊裡'
+               '也是這顆。小米焦點通知那一檔刪掉了——要廠商白名單，沒授權只會被系統忽略。',
+               'The notification small icon is the app\'s own silhouette with the launcher '
+               'icon as the large one, and the live-update pill shows it too. The Xiaomi focus '
+               'option is gone: it needs a vendor whitelist.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.21', 'date': '2026-10-18',
+        'items': [
+            ('fix',
+             T('实时更新接上了：上一版那两个方法走的是反射，release 包被 R8 裁掉就找不到，'
+               '现在直接调用。',
+               '即時更新接上了：上一版那兩個方法走的是反射，release 包被 R8 裁掉就找不到，'
+               '現在直接呼叫。',
+               'Live updates are hooked up: the previous build called the two methods through '
+               'reflection, which R8 stripped from the release build. They are called directly '
+               'now.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.20', 'date': '2026-10-18',
+        'items': [
+            ('fix',
+             T('实时更新修好了：申请提升的两个方法在 androidx 兼容层上，平台的 '
+               'Notification.Builder 上没有，所以以前一直没反应。',
+               '即時更新修好了：申請提升的兩個方法在 androidx 相容層上，平台的 '
+               'Notification.Builder 上沒有，所以以前一直沒反應。',
+               'Live updates are fixed: the two request methods live on the androidx '
+               'compatibility layer rather than the platform Notification.Builder.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.19', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('通知显示样式多一档「小米焦点通知」，没有厂商许可时照样退回实时更新或'
+               '普通通知。',
+               '通知顯示樣式多一檔「小米焦點通知」，沒有廠商許可時照樣退回即時更新或'
+               '普通通知。',
+               'Notification style gains a Xiaomi focus option; without vendor permission it '
+               'falls back to live updates or a normal notification.')),
+            ('fix',
+             T('显示页多一个「通知诊断」，把本机支持到什么程度列成几行，可以复制。'
+               '实时更新不再被缺一个能力查询就整体挡住。',
+               '顯示頁多一個「通知診斷」，把本機支援到什麼程度列成幾行，可以複製。'
+               '即時更新不再被缺一個能力查詢就整體擋住。',
+               'The display page can now list what this phone supports for notifications, '
+               'with copy, and live updates no longer depend on a capability query that may '
+               'be missing.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.18' , 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('显示页里能选常驻通知的样式：普通常驻通知，或者申请 Android 16 的实时'
+               '更新。选了它，状态栏那一小条里显示距下次上报的倒计时；提不上去就自动'
+               '退回普通通知。',
+               '顯示頁裡能選常駐通知的樣式：普通常駐通知，或者申請 Android 16 的即時'
+               '更新。選了它，狀態列那一小條裡顯示距下次上報的倒數；提不上去就自動'
+               '退回普通通知。',
+               'The display page now picks the style of the ongoing notification: a normal '
+               'ongoing notification, or Android 16 live updates. Live updates show the '
+               'countdown to the next beacon in the status bar pill, and fall back to the '
+               'normal notification where the system cannot promote it.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.17' , 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('发射来源分成两条：位置与状态报文选一条链路，消息选另一条，两条选同一条也'
+               '照样工作。消息按自己那条链路的通断判断发没发出去。',
+               '發射來源分成兩條：位置與狀態報文選一條鏈路，訊息選另一條，兩條選同一條也'
+               '照樣工作。訊息按自己那條鏈路的通斷判斷發沒發出去。',
+               'Transmit now has two sources: one link for position and status packets, another '
+               'for messages. Picking the same link for both still works, and a message is judged '
+               'sent by its own link.')),
+            ('up',
+             T('位置与状态报文可以勾好几条链路同时发，射频与网络各一份。',
+               '位置與狀態報文可以勾好幾條鏈路同時發，射頻與網路各一份。',
+               'Position and status packets can tick several links and go out on all of them, '
+               'radio and network at once.')),
+            ('up',
+             T('APRSNETCN 不再有自己的半径与呼号，两条链路共用服务器页上的同一套过滤规则。',
+               'APRSNETCN 不再有自己的半徑與呼號，兩條鏈路共用伺服器頁上的同一套篩選規則。',
+               'APRSNETCN no longer keeps its own radius and callsigns; both links follow the '
+               'filter on the Servers page.')),
+            ('fix',
+             T('台站备注与状态报文单独一张卡，一种报文一行。快捷面板里 APRS-IS 那一行点得'
+               '进去它自己的设置页。',
+               '臺站備註與狀態報文單獨一張卡，一種報文一行。快捷面板裡 APRS-IS 那一行點得'
+               '進去它自己的設定頁。',
+               'The station note and the status packet now sit in a card of their own, one packet '
+               'kind per row, and the APRS-IS row in the quick panel opens its settings page.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.16', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('设置里的连接设置叫服务器。一级列出 APRS-IS 与 APRSNETCN SERVER 两条链路，'
+               '各有开关、连接状态与发射圆点，点进去才填地址和端口。',
+               '設定裡的連線設定叫伺服器。一級列出 APRS-IS 與 APRSNETCN SERVER 兩條鏈路，'
+               '各有開關、連線狀態與發射圓點，點進去才填位址和埠。',
+               'Settings now calls that page Servers. It lists the two internet links, APRS-IS and '
+               'APRSNETCN SERVER, each with its own switch, status and transmit dot; the address '
+               'and port live on that link\'s own page.')),
+            ('fix',
+             T('任何服务器地址都不预填。两条链路的地址框一开始都是空的，恢复出厂也清空。地址'
+               '空着时不去试默认服务器，24 小时台站同步直接跳过。',
+               '任何伺服器位址都不預填。兩條鏈路的位址框一開始都是空的，恢復出廠也清空。位址'
+               '空著時不去試預設伺服器，24 小時臺站同步直接跳過。',
+               'No server address is prefilled: both links start empty, a factory reset clears '
+               'them again, and an empty address never falls back to a default server, so the '
+               '24 hour station sync is skipped.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.15', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('APRSNETCN 和 APRS-IS 摆成两条并列的链路。可以只连它，也可以选它作为'
+               '发送链路，选了就不会改从 APRS-IS 发。',
+               'APRSNETCN 和 APRS-IS 擺成兩條並列的鏈路。可以只連它，也可以選它作為'
+               '發送鏈路，選了就不會改從 APRS-IS 發。',
+               'APRSNETCN now stands beside APRS-IS as its peer: either can be the only link '
+               'connected, and either can be the send link without falling back to the other.')),
+            ('up',
+             T('发送来源改成每张链路卡上的一个圆点，原来那张发送渠道卡删掉了。这条链路'
+               '有自己的 passcode，留空就沿用 APRS-IS 那一格。',
+               '發送來源改成每張鏈路卡上的一個圓點，原來那張發送渠道卡刪掉了。這條鏈路'
+               '有自己的 passcode，留空就沿用 APRS-IS 那一格。',
+               'The send source is now a dot on each link card; the old send channel card is '
+               'gone. This link has its own passcode, and leaving it empty uses the APRS-IS one.')),
+            ('fix',
+             T('台站详情里状态报文单独一块，写明标签。台站备注留在呼号那一列。两种报文'
+               '不再混在一起。',
+               '臺站詳情裡狀態報文單獨一塊，寫明標籤。臺站備註留在呼號那一列。兩種報文'
+               '不再混在一起。',
+               'On the station detail page the status packet has a block of its own with a label, '
+               'while the station note stays beside the callsign. The two no longer share a spot.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.14', 'date': '2026-10-18',
+        'items': [
+            ('fix',
+             T('台站详情的状态报文回到呼号右侧。上一版把它挪到发送消息下面，滚屏才看得到，'
+               '看着像没了。',
+               '臺站詳情的狀態報文回到呼號右側。上一版把它挪到傳送訊息下面，捲動才看得到，'
+               '看著像沒了。',
+               'The status packet is back beside the callsign on the station detail page; the '
+               'previous build moved it under the message box, where it scrolled out of sight.')),
+            ('fix',
+             T('设备页那张数据来源卡里，APRSNETCN 的勾选放回来了，两条互联网链路并排。',
+               '裝置頁那張資料來源卡裡，APRSNETCN 的勾選放回來了，兩條網際網路鏈路並排。',
+               'The APRSNETCN switch is back in the data source card on the device page, with '
+               'both internet links side by side.')),
+            ('up',
+             T('连接设置页把 APRSNETCN 做成 APRS-IS 那张卡的等价版本：自己的开关、状态、'
+               '登录结果、地址、端口、账号口令、筛选，发送渠道单独一张卡。',
+               '連線設定頁把 APRSNETCN 做成 APRS-IS 那張卡的等價版本：自己的開關、狀態、'
+               '登入結果、位址、連接埠、帳號密碼、篩選，發送渠道單獨一張卡。',
+               'On the connection settings page APRSNETCN now has a card that matches the '
+               'APRS-IS one: its own switch, state, login result, address, port, account, '
+               'password and filter, with the send channel on a card of its own.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.13', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('连接设置页同时列出两条互联网链路：APRS-IS 与 APRSNETCN SERVER 各有开关、'
+               '连接状态与登录结果，地址账号在各自的子页里填。设备页里那一格删了。',
+               '連線設定頁同時列出兩條網際網路鏈路：APRS-IS 與 APRSNETCN SERVER 各有開關、'
+               '連線狀態與登入結果，位址帳號在各自的子頁裡填。裝置頁裡那一格刪了。',
+               'The connection settings page lists both internet links: APRS-IS and APRSNETCN '
+               'SERVER each with a switch, its state and the login result, while address and '
+               'account stay on their own pages. The tile on the device page is gone.')),
+            ('new',
+             T('发送渠道改成单选。下拉里选 APRS-IS 或 APRSNETCN SERVER，报文只从选中的'
+               '那条走；副链路没在线时退回主链路。',
+               '發送渠道改成單選。下拉裡選 APRS-IS 或 APRSNETCN SERVER，報文只從選中的'
+               '那條走；副鏈路沒在線時退回主鏈路。',
+               'The send channel is a single choice now: pick APRS-IS or APRSNETCN SERVER and '
+               'packets leave on that link only, falling back to the main link when the '
+               'secondary one is offline.')),
+            ('new',
+             T('APRSNETCN 链路有了自己的筛选：半径默认一千公里，可以另外加呼号，不再沿用'
+               '主链路的范围与群呼号。',
+               'APRSNETCN 鏈路有了自己的篩選：半徑預設一千公里，可以另外加呼號，不再沿用'
+               '主鏈路的範圍與群呼號。',
+               'The APRSNETCN link has its own filter: a radius of one thousand kilometres by '
+               'default plus any callsigns you add, instead of the main link\'s range and '
+               'group calls.')),
+            ('new',
+             T('翻译接口多了 B 站 Index-Translate，免密钥，自动模式里排第一站；地址与模型'
+               '都能改，自己部署也能用。台站同步改成翻页拉完，不再只拿前两千台。',
+               '翻譯介面多了 B 站 Index-Translate，免金鑰，自動模式裡排第一站；位址與模型'
+               '都能改，自己部署也能用。臺站同步改成翻頁拉完，不再只拿前兩千臺。',
+               'A new translation provider, Bilibili Index-Translate: no key, first stop in '
+               'auto mode, with an editable endpoint and model for self-hosted deployments. '
+               'Station sync now pages through the whole list.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.12', 'date': '2026-10-18',
+        'items': [
+            ('up',
+             T('APRSNETCN SERVER 那一页改成直说：一台基于 APRSNETCN SERVER 协议'
+               '的 APRS-IS 服务器，地址填进连接设置，收发都走它；在这一页打开，是让它'
+               '与主链路同时在线，各收各的。',
+               'APRSNETCN SERVER 那一頁改成直說：一臺基於 APRSNETCN SERVER 協定'
+               '的 APRS-IS 伺服器，位址填進連線設定，收發都走它；在這一頁打開，是讓它'
+               '與主鏈路同時在線，各收各的。',
+               'The APRSNETCN SERVER page says it straight: an APRS-IS server built on the '
+               'APRSNETCN SERVER protocol. Put its address in the connection settings and it '
+               'carries traffic both ways; switching it on here runs both links at once, each '
+               'with its own feed.')),
+            ('new',
+             T('两条链路都在线时，发出去的每一帧两台服务器各收一份，主链路指的是同一台'
+               '机器时只发一次。',
+               '兩條鏈路都在線時，送出去的每一幀兩臺伺服器各收一份，主鏈路指的是同一臺'
+               '機器時只送一次。',
+               'With both links online, every packet goes out once per server; when the main '
+               'link already points at the same machine it goes out once.')),
+            ('new',
+             T('台站详情页的呼号旁边加一枚来源标签：APRS-IS、APRSNETCN、TNC、声卡、'
+               'PKWDWPL，服务器 24 小时台站接口补进来的也标 APRSNETCN。它跟着台站一起存，'
+               '重启还在。',
+               '臺站詳情頁的呼號旁邊加一枚來源標籤：APRS-IS、APRSNETCN、TNC、音效卡、'
+               'PKWDWPL，伺服器 24 小時臺站介面補進來的也標 APRSNETCN。它跟著臺站一起存，'
+               '重啟還在。',
+               'The station detail page carries a source badge next to the callsign: APRS-IS, '
+               'APRSNETCN, TNC, sound card, PKWDWPL, and APRSNETCN for stations the 24-hour '
+               'station API brought in. It is saved with the station, so it survives a restart.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.11', 'date': '2026-10-17',
+        'items': [
+            ('up',
+             T('APRSNETCN SERVER 从连接设置里搬出来单独一页：地址、端口、账号口令、'
+               '登录结果、重新连接，排法与 APRS-IS 那一页一致。服务器地址和端口不再'
+               '写死，填哪台就连哪台，留空就不连。数据来源卡分两组：互联网链接里它和 '
+               'APRS-IS 并排，TNC、WLAN 电台、声卡归到电台链路。24 小时台站现在只在'
+               '按下「立即同步」时拉，连上链路不再自己去请求。',
+               'APRSNETCN SERVER 從連線設定裡搬出來單獨一頁：位址、連接埠、帳號密碼、'
+               '登入結果、重新連線，排法與 APRS-IS 那一頁一致。伺服器位址和連接埠不再'
+               '寫死，填哪臺就連哪臺，留空就不連。資料來源卡分兩組：網際網路連結裡它和 '
+               'APRS-IS 並排，TNC、WLAN 電臺、音效卡歸到電臺鏈路。24 小時臺站現在只在'
+               '按下「立即同步」時拉，連上鏈路不再自己去請求。',
+               'APRSNETCN SERVER has a page of its own now: address, port, account and '
+               'password, login result and reconnect, arranged like the APRS-IS page. The '
+               'address and port are no longer hard-coded, so any machine can be filled in, '
+               'and an empty address does not connect. The data source card is split into '
+               'Internet links, where it sits beside APRS-IS, and Radio links for TNC, WLAN '
+               'radio and the sound card. The 24-hour station list is pulled only when you '
+               'tap "Sync now".')),
+        ],
+    },
+    {
+        'ver': 'v2.1.10', 'date': '2026-10-17',
+        'items': [
+            ('new',
+             T('连接设置多了「APRSNETCN 副链路」：它和主链路同时在线、只收不发，发报文仍走'
+               '主链路那台服务器。名单账号与口令填在副链路自己那一格，口令错了卡片里会说明'
+               '原因。服务器 24 小时里的台站可以点「立即同步」拉进来，只补空，已有的呼号'
+               '不动；连上链路不会自己去请求。两条链路收到同一帧只记一次。',
+               '連線設定多了「APRSNETCN 副鏈路」：它和主鏈路同時在線、只收不發，發報文仍走'
+               '主鏈路那臺伺服器。名單帳號與口令填在副鏈路自己那一格，口令錯了卡片裡會說明'
+               '原因。伺服器 24 小時裡的臺站可以點「立即同步」拉進來，只補空，已有的呼號'
+               '不動；連上鏈路不會自己去請求。兩條鏈路收到同一幀只記一次。',
+               'The connection settings gained an APRSNETCN secondary link: it runs alongside the '
+               'main link, receive only, while everything you send still leaves through the main '
+               'server. The whitelist account and password have their own field, and a wrong '
+               'password gets a line that says why. The stations the server heard in the last 24 '
+               'hours can be pulled in with "Sync now"; it only fills the gaps and never overwrites '
+               'a callsign you already have, and nothing is requested on connect. A frame arriving '
+               'on both links is recorded once.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.9', 'date': '2026-10-17',
+        'items': [
+            ('new',
+             T('数据包页搜索框与连接设置里的服务器地址多了「最近用过的」：点开挑一条就填回去，'
+               '选错的也能当场删掉，最多留八条。公告里的内嵌视频按屏幕宽度铺开，竖屏不再有'
+               '黑边，横条也不会留下一大片空白。',
+               '資料包頁搜尋框與連線設定裡的伺服器位址多了「最近用過的」：點開挑一條就填回去，'
+               '選錯的也能當場刪掉，最多留八條。公告裡的內嵌影片按螢幕寬度鋪開，豎屏不再有'
+               '黑邊，橫條也不會留下一大片空白。',
+               'The packet page search box and the server address in the connection settings '
+               'now keep a short history: tap to fill one back in, delete the ones you got wrong, '
+               'eight entries at most. Inline videos in the announcement fill the width, so a '
+               'portrait phone has no black bar and an audio strip leaves no empty gap.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.8', 'date': '2026-10-17',
+        'items': [
+            ('fix',
+             T('外接 GPS 模块供位时手机定位只待机，不再把后台服务一起停掉；模块断流或被拔掉，'
+               '手机定位会自己接回来，接回失败隔十秒再试。模块只是开着、没在供位时，网络定位'
+               '也不再被它挡住，室内也能重新拿到位置。',
+               '外接 GPS 模組供位時手機定位只待機，不再把後台服務一起停掉；模組斷流或被拔掉，'
+               '手機定位會自己接回來，接回失敗隔十秒再試。模組只是開著、沒在供位時，網路定位'
+               '也不再被它擋住，室內也能重新拿到位置。',
+               'While an external GPS module supplies fixes, the phone GPS only stands by instead '
+               'of stopping the background service. When the module goes quiet or is unplugged, '
+               'the phone GPS returns by itself and retries after ten seconds if the hand-over '
+               'fails. A module that is switched on but not supplying no longer blocks network '
+               'fixes, so a position comes back indoors too.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.7', 'date': '2026-10-17',
+        'items': [
+            ('fix',
+             T('台站页的筛选、地图的图层筛选、锁定地图中心的三态都会记住上次的选择，重启后照旧，'
+               '也跟备份走。以前每次打开地图都要把航向锁定重新点两下。',
+               '臺站頁的篩選、地圖的圖層篩選、鎖定地圖中心的三態都會記住上次的選擇，重啟後照舊，'
+               '也跟備份走。以前每次打開地圖都要把航向鎖定重新點兩下。',
+               'The station filter, the map layer filter and the map centre lock all keep their '
+               'last setting across launches, and travel with the backup. The heading lock used '
+               'to need two taps on every launch.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.6', 'date': '2026-10-16',
+        'items': [
+            ('new',
+             T('**历史轨迹可以导出成 GPX**：今天、最近 7 天、30 天、1 年，或者自己挑一段起止'
+               '时间。导出的文件落在系统的「下载」目录里，导完可以直接分享出去，用别的软件'
+               '打开就是一条条带时间的轨迹点。',
+               '**歷史軌跡可以匯出成 GPX**：今天、最近 7 天、30 天、1 年，或者自己挑一段起止'
+               '時間。匯出的檔案落在系統的「下載」目錄裡，匯完可以直接分享出去，用別的軟體'
+               '打開就是一條條帶時間的軌跡點。',
+               '**History can be exported as GPX**: today, the last 7 days, 30 days, a year, or a '
+               'range you pick. The file lands in the system Downloads folder and can be shared '
+               'straight away; any other app that opens it gets the track as timestamped points.')),
+            ('new',
+             T('**地图右侧的「跟随」改成三态**：关、锁定中心·正北朝上、锁定中心·航向朝上，'
+               '点一下就能换。台站页横屏下的排序入口不再消失，按哪个字段排也会记住，跟着备份'
+               '一起走。',
+               '**地圖右側的「跟隨」改成三態**：關、鎖定中心·正北朝上、鎖定中心·航向朝上，'
+               '點一下就能換。臺站頁橫屏下的排序入口不再消失，按哪個欄位排也會記住，跟著備份'
+               '一起走。',
+               '**The follow button has three states**: off, locked centre with north up, and '
+               'locked centre with heading up, one tap apart. The stations page keeps its sort '
+               'entry in landscape, and the sort field is remembered with the backup.')),
+            ('fix',
+             T('横屏下地图画的轨迹、信标点、精度圈和热力图不再画到左侧卡片与底部横条底下（卡'
+               '片是磨砂的，以前蓝线就从卡片里透出来）；上报横条开详细档时，最左边会显示这一发'
+               '要发的信标符号；启动时体检一次权限，只说「本来有、现在被关掉」的那几项。',
+               '橫屏下地圖畫的軌跡、信標點、精度圈和熱力圖不再畫到左側卡片與底部橫條底下（卡'
+               '片是磨砂的，以前藍線就從卡片裡透出來）；上報橫條開詳細檔時，最左邊會顯示這一發'
+               '要發的信標符號；啟動時體檢一次權限，只說「本來有、現在被關掉」的那幾項。',
+               'In landscape the drawn track, beacon marks, accuracy ring and heat map no longer '
+               'paint under the left card or the bottom bar (the cards are frosted, so the blue '
+               'line used to show through them). The reporting bar now shows the symbol this '
+               'beacon will send, and permissions are checked once at startup, naming only the '
+               'ones that were there before and are now off.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.5', 'date': '2026-10-15',
+        'items': [
+            ('new',
+             T('**地图跟着你走**：右侧工具列多了一颗「锁定地图中心」。点开以后你走动时'
+               '地图一直把你的位置摆在中间，不用每次手动回中；缩放仍由你掌握。拖地图、'
+               '或者点某个台站聚焦过去，锁定自动解开。',
+               '**地圖跟著你走**：右側工具列多了一顆「鎖定地圖中心」。點開以後你走動時'
+               '地圖一直把你的位置擺在中間，不用每次手動回中；縮放仍由你掌握。拖地圖、'
+               '或者點某個臺站聚焦過去，鎖定自動解開。',
+               '**The map follows you**: the right toolbar gained a "lock map centre" '
+               'button. With it on, the map keeps your position in the middle as you move, '
+               'so there is no need to recentre by hand, and zoom stays yours. Dragging the '
+               'map, or focusing a station, releases the lock.')),
+            ('new',
+             T('关于页新增「伙伴」一节，收录 APRSNET.CN。',
+               '關於頁新增「夥伴」一節，收錄 APRSNET.CN。',
+               'The About page gained a Partners section listing APRSNET.CN.')),
+            ('fix',
+             T('**服务器地址没填时点「连接」不再只是转圈**：设置页的服务器一栏会标出'
+               '「未配置」并写明原因，点连接则弹一句提示，附一个直达连接设置的入口。',
+               '**伺服器位址沒填時點「連線」不再只是轉圈**：設定頁的伺服器一欄會標出'
+               '「未配置」並寫明原因，點連線則彈一句提示，附一個直達連線設定的入口。',
+               '**Tapping Connect with no server address no longer just spins**: the '
+               'server field shows an "unset" badge with the reason, and Connect pops a '
+               'note with a one-tap way into the connection settings.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.4', 'date': '2026-10-14',
+        'items': [
+            ('fix',
+             T('**「待确认上报」不再反复弹**：常驻通知以前可能一秒重发一次（定位、台站、'
+               '电量、倒计时的任何变化都会重写通知文字），系统把它当成新通知再弹一回；'
+               '现在文字没变就不去碰系统，通知也标成「只提醒一次」。更根上的一处是：链路'
+               '抖一下（掉线后自动重连、被服务器踢、换发射来源）会把本次连接里你已经点过'
+               '的「开始上报」抹掉 —— 上报停住，界面与通知跳回「待确认上报」。现在只有你'
+               '自己点的连接 / 断开 / 恢复出厂才作废这次确认；计划外掉线、自己又连回来的，'
+               '确认留着，接着上报。',
+               '**「待確認上報」不再反覆彈**：常駐通知以前可能一秒重發一次（定位、臺站、'
+               '電量、倒數的任何變化都會重寫通知文字），系統把它當成新通知再彈一回；'
+               '現在文字沒變就不去碰系統，通知也標成「只提醒一次」。更根上的一處是：鏈路'
+               '抖一下（掉線後自動重連、被伺服器踢、換發射來源）會把本次連線裡你已經點過'
+               '的「開始上報」抹掉 —— 上報停住，介面與通知跳回「待確認上報」。現在只有你'
+               '自己點的連線 / 斷開 / 恢復出廠才作廢這次確認；計畫外掉線、自己又連回來的，'
+               '確認留著，接著上報。',
+               '**The "waiting for confirmation" prompt no longer keeps popping up**: the '
+               'persistent notification could be re-sent once a second (any change in the fix, '
+               'stations, battery or countdown rewrote its text) and the system popped it again '
+               'as a new notification; it now stays quiet while the text is unchanged, and is '
+               'flagged alert-once. More to the point: a jitter in the link (an automatic '
+               'reconnect, a server-side disconnect, a transmit-source switch) used to wipe the '
+               '"start reporting" tap already made for this connection, stopping reporting and '
+               'sending the UI and the notification back to "waiting for confirmation". Now '
+               'only your own connect / disconnect / factory reset voids it; a link that dropped '
+               'on its own and came back keeps the confirmation and carries on.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.3', 'date': '2026-10-14',
+        'items': [
+            ('fix',
+             T('**修好「安卓取不到卫星数」**：新机型普遍不再往定位结果里塞卫星数，'
+               '退路的系统 GNSS 状态里「哪几颗参与了定轨」也不是每台机器都填 —— 于是'
+               '信标设置页的「当前卫星数」一直是一个「—」。现在按三级取数：定位自带的数 → '
+               '参与定轨的颗数 → **在视颗数**，哪一级有值就用哪一级；监听注册失败也会'
+               '每 30 秒自己重试一次，不再永久停在「不知道」。',
+               '**修好「安卓取不到衛星數」**：新機型普遍不再往定位結果裡塞衛星數，'
+               '退路的系統 GNSS 狀態裡「哪幾顆參與了定軌」也不是每台機器都填 —— 於是'
+               '信標設定頁的「目前衛星數」一直是一個「—」。現在按三級取數：定位自帶的數 → '
+               '參與定軌的顆數 → **在視顆數**，哪一級有值就用哪一級；監聽註冊失敗也會'
+               '每 30 秒自己重試一次，不再永久停在「不知道」。',
+               '**"Android cannot get the satellite count" fixed**: newer devices no '
+               'longer attach a satellite count to the fix, and the GNSS-status fallback '
+               'does not fill in "used in fix" on every device -- so the beacon settings '
+               'page kept showing a dash. The count is now read in three steps: attached '
+               'to the fix -> used in fix -> **satellites in view**, using whichever has '
+               'a value; a failed listener registration also retries itself every 30 '
+               'seconds instead of staying "unknown" forever.')),
+        ],
+    },
+    {
+        'ver': 'v2.1.2', 'date': '2026-10-14',
+        'items': [
+            ('new',
+             T('**信标可带上卫星数**：`SAT=nn` 是可选的备注字段，来源是正在供位的那个'
+               '来源 —— 手机 GPS（Android 读参与定位的颗数）或外接 GPS 模组的 `GGA` 语句。'
+               '默认关；来源不提供这个值时不发，而不是发一个会被读成「一颗星都没有」的 0。',
+               '**信標可帶上衛星數**：`SAT=nn` 是可選的備註欄位，來源是正在供位的那個'
+               '來源 —— 手機 GPS（Android 讀參與定位的顆數）或外接 GPS 模組的 `GGA` 語句。'
+               '預設關；來源不提供這個值時不發，而不是發一個會被讀成「一顆星都沒有」的 0。',
+               '**The beacon can carry the satellite count**: `SAT=nn` is an optional '
+               'comment field, fed by whichever source is supplying the position — '
+               'phone GPS (Android reads the satellites used in the fix) or the external '
+               'GPS module\'s `GGA` sentence. Off by default, and nothing is sent when '
+               'the source does not provide it, rather than a zero that reads as "no '
+               'satellites".')),
+            ('up',
+             T('**外接 GPS 设备页多了一张「当前定位」卡**：坐标、海拔、速度、航向、卫星数、'
+               '精度（含原始 HDOP）、定位类型（`GSA` 的 2D / 3D，也会明确说「模组没报」）、'
+               '模组时间（UTC）、触发语句与最近一条原始语句都在明面上；龄期（「N 秒前」）'
+               '每秒刷新，断流后一眼能看出「已经多久没有新定位」。',
+               '**外接 GPS 裝置頁多了一張「目前定位」卡**：座標、海拔、速度、航向、衛星數、'
+               '精度（含原始 HDOP）、定位類型（`GSA` 的 2D / 3D，也會明確說「模組沒報」）、'
+               '模組時間（UTC）、觸發語句與最近一條原始語句都在明面上；齡期（「N 秒前」）'
+               '每秒刷新，斷流後一眼能看出「已經多久沒有新定位」。',
+               '**A new "Current fix" card on the external GPS device page**: position, '
+               'altitude, speed, course, satellites, accuracy (with the raw HDOP), fix '
+               'type (2D / 3D from `GSA`, and an explicit "not reported"), module time '
+               '(UTC), the trigger sentence and the latest raw sentence are all out in '
+               'the open; the age ("N seconds ago") refreshes every second, so a '
+               'stalled stream shows at a glance how long ago the last fix was.')),
+            ('fix',
+             T('**不再说「连接 TNC」**：外接 GPS 与 PKWDWPL 设备页以前沿用 TNC 那一套'
+               '按钮文案，点下去看着像要连电台 —— 现在改成按设备说话（扫描设备 / 连接设备 /'
+               '已绑定设备…），只有真正的 TNC 页才说「连接 TNC」。',
+               '**不再說「連接 TNC」**：外接 GPS 與 PKWDWPL 裝置頁以前沿用 TNC 那一套'
+               '按鈕文案，點下去看起來像要連電台 —— 現在改成按裝置說話（掃描裝置 / 連接裝置 /'
+               '已綁定裝置…），只有真正的 TNC 頁才說「連接 TNC」。',
+               '**No more "Connect TNC"**: the external GPS and PKWDWPL device pages used '
+               'the TNC button wording, so tapping them looked like connecting a radio. '
+               'They now speak in terms of the device (Scan devices / Connect device / '
+               'Bound device …), and only the actual TNC page says "Connect TNC".')),
+        ],
+    },
+    {
+        'ver': 'v2.1.1', 'date': '2026-10-14',
+        'items': [
+            ('new',
+             T('**外接 GPS 定位来源**：蓝牙 SPP / USB 串口接入 NMEA 0183 模组'
+               '（`RMC` / `GGA` / `GLL` / `ZDA` / `GSA` / `VTG`），作为本机位置，只收不发。'
+               '位置优先级：模拟位置 ＞ 外接模块 ＞ 佳明手表 ＞ 手机 GPS。',
+               '**外接 GPS 定位來源**：藍牙 SPP / USB 串列埠接入 NMEA 0183 模組'
+               '（`RMC` / `GGA` / `GLL` / `ZDA` / `GSA` / `VTG`），作為本機位置，只收不發。'
+               '位置優先級：模擬位置 ＞ 外接模組 ＞ 佳明手錶 ＞ 手機 GPS。',
+               '**External GPS position source**: an NMEA 0183 module (`RMC` / `GGA` / '
+               '`GLL` / `ZDA` / `GSA` / `VTG`) over Bluetooth SPP or a USB serial port, '
+               'used for this device\'s own position and receive-only. Position '
+               'priority: simulated > external module > Garmin watch > phone GPS.')),
+            ('up',
+             T('**设备页新增「外接 GPS」子页**：扫描 / 绑定 / 连接 / 断开 / 重启，'
+               '以及定位接收统计；数据来源卡把手机 GPS / 外接模块 / 佳明列在一处并写明优先级；'
+               '信标横杠显示位置来源（如「外接 GPS 上报 · 45s」）。',
+               '**裝置頁新增「外接 GPS」子頁**：掃描 / 綁定 / 連線 / 斷開 / 重啟，'
+               '以及定位接收統計；資料來源卡把手機 GPS / 外接模組 / 佳明列在一處並寫明優先級；'
+               '信標橫杠顯示位置來源（如「外接 GPS 上報 · 45s」）。',
+               '**New "External GPS" device sub-page**: scan / bind / connect / '
+               'disconnect / restart, plus reception stats; the data source card lists '
+               'phone GPS / external module / Garmin together with the priority; the '
+               'beacon bar shows the position source (e.g. "External GPS · 45s").')),
+        ],
+    },
+    {
+        'ver': 'v2.1.0', 'date': '2026-10-14',
+        'items': [
+            ('new',
+             T('**封面彩蛋不再等那五秒**：关于页封面上那颗蛋，以前点一下要盯着一张'
+               '不动的封面等五秒 —— 谁也分不清那是彩蛋还是卡住了。现在**一点就是'
+               '一次激活**：抖动、翻面、粒子一起发生，翻牌动画刚走完，那一页故事'
+               '就递到眼前；再点一下翻回正面，故事也不再打开。故事**能内嵌的平台'
+               '（Android / iOS / macOS）直接在应用内整屏翻开**，只有 Windows /'
+               ' Linux / Web 才交给系统浏览器。',
+               '**封面彩蛋不再等那五秒**：關於頁封面上那顆蛋，以前點一下要盯著一張'
+               '不動的封面等五秒 —— 誰也分不清那是彩蛋還是卡住了。現在**一點就是'
+               '一次啟動**：抖動、翻面、粒子一起發生，翻牌動畫剛走完，那一頁故事'
+               '就遞到眼前；再點一下翻回正面，故事也不再打開。故事**能內嵌的平台'
+               '（Android / iOS / macOS）直接在應用內整屏翻開**，只有 Windows /'
+               ' Linux / Web 才交給系統瀏覽器。',
+               '**The cover easter egg no longer counts to five**: the egg on the About '
+               'cover used to be "tap, then watch a motionless cover for five seconds" '
+               '— nobody can tell an easter egg from a freeze. **A tap is the '
+               'activation now**: the shudder, the flip and the particles happen '
+               'together, and the moment the flip lands, that page of story is handed '
+               'over; one more tap turns the cover back and the story stays closed. '
+               '**Platforms with an embedder (Android / iOS / macOS) open it '
+               'full-screen inside the app**; only Windows / Linux / Web hand it to '
+               'the system browser.')),
+            ('fix',
+             T('**离开这一页，音乐就停**：故事页自带背景音乐，以前退出这一页（返回或'
+               '切到后台）之后声音还在响 —— Android 的 WebView 拆掉后，页面里的音频'
+               '（`audio` 元素）并不会自己安静。现在退出前先把声音按停、退场动画里'
+               '再把整页腾空，切到后台也同样按停。',
+               '**離開這一頁，音樂就停**：故事頁自帶背景音樂，以前退出這一頁（返回或'
+               '切到後台）之後聲音還在響 —— Android 的 WebView 拆掉後，頁面裡的音訊'
+               '（`audio` 元素）並不會自己安靜。現在退出前先把聲音按停、退場動畫裡'
+               '再把整頁騰空，切到後台也同樣按停。',
+               '**Leaving the page takes the music with it**: the story page plays its '
+               'own background music, and leaving it (back, or switching the app away) '
+               'used to leave the sound running — an Android WebView does not silence '
+               'the audio inside it when it is torn down. The page is now silenced '
+               'before the route pops and unloaded during the exit animation, and '
+               'switching away silences it too.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.68', 'date': '2026-10-13',
+        'items': [
+            ('fix',
+             T('**智能体回复更快**：2.0.67 的「逐字回复」请求体里**漏了 `stream`**，'
+               '后端按普通请求回一整段 JSON，应用判定「没拿到流」后**又把同样的'
+               '请求发了一遍** —— 每轮白等一倍时间、白花一倍 token。现在流式请求'
+               '真的带 `stream`：一次请求、边收边显示；后端不认这个字段时照旧自动'
+               '退回整段式，**不会少一句回复**。',
+               '**智慧代理回覆更快**：2.0.67 的「逐字回覆」請求體裡**漏了 `stream`**，'
+               '後端按普通請求回一整段 JSON，應用判定「沒拿到串流」後**又把同樣的'
+               '請求發了一遍** —— 每輪白等一倍時間、白花一倍 token。現在串流請求'
+               '真的帶 `stream`：一次請求、邊收邊顯示；後端不認這個欄位時照舊自動'
+               '退回整段式，**不會少一句回覆**。',
+               '**Faster agent replies**: the "stream replies" request of 2.0.67 was '
+               '**missing `stream`**, so the backend answered with one plain JSON blob; '
+               'the app saw "no stream" and **sent the very same request a second '
+               'time** — every round waited twice as long and paid twice the tokens. '
+               'The streaming request now really carries `stream`: one request, shown '
+               'as it arrives, with the same automatic fallback when a backend does '
+               'not accept it — **never fewer replies**.')),
+            ('fix',
+             T('**智能体不再「调几次工具就断掉」**：单个工具出错不再带走整轮对话'
+               '（异常变成**这次调用的结果**回给模型）；一轮的工具往返次数用完后会'
+               '补一次**不带工具**的收尾请求，把结论说出来，而不是干停在最后一个'
+               '工具气泡上。',
+               '**智慧代理不再「呼叫幾次工具就斷掉」**：單個工具出錯不再帶走整輪'
+               '對話（例外變成**這次呼叫的結果**回給模型）；一輪的工具往返次數用完'
+               '後會補一次**不帶工具**的收尾請求，把結論說出來，而不是乾停在最後'
+               '一個工具氣泡上。',
+               '**The agent no longer "stops after a few tool calls"**: one failing '
+               'tool no longer takes down the whole turn (the exception becomes **the '
+               'result of that call** and goes back to the model), and when a turn '
+               'runs out of tool round-trips the app makes one more request **without '
+               'any tools** so the model puts its conclusion into words, instead of '
+               'stopping dead on the last tool bubble.')),
+            ('up',
+             T('**台站备注更完整**：备注单独成行、可换行、默认不限行数，长备注不再'
+               '被省略号吃掉；备注里的网址（`https://…` / `www.…`）自动变成**可点'
+               '链接**，台站列表 / 台站详情 / 地图信息浮窗三处一致。',
+               '**台站備註更完整**：備註單獨成行、可換行、預設不限行數，長備註不再'
+               '被省略號吃掉；備註裡的網址（`https://…` / `www.…`）自動變成**可點'
+               '連結**，台站列表 / 台站詳情 / 地圖資訊浮窗三處一致。',
+               '**More complete station comments**: comments get their own line, wrap, '
+               'and default to unlimited lines, so long ones are no longer eaten by an '
+               'ellipsis; URLs inside a comment (`https://…` / `www.…`) become '
+               '**tappable links**, consistently in the station list, the station '
+               'detail page and the map info window.')),
+            ('up',
+             T('**智能体更快**：默认系统提示从 5.3KB 瘦到 2KB —— 它原本把 57 个'
+               '工具的用法逐条复述了一遍，而每个工具的说明本来就随请求一起发。'
+               '工具描述也一并精简（名字 / 参数 / 取值都不变）。系统提示 + 工具'
+               'schema 每轮都要重发，两份合计小了约四分之一，回复更快。',
+               '**智慧代理更快**：預設系統提示從 5.3KB 瘦到 2KB —— 它原本把 57 個'
+               '工具的用法逐條複述了一遍，而每個工具的說明本來就隨請求一起發。'
+               '工具描述也一併精簡（名字 / 參數 / 取值都不變）。系統提示 + 工具'
+               'schema 每輪都要重發，兩份合計小了約四分之一，回覆更快。',
+               '**A faster agent**: the default system prompt shrank from 5.3KB to '
+               '2KB — it used to restate all 57 tools one by one, even though each '
+               'tool is already described in the schemas sent with every request; the '
+               'tool descriptions were trimmed too (names / parameters / values '
+               'unchanged). Prompt plus tool schemas are re-sent on every request, '
+               'and together they are now about a quarter smaller, so replies come '
+               'faster.')),
+            ('up',
+             T('**台站状态报文更省、不再闪**：APRS-IS 保活以前每 15 秒先发一帧 '
+               '`>APRSlocus CONNECT …`、再发一帧你的自定义状态，白占一帧还让 '
+               'aprs.fi 上的状态在两者间反复闪。现在**只发一帧、谁有内容发谁**：'
+               '填了自定义发自定义，没填才发内置默认帧；CONNECT 身份帧只在连上的'
+               '一瞬间发一次。自定义帧万一写失败仍会自动补发，状态不会被 CONNECT '
+               '顶掉。',
+               '**台站狀態報文更省、不再閃**：APRS-IS 保活以前每 15 秒先發一幀 '
+               '`>APRSlocus CONNECT …`、再發一幀你的自訂狀態，白佔一幀還讓 '
+               'aprs.fi 上的狀態在兩者間反覆閃。現在**只發一幀、誰有內容發誰**：'
+               '填了自訂發自訂，沒填才發內建預設幀；CONNECT 身分幀只在連上的'
+               '一瞬間發一次。自訂幀萬一寫失敗仍會自動補發，狀態不會被 CONNECT '
+               '頂掉。',
+               '**Leaner, no-flicker status reports**: the APRS-IS keep-alive used to '
+               'send an `>APRSlocus CONNECT …` frame every 15 seconds and then a '
+               'second frame with your custom status — a wasted frame that also made '
+               'the status on aprs.fi flip between the two. Now **a single frame is '
+               'sent, whichever has content**: custom text if set, otherwise the '
+               'built-in default; the CONNECT identity frame goes out once, at the '
+               'moment of connecting. A custom frame that fails to write is still '
+               'retried automatically, so your status is never overwritten by '
+               'CONNECT.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.67', 'date': '2026-10-13',
+        'items': [
+            ('new',
+             T('**智能体可以「逐字回复」了**：回复不再是「转半天整段蹦出来」，'
+               '而是边生成边逐字上屏，长回答尤其明显。优先走真流式（SSE 逐块'
+               '增量）；后端不支持流式（忽略 `stream`、或 Web 平台）时自动退回'
+               '整段请求，再用打字机效果补上逐字观感 —— **不会少一句回复**。'
+               '设置页「接口」折里可开关（默认开）。',
+               '**智慧代理可以「逐字回覆」了**：回覆不再是「轉半天整段跳出來」，'
+               '而是邊生成邊逐字上螢幕，長回答尤其明顯。優先走真串流（SSE 逐塊'
+               '增量）；後端不支援串流（忽略 `stream`、或 Web 平台）時自動退回'
+               '整段請求，再用打字機效果補上逐字觀感 —— **不會少一句回覆**。'
+               '設定頁「介面」摺裡可開關（預設開）。',
+               '**The agent now replies character-by-character**. Replies are no '
+               'longer "wait, then the whole block appears" but are shown as the '
+               'model writes them, which matters most for long answers. Real '
+               'streaming (SSE tokens) is used first; when the backend cannot '
+               'stream (it ignores `stream`, or on the Web) the app falls back to '
+               'a whole-answer request plus a typewriter effect for the same feel '
+               '— **never fewer replies**. A switch in Settings → Interface (on '
+               'by default) controls it.')),
+            ('new',
+             T('**智能体「工具操作历史」+ 工作状态冒泡**：聊天框标题栏新增「工具'
+               '操作历史」按钮，记下它**每一次**工具调用（工具 / 参数 / 结果 / 时间 / '
+               '成功 · 被拒 · 失败），最新在前、可一键清空，按钮带数字角标。有活儿时'
+               '旁边还会冒一个状态气泡：「正在操作：xxx」或「思考中…」，不用盯着'
+               '对话猜它在干嘛。',
+               '**智慧代理「工具操作歷史」+ 工作狀態冒泡**：聊天框標題列新增「工具'
+               '操作歷史」按鈕，記下它**每一次**工具呼叫（工具 / 參數 / 結果 / 時間 / '
+               '成功 · 被拒 · 失敗），最新在前、可一鍵清空，按鈕帶數字角標。有活兒時'
+               '旁邊還會冒一個狀態氣泡：「正在操作：xxx」或「思考中…」，不用盯著'
+               '對話猜它在幹嘛。',
+               '**Agent "tool activity" history + a live working bubble**: a new button '
+               'in the chat header records **every** tool call (tool / arguments / '
+               'result / time / success · denied · failed), newest first and clearable '
+               'with one tap, carrying a numeric badge. While it works, a status bubble '
+               'appears next to it — "Working: xxx" or "Thinking…" — so you never have '
+               'to guess what it is doing.')),
+            ('up',
+             T('**台站详情 PHG 更清楚**：功率 / 天线高度 / 增益 / 方向从一行灰字'
+               '改成一张**橙色小卡片**，四项各自带标签与单位，一眼可读；全向方位'
+               '显示为「全向」，不再露出 `360°`。',
+               '**台站詳情 PHG 更清楚**：功率 / 天線高度 / 增益 / 方向從一行灰字'
+               '改成**橙色小卡片**，四項各自帶標籤與單位，一眼可讀；全向方位'
+               '顯示為「全向」，不再露出 `360°`。',
+               '**Clearer PHG in station details**: power / antenna height / gain / '
+               'direction went from one grey line to an **orange card** with each value '
+               'labelled and unit-tagged, readable at a glance; an omni pattern now '
+               'reads "Omni" instead of `360°`.')),
+            ('up',
+             T('**数据包页更清晰**：每条报文的「呼号 → 目标」单独成行，不再和徽标、'
+               '时间挤在一起被省略号截掉；「原始模式」不再截断，完整显示整条报文'
+               '（路径 / 数据扩展 / 备注不再被吃掉），可换行、长按复制。',
+               '**資料包頁更清晰**：每條報文的「呼號 → 目標」單獨成行，不再和徽標、'
+               '時間擠在一起被省略號截掉；「原始模式」不再截斷，完整顯示整條報文'
+               '（路徑 / 資料擴展 / 備註不再被吃掉），可換行、長按複製。',
+               '**Clearer packet viewer**: each frame\'s "call → target" now sits on its '
+               'own line instead of being crammed with the badges and time and ellipsised '
+               'away; "raw mode" no longer truncates — the full frame (path / data '
+               'extensions / comment) is shown, wraps, and copies on long-press.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.66', 'date': '2026-10-13',
+        'items': [
+            ('new',
+             T('**智能体可以操作「策略地图」了**：现在能用一句话让智能体在群里'
+               '给队友标点、画线、画圈、放集合点 —— 它调用 `strategy_add_point` / '
+               '`strategy_add_line` 等新工具，元素立刻落到每个人图上并广播给群；'
+               '也能用 `list_strategy` 看清图上有哪些元素、按 id 修改或删除，'
+               '或 `strategy_clear` 一键清空。只读的 `list_strategy` 免确认；'
+               '会发 APRS 帧的写操作仍需「允许发送 / 允许修改设置」权限与逐次确认。',
+               '**智慧代理可以操作「策略地圖」了**：現在能用一句話讓智慧代理在群裡'
+               '給隊友標點、畫線、畫圈、放集合點 —— 它呼叫 `strategy_add_point` / '
+               '`strategy_add_line` 等新工具，元素立刻落到每個人圖上並廣播給群；'
+               '也能用 `list_strategy` 看清圖上有哪些元素、按 id 修改或刪除，'
+               '或 `strategy_clear` 一鍵清空。唯讀的 `list_strategy` 免確認；'
+               '會發 APRS 幀的寫操作仍需「允許傳送 / 允許修改設定」權限與逐次確認。',
+               '**The agent can now drive the shared strategy map**. Ask it in plain '
+               'language to drop markers, draw lines and circles, or place rally points '
+               'for your group: it calls the new `strategy_add_point` / `strategy_add_line` '
+               'and friends, and each element lands on every member\'s map and is '
+               'broadcast to the group. Use `list_strategy` to see what is there, edit '
+               'or delete by id, or `strategy_clear` to wipe the layer. The read-only '
+               '`list_strategy` needs no confirmation; the frame-sending writes still '
+               'need the "allow sending"/"allow settings" permissions and a per-action '
+               'confirmation.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.65', 'date': '2026-10-12',
+        'items': [
+            ('fix',
+             T('**修复 WLAN 电台直连无法更改射频中继路径**：「WLAN 电台直连」'
+               '（IC-705 / IC-9700 / IC-7610 / IC-905）子页原本没有中继路径入口，'
+               '想改 `WIDE1-1,WIDE2-1` 之类的射频路线无处可填。现在该页补上'
+               '「射频中继路径」输入框，与 TNC / 音频页同一个键、同一个语义'
+               '（留空 = 不指定中继），改完立即生效。',
+               '**修復 WLAN 電台直連無法更改射頻中繼路徑**：「WLAN 電台直連」'
+               '（IC-705 / IC-9700 / IC-7610 / IC-905）子頁原本沒有中繼路徑入口，'
+               '想改 `WIDE1-1,WIDE2-1` 之類的射頻路線無處可填。現在該頁補上'
+               '「射頻中繼路徑」輸入框，與 TNC / 音訊頁同一個鍵、同一個語意'
+               '（留空 = 不指定中繼），改完立即生效。',
+               '**Fix: the WLAN radio link could not change its RF digipeater path**. '
+               'The “WLAN radio direct” sub-page (IC-705 / IC-9700 / IC-7610 / IC-905) '
+               'had no digipeater-path field, so there was nowhere to set an RF route '
+               'such as `WIDE1-1,WIDE2-1`. The page now has an “RF digipeater path” '
+               'input, sharing the same key and semantics as the TNC/audio pages '
+               '(empty = no digipeater); changes take effect immediately.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.64', 'date': '2026-10-11',
+        'items': [
+            ('fix',
+             T('**修复连电台热点后 APRS-IS 断线**：连上 IC-705 等电台发出的 '
+               'Wi-Fi 热点后，系统把它当成默认上网通道、暂停移动数据 —— 于是'
+               '电台连上了，APRS-IS 反而掉了。现在改为向系统申请一条**本地 '
+               'Wi-Fi 网络**并把电台的 UDP 流量**绑定到 Wi-Fi**，APRS-IS 仍走移动'
+               '数据，两条路各走各的；低版本 Android 退回原有方式。',
+               '**修復連電台熱點後 APRS-IS 斷線**：連上 IC-705 等電台發出的 '
+               'Wi-Fi 熱點後，系統把它當成預設上網通道、暫停行動數據 —— 於是'
+               '電台連上了，APRS-IS 反而斷了。現在改為向系統申請一條**本機 '
+               'Wi-Fi 網路**並把電台的 UDP 流量**綁定到 Wi-Fi**，APRS-IS 仍走行動'
+               '數據，兩條路各走各的；舊版 Android 退回原有方式。',
+               '**Fix: APRS-IS dropping after joining the radio hotspot**. After the '
+               'phone joins the Wi-Fi hotspot hosted by an IC-705 (or similar), the '
+               'system treated it as the default route and paused mobile data -- so the '
+               'radio connected but APRS-IS dropped. The app now requests a **local-only '
+               'Wi-Fi network** and **binds the radio\'s UDP traffic to Wi-Fi**, keeping '
+               'APRS-IS on mobile data so the two paths no longer interfere. Older '
+               'Android falls back to the previous behaviour.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.55', 'date': '2026-10-10',
+        'items': [
+            ('new',
+             T('**新增香港节点：阿里云 OSS（香港）更新通道**。更新页多出与该渠道'
+               '并列的「Aliyun OSS（香港）」，与广州节点同属团队承担的 CDN 分发，'
+               '区别只是阿里云区域 —— 广州国内可达性好，香港在**跨境 / 境外网络**'
+               '下更稳；两条渠道都会显示「请少量使用 🙏」。发版流水线现在把每个版本'
+               '的安装包与索引**同时**推到广州（`aprslocus`）与香港（`aprslocushk`）'
+               '两个 bucket，香港走自定义域 `aprslocushk.oss.theez.top`。',
+               '**新增香港節點：阿里雲 OSS（香港）更新通道**。更新頁多出與該通道'
+               '並列的「Aliyun OSS（香港）」，與廣州節點同屬團隊承擔的 CDN 分發，'
+               '區別只是阿里雲區域 —— 廣州國內可達性好，香港在**跨境 / 境外網路**'
+               '下更穩；兩條通道都會顯示「請少量使用 🙏」。發版流水線現在把每個版本'
+               '的安裝包與索引**同時**推到廣州（`aprslocus`）與香港（`aprslocushk`）'
+               '兩個 bucket，香港走自訂網域 `aprslocushk.oss.theez.top`。',
+               '**New Hong Kong node: "Aliyun OSS (Hong Kong)" update channel**. The '
+               'update page gains an "Aliyun OSS (Hong Kong)" option next to the '
+               'Guangzhou one -- both are team-funded CDN distribution, differing only in '
+               'Aliyun region: Guangzhou is fast inside mainland China, Hong Kong is more '
+               'reliable over **cross-border / overseas** networks. Both show the "please '
+               'use sparingly 🙏" hint. The release pipeline now pushes each version\'s '
+               'installers and index to **both** the Guangzhou (`aprslocus`) and Hong Kong '
+               '(`aprslocushk`) buckets; Hong Kong is served over the custom domain '
+               '`aprslocushk.oss.theez.top`.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.54', 'date': '2026-10-10',
+        'items': [
+            ('up',
+             T('**改地图交互**：单击台站标记不再「飞过去」并放大，而是**选中并显示'
+               '呼号标签 / 信息窗**，想连着看几个相邻台站时地图不再跳；详情改为'
+               '**双击**（或点信息窗）进入。同时**提升卫星影像可读性**：台站符号加'
+               '一圈深色光晕，主地图与策略地图的呼号标签在卫星图上改为「深底白字」。',
+               '**改地圖互動**：單擊台站標記不再「飛過去」並放大，而是**選取並顯示'
+               '呼號標籤 / 資訊窗**，想連著看幾個相鄰台站時地圖不再跳；詳情改為'
+               '**雙擊**（或點資訊窗）進入。同時**提升衛星影像可讀性**：台站符號加'
+               '一圈深色光暈，主地圖與策略地圖的呼號標籤在衛星圖上改為「深底白字」。',
+               '**Map interaction rework**: tapping a station marker no longer flies to '
+               'it and zooms in -- it now **selects it and shows the callsign label / '
+               'info popup**, so the map stays put while inspecting nearby stations; '
+               'details move to **double-tap** (or the popup). Also **better readability '
+               'on satellite imagery**: symbols get a dark halo and callsign chips on '
+               'both the main and strategy maps switch to **dark background / white text** '
+               'on satellite basemaps.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.53', 'date': '2026-10-10',
+        'items': [
+            ('fix',
+             T('**修复阿里云 OSS 渠道下载 400**：OSS 默认域名对 `.apk` / `.ipa` '
+               '下载一律返回 `ApkDownloadForbidden`（`.exe` 不受影响）。改为上传时'
+               '给这两类对象加 `.bin` 后缀、索引里的下载地址随之指向 `xxx.apk.bin`，'
+               '而资产名不变 —— 客户端无需改动。发版自检现在会真去下每个资产。',
+               '**修復阿里雲 OSS 通道下載 400**：OSS 預設網域對 `.apk` / `.ipa` '
+               '下載一律回傳 `ApkDownloadForbidden`（`.exe` 不受影響）。改為上傳時'
+               '給這兩類物件加 `.bin` 後綴、索引裡的下載位址隨之指向 `xxx.apk.bin`，'
+               '而資產名不變 —— 客戶端無需改動。發版自檢現在會真去下每個資產。',
+               '**Fixed Aliyun OSS download 400**: the OSS default endpoint rejects '
+               'public `.apk` / `.ipa` downloads with `ApkDownloadForbidden` (`.exe` is '
+               'fine). Uploads now add a `.bin` suffix to those objects and the index '
+               'download URLs point at `xxx.apk.bin`, while asset names stay unchanged -- '
+               'no client change needed. The release self-check now really downloads each asset.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.52', 'date': '2026-10-10',
+        'items': [
+            ('new',
+             T('**新增阿里云 OSS 更新通道（可选）**：在 GitHub / GitCode / Qingling '
+               '之外再加一条，安装包放在阿里云对象存储、客户端走**阿里云 CDN**'
+               '（`aprslocus.oss-cn-guangzhou.aliyuncs.com`）取包，国内可达性好。'
+               '默认**不启用**，需在更新页手动切换。',
+               '**新增阿里雲 OSS 更新通道（可選）**：在 GitHub / GitCode / Qingling '
+               '之外再加一條，安裝包放在阿里雲物件儲存、客戶端走**阿里雲 CDN**'
+               '（`aprslocus.oss-cn-guangzhou.aliyuncs.com`）取包，國內可達性好。'
+               '預設**不啟用**，需在更新頁手動切換。',
+               '**New Aliyun OSS update channel (optional)**: alongside GitHub / GitCode / '
+               'Qingling, installers can now be served from Alibaba Cloud OSS over the '
+               '**Aliyun CDN** (`aprslocus.oss-cn-guangzhou.aliyuncs.com`), which is fast in '
+               'mainland China. It is **off by default** and must be picked on the update page.')),
+            ('fix',
+             T('**费用提示**：该通道流量费由**开发团队**承担，切到它时更新页顶部会常驻'
+               '一条提示，请**少量使用** 🙏。发版流水线新增 `publish-oss`，把安装包与'
+               '一份 GitHub 同格式的 releases 索引一并上传；凭据只从 GitHub Secrets '
+               '读取，**不写进仓库**。',
+               '**費用提示**：該通道流量費由**開發團隊**承擔，切到它時更新頁頂部會常駐'
+               '一條提示，請**少量使用** 🙏。發版流水線新增 `publish-oss`，把安裝包與'
+               '一份 GitHub 同格式的 releases 索引一併上傳；憑證只從 GitHub Secrets '
+               '讀取，**不寫進倉庫**。',
+               '**Cost notice**: traffic on this channel is **paid for by the dev team**, '
+               'so a persistent banner asks users to use it **sparingly** 🙏. The release '
+               'pipeline gained a `publish-oss` job that uploads the installers plus a '
+               'GitHub-format releases index; credentials come only from GitHub Secrets and '
+               'are **never committed**.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.51', 'date': '2026-10-10',
+        'items': [
+            ('new',
+             T('**新增 Qingling（清零）更新通道**：国内直连 GitHub 取更新包常失败，'
+               '现多一条可选渠道，指向**自建镜像**（先取回发行版、再以 GitHub 同格式'
+               '接口提供，客户端不直连 GitHub）。通道地址集中在 `updateChannelBases`，'
+               '更新页与启动提示共用一份，避免漏改。清零通道走 **HTTPS + 内置自签'
+               '证书钉扎**（只钉交付服务器那一个主机，其余渠道仍走默认信任链），'
+               '传输加密、中间人无法篡改，且无需域名 / 备案 / 买证书。默认仍是 GitHub。',
+               '**新增 Qingling（清零）更新通道**：國內直連 GitHub 取更新包常失敗，'
+               '現多一條可選通道，指向**自建鏡像**（先取回發行版、再以 GitHub 同格式'
+               '介面提供，客戶端不直連 GitHub）。通道地址集中在 `updateChannelBases`，'
+               '更新頁與啟動提示共用一份，避免漏改。清零通道走 **HTTPS + 內建自簽'
+               '憑證釘扎**（只釘交付伺服器那一個主機，其餘通道仍走預設信任鏈），'
+               '傳輸加密、中間人無法篡改，且無需網域 / 備案 / 買憑證。預設仍是 GitHub。',
+               '**New Qingling update channel**: fetching updates straight from GitHub '
+               'often fails in mainland China. A fourth **optional** channel points at a '
+               '**self-hosted mirror** (it pulls the release, then serves a GitHub-format '
+               'API; the client never talks to GitHub). Channel bases are centralized in '
+               '`updateChannelBases`, shared by the update page and the launch prompt. The '
+               'Qingling channel uses **HTTPS with a pinned self-signed certificate** '
+               '(pinning only that one host; other channels keep the default trust chain): '
+               'encrypted and tamper-proof, with no domain, filing or purchased cert needed. '
+               'GitHub stays the default.')),
+            ('fix',
+             T('**修复测试流水线产物**：Windows 测试版此前只打 Flutter 启动器'
+               '（约 123 KB，缺 `flutter_windows.dll` 与 `data/`，双击无反应）→ 改为'
+               '单文件安装器并加 `if-no-files-found: error`；iOS 测试版产物名会丢掉'
+               'fork 标识 → 保留版本后缀。另：v2.0.50 已发布，本次带新功能，版本'
+               '递增到 **2.0.51**。',
+               '**修復測試流水線產物**：Windows 測試版此前只打 Flutter 啟動器'
+               '（約 123 KB，缺 `flutter_windows.dll` 與 `data/`，雙擊無反應）→ 改為'
+               '單檔安裝器並加 `if-no-files-found: error`；iOS 測試版產物名會丟掉'
+               'fork 標識 → 保留版本後綴。另：v2.0.50 已發布，本次帶新功能，版本'
+               '遞增到 **2.0.51**。',
+               '**Fixed test-pipeline artifacts**: the Windows test build shipped only '
+               'the Flutter launcher (~123 KB, missing `flutter_windows.dll` and `data/`, '
+               'so it did nothing when opened) -> now a single-file installer with '
+               '`if-no-files-found: error`; the iOS test artifact dropped its fork suffix '
+               '-> the suffix is kept. Also: v2.0.50 was already released, so this feature '
+               'bumps the version to **2.0.51**.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.50', 'date': '2026-10-09',
+        'items': [
+            ('fix',
+             T('**修复音频参数改了不保存**：在音频设置里改采样率 / 波特率 / 音调 /'
+               'TX 前导延时 / **输出幅度**，改完不按回车、直接点别处会**悄悄丢掉**'
+               '——没按回车的输入框只挂了 `onEditingComplete`，而它只在回车时触发、'
+               '**失焦不触发**。现在**失焦即落定**，回车仍可立即确认；输出幅度只重建'
+               '调制器、**不中断接收**。IC-705 的电台参数与 TNC 串口线速同款问题'
+               '一并修好。',
+               '**修復音訊參數改了不儲存**：在音訊設定裡改取樣率 / 波特率 / 音調 /'
+               'TX 前導延時 / **輸出幅度**，改完不按 Enter、直接點別處會**悄悄丟掉**'
+               '——沒按 Enter 的輸入框只掛了 `onEditingComplete`，而它只在 Enter 時'
+               '觸發、**失焦不觸發**。現在**失焦即落定**，Enter 仍可立即確認；輸出'
+               '幅度只重建調變器、**不中斷接收**。IC-705 的電台參數與 TNC 串列線速'
+               '同款問題一併修好。',
+               '**Fixed audio settings not saving**: changing the sample rate / baud / '
+               'tones / TX delay / **output amplitude** and then tapping elsewhere '
+               '(without pressing Enter) **silently lost the change** — those fields '
+               'only wired `onEditingComplete`, which fires on Enter but **not on '
+               'focus loss**. They now **settle on blur**; Enter still confirms '
+               'immediately, and the output-amplitude commit rebuilds only the '
+               'modulator without interrupting receive. The same fix lands for the '
+               'IC-705 radio fields and the TNC serial baud.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.49', 'date': '2026-10-09',
+        'items': [
+            ('fix',
+             T('**修复声卡能收不能发**：接电台时对方解不出，是因为'
+               '`输出幅度`这个决定是否削顶的增益**在界面上根本改不了**，'
+               '而两条告警都写着「请调输出幅度」。发射卡现新增'
+               '**「输出幅度」输入框**，改完立即生效（只重建调制器，'
+               '不打断正在进行的接收）。同时**标明当前发射来源**'
+               '（音频连上 ≠ 从音频发），并提示**软件不会按电台 PTT**'
+               '（需 VOX 或数据口键控）。',
+               '**修復音效卡能收不能發**：接電台時對方解不出，是因為'
+               '`輸出幅度`這個決定是否削頂的增益**在介面上根本改不了**，'
+               '而兩條告警都寫著「請調輸出幅度」。發射卡現新增'
+               '**「輸出幅度」輸入框**，改完立即生效（只重建調變器，'
+               '不打断正在進行的接收）。同時**標明目前發射來源**'
+               '（音訊連上 ≠ 從音訊發），並提示**軟體不會按電台 PTT**'
+               '（需 VOX 或資料埠鍵控）。',
+               '**Fixed sound-card RX-but-no-TX**: the far end could not '
+               'decode because `output amplitude` — the gain that decides '
+               'clipping — was **not editable in the UI**, while both warnings '
+               'said to adjust it. The TX card now has an **output-amplitude '
+               'field** that takes effect immediately (rebuilding only the '
+               'modulator, without interrupting receive). It also **shows the '
+               'current TX source** (connected ≠ transmitting) and notes that '
+               'the **app never keys the radio PTT** (use VOX or a data-port '
+               'cable).')),
+            ('up',
+             T('**数据包页标明来源**：每条报文都带**来源徽标**'
+               '（APRS-IS / TNC / 声卡 / PKWDWPL / 本地），排查'
+               '「射频通不通、网关有没有转」时一眼看清这条从哪来。',
+               '**資料包頁標明來源**：每條報文都帶**來源徽標**'
+               '（APRS-IS / TNC / 音效卡 / PKWDWPL / 本地），排查'
+               '「射頻通不通、閘道有沒有轉」時一眼看清這條從哪來。',
+               '**Packet source labels**: every frame now carries a **source '
+               'badge** (APRS-IS / TNC / sound card / PKWDWPL / local), so '
+               'checking "is RF working / did the gateway relay it?" tells you '
+               'at a glance where a frame came from.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.48', 'date': '2026-10-09',
+        'items': [
+            ('fix',
+             T('**修复设置页箭头没贴右**：标题用了「松份额」`Flexible`，文字短时会'
+               '留剩余空间、箭头左飘；改成紧份额 `Expanded` 后箭头恒定贴右，'
+               '说明列起点也随之对齐。',
+               '**修復設定頁箭頭沒貼右**：標題用了「鬆份額」`Flexible`，文字短時'
+               '會留剩餘空間、箭頭左飄；改成緊份額 `Expanded` 後箭頭恆定貼右，'
+               '說明欄起點也隨之對齊。',
+               '**Fixed the settings chevrons not pinned right**: the title used a '
+               'loose `Flexible`, so short text left free space and the chevron '
+               'drifted left; switching to a tight `Expanded` pins it to the right '
+               'and aligns the description column too.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.47', 'date': '2026-10-09',
+        'items': [
+            ('fix',
+             T('**点空白收起键盘**：点聊天框以外任意处即取消输入聚焦；'
+               '**设置页整理对齐**（图标底座 / 图标 / 箭头尺寸统一，说明文字'
+               '左端对齐）；「关于」下方新增「**用户反馈**」入口，直达'
+               '**仓库 Issue**。',
+               '**點空白收起鍵盤**：點聊天框以外任意處即取消輸入聚焦；'
+               '**設定頁整理對齊**（圖示底座 / 圖示 / 箭頭尺寸統一，說明文字'
+               '左端對齊）；「關於」下方新增「**使用者回饋**」入口，直達'
+               '**倉庫 Issue**。',
+               '**Tap outside to dismiss the keyboard**: tapping anywhere outside '
+               'the compose box clears focus; the **settings page is aligned** '
+               '(unified icon-tile / icon / chevron sizes, descriptions start at '
+               'the same x); a new "**Feedback**" entry under "About" opens the '
+               '**repo issues**.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.46', 'date': '2026-10-09',
+        'items': [
+            ('up',
+             T('**输入框更顺手**：主操作键平时是「＋」（发位置点），**一点进输入框就'
+               '变成「发送」**；「**译发**」也从「＋」里**挪到外面常驻**，一键可用。'
+               '分享出去的位置点点一下会弹**小面板**，可直接选**在地图查看**或'
+               '**导航**。',
+               '**輸入框更順手**：主操作鍵平時是「＋」（傳位置點），**一點進輸入框就'
+               '變成「傳送」**；「**譯發**」也從「＋」裡**挪到外面常駐**，一鍵可用。'
+               '分享出去的位置點點一下會彈**小面板**，可直接選**在地圖檢視**或'
+               '**導航**。',
+               '**A handier compose bar**: the main key is "+" (send a location) by '
+               'default and **turns into "send" as soon as you tap into the field**; '
+               '**"translate" moved out** of the "+" sheet to a **permanent button**. '
+               'Tapping a shared location opens a **small sheet** to **view it on the '
+               'map** or **navigate** to it.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.45', 'date': '2026-10-09',
+        'items': [
+            ('new',
+             T('**选台站，能搜能翻页**：私聊「+ → 发送位置点」里新增「选择台站」，'
+               '**按呼号 / 别名搜索**、**分页浏览**（每页 20 条、上/下页带文字按钮），'
+               '有定位时按**近 → 远**排序；行尾可先看台站详情。'
+               '台站详情「更多」里也能**把这个台站分享到其它会话**。',
+               '**選台站，能搜能翻頁**：私聊「+ → 傳送位置點」裡新增「選擇台站」，'
+               '**按呼號 / 別名搜尋**、**分頁瀏覽**（每頁 20 筆、上/下頁帶文字按鈕），'
+               '有定位時按**近 → 遠**排序；行尾可先看台站詳情。'
+               '台站詳情「更多」裡也能**把這個台站分享到其它會話**。',
+               '**Pick a station — search & paging**: the private-chat "+ → send '
+               'location" menu now offers "Pick a station" with **search by callsign / '
+               'alias** and **paged browsing** (20 rows per page, labelled prev/next '
+               'buttons), sorted **near → far** when a position is known; each row can '
+               'open station details first. A station\'s "More" menu can also **share '
+               'that station to other chats**.')),
+            ('up',
+             T('**位置点自由选、样式统一**：分享位置点在地图上**任取坐标**（或「我的'
+               '位置」）；点按后**套用台站面板**，可直接**呼出导航**。'
+               '对话里的**呼号识别修正**：只要形如呼号即可点击，已在台站列表用实线、'
+               '暂未收到的用虚线，点开都能看台站面板。',
+               '**位置點自由選、樣式統一**：分享位置點在地圖上**任取座標**（或「我的'
+               '位置」）；點按後**套用台站面板**，可直接**呼出導航**。'
+               '對話裡的**呼號識別修正**：只要形如呼號即可點擊，已在台站列表用實線、'
+               '暫未收到的用虛線，點開都能看台站面板。',
+               '**Free-picked locations, unified panel**: pick any point on the map (or '
+               '"My position") to share a location; tapping it **reuses the station '
+               'panel**, putting **navigation** one tap away. **Callsign recognition '
+               'fixed** in messages: any callsign-looking word is clickable — solid '
+               'underline for known stations, dotted for not-yet-heard ones, all opening '
+               'the station panel.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.44', 'date': '2026-10-09',
+        'items': [
+            ('new',
+             T('**私聊也能发位置**：一对一会话里点输入栏「+」即可**在私聊发送位置点**'
+               '——拖动地图任取坐标，或直接「我的位置」；还能**分享某个台站**。'
+               '对方收到后是一条专用卡片消息。',
+               '**私聊也能傳位置**：一對一會話裡點輸入欄「+」即可**在私聊傳送位置點**'
+               '——拖動地圖任取座標，或直接「我的位置」；還能**分享某個台站**。'
+               '對方收到後是一條專用卡片訊息。',
+               '**Send a location in a private chat**: in a one-to-one conversation tap the '
+               'compose "+" to **send a location** — drag the map to pick any point, or use '
+               '"My position"; you can also **share a station**. The peer receives it as a '
+               'dedicated card message.')),
+            ('up',
+             T('**消息里的呼号可点击**：对话中识别到的台站呼号像超链接一样，点一下即'
+               '打开台站详情；分享台站的位置卡片点按同样是打开台站面板（自由选点则跳'
+               '主地图）。输入栏也收敛成微信式的一个「+」。',
+               '**訊息裡的呼號可點擊**：對話中識別到的台站呼號像超連結一樣，點一下即'
+               '開啟台站詳情；分享台站的位置卡片點按同樣是開啟台站面板（自由選點則跳'
+               '主地圖）。輸入欄也收斂成微信式的一個「+」。',
+               '**Clickable callsigns in messages**: a station callsign recognized in a '
+               'conversation behaves like a hyperlink and opens station details; the shared '
+               'station card does the same, while a free-picked location jumps to the main '
+               'map. The compose bar is collapsed into a single WeChat-style "+".')),
+        ],
+    },
+    {
+        'ver': 'v2.0.43', 'date': '2026-10-09',
+        'items': [
+            ('new',
+             T('**策略地图更顺手**：点队友/自己标点直接打开**台站详细面板**；'
+               '「导航」交给手机地图应用（高德 → 系统地图 → 浏览器 OSM）；地图上新增'
+               '**「我」的位置**（蓝点 + 呼号 + 方位角）与「定位到我」一键回位。',
+               '**策略地圖更順手**：點隊友/自己標點直接開啟**台站詳細面板**；'
+               '「導航」交給手機地圖 App（高德 → 系統地圖 → 瀏覽器 OSM）；地圖上新增'
+               '**「我」的位置**（藍點 + 呼號 + 方位角）與「定位到我」一鍵回位。',
+               '**Strategy map, easier to use**: tapping a teammate/self marker opens the '
+               '**station detail panel**; "navigate" hands off to the phone\'s map app '
+               '(AMap → system maps → browser OSM); the map now draws **your own '
+               'position** (blue dot + callsign + bearing) with a one-tap "locate me".')),
+            ('up',
+             T('**策略变动在群聊留痕**：新增 / 改动 / 删除 / 清空图层都会在群聊留一条'
+               '提示，队友点一下即跳进策略地图；**群聊发送不再弹确认**，直接发'
+               '（未连接服务器会先拦下提示）。',
+               '**策略變動在群聊留痕**：新增 / 改動 / 刪除 / 清空圖層都會在群聊留一條'
+               '提示，隊友點一下即跳進策略地圖；**群聊傳送不再彈確認**，直接傳'
+               '（未連接伺服器會先攔下提示）。',
+               '**Strategy changes leave a trail**: add / edit / delete / clear all leave a '
+               'notice in group chat, and a tap jumps into the strategy map; **group send '
+               'no longer asks for confirmation** and just sends (with a pre-check when the '
+               'server is offline).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.42', 'date': '2026-10-09',
+        'items': [
+            ('new',
+             T('**策略地图升级**：地图上新增**队友位置 + 方位角小角标**（按去 SSID 的'
+               '基呼号匹配群成员台站，静止/无航向就不画），**线 / 圈可选颜色**（全网'
+               '一致六色调色板），画点等**策略消息在群聊留可点击提示**，点一下直接跳进'
+               '对应群的策略地图。',
+               '**策略地圖升級**：地圖上新增**隊友位置 + 方位角小角標**（按去 SSID 的'
+               '基呼號匹配群成員台站，靜止/無航向就不畫），**線 / 圈可選顏色**（全網'
+               '一致六色調色盤），畫點等**策略訊息在群聊留可點擊提示**，點一下直接跳進'
+               '對應群的策略地圖。',
+               '**Strategy map upgrades**: the map now shows **teammate positions with a '
+               'bearing badge** (matched to group members by SSID-stripped base callsign; no '
+               'badge when stationary or without a heading), **lines/circles get selectable '
+               'colors** (a network-wide six-color palette), and a strategy element leaves a '
+               '**clickable notice in group chat** that jumps straight into that group\'s '
+               'strategy map.')),
+            ('up',
+             T('**射频也能用群聊与策略地图**：`groupChatAllowed` 放开为始终可用，'
+               '射频（TNC / 音频）下策略帧改用带 ack 格式，借队友的标准自动 ack 判断'
+               '送达；90 秒未确认视为「不确认」（队友可能关了自动 ack），可在策略地图页'
+               '手动重发。',
+               '**射頻也能用群聊與策略地圖**：`groupChatAllowed` 放開為始終可用，'
+               '射頻（TNC / 音訊）下策略幀改用帶 ack 格式，借隊友的標準自動 ack 判斷'
+               '送達；90 秒未確認視為「不確認」（隊友可能關了自動 ack），可在策略地圖頁'
+               '手動重發。',
+               '**Group chat and the strategy map now work on RF**: `groupChatAllowed` is '
+               'always on; on RF (TNC / audio) strategy frames are sent ack-requesting and '
+               'delivery is judged by teammates\' standard auto-ack; unacked after 90s is '
+               'treated as "unconfirmed" (a peer may have auto-ack off) and can be resent '
+               'manually from the strategy map page.')),
+            ('fix',
+             T('**修复策略点「跳转导航」**：策略点不在台站表里，补画一枚焦点标记，'
+               '跳转改为瞬时落位（不再走过渡动画），不会再停在「飞了一半」的中间态。',
+               '**修復策略點「跳轉導航」**：策略點不在台站表裡，補畫一枚焦點標記，'
+               '跳轉改為瞬時落位（不再走過渡動畫），不會再停在「飛了一半」的中間態。',
+               '**Fixed strategy-point "jump to navigation"**: a strategy point is not in '
+               'the station list, so a focus marker is now painted; the jump snaps '
+               'instantly instead of animating and stalling mid-flight.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.41', 'date': '2026-10-03',
+        'items': [
+            ('new',
+             T('**群内「策略地图」**：与队友 / 群组共享**标点、线、圈、集合点**，'
+               '复用现有群组、数据经 APRS 消息传输（帧前缀 `$M`，超长的线自动分片，'
+               '任何帧都 ≤ 67 字符）；元素支持**跳转导航**与编辑附带信息，可「清空'
+               '图层」同步全群。',
+               '**群內「策略地圖」**：與隊友 / 群組共享**標點、線、圈、集合點**，'
+               '複用現有群組、資料經 APRS 訊息傳輸（幀前綴 `$M`，過長的線自動分片，'
+               '任何幀都 ≤ 67 字元）；元素支援**跳轉導航**與編輯附帶資訊，可「清空'
+               '圖層」同步全群。',
+               '**In-group "Strategy Map"**: share **points, lines, circles and rally '
+               'points** with teammates/groups, reusing existing groups and transported '
+               'over APRS messages (frame prefix `$M`, long lines auto-chunked, every '
+               'frame ≤ 67 chars); elements support **jump-to-navigation** and editing '
+               'attached info, and "clear layer" syncs to the whole group.')),
+            ('new',
+             T('**地图长按快捷消息**：长按 beacon / 台站弹出快捷消息面板，'
+               '复用现有发送链路。',
+               '**地圖長按快捷訊息**：長按 beacon / 台站彈出快捷訊息面板，'
+               '複用現有傳送鏈路。',
+               '**Long-press quick message**: long-pressing a beacon/station opens a '
+               'quick-message sheet, reusing the existing send path.')),
+            ('up',
+             T('**移除 OOBE Passcode 提示**：首次启动引导里不再出现「获取 Passcode」'
+               '提示。',
+               '**移除 OOBE Passcode 提示**：首次啟動引導裡不再出現「取得 Passcode」'
+               '提示。',
+               '**Removed the OOBE passcode hint**: the first-run guide no longer shows '
+               'a "get Passcode" hint.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.40', 'date': '2026-10-08',
+        'items': [
+            ('new',
+             T('**消息页「发射位置信标」按钮**：消息页大标题右侧新增一键按钮，'
+               '随手手动发射一次位置信标（与地图页「立即上报」同一动作），'
+               '不改动自动上报开关；位置还没就绪时如实提示「等待定位」，'
+               '窄面板下自动缩为图标。',
+               '**訊息頁「發射位置信標」按鈕**：訊息頁大標題右側新增一鍵按鈕，'
+               '隨手手動發射一次位置信標（與地圖頁「立即上報」同一動作），'
+               '不改動自動上報開關；位置還沒就緒時如實提示「等待定位」，'
+               '窄面板下自動縮為圖示。',
+               '**"Transmit position beacon" button on Messages**: a one-tap button '
+               'sits to the right of the Messages page title, firing a single position '
+               'beacon on demand (the same action as the map page\'s "Beacon now") '
+               'without touching the automatic-report toggle; when no fix is ready it '
+               'says "waiting for a fix" honestly, and collapses to an icon in narrow '
+               'panels.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.39', 'date': '2026-10-08',
+        'items': [
+            ('new',
+             T('**备份包含历史轨迹**：导出备份时，「设置配置」分组会一并带上**历史轨迹**'
+               '（按天原样搬运），换机导入后轨迹照常保留、可继续翻账。备份格式升到 **v2**，'
+               '旧备份（v1）仍可导入；轨迹在导入时**按天合并**，本机较新的一天不会被旧'
+               '备份顶掉。轨迹是不带类型标签的独立载荷，不参与偏好白名单校验。',
+               '**備份包含歷史軌跡**：匯出備份時，「設定」分組會一併帶上**歷史軌跡**'
+               '（按天原樣搬運），換機匯入後軌跡照常保留、可繼續翻帳。備份格式升到 **v2**，'
+               '舊備份（v1）仍可匯入；軌跡在匯入時**按天合併**，本機較新的一天不會被舊'
+               '備份蓋掉。軌跡是不帶型別標籤的獨立酬載，不參與偏好白名單檢查。',
+               '**Backups include track history**: exporting a backup now folds **track '
+               'history** into the "Settings" group (moved verbatim, day by day), so the '
+               'history survives a device move and can still be reviewed. The backup schema '
+               'goes to **v2** while old v1 backups still import; on import, days are '
+               '**merged**, so a newer local day is not overwritten by an older backup. '
+               'Tracks travel as a separate, untyped payload outside the preference '
+               'whitelist.')),
+            ('up',
+             T('**关于页文案**：副标题去掉「本机」限定词，六语言统一为'
+               '「APRS 客户端 · 定位与地图」，不再让人误以为只在本机运行。',
+               '**關於頁文案**：副標題去掉「本機」限定詞，六語言統一為'
+               '「APRS 用戶端 · 定位與地圖」，不再讓人誤以為只在本機執行。',
+               '**About wording**: the subtitle drops the "Local" qualifier in all six '
+               'locales, now "APRS client · tracking & map", so it no longer implies the '
+               'app only runs locally.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.38', 'date': '2026-10-07',
+        'items': [
+            ('new',
+             T('**天地图图层**：底图新增「天地图」分组，共三张 —— `天地图 矢量`（vec）、'
+               '`天地图 影像`（img）、`天地图 地形`（ter）。天地图的底图**本身不含地名**，'
+               '文字在单独的透明注记层（cva/cia/cta），因此每张底图都会**叠上对应注记**'
+               '（矢量叠 cva、影像叠 cia、地形叠 cta）；底图与注记分开缓存、离线时一起'
+               '下载，不会出现「有图无地名」。天地图实测为 **WGS-84**（与 Esri/OSM 影像'
+               '零偏移），因此不做 GCJ 纠偏，可与 OSM 互为兜底；瓦片支持到 z18。Key 走'
+               '构建期注入（CI Secret `TIANDITU_KEY`），源码不落 key；未配置时自动退到'
+               ' OSM，地图照常可用。',
+               '**天地圖圖層**：底圖新增「天地圖」分組，共三張 —— `天地圖 向量`（vec）、'
+               '`天地圖 影像`（img）、`天地圖 地形`（ter）。天地圖的底圖**本身不含地名**，'
+               '文字在單獨的透明註記層（cva/cia/cta），因此每張底圖都會**疊上對應註記**'
+               '（向量疊 cva、影像疊 cia、地形疊 cta）；底圖與註記分開快取、離線時一起'
+               '下載，不會出現「有圖無地名」。天地圖實測為 **WGS-84**（與 Esri/OSM 影像'
+               '零偏移），因此不做 GCJ 糾偏，可與 OSM 互為兜底；圖磚支援到 z18。Key 走'
+               '建置期注入（CI Secret `TIANDITU_KEY`），原始碼不落 key；未設定時自動退到'
+               ' OSM，地圖照常可用。',
+               '**Tianditu layers**: the basemaps gain a "Tianditu" group with three '
+               'layers — `Tianditu Vector` (vec), `Tianditu Imagery` (img) and '
+               '`Tianditu Terrain` (ter). Their base tiles carry **no place labels**; text '
+               'lives in separate transparent annotation layers (cva/cia/cta), so each '
+               'basemap is **composited with its matching overlay** (vector+cva, '
+               'imagery+cia, terrain+cta). Base and annotation are cached separately and '
+               'downloaded together offline, so you never get a map with no place names. '
+               'Tianditu is measured as **WGS-84** (zero offset vs Esri/OSM imagery), so '
+               'it is not GCJ-shifted and falls back to OSM; tiles go up to z18. The key '
+               'is injected at build time (CI Secret `TIANDITU_KEY`), never committed to '
+               'source; when absent the map falls back to OSM and stays usable.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.37', 'date': '2026-10-07',
+        'items': [
+            ('new',
+             T('**地形 / 等高线图图层**：地图底图新增「地形」分组，一次给到四张对登山友好的'
+               '地形底图 —— `OpenTopo 地形`（带等高线，从「其他」移入）、`Esri 地形(等高线)`'
+               '（路网 + 地名 + 等高线，最像纸质等高线地形图）、`Esri 地形浮雕`（纯浮雕，'
+               '看整体地形最干净）、`Esri 山体阴影`（只看沟壑走向）。四张都免 Key、可离线'
+               '下载、与 OSM 互为兜底；它们本就是 WGS-84 国际瓦片，因此不做 GCJ 纠偏，'
+               '不会整体偏位。',
+               '**地形 / 等高線圖圖層**：地圖底圖新增「地形」分組，一次給到四張對登山友善'
+               '的地形底圖 —— `OpenTopo 地形`（帶等高線，從「其他」移入）、`Esri 地形(等高線)`'
+               '（路網 + 地名 + 等高線，最像紙本等高線地形圖）、`Esri 地形浮雕`（純浮雕，'
+               '看整體地形最乾淨）、`Esri 山體陰影`（只看溝壑走向）。四張都免 Key、可離線'
+               '下載、與 OSM 互為兜底；它們本就是 WGS-84 國際圖磚，因此不做 GCJ 糾偏，'
+               '不會整體偏位。',
+               '**Terrain / contour layers**: the basemaps gain a "Terrain" group with four '
+               'hiking-friendly layers — `OpenTopo Terrain` (with contours, moved out of '
+               '"Others"), `Esri Topo (contours)` (roads + labels + contours, closest to a '
+               'paper contour map), `Esri Shaded Relief` (pure relief, cleanest for overall '
+               'terrain) and `Esri Hillshade` (valley direction only). All four are key-free, '
+               'offline-downloadable and fall back to OSM; being native WGS-84 international '
+               'tiles, they are not GCJ-shifted and will not offset.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.36', 'date': '2026-10-03',
+        'items': [
+            ('up',
+             T('**连上服务器后手动确认再上报**：无论用哪种方式定位，连上服务器后都'
+               '**不再自动上报位置**。主界面上报动作组给出一枚正式的「开始上报」'
+               '按钮 —— 拿到本轮有效定位前置灰显示「等待定位」，确认坐标有效后点一下'
+               '才开始按间隔自动上报，并立刻补发一次让用户在地图上看到自己。断开 / '
+               '重连 / 重开 App 都会复位这个确认，绝不回到「连上就自动上报」；'
+               '顺带去掉了连接成功后自动弹出的询问弹窗，改为这枚按钮（不打扰）。',
+               '**連上伺服器後手動確認再上報**：無論用哪種方式定位，連上伺服器後都'
+               '**不再自動上報位置**。主介面上報動作組給出一枚正式的「開始上報」'
+               '按鈕 —— 拿到本輪有效定位前置灰顯示「等待定位」，確認座標有效後點一下'
+               '才開始按間隔自動上報，並立刻補發一次讓使用者在地圖上看到自己。斷線 / '
+               '重連 / 重開 App 都會復位這個確認，絕不回到「連上就自動上報」；'
+               '順帶去掉了連線成功後自動彈出的詢問彈窗，改為這枚按鈕（不打擾）。',
+               '**Manual confirmation before reporting**: whatever positioning method is '
+               'used, the app **no longer auto-reports the position after connecting**. The '
+               'report action group now shows a formal "Start reporting" button — disabled as '
+               '"Waiting for fix" until a valid fix for this round arrives, then one tap starts '
+               'interval reporting and sends an immediate beacon so you can see yourself on the '
+               'map. Disconnect / reconnect / restart all reset this confirmation, never falling '
+               'back to "auto-report on connect"; the post-connect popup was also replaced by '
+               'this button (non-intrusive).')),
+            ('up',
+             T('**荣誉墙更好看**：成员荣誉墙加上工具条 —— 搜索框（按姓名 / 呼号 / 称号'
+               '过滤）、实时概览（多少位伙伴、多少枚徽章）、以及可横向滚动的徽章图例'
+               '（点一下直达对应分组）。卡片、分组标题与响应式布局一并打磨，键盘也能'
+               '导航；**荣誉卡的导出样式（PNG）保持原样不变**。',
+               '**榮譽牆更好看**：成員榮譽牆加上工具列 —— 搜尋框（依姓名 / 呼號 / 稱號'
+               '篩選）、即時概覽（多少位夥伴、多少枚徽章）、以及可橫向捲動的徽章圖例'
+               '（點一下直達對應分組）。卡片、分組標題與響應式版面一併打磨，鍵盤也能'
+               '導覽；**榮譽卡的匯出樣式（PNG）維持原樣不變**。',
+               '**Nicer honor wall**: the member honor wall gains a toolbar — a search box '
+               '(filter by name / callsign / honor), a live overview (members, badges) and a '
+               'horizontally scrollable badge legend that jumps to each group. Cards, group '
+               'headings and the responsive layout were polished, and it is keyboard '
+               'navigable; **the exported honor-card (PNG) style is left untouched**.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.35', 'date': '2026-10-06',
+        'items': [
+            ('fix',
+             T('**模拟位置重启后不自动生效**：选了「模拟位置 + 手动定位」并保存了坐标后，'
+               '下次启动 App 虽然把坐标装了回来，上报闸却一直关着 —— 界面停在「等待定位」，'
+               '必须再点一次「应用坐标」才能定位上报。原因：启动时把保存的坐标一律当成'
+               '「上次的实时定位」关闸（GPS 模式下这是对的，防止定位没开就报旧坐标），'
+               '而 GPS 的自动定位路径又会被「模拟位置」挡掉，于是这个闸永远开不了。现在'
+               '模拟位置下保存的坐标**就是**用户选定的坐标，启动即放行、并同步过滤中心；'
+               '顺带把模拟位置的保活前台服务也在启动时拉起（与 GPS 模式对称）。',
+               '**模擬位置重啟後不自動生效**：選了「模擬位置 + 手動定位」並儲存座標後，'
+               '下次啟動 App 雖然把座標裝了回來，上報閘卻一直關著 —— 介面停在「等待定位」，'
+               '必須再點一次「套用座標」才能定位上報。原因：啟動時把儲存的座標一律當成'
+               '「上次的即時定位」關閘（GPS 模式下這是對的，避免定位沒開就報舊座標），'
+               '而 GPS 的自動定位路徑又會被「模擬位置」擋掉，於是這個閘永遠開不了。現在'
+               '模擬位置下儲存的座標**就是**使用者選定的座標，啟動即放行、並同步過濾中心；'
+               '順帶把模擬位置的保活前景服務也在啟動時拉起（與 GPS 模式對稱）。',
+               '**Simulated location not applied after restart**: after choosing '
+               '"simulated location + manual fix" and saving coordinates, the next launch '
+               'restored the coordinates but kept the reporting gate closed — the UI sat at '
+               '"waiting for location" and you had to tap "Apply coordinates" again. Cause: '
+               'startup treated any saved coordinates as "last round\'s live fix" and closed '
+               'the gate (correct for GPS, to avoid reporting a stale position with location '
+               'off), while the GPS auto-locate path is skipped in simulated mode — so the '
+               'gate never opened. Now, in simulated mode the saved coordinates **are** the '
+               'chosen position: they are accepted on startup and the filter center follows; '
+               'the simulated-mode keep-alive foreground service is also started at boot, '
+               'symmetric with GPS mode.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.34', 'date': '2026-10-03',
+        'items': [
+            ('fix',
+             T('**非整数缩放级别下地图发糊**：实测各图源返回的像素后发现，除了高德街道'
+               '（wprd 主机 + `scl=2`）给 512px，Carto / OSM / Esri / 腾讯 / 高德卫星**都只有 '
+               '256px** —— 图源本身不是主因。真正的问题在选层级：地图用 `zoom.floor()` 取瓦片级，'
+               '于是整档 `[z, z+1)` 都取 z 级瓦片，越接近 `z+1` 源图被拉得越大（z=12.9 时 '
+               '**1.93×**），再乘屏幕像素密度 2~3 倍，物理上放大 4~6 倍，必然糊。改用 '
+               '`zoom.round()`：放大封顶在 √2≈1.41×，后半档转为缩小，**对所有图源**都生效。',
+               '**非整數縮放級別下地圖發糊**：實測各圖源回傳的像素後發現，除了高德街道'
+               '（wprd 主機 + `scl=2`）給 512px，Carto / OSM / Esri / 騰訊 / 高德衛星**都只有 '
+               '256px** —— 圖源本身不是主因。真正的問題在選層級：地圖用 `zoom.floor()` 取瓦片級，'
+               '於是整檔 `[z, z+1)` 都取 z 級瓦片，越接近 `z+1` 源圖被拉得越大（z=12.9 時 '
+               '**1.93×**），再乘螢幕像素密度 2~3 倍，物理上放大 4~6 倍，必然糊。改用 '
+               '`zoom.round()`：放大封頂在 √2≈1.41×，後半檔轉為縮小，**對所有圖源**都生效。',
+               '**Blurry map at fractional zoom levels**: measuring the pixels each source returns '
+               'showed that apart from Gaode street (wprd host + `scl=2`, 512px), Carto / OSM / '
+               'Esri / Tencent / Gaode satellite **only serve 256px** — the source was not the '
+               'cause. The real issue was level selection: the map used `zoom.floor()`, so the '
+               'whole `[z, z+1)` band pulled level-`z` tiles, stretching the source up to **1.93×** '
+               'at z=12.9 and then 2–3× more by screen pixel density — a 4–6× physical upscale, '
+               'hence blur. It now uses `zoom.round()`: the upscale is capped at √2≈1.41× and the '
+               'upper half downscales. **Applies to every source.**')),
+        ],
+    },
+    {
+        'ver': 'v2.0.33', 'date': '2026-10-03',
+        'items': [
+            ('up',
+             T('**上报界面合并，一处开关两处按钮**：把分散在地图状态栏、我的面板、沉浸页的'
+               '「立即上报」收进共用的 `ReportActions`（自动上报开关 + 立即上报按钮），删掉重复实现与'
+               '「上报成功」的假提示；设置里统一叫「自动上报」并加了指回主界面的说明。',
+               '**上報介面合併，一處開關兩處按鈕**：把分散在地圖狀態列、我的面板、沉浸頁的'
+               '「立即上報」收進共用的 `ReportActions`（自動上報開關 + 立即上報按鈕），刪掉重複實作與'
+               '「上報成功」的假提示；設定裡統一叫「自動上報」並加了指回主介面的說明。',
+               '**One reporting control, two buttons**: the scattered "report now" actions on the '
+               'map status bar, the My panel and the immersive page are consolidated into a shared '
+               '`ReportActions` (auto-report switch + report-now button); the duplicate '
+               'implementations and the false "reported" toast are gone. Settings now use the '
+               'unified "自动上报" wording with a hint pointing back to the main UI.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.32', 'date': '2026-10-03',
+        'items': [
+            ('new',
+             T('**数据维护页重排 + 恢复出厂**：把「台站保留天数」从「连接设置 → 存储上限」'
+               '移进「数据维护」页、与清理按钮同页（改为下拉选择）；手动清理不再复用自动清理的'
+               '天数，而是**当场选一个独立天数**；新增**「清除所有数据并重新初始化」**——连呼号、'
+               '服务器、信标、界面等全部设置一起清除，并重新运行首次引导。',
+               '**資料維護頁重排 + 恢復出廠**：把「台站保留天數」從「連線設定 → 儲存上限」'
+               '移進「資料維護」頁、與清理按鈕同頁（改為下拉選擇）；手動清理不再複用自動清理的'
+               '天數，而是**當場選一個獨立天數**；新增**「清除所有資料並重新初始化」**——連呼號、'
+               '伺服器、信標、介面等全部設定一起清除，並重新執行首次引導。',
+               '**Data-maintenance page rework + factory reset**: retention days moved from '
+               '*Connection → Storage limits* onto the *Data maintenance* page next to the prune '
+               'button (as a dropdown); manual pruning no longer reuses the auto-prune days — you '
+               '**pick its own days** on the spot; and a new **"Erase all data and start over"** '
+               'clears **all settings including callsign, server, beacon and UI** and re-runs the '
+               'first-run wizard.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.31', 'date': '2026-10-03',
+        'items': [
+            ('fix',
+             T('**自定义状态「有时还显示 CONNECT」**：状态报文是「内置身份帧 + 自定义状态」一对，'
+               '写的是 aprs.fi 上同一个「台站状态」栏、后到者覆盖。补发那一帧原本是「发射即忘」，'
+               'socket 抖动时可能静默写失败，于是 aprs.fi 停在 CONNECT 上、每轮保活又续一次。'
+               '现在连接器**回传发送成败**，保活记住「上次自定义帧丢了」，**下一拍立刻补发自定义帧'
+               '本身**（不再发 CONNECT）直到成功 —— 状态不会再被内置文本顶掉。',
+               '**自訂狀態「有時還顯示 CONNECT」**：狀態報文是「內建身份幀 + 自訂狀態」一對，'
+               '寫的是 aprs.fi 上同一個「台站狀態」欄、後到者覆蓋。補發那一幀原本是「發射即忘」，'
+               'socket 抖動時可能靜默寫入失敗，於是 aprs.fi 停在 CONNECT 上、每輪保活又續一次。'
+               '現在連接器**回傳發送成敗**，保活記住「上次自訂幀丟了」，**下一拍立刻補發自訂幀'
+               '本身**（不再發 CONNECT）直到成功 —— 狀態不會再被內建文字頂掉。',
+               '**Custom status "sometimes still shows CONNECT"**: a status report is a pair — the '
+               'built-in identity frame plus your custom status — and both write the **same "station '
+               'status" field** on aprs.fi, last one wins. The compensating frame was fire-and-forget, '
+               'so a socket hiccup could drop it silently and leave aprs.fi stuck on CONNECT while each '
+               'keep-alive renewed it. The connector now **reports send success**, and keep-alive '
+               'remembers a lost custom frame and **re-sends the custom frame itself on the next tick** '
+               '(no extra CONNECT) until it goes through — your status can no longer be overwritten by '
+               'the built-in text.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.30', 'date': '2026-10-03',
+        'items': [
+            ('new',
+             T('**数据维护：按天数清理过时台站**（issue #33）：设置里可设「台站保留天数」，'
+               '超过该天数**没再听到**的台站会在启动时自动清理；「数据维护」页还提供**立即清理**'
+               '入口，并先显示会清掉多少个。**只清普通台站** —— 收藏 / 手动添加 / 你自己的台站'
+               '永不被清理，恰好卡在阈值上的也保留；保留天数 0 = 关闭自动清理。清理不可恢复，'
+               '所以绝不静默全清。',
+               '**資料維護：依天數清理過時台站**（issue #33）：設定裡可設「台站保留天數」，'
+               '超過該天數**沒再聽到**的台站會在啟動時自動清理；「資料維護」頁還提供**立即清理**'
+               '入口，並先顯示會清掉多少個。**只清一般台站** —— 收藏 / 手動新增 / 你自己的台站'
+               '永不被清理，恰好卡在閾值上的也保留；保留天數 0 = 關閉自動清理。清理不可恢復，'
+               '所以絕不靜默全清。',
+               '**Data maintenance: prune stale stations by age** (issue #33): a **station retention '
+               '(days)** setting prunes stations **not heard from** for longer than that at startup, '
+               'and the Data maintenance page adds a **prune now** action that first shows how many '
+               'will be removed. **Only ordinary stations are pruned** — favorites, manual contacts '
+               'and your own station are never pruned, and stations exactly at the threshold are '
+               'kept; retention 0 = auto-prune off. Pruning is irreversible, so there is never a '
+               'silent full wipe.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.29', 'date': '2026-10-03',
+        'items': [
+            ('fix',
+             T('**稍微使劲放手机就触发碰撞提醒**（issue #32 后续）：旧判据是「一个冲击尖峰 + 之后 '
+               '12 秒不动」，而放手机恰好同时满足这两条。阈值调高也救不了 —— 这是判据本身的问题。'
+               '现在把两种事件的要求**分开**：**摔倒**要有自由落体（失重）再落地冲击；**碰撞**没有'
+               '失重可依据，就要求冲击**明显更狠**（约两倍阈值）。真实车祸峰值动辄 20g 以上，照样抓得到，'
+               '轻放手机的 3~8g 被挡掉。',
+               '**稍微使勁放手機就觸發碰撞提醒**（issue #32 後續）：舊判據是「一個衝擊尖峰 + 之後 '
+               '12 秒不動」，而放手機恰好同時滿足這兩條。閾值調高也救不了 —— 這是判據本身的問題。'
+               '現在把兩種事件的要求**分開**：**摔倒**要有自由落體（失重）再落地衝擊；**碰撞**沒有'
+               '失重可依據，就要求衝擊**明顯更狠**（約兩倍閾值）。真實車禍峰值動輒 20g 以上，照樣抓得到，'
+               '輕放手機的 3~8g 被擋掉。',
+               '**Setting the phone down a bit firmly triggered a crash alert** (issue #32 follow-up): '
+               'the old rule was "an impact spike + then 12 s of stillness", and setting the phone down '
+               'satisfies both at once. Raising the threshold cannot help — it is a flaw in the rule '
+               'itself. The two events now have **separate** requirements: a **fall** needs a free fall '
+               '(weightlessness) before the landing impact; a **crash**, with no weightlessness to rely '
+               'on, must be **much harder** (about twice the threshold). A real vehicle crash peaks at '
+               '20 g or more and still triggers, while a 3–8 g set-down is rejected.')),
+            ('fix',
+             T('**修一个自由落体判据的 bug**：此前判「失重」用的是**去掉重力**的线性加速度，而它在'
+               '静止时恒为 0 —— 于是「放着不动」被当成了「一直在自由落体」，每次冲击都被判成摔倒。'
+               '现在改用**含重力的总加速度**（静止≈1g，只有真失重才趋近 0）。说明卡也据实更新了。',
+               '**修一個自由落體判據的 bug**：此前判「失重」用的是**去掉重力**的線性加速度，而它在'
+               '靜止時恆為 0 —— 於是「放著不動」被當成了「一直在自由落體」，每次衝擊都被判成摔倒。'
+               '現在改用**含重力的總加速度**（靜止≈1g，只有真失重才趨近 0）。說明卡也據實更新了。',
+               '**Fixed a free-fall detection bug**: weightlessness used to be judged from the '
+               '**gravity-removed** linear acceleration, which is always 0 at rest — so "sitting still" '
+               'was mistaken for "in free fall" and every impact was labelled a fall. It now uses the '
+               '**gravity-included total acceleration** (~1 g at rest; only true weightlessness tends '
+               'to 0). The explainer card was updated to match.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.28', 'date': '2026-10-03',
+        'items': [
+            ('new',
+             T('**生命守护「强提醒」**：碰撞 / 摔倒、心率异常触发时，除了应用内弹窗，'
+               '还会发一条**高优先级系统通知**（响铃 + 震动 + 锁屏/抬头横幅）。此前告警只挂在'
+               '那条安静（`IMPORTANCE_LOW`）的常驻通知上，系统不为它震动也不弹横幅 —— '
+               '手机放兜里（摔倒或开车时最常见的状态）根本察觉不到。强提醒走**单独**的高优先级'
+               '通道；Android 需要 `VIBRATE` 权限（已加）。',
+               '**生命守護「強提醒」**：碰撞 / 摔倒、心率異常觸發時，除了應用程式內彈窗，'
+               '還會發一條**高優先級系統通知**（響鈴 + 震動 + 鎖屏/抬頭橫幅）。此前告警只掛在'
+               '那條安靜（`IMPORTANCE_LOW`）的常駐通知上，系統不為它震動也不彈橫幅 —— '
+               '手機放口袋（摔倒或開車時最常見的狀態）根本察覺不到。強提醒走**單獨**的高優先級'
+               '通道；Android 需要 `VIBRATE` 權限（已加）。',
+               '**Life-guard "strong reminder"**: when a crash/fall or an abnormal heart rate '
+               'fires, besides the in-app dialog the app now posts a **high-priority system '
+               'notification** (sound + vibration + lock-screen/heads-up banner). Previously '
+               'alarms only went to the quiet (`IMPORTANCE_LOW`) persistent notification, which '
+               'the system neither vibrates nor banners for — so with the phone in a pocket (the '
+               'usual state during a fall or while driving) it was not noticed at all. The strong '
+               'reminder uses its **own** high-priority channel; Android needs the `VIBRATE` '
+               'permission (added).')),
+            ('up',
+             T('**碰撞 / 摔倒检测算法优化**：在原有「冲击 + 随后约 12 秒静止」之外，再看冲击前'
+               '有没有**自由落体**（加速度模 ≤ 0.35 g 持续 ≥ 80 毫秒）—— 摔倒几乎总是先自由'
+               '落体再落地冲击，车祸撞击则没有那一段。据此把告警区分为**摔倒**与**碰撞**，'
+               '标题、图标与说明文字随之变化。两类告警的**处理方式完全一样**，这只是把判断'
+               '说得更准；仍然是启发式，弹窗里照旧写明「不是工程级检测」。',
+               '**碰撞 / 摔倒偵測演算法優化**：在原有「衝擊 + 隨後約 12 秒靜止」之外，再看衝擊前'
+               '有沒有**自由落體**（加速度模 ≤ 0.35 g 持續 ≥ 80 毫秒）—— 摔倒幾乎總是先自由'
+               '落體再落地衝擊，車禍撞擊則沒有那一段。據此把告警區分為**摔倒**與**碰撞**，'
+               '標題、圖示與說明文字隨之變化。兩類告警的**處理方式完全一樣**，這只是把判斷'
+               '說得更準；仍然是啟發式，彈窗裡照舊寫明「不是工程級偵測」。',
+               '**Better crash/fall detection algorithm**: on top of the existing "impact + then '
+               '~12 s of stillness", it now also looks for a **free fall** just before the impact '
+               '(acceleration magnitude ≤ 0.35 g for ≥ 80 ms) — a fall almost always starts with a '
+               'free fall before the landing impact, whereas a vehicle crash does not. Alarms are '
+               'therefore split into **fall** and **crash**, changing the title, icon and '
+               'explanatory text. Both kinds are **handled exactly the same**; this only makes the '
+               'wording more accurate. It is still a heuristic, and the dialog still says so '
+               '("not engineering-grade detection").')),
+            ('new',
+             T('**检测灵敏度三档**：设置 → 生命守护新增「灵敏 / 标准 / 抗颠簸」。原来阈值写死，'
+               '适配不了不同携带方式 —— 手机放裤兜里骑车，正常颠簸就能越过阈值；固定在车把上'
+               '又一路误报。灵敏度只影响**检测**（哪个撞击算数），不影响告警动作；随备份一起走。'
+               '同时 **iOS 补齐**了本地通知与同款碰撞/摔倒检测。',
+               '**偵測靈敏度三檔**：設定 → 生命守護新增「靈敏 / 標準 / 抗顛簸」。原來閾值寫死，'
+               '適配不了不同攜帶方式 —— 手機放褲袋騎車，正常顛簸就能越過閾值；固定在車把上'
+               '又一路誤報。靈敏度只影響**偵測**（哪個撞擊算數），不影響告警動作；隨備份一起走。'
+               '同時 **iOS 補齊**了本機通知與同款碰撞/摔倒偵測。',
+               '**Three detection-sensitivity levels**: Settings → Life Guard now offers Sensitive '
+               '/ Standard / Firm. The threshold used to be hard-coded, which cannot fit every way '
+               'of carrying the phone — in a cycling pocket an ordinary bump crosses it, while a '
+               'bar-mounted phone then false-alarms the whole ride. Sensitivity only affects '
+               '**detection** (which impact counts), not what the alarm does; it travels with '
+               'backups. **iOS parity** was added too: local notifications and the same '
+               'crash/fall detection.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.27', 'date': '2026-10-05',
+        'items': [
+            ('fix',
+             T('**连接成功时用户自定义状态包被内置身份帧顶掉**（issue #31）：连上 '
+               'APRS-IS 会先发一帧身份状态帧宣告在线，它会把 aprs.fi 上「台站状态」那一栏'
+               '改成内置文本。此前只有 15 秒保活帧会补一帧自定义状态，连接成功这条路径'
+               '**漏了** —— 于是每次重连都把用户设的状态顶掉一次。现在两处都补发。',
+               '**連線成功時使用者自訂狀態包被內建身分幀頂掉**（issue #31）：連上 '
+               'APRS-IS 會先發一幀身分狀態幀宣告在線，它會把 aprs.fi 上「臺站狀態」那一欄'
+               '改成內建文字。此前只有 15 秒保活幀會補一幀自訂狀態，連線成功這條路徑'
+               '**漏了** —— 於是每次重連都把使用者設的狀態頂掉一次。現在兩處都補發。',
+               '**The custom status packet was overwritten by the built-in identity frame on '
+               'connect** (issue #31): connecting to APRS-IS first sends an identity status '
+               'frame to announce presence, which rewrites the "station status" field on '
+               'aprs.fi with the built-in text. Only the 15-second keep-alive frame used to '
+               're-send the custom status, and the connect-success path **missed it** — so '
+               'every reconnect wiped the user\'s status once. Both paths now re-send it.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.26', 'date': '2026-10-04',
+        'items': [
+            ('new',
+             T('**地图「我的位置」标记显示方位角**：圆环上多出一个朝航向的三角箭头'
+               '（蓝底白边，与圆点同一套视觉语言），一眼就能看出自己朝哪边走。'
+               '纯网络定位 / 静止未取得航向时不画，不拿猜的方向误导。',
+               '**地圖「我的位置」標記顯示方位角**：圓環上多出一個朝航向的三角箭頭'
+               '（藍底白邊，與圓點同一套視覺語言），一眼就能看出自己朝哪邊走。'
+               '純網路定位 / 靜止未取得航向時不畫，不拿猜的方向誤導。',
+               '**The map\'s my-location marker now shows heading**: a triangular arrow '
+               '(blue fill, white outline, matching the dot\'s visual language) points along '
+               'your course so you can tell at a glance which way you are facing. It is not '
+               'drawn for network-only fixes or when no course is known, rather than guessing '
+               'a direction.')),
+            ('fix',
+             T('**左下角「我的位置」面板显示的上报间隔与倒计时不一致**：面板那行'
+               '「自动上报中 · 每 Ns」读的是**固定间隔**字段，而右边的倒计时读的是'
+               '**当前生效间隔**。纯网络模式下两者不同（生效值 = 网络间隔，默认 300 秒），'
+               '于是间隔卡在 GPS 模式留下的旧值不动。现在两处都改用生效间隔。',
+               '**左下角「我的位置」面板顯示的上報間隔與倒數不一致**：面板那行'
+               '「自動上報中 · 每 Ns」讀的是**固定間隔**欄位，而右邊的倒數讀的是'
+               '**目前生效間隔**。純網路模式下兩者不同（生效值 = 網路間隔，預設 300 秒），'
+               '於是間隔卡在 GPS 模式留下的舊值不動。現在兩處都改用生效間隔。',
+               '**The interval shown in the bottom-left my-location panel disagreed with the '
+               'countdown next to it**: the panel\'s "auto-reporting · every Ns" line read the '
+               '*fixed* interval field while the countdown read the *effective* one. In '
+               'network-only mode the two differ (effective = the network interval, 300 s by '
+               'default), so the label sat on a stale value left over from GPS mode. Both now '
+               'use the effective interval.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.25', 'date': '2026-10-04',
+        'items': [
+            ('new',
+             T('**群发前提示一次确认**：无论从消息页选中群聊发送，还是从群跟踪页的'
+               '快捷聊天面板发给整个群，发送前都会弹一次「确认发送到 &lt;群呼号&gt;？」。'
+               '群发是一键发给全体成员，发出去收不回来，值得先问一句。',
+               '**群發前提示一次確認**：無論從訊息頁選中群聊發送，還是從群追蹤頁的'
+               '快捷聊天面板發給整個群，發送前都會彈一次「確認發送到 &lt;群呼號&gt;？」。'
+               '群發是一鍵發給全體成員，發出去收不回來，值得先問一句。',
+               '**Confirm once before a group mass-send**: whether you send from the messages '
+               'page with a group selected or from the tracker\'s quick-chat panel to the whole '
+               'group, a single "Send to &lt;group call&gt;?" prompt appears first. A mass-send goes '
+               'to every member at once and cannot be recalled.')),
+            ('new',
+             T('**邀请前提示一次确认**：单成员邀请（手动输入呼号或点成员旁的对勾）与'
+               '建群时的批量邀请，都会先弹一次确认（建群那句会写明「将邀请 N 位成员」）。',
+               '**邀請前提示一次確認**：單成員邀請（手動輸入呼號或點成員旁的對勾）與'
+               '建群時的批次邀請，都會先彈一次確認（建群那句會寫明「將邀請 N 位成員」）。',
+               '**Confirm once before inviting**: single-member invites (typing a call or '
+               'tapping the check beside a member) and the batch invites fired when creating a '
+               'group both ask once first (the create-group prompt states how many members will '
+               'be invited).')),
+            ('fix',
+             T('**升级 / 更改文件重装后「今日步数」归零**（issue #22-2）：今日步数此前只'
+               '存在内存里、从不落盘，任何一次冷启动、覆盖安装或改文件重编译都会先回到 0，'
+               '若一直没等到传感器读数就永远停在 0。现在**每次步数变化即落盘**，启动时把'
+               '今日步数接回来；跨天照常按日期归零，同一天内设备重启则把重启前已累计的'
+               '部分接续上，不再凭空少一截。',
+               '**升級 / 更改檔案重裝後「今日步數」歸零**（issue #22-2）：今日步數此前只'
+               '存在記憶體裡、從不落盤，任何一次冷啟動、覆蓋安裝或改檔重編譯都會先回到 0，'
+               '若一直沒等到感測器讀數就永遠停在 0。現在**每次步數變化即落盤**，啟動時把'
+               '今日步數接回來；跨天照常按日期歸零，同一天內裝置重啟則把重啟前已累計的'
+               '部分接續上，不再憑空少一截。',
+               '**"Steps today" resetting to zero after an upgrade / reinstall** (issue #22-2): '
+               'the count only ever lived in memory and was never written to disk, so any cold '
+               'start, in-place upgrade or rebuild began at 0 and stayed there until a sensor '
+               'reading arrived. The count is now **written on every change** and restored on '
+               'launch; it still resets across a date change, and a same-day device reboot '
+               'resumes the pre-reboot accumulation instead of losing it.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.24', 'date': '2026-10-04',
+        'items': [
+            ('fix',
+             T('**荣誉庆祝不再区分新老用户**：此前「只有被新授予的称号才弹」，自己'
+               '本来已有的荣誉从不展示。现在改为：**本地没有「已阅读」记录，就把当前'
+               '已拥有的全部荣誉依次弹一遍**（全新安装、旧版本升级、记录被清除都算'
+               '无记录）；看过一次即落盘，之后不再重复（除非该账号新获荣誉）。',
+               '**榮譽慶祝不再區分新舊使用者**：此前「只有被新授予的稱號才彈」，自己'
+               '本來已有的榮譽從不顯示。現在改為：**本機沒有「已閱讀」記錄，就把目前'
+               '已擁有的全部榮譽依序彈一遍**（全新安裝、舊版升級、記錄被清除都算'
+               '無記錄）；看過一次即落盤，之後不再重複（除非該帳號新獲榮譽）。',
+               '**Honor celebration no longer distinguishes new and existing users**: '
+               'previously only a freshly granted title would show, and honors you already '
+               'had were never shown. Now: **with no local "read" record, every honor you '
+               'currently own is shown in turn** (a fresh install, an upgrade from an older '
+               'version, or a cleared record all count as no record); once seen, the record '
+               'is written and it will not repeat - unless the account is granted a new honor.')),
+            ('fix',
+             T('**步数排行榜点「我」那一行，弹出的提示条黑乎乎一片**：提示文字用了 '
+               '`ts(12)`，其默认取色是深色，压在同样是深色的提示条底上 —— 深字叠深底，'
+               '一个字都看不清。改为显式白字（设置页里同类的一处一并修）。',
+               '**步數排行榜點「我」那一列，彈出的提示條黑壓壓一片**：提示文字用了 '
+               '`ts(12)`，其預設取色是深色，壓在同樣是深色的提示條底上 —— 深字疊深底，'
+               '一個字都看不清楚。改為明確白字（設定頁裡同類的一處一併修）。',
+               '**Tapping your own row in the steps leaderboard showed a black-on-black '
+               'toast**: the text used `ts(12)`, whose default color is dark, on an equally '
+               'dark background - dark on dark and unreadable. It is now explicit white text '
+               '(one more instance of the same bug in the settings pages is fixed too).')),
+            ('new',
+             T('**开发者选项新增「清除已阅读荣誉」**（设置 → 实验室与开发者工具）：'
+               '清掉本机「已阅读」记录，下次判定会把当前已拥有的荣誉重新展示一遍，'
+               '方便预览与自测。',
+               '**開發者選項新增「清除已閱讀榮譽」**（設定 → 實驗室與開發者工具）：'
+               '清掉本機「已閱讀」記錄，下次判定會把目前已擁有的榮譽重新顯示一遍，'
+               '方便預覽與自測。',
+               '**New developer option "Clear read honors"** (Settings → Lab & developer '
+               'tools): wipes the local "read" record so the next check replays every honor '
+               'you currently own - handy for previewing and for self-testing.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.23', 'date': '2026-10-04',
+        'items': [
+            ('new',
+             T('**显示设置新增「始终显示地图标签」**：打开后，无论台站多密、缩得多小，'
+               '地图上都会显示每个台站的呼号标签（栅格与矢量两套地图都生效）。默认关，'
+               '沿用原取舍（台站 ≤ 60 个或放大到 13 级以上才显示）—— 打开会明显变密、'
+               '标签也可能互相重叠，渲染也更费；该偏好随备份一起走。',
+               '**顯示設定新增「永遠顯示地圖標籤」**：開啟後，無論台站多密、縮得多小，'
+               '地圖上都會顯示每個台站的呼號標籤（格狀與向量兩套地圖都生效）。預設關，'
+               '沿用原取捨（台站 ≤ 60 個或放大到 13 級以上才顯示）—— 開啟會明顯變密、'
+               '標籤也可能互相重疊，渲染也更費；該偏好隨備份一起走。',
+               '**New display setting: "Always show map labels"**: when on, every station\'s '
+               'callsign label is drawn on the map regardless of station count or zoom (both the '
+               'raster and vector maps). Off by default, keeping the original trade-off (labels '
+               'only when there are 60 or fewer stations or zoom is 13+) - turning it on gets '
+               'crowded, labels may overlap, and it costs more to render. The preference travels '
+               'with backups.')),
+            ('fix',
+             T('**拦截页「长按解封」按不出来**：远程限制名单里**软封**的隐藏解封入口'
+               '（长按本机安装标识）此前被两处手势抢走 —— 标识用的是可选中文本，长按会弹出'
+               '系统选区工具栏；旁边的复制图标又因长按提示抢走同一手势。于是长按永远不是'
+               '「解封」，用户看到的就是「变成复制/选择工具栏」。现在标识行是**单一手势区**：'
+               '点一下 = 复制、长按 = 解封（软封有效；硬封仍按设计静默无反应）。',
+               '**攔截頁「長按解封」按不出來**：遠端限制名單裡**軟封**的隱藏解封入口'
+               '（長按本機安裝識別）此前被兩處手勢搶走 —— 識別用的是可選取文字，長按會彈出'
+               '系統選區工具列；旁邊的複製圖示又因長按提示搶走同一手勢。於是長按永遠不是'
+               '「解封」，使用者看到的就是「變成複製/選取工具列」。現在識別列是**單一手勢區**：'
+               '點一下 = 複製、長按 = 解封（軟封有效；硬封仍按設計靜默無反應）。',
+               '**The intercept page\'s "unblock on long-press" never fired**: the soft-ban hidden '
+               'unblock (long-press the install ID) was swallowed by two other gestures on the same '
+               'row - the ID used selectable text, so a long-press raised the system selection '
+               'toolbar, and the copy icon\'s long-press tooltip claimed the same gesture. The '
+               'long-press was therefore never the unblock. The ID row is now a **single gesture '
+               'area**: tap = copy, long-press = unblock (works for soft bans; hard bans stay '
+               'silent by design).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.22', 'date': '2026-10-04',
+        'items': [
+            ('fix',
+             T('**修好「老用户看不到新荣誉庆祝」**：上一版的新荣誉庆祝只在你关闭过动画后'
+               '才记录「已见」，而旧版本没有这个功能 —— 升级后设备上只有荣誉表、没有已见记录，'
+               '旧逻辑把这种情况当成全新安装、「等第一份在线名单再建基线」，而那份名单'
+               '**已经含刚授予的称号**，于是新荣誉被算进基线、**永远不弹**。现在按「本地是否已有'
+               '荣誉表」区分：老用户升级时立刻用本地缓存建基线，同一会话内到达的在线新授予即可正常弹出；'
+               '全新安装仍等在线名单，不会把已有荣誉狂弹一遍。'
+               '**一次授予多枚只弹一枚**也修了：现在按顺序逐枚弹，关闭一枚自动补下一枚。',
+               '**修好「老用戶看不到新榮譽慶祝」**：上一版的新榮譽慶祝只在你關閉過動畫後'
+               '才記錄「已見」，而舊版本沒有這個功能 —— 升級後裝置上只有榮譽表、沒有已見記錄，'
+               '舊邏輯把這種情況當成全新安裝、「等第一份線上名單再建基線」，而那份名單'
+               '**已經含剛授予的稱號**，於是新榮譽被算進基線、**永遠不彈**。現在按「本機是否已有'
+               '榮譽表」區分：老用戶升級時立刻用本機快取建基線，同一工作階段內到達的線上新增即可正常彈出；'
+               '全新安裝仍等線上名單，不會把已有榮譽狂彈一遍。'
+               '**一次授予多枚只彈一枚**也修了：現在依序逐枚彈，關閉一枚自動補下一枚。',
+               '**Fixed: existing users never saw the new-honor celebration**: the previous '
+               'release only recorded a "seen" snapshot after you dismissed the animation - and '
+               'older versions had no such feature, so after upgrading the device held a roster but '
+               'no seen-record. The old logic treated that as a fresh install and waited for the '
+               'first online roster to build the baseline - but that roster **already contained the '
+               'newly granted honor**, so it was folded into the baseline and **never celebrated**. '
+               'It now tells existing users from fresh installs by whether a local roster is '
+               'stored: on upgrade the baseline is built immediately, so a genuinely new online '
+               'grant in the same session still pops, while a fresh install still waits for the '
+               'online roster and never replays honors you already had. '
+               '**Several honors granted at once only celebrated one** is fixed too: they are now '
+               'queued and shown one after another.')),
+            ('up',
+             T('**首次运行的向导不再预填连接参数**：服务器、端口与 Passcode 一律留空'
+               '（仅以灰色提示常值），不再默认填好 `rotate.aprs2.net` / `14580` / `-1` —— '
+               '软件不预置、也不推荐任何服务器地址；重新运行向导时仍会回填你保存过的值。',
+               '**首次執行的嚮導不再預填連線參數**：伺服器、連接埠與 Passcode 一律留空'
+               '（僅以灰色提示常值），不再預設填好 `rotate.aprs2.net` / `14580` / `-1` —— '
+               '軟體不預置、也不推薦任何伺服器位址；重新執行嚮導時仍會回填你儲存過的值。',
+               '**The first-run wizard no longer prefills connection fields**: server, port and '
+               'Passcode are left empty (common values only show as grey hints) instead of '
+               'defaulting to `rotate.aprs2.net` / `14580` / `-1` - the app presets and recommends '
+               'no server; re-running the wizard still restores your saved values.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.21', 'date': '2026-10-04',
+        'items': [
+            ('new',
+             T('**新获荣誉时弹出「恭喜获得」庆祝动画**：打开软件后若检测到账号**被新授予**荣誉'
+               '（成员称号或 FIRST FIX），会弹出一屏庆祝：半透明遮罩上金箔粒子四散，中央白底卡片里'
+               '徽章带光环 / 射线浮现，随后荣誉名、描述与主按钮依次淡入。造型沿用全 App 的浅色卡片语言，'
+               '徽章配色与荣誉墙一致；点按任意处或按钮关闭，**同一枚荣誉只弹一次**。'
+               '判定只在**在线名单**到达后进行，全新安装不会把已有荣誉误当新授予弹一遍。',
+               '**新獲榮譽時彈出「恭喜獲得」慶祝動畫**：開啟軟體後若偵測到帳號**被新授予**榮譽'
+               '（成員稱號或 FIRST FIX），會彈出一幕慶祝：半透明遮罩上金箔粒子四散，中央白底卡片裡'
+               '徽章帶著光環 / 射線浮現，隨後榮譽名、描述與主按鈕依序淡入。造型沿用全 App 的淺色卡片語言，'
+               '徽章配色與榮譽牆一致；點按任意處或按鈕關閉，**同一枚榮譽只彈一次**。'
+               '判定只在**線上名單**到達後進行，全新安裝不會把已有榮譽誤當新授予彈一遍。',
+               '**A "Congratulations" celebration when you earn a new honor**: after the app starts, '
+               'if your account has been **newly granted** an honor (a member title or FIRST FIX), a '
+               'celebration pops up - gold-foil particles scatter over a dimmed backdrop while a badge '
+               'emerges with rings and rays inside a white card, then the honor name, description and '
+               'the primary button fade in. It follows the app light-card language and the badge color '
+               'matches the honor wall; tap anywhere or the button to dismiss, **each honor is '
+               'celebrated only once**. Detection waits for the **online roster**, so a fresh install '
+               'never replays honors you already had as if they were new.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.20', 'date': '2026-10-03',
+        'items': [
+            ('fix',
+             T('**手指落在台站上时地图无法缩放/拖动**：台站标记的手势会把地图的手势挡掉'
+               '（`HitTestBehavior.opaque`），改成 `translucent` 后标记与地图都收到指针 —— '
+               '点 = 选中台站，拖动/捏合 = 地图；栅格与矢量两套地图都改了。'
+               '**矢量地图的热力图失效**也修了：原来被 `!_usePluginMap` 整个排除，'
+               '现在矢量地图也画热力（用 flutter_map 相机投影）。'
+               '**「从收藏台站开始」新建会话黑屏**也修了：它会先把「新建会话」对话框关掉，'
+               '选完人后又关了一次，把整个消息页弹掉 —— 现在只有对话框还开着时才关。'
+               '**手动选点（模拟位置）没有系统通知**也修了：手动设坐标会停掉前台服务却没把保活起回来 —— 现在会起回来。',
+               '**手指落在臺站上時地圖無法縮放/拖曳**：臺站標記的手勢會把地圖的手勢擋掉'
+               '（`HitTestBehavior.opaque`），改成 `translucent` 後標記與地圖都收到指標 —— '
+               '點 = 選中臺站，拖曳/捏合 = 地圖；點陣與向量兩套地圖都改了。'
+               '**向量地圖的熱力圖失效**也修了：原本被 `!_usePluginMap` 整個排除，'
+               '現在向量地圖也畫熱力（用 flutter_map 相機投影）。'
+               '**「從收藏臺站開始」新建會話黑屏**也修了：它會先把「新建會話」對話框關掉，'
+               '選完人後又關了一次，把整個訊息頁彈掉 —— 現在只有對話框還開著時才關。'
+               '**手動選點（模擬位置）沒有系統通知**也修了：手動設座標會停掉前景服務卻沒把保活起回來 —— 現在會起回來。',
+               '**Map cannot be zoomed/panned when a finger lands on a station**: the marker '
+               'swallowed the map gestures (`HitTestBehavior.opaque`); with `translucent` both '
+               'receive the pointer - tap selects the station, drag/pinch moves the map; applied '
+               'to both the raster and vector map. **The vector-map heatmap never worked** '
+               'either (it was excluded by `!_usePluginMap`); the vector map draws it now, '
+               'projected with the flutter_map camera. '
+               '**"Start from a favourite station" opening a black screen** was fixed too: '
+               'it closes the New conversation dialog first and then closed one again after '
+               'picking, popping the whole messages page - now the dialog is only closed when '
+               'one is open. '
+               '**No system notification when picking a simulated point** was fixed too: setting the '
+               'position manually stopped the foreground service without restarting keep-alive - it is '
+               'restarted now.')),
+            ('new',
+             T('**热力图档位**（设置 → 显示 → 地图）：弱 / 中 / 强，调整热力光斑的大小与浓度，'
+               '两套地图共用同一个值。**台站详情重新显示 PHG**（功率 / 天线高度 / 增益 / 方向），'
+               '这次是独立一行、不再挤进三列指标。',
+               '**熱力圖檔位**（設定 → 顯示 → 地圖）：弱 / 中 / 強，調整熱力光斑的大小與濃度，'
+               '兩套地圖共用同一個值。**臺站詳情重新顯示 PHG**（功率 / 天線高度 / 增益 / 方向），'
+               '這次是獨立一行、不再擠進三欄指標。',
+               '**Heatmap level** (Settings -> Display -> Map): Light / Medium / Strong, scaling '
+               'the heat blobs size and density, shared by both maps. **PHG is back in the '
+               'station detail** (power / antenna height / gain / direction), now on its own '
+               'line instead of crammed into the three metrics.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.19', 'date': '2026-10-03',
+        'items': [
+            ('fix',
+             T('**地图不再卡**（三处根因）：矢量地图原来**完全没有视口裁剪**、还把全世界台站'
+               '塞进 MarkerLayer，而台站版本号每个报文都 +1 —— 于是每个报文都重建几千个标记；'
+               '现在只建视口内的 + 标记带 `key` 按身份复用 + 台站密时不画呼号标签。'
+               '**瓦片拖动不丝滑**也修了：手势期间压住新瓦片的下载与解码，手停再补。'
+               '**数据包页**每行重播淡入动画（时长还随行号无限增长）也改成只播一次。',
+               '**地圖不再卡**（三處根因）：向量地圖原本**完全沒有視窗裁剪**、還把全世界臺站'
+               '塞進 MarkerLayer，而臺站版本號每個封包都 +1 —— 於是每個封包都重建幾千個標記；'
+               '現在只建視窗內的 + 標記帶 `key` 按身分重用 + 臺站密時不畫呼號標籤。'
+               '**圖磚拖曳不順**也修了：手勢期間壓住新圖磚的下載與解碼，手停再補。'
+               '**封包頁**每列重播淡入動畫（時長還隨列號無限增長）也改成只播一次。',
+               '**The map no longer stutters** (three root causes): the vector map had no '
+               'viewport culling and pushed every station in the world into a MarkerLayer, '
+               'while the station version bumps on every packet - so every packet rebuilt '
+               'thousands of markers. Only viewport stations are built now, markers carry a '
+               '`key` for identity reuse, and callsign labels are skipped when dense. Tile '
+               'dragging was fixed too (tile loads are deferred until the gesture ends), as '
+               'was the packet page (each row restarted a fade-in whose duration grew with '
+               'the row index).')),
+            ('new',
+             T('**新增**：设置主页的连接状态面板点一下 → 弹出「链路方式」浮动面板（数据来源'
+               '快捷切换，与「连接 → 设备」页同一张卡片）；「新建会话」下面加「从收藏台站'
+               '开始」；台站列表加「收藏」筛选，收藏视图下每行一颗星标点一下即取消收藏；'
+               '**运动排行榜把自己排进列表**。另外修好：佳明链接断开时请求堆叠（可能卡顿/'
+               '闪退）、盒子「连接 TNC」的错误文案、设置主页过时的「待开放」、地图图例已去掉。',
+               '**新增**：設定主頁的連線狀態面板點一下 → 彈出「鏈路方式」浮動面板（資料來源'
+               '快速切換，與「連線 → 裝置」頁同一張卡片）；「新建會話」下面加「從收藏臺站'
+               '開始」；臺站列表加「收藏」篩選，收藏檢視下每列一顆星號點一下即取消收藏；'
+               '**運動排行榜把自己排進列表**。另外修好：Garmin 連結中斷時請求堆疊（可能卡頓/'
+               '閃退）、盒子「連接 TNC」的錯誤文案、設定主頁過時的「待開放」、地圖圖例已移除。',
+               '**New**: tapping the connection banner on the settings home page opens a '
+               'floating link-method panel (same card as the Connection -> Device page); '
+               '"Start from a favourite station" under New session; a Favourites filter in the '
+               'station list (tap a row star to un-favourite); and **you now appear in the activity '
+               'leaderboard**. Also fixed: Garmin link-drop request pile-up (stutter/crash '
+               'risk), the box calling itself a TNC, the stale "coming soon" on the settings '
+               'home page, and the map legend was removed.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.18', 'date': '2026-10-02',
+        'items': [
+            ('new',
+             T('**新增：WLAN 电台直连**（支持 IC-705 / IC-9700 / IC-7610 / IC-905 等 Wi-Fi 与以太网型号）。'
+               '手机与电台在同一局域网即可收发 APRS 音频，不用声卡或 TNC；PTT 与频率控制走 '
+               'CI-V、音频走网络，不占用音频口；新增独立的电台设备页与并列的数据来源入口，'
+               '并带 19 个新测试。由社区贡献者 nimenhagg 实现（PR #29）。',
+               '**新增：WLAN 電台直連**（支援 IC-705 / IC-9700 / IC-7610 / IC-905 等 Wi-Fi 與乙太網路型號）。'
+               '手機與電台在同一區域網路即可收發 APRS 音訊，不需音效卡或 TNC；PTT 與頻率控制走 '
+               'CI-V、音訊走網路，不佔用音訊埠；新增獨立的電台裝置頁與並列的資料來源入口，'
+               '並帶 19 個新測試。由社群貢獻者 nimenhagg 實作（PR #29）。',
+               '**New: WLAN radio direct link over Wi-Fi / Ethernet** (supporting IC-705, IC-9700, IC-7610, '
+               'IC-905). With the phone and radio on the same LAN you can send and receive APRS '
+               'audio with no sound card or TNC; PTT and tuning go over CI-V while audio goes '
+               'over the network, leaving the audio port free. Adds a dedicated radio page, a '
+               'parallel data source entry, and 19 new test files. Contributed by nimenhagg '
+               '(PR #29).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.17', 'date': '2026-10-02',
+        'items': [
+            ('up',
+             T('**用户协议更新到 V1.2**：明确"不预置、不推荐任何服务器地址，默认不连接任何 '
+               'APRS-IS / iGate / 网络服务器"，并补齐自行配置的责任、合法使用与数据安全条款；'
+               '首次引导里服务器留空即不联网（不再预填公共服务器、不再自动连接）。',
+               '**使用者條款更新到 V1.2**：明確「不預置、不推薦任何伺服器位址，預設不連線任何 '
+               'APRS-IS / iGate / 網路伺服器」，並補齊自行設定的責任、合法使用與資料安全條款；'
+               '首次引導裡伺服器留空即不連網（不再預填公共伺服器、不再自動連線）。',
+               '**Terms of Use updated to V1.2**: the app neither provides nor recommends any '
+               'server address and connects to no APRS-IS / iGate / network server by default, '
+               'with added clauses on configuring your own server, lawful use, and data safety. '
+               'In the first-run guide an empty server means no connection at all (no pre-filled '
+               'public server, no automatic connect).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.16', 'date': '2026-10-02',
+        'items': [
+            ('fix',
+             T('**启动时的远程检查更及时**：现在每次启动都会检查一次（原来要等最长 6 小时）。',
+               '**啟動時的遠端檢查更及時**：現在每次啟動都會檢查一次（原本要等最長 6 小時）。',
+               '**Remote checks are timely at launch**: the app now checks on every launch '
+               '(it used to take up to 6 hours).')),
+        ],
+    },
+    {
+        'ver': 'v2.0.15', 'date': '2026-10-01',
+        'items': [
+            ('up',
+             T('**用户协议更新到 V1.1（含赞赏声明）**。三语同步、34 → 41 条，把'
+               '「软件实际会做的事」补齐了：网关转发等于**代表他人在业余频段上发射**'
+               '（3.5）；未成年人需监护人同意、无资格不得发射（3.6）；发出内容要真实、'
+               '准确、合法并尊重各国法律与文化习俗（3.7）；与哪些第三方通信（天气发送'
+               '位置、翻译发送文本、更新向 GitHub 请求…，不使用即不发生，5.3）；'
+               '「生命守护」等不是医疗设备、不是紧急救援（7.6）；数据可能传入第三方软件'
+               '服务的免责（7.7）；**关于赞赏**（自愿、不换取功能、不予退还、未成年人需'
+               '监护人同意，9.4）。应用内公告与赞赏页都有同一口径的说明。'
+               '同版还修了三处：**蓝牙连不上就闪退**（阻塞的连接跑在主线程 → 系统判定'
+               '无响应）、**电量半天不动**（只在有定位时才读）、**运动排行榜**的占位'
+               '文字与排序口径（只统计今天，且自己也在榜上并标出）。',
+               '**使用者條款更新到 V1.1（含贊賞聲明）**。三語同步、34 → 41 條，把'
+               '「軟體實際會做的事」補齊了：閘道轉發等於**代表他人在業餘頻段上發射**'
+               '（3.5）；未成年人需監護人同意、無資格不得發射（3.6）；送出的內容要真實、'
+               '準確、合法並尊重各國法律與文化習俗（3.7）；與哪些第三方通訊（天氣傳送'
+               '位置、翻譯傳送文字、更新向 GitHub 請求…，不使用即不發生，5.3）；'
+               '「生命守護」等不是醫療設備、不是緊急救援（7.6）；資料可能傳入第三方軟體'
+               '服務的免責（7.7）；**關於贊賞**（自願、不換取功能、不予退還、未成年人需'
+               '監護人同意，9.4）。應用程式內公告與贊賞頁都有同一口徑的說明。'
+               '同版還修了三處：**藍牙連不上就閃退**（阻塞的連線跑在主執行緒 → 系統判定'
+               '無回應）、**電量半天不動**（只在有定位時才讀）、**運動排行榜**的佔位'
+               '文字與排序口徑（只統計今天，且自己也在榜上並標出）。',
+               '**Terms of Use updated to V1.1 (with a donation clause).** All three '
+               'languages, 34 -> 41 clauses, documenting what the software actually does: '
+               'gateway forwarding means transmitting on amateur bands on behalf of others '
+               '(3.5); minors need a guardian consent and must not transmit unqualified '
+               '(3.6); what you send must be truthful, accurate, lawful and respectful of '
+               'local laws and customs (3.7); which third parties see what (weather sends a '
+               'location, translation sends text, update checks query GitHub - none of it '
+               'happens unless you use the feature, 5.3); Life Guard etc. are not medical '
+               'devices and not an emergency service (7.6); a disclaimer that data may be '
+               'passed to third-party software services (7.7); and about tips and donations '
+               '(voluntary, no feature in return, non-refundable, minors need a guardian, '
+               '9.4). The in-app notice and the sponsor page state the same. '
+               'The same release fixes three things: the **crash when Bluetooth fails to '
+               'connect** (the blocking connect ran on the main thread, so the system killed '
+               'the app), a **phone battery that never updated** (it was only read when a '
+               'location fix arrived), and the **sport ranking** placeholder text and '
+               'counting rule (today only, and you now appear on the board, marked). ')),
+        ],
+    },
+    {
+        'ver': 'v2.0.14', 'date': '2026-10-01',
+        'items': [
+            ('new',
+             T('**新：盒子上的「APRSLOCUS」实时仪表盘**。接着上一版的盒子支持，'
+               '这一版把**手机那侧的实时状态**也推给盒子：心率、速度、方位、'
+               '**自动上报倒计时**（带进度条）、里程（本次/累计）、电量、步数、定位精度、'
+               'APRS-IS 与未读 —— 跑步骑车时手机在包里，挂在车把上的盒子一眼就能看到。'
+               '心率测到就放大当主角，没测到自动换成速度；附近台站另拆一页 **NEARBY**'
+               '（整屏 8 行）。协议改用 `TEL k=v …`：应用以后加字段**不用动固件**'
+               '（不认识的键静默跳过；空值不发，盒子写 `--`，绝不显示假的 0）。'
+               '另：`IS rx-only` 现在三处写清原因（首页 `set pass`、SYS 页的服务器原话、'
+               '应用事件日志）并给出修法（`pass` 填**基础呼号**的 passcode）；'
+               '倒计时改为**盒子本地每秒递减**，状态推送收紧到 5 秒。',
+               '**新：盒子上的「APRSLOCUS」即時儀表板**。接著上一版的盒子支援，'
+               '這一版把**手機那側的即時狀態**也推給盒子：心率、速度、方位、'
+               '**自動上報倒數**（帶進度條）、里程（本次/累計）、電量、步數、定位精度、'
+               'APRS-IS 與未讀 —— 跑步騎車時手機在包包裡，掛在車把上的盒子一眼就能看到。'
+               '心率測到就放大當主角，沒測到自動換成速度；附近台站另拆一頁 **NEARBY**'
+               '（整屏 8 行）。協定改用 `TEL k=v …`：應用程式以後加欄位**不用動韌體**'
+               '（不認識的鍵靜默跳過；空值不送，盒子寫 `--`，絕不顯示假的 0）。',
+               '**New: an "APRSLOCUS" live dashboard on the box.** Building on the box '
+               'support from the previous release, the phone live status is now pushed to '
+               'the box too: heart rate, speed, course, the **auto-report countdown** with '
+               'a progress bar, mileage (trip / total), battery, steps, GPS accuracy, '
+               'APRS-IS state and unread messages - visible at a glance on the bar-mounted '
+               'box while the phone stays in the bag. Heart rate takes the lead when '
+               'available, otherwise speed does; nearby stations moved to their own '
+               '**NEARBY** page (8 rows). The protocol now uses `TEL k=v ...`, so the app '
+               'can add fields without touching the firmware (unknown keys are skipped, '
+               'empty values are not sent, and the box shows `--`, never a fake 0). '
+               'Also: `IS rx-only` now explains itself in three places (home `set pass`, '
+               'the server own words on the SYS page, and the app event log) with the fix '
+               '(use the passcode of the base callsign), and countdowns now tick locally '
+               'on the box with status pushed every 5 s.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.13', 'date': '2026-10-01',
+        'items': [
+            ('new',
+             T('**新：APRSlocusBOX（APRS 小盒子）—— 用手机管你那台小盒子**。'
+               '「设备」页多了一条 **APRSlocusBOX**：连上盒子之后，手机上就能读它的配置、'
+               '改它的配置、把手机的位置喂给它、催它发一帧信标、看它到底在干什么。'
+               '连接走**蓝牙 SPP 或 USB 串口**（独立通道，管盒子不会打断正在收发的 TNC）；'
+               '配置是全部 23 个键（键名与盒子文档逐字一致），改完还会自动回读 —— '
+               '显示的是**盒子里的真值**；盒子推回来的 `EVT …` 事件与命令回执一并显示，'
+               '可一键复制。'
+               '这一版还把**手机这侧看到的东西**推给盒子：自己的速度/方位/海拔/有没有定位/'
+               'APRS-IS 通不通/未读消息，以及**附近台站列表**（按距离，最多 8 条）—— '
+               '盒子新增的 **PHONE 页**显示这些。盒子只跑蓝牙（自己不上 APRS-IS）时，'
+               '「旁边有谁」在它上面本来是空的，现在这份数据能顶上去。'
+               '两条刻意的规矩：盒子**不是**「数据来源」（它自己就上 APRS-IS，本应用再收一遍'
+               '只会重复），且**绝不自动发射** —— 信标与状态报文必须人点，自动的只有本地的'
+               '位置喂养与状态推送（都不上射频）。',
+               '**新：APRSlocusBOX（APRS 小盒子）—— 用手機管你那台小盒子**。'
+               '「裝置」頁多了一條 **APRSlocusBOX**：連上盒子之後，手機上就能讀它的設定、'
+               '改它的設定、把手機的位置餵給它、催它發一幀信標、看它到底在幹什麼。'
+               '連線走**藍牙 SPP 或 USB 串列埠**（獨立通道，管盒子不會打斷正在收發的 TNC）；'
+               '設定是全部 23 個鍵（鍵名與盒子文件逐字一致），改完還會自動回讀 —— '
+               '顯示的是**盒子裡的真值**；盒子推回來的 `EVT …` 事件與指令回執一併顯示，'
+               '可一鍵複製。'
+               '這一版還把**手機這側看到的東西**推給盒子：自己的速度/方位/海拔/有沒有定位/'
+               'APRS-IS 通不通/未讀訊息，以及**附近台站列表**（按距離，最多 8 條）—— '
+               '盒子新增的 **PHONE 頁**顯示這些。盒子只跑藍牙（自己不上 APRS-IS）時，'
+               '「旁邊有誰」在它上面本來是空的，現在這份資料能頂上去。'
+               '兩條刻意的規矩：盒子**不是**「資料來源」（它自己就上 APRS-IS，本應用再收一遍'
+               '只會重複），且**絕不自動發射** —— 信標與狀態報文必須人點，自動的只有本地的'
+               '位置餵養與狀態推送（都不上射頻）。',
+               '**New: APRSlocusBOX - manage your little APRS box from the phone.** '
+               'The Device page has a new entry, **APRSlocusBOX**: once connected you can read '
+               'the box config, change it, feed it your position, trigger a beacon and see what '
+               'it is actually doing. It connects over **Bluetooth SPP or USB serial** on its own '
+               'channel, so managing the box never interrupts a TNC. Config covers all 23 keys '
+               '(names match the box documentation) and the app re-reads after each change, so '
+               'what you see is the real value in the box. This release also pushes what the '
+               'phone sees - speed, course, altitude, fix, APRS-IS up/down, unread messages and '
+               'the nearby station list (by distance, up to 8) - to the box PHONE page. In '
+               'Bluetooth-only mode the box has no APRS-IS of its own, so that list is the only '
+               'way it can show who is nearby. Two deliberate rules: the box is not a data '
+               'source, and nothing is transmitted automatically - beacons and status packets '
+               'must be tapped.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.12', 'date': '2026-10-01',
+        'items': [
+            ('fix',
+             T('**修：更新页不再让你自己选包，也不再跳浏览器**。上一版把三个包的名单摆出来、'
+               '点一行去浏览器下载 —— 这是错的：绝大多数人只知道「我要更新」，让他去理解'
+               '`armeabi-v7a` 是什么、该选哪一个，等于把应用该做的事推给用户。现在更新页'
+               '**按本机 CPU 自动挑好对应的包**（`Abi.current()`，无需原生通道）并'
+               '**直接在应用内下载**：32 位老机型自动拿到 32 位包、模拟器拿到 x86_64，'
+               '不会再出现「下完提示与设备不兼容」；认不出架构时回退到分架构之前的行为，'
+               '所以也不会变成「挑不到包」。',
+               '**修：更新頁不再讓你自己選包，也不再跳瀏覽器**。上一版把三個包的名單擺出來、'
+               '點一列去瀏覽器下載 —— 這是錯的：絕大多數人只知道「我要更新」，讓他去理解'
+               '`armeabi-v7a` 是什麼、該選哪一個，等於把應用該做的事推給使用者。現在更新頁'
+               '**按本機 CPU 自動挑好對應的包**（`Abi.current()`，無需原生通道）並'
+               '**直接在應用程式內下載**：32 位元舊機型自動拿到 32 位元包、模擬器拿到 x86_64，'
+               '不會再出現「下載完提示與裝置不相容」；認不出架構時回退到分架構之前的行為，'
+               '所以也不會變成「挑不到包」。',
+               '**Fix: the update page no longer asks you to pick a package and never opens a '
+               'browser.** The previous build listed the three packages and sent a tap to the '
+               'browser — that was wrong: almost everyone only knows "I want to update", and '
+               'making them work out what `armeabi-v7a` means (or which row to choose) pushes the '
+               'app\'s job onto the user. The page now **picks the package matching this device\'s '
+               'CPU by itself** (`Abi.current()`, no platform channel needed) and **downloads it '
+               'in-app**: a 32-bit device gets the 32-bit build, an emulator gets x86_64, and no '
+               'one sees "incompatible with this device" after downloading. When the architecture '
+               'cannot be determined it falls back to the pre-split behaviour, so an unknown '
+               'device never ends up with no package at all.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.11', 'date': '2026-10-01',
+        'items': [
+            ('up',
+             T('**安卓安装包按 CPU 架构分包：81.6 MB → 约 30 MB**。实测上一版 81.6 MB 里'
+               '**76.6 MB（94%）是三套原生库**（应用代码编译出的机器码 + Flutter 引擎，'
+               '分别对应 arm64-v8a / armeabi-v7a / x86_64），而一台手机只用得上其中一套。'
+               '现在 Release 里有**三个各约 30 MB** 的包：64 位沿用原来的文件名'
+               '（**应用内更新默认下这个，逻辑一行没改**）、32 位、x86_64（模拟器 / Chromebook）。'
+               '「64 位沿用原名」是刻意的：更新取资产列表里第一个 `.apk`，而资产按名字升序'
+               '返回，`.` 比 `_` 小 —— 所以它永远排第一，这条不变量有专门的检查与自测盯着。',
+               '**安卓安裝包按 CPU 架構分包：81.6 MB → 約 30 MB**。實測上一版 81.6 MB 裡'
+               '**76.6 MB（94%）是三套原生函式庫**（應用程式碼編譯出的機器碼 + Flutter 引擎，'
+               '分別對應 arm64-v8a / armeabi-v7a / x86_64），而一台手機只用得上其中一套。'
+               '現在 Release 裡有**三個各約 30 MB** 的包：64 位元沿用原來的檔案名稱'
+               '（**應用程式內更新預設下這個，邏輯一行沒改**）、32 位元、x86_64（模擬器 / Chromebook）。'
+               '「64 位元沿用原名」是刻意的：更新取資產清單裡第一個 `.apk`，而資產按名稱升序'
+               '回傳，`.` 比 `_` 小 —— 所以它永遠排第一，這條不變量有專門的檢查與自測盯著。',
+               '**Android packages are now split per CPU architecture: 81.6 MB → about 30 MB.** '
+               'In the previous build, **76.6 MB of the 81.6 MB — 94% — was three sets of native '
+               'libraries** (the machine code compiled from the app plus the Flutter engine, for '
+               'arm64-v8a / armeabi-v7a / x86_64), while a phone only ever uses one of them. A '
+               'release now carries **three packages of about 30 MB each**: 64-bit keeps the '
+               'original file name (**this is what the in-app update downloads; that logic is '
+               'untouched**), plus 32-bit and x86_64 (emulators / Chromebooks). Keeping the plain '
+               'name is deliberate: the updater takes the first `.apk` in the asset list and '
+               'assets come back in ascending name order, where `.` sorts before `_` — so the '
+               '64-bit build is always first, an invariant with a dedicated check and self-test.')),
+            ('new',
+             T('**更新页新增「选择安装包」**：该版本有多个包时，一行一个（**文件名 · 架构 · 大小**），'
+               '第一个标「推荐」= 应用内更新会挑的那个；**点一行在浏览器打开该包的下载地址**，'
+               '方便只支持 32 位的老机型直接取 `_armeabi-v7a`。顺带修掉一处显示问题：'
+               '下载中以前英雄卡与下方卡片**各画一条进度条**（同一个下载看着像两个任务），现在只留一条。',
+               '**更新頁新增「選擇安裝包」**：該版本有多個包時，一列一個（**檔案名稱 · 架構 · 大小**），'
+               '第一個標「建議」= 應用程式內更新會挑的那個；**點一列在瀏覽器開啟該包的下載網址**，'
+               '方便只支援 32 位元的舊機型直接取 `_armeabi-v7a`。順帶修掉一處顯示問題：'
+               '下載中以前英雄卡與下方卡片**各畫一條進度列**（同一個下載看著像兩個任務），現在只留一條。',
+               '**A "choose a package" block on the update page**: when a release has more than one '
+               'package it lists one row per file (**name · architecture · size**), the first '
+               'marked "Recommended" — the one the in-app update fetches — and **tapping a row '
+               'opens that package\'s download URL in the browser**, so 32-bit-only devices can '
+               'grab `_armeabi-v7a` directly. One display fix came along: while downloading, the '
+               'hero card and the card below it **each drew a progress bar** for the same download '
+               '(it read as two tasks); now there is one.')),
+        ],
+    },
+    {
+        'ver': 'v2.0.10', 'date': '2026-09-30',
+        'items': [
+            ('new',
+             T('**新：支持国区（中国大陆）佳明 LiveTrack**。佳明的账号体系分国际区与国区两套服务器：'
+               '国际区在 `livetrack.garmin.com`、国区在 `livetrack.garmin.cn`。此前只认国际区域名 —— '
+               '国区用户从佳明 App 分享过来只会看到「没有找到 LiveTrack 链接」，而且**连一次网络请求都没发出**，'
+               '功能是静默失效的。现在三种域名写法都认（`.com` / `.cn` / `.com.cn`），'
+               '**没有 `https://` 的一段链接也认**（从聊天窗口里复制出来的常常就是那样），'
+               '并补了两处兜底：解析时会在**整篇文档**里找 `trackPoints`（国区与老版分享页不是 Next.js 的'
+               '流式块形态），抓取时照旧跟随 301 跳转。',
+               '**新：支援國區（中國大陸）佳明 LiveTrack**。佳明的帳號體系分國際區與國區兩套伺服器：'
+               '國際區在 `livetrack.garmin.com`、國區在 `livetrack.garmin.cn`。此前只認國際區域名 —— '
+               '國區使用者從佳明 App 分享過來只會看到「沒有找到 LiveTrack 連結」，而且**連一次網路請求都沒送出**，'
+               '功能是靜默失效的。現在三種網域寫法都認（`.com` / `.cn` / `.com.cn`），'
+               '**沒有 `https://` 的一段連結也認**（從聊天視窗裡複製出來的常常就是那樣），'
+               '並補了兩處兜底：解析時會在**整篇文件**裡找 `trackPoints`（國區與舊版分享頁不是 Next.js 的'
+               '串流區塊形態），抓取時照舊跟隨 301 跳轉。',
+               '**New: LiveTrack from China-region Garmin accounts.** Garmin runs **two separate '
+               'account systems** on two sets of servers: the international one at '
+               '`livetrack.garmin.com` and the China-region (mainland) one at '
+               '`livetrack.garmin.cn`. Only the international host was recognised, so a link shared '
+               'from the China-region app just said "no LiveTrack link found" — and **not a single '
+               'network request was ever made**, making the feature silently dead. All three host '
+               'forms are accepted now (`.com` / `.cn` / `.com.cn`), including a link **without '
+               '`https://`** (which is what copying from a chat window usually gives), and two '
+               'fallbacks were added: parsing searches the **whole document** for `trackPoints` '
+               '(the China-region and older share pages are not Next.js streaming chunks), and '
+               'fetching still follows the 301 redirect.')),
+            ('fix',
+             T('**修：macOS 上主界面中文乱码**。正文几乎全部走同一个文字样式，而它的「主字体」在 macOS 上'
+               '被写死成一个 CoreText **私有字体名**（`.SF NS Text`）—— 这个名字解析不到时，中文就'
+               '**没有可回退的字体**，于是地图页、设置页的中文整片乱码。现在 macOS 交回系统默认字体'
+               '（本来就是 SF，观感一致，但「挑字体 + 中文回退」交给系统做），并把中文回退表补全'
+               '（`PingFang SC` / `Microsoft YaHei` / `Noto Sans CJK SC` …）；等宽区域（报文、日志、'
+               '荣誉墙）也补上了中文回退 —— 等宽字体同样不含中文字形。新增判据：不许再出现那个私有'
+               '字体名，回退表必须含三平台的中文字体。',
+               '**修：macOS 上主介面中文亂碼**。正文幾乎全部走同一個文字樣式，而它的「主字體」在 macOS 上'
+               '被寫死成一個 CoreText **私有字體名**（`.SF NS Text`）—— 這個名字解析不到時，中文就'
+               '**沒有可回退的字體**，於是地圖頁、設定頁的中文整片亂碼。現在 macOS 交回系統預設字體'
+               '（本來就是 SF，觀感一致，但「挑字體 + 中文回退」交給系統做），並把中文回退表補全'
+               '（`PingFang SC` / `Microsoft YaHei` / `Noto Sans CJK SC` …）；等寬區域（報文、日誌、'
+               '榮譽牆）也補上了中文回退 —— 等寬字體同樣不含中文字形。新增判據：不許再出現那個私有'
+               '字體名，回退表必須含三平台的中文字體。',
+               '**Fix: Chinese text was garbled across the macOS UI.** Almost all body text goes '
+               'through one shared text style, and on macOS its "primary font" was pinned to a '
+               'CoreText **private** family name (`.SF NS Text`). When that name fails to resolve, '
+               '**no fallback is left for Chinese**, so the map page and the settings pages came out '
+               'as garbage. macOS now uses the system default font instead (it is SF either way, so '
+               'nothing looks different — the OS just does the font picking and CJK fallback), and '
+               'the CJK fallback list was completed (`PingFang SC` / `Microsoft YaHei` / '
+               '`Noto Sans CJK SC` …). Monospace areas (packets, logs, the honour wall) got CJK '
+               'fallbacks as well — monospace faces carry no Chinese glyphs either. A new check '
+               'refuses that private family name and requires the three platforms\' CJK families.')),
+            ('fix',
+             T('**修：聊天输入框上方的「字符数 / 整包字节」计数器不实时**（用户上报：要等输入框失去焦点'
+               '才更新）。根因是它在页面构建时读一次输入内容，而打字只会重建输入框自己、不会重建它旁边'
+               '的计数器；「失焦」恰好也是一次重建，所以看起来像是失焦才刷新。现在它**自己监听输入**'
+               '（打字时只重建这一行，不在每次按键时重建整个消息页），译发预览的判定（预览原文 == 当前'
+               '输入）也一并搬进去；并补了回归测试 —— 把监听去掉时测试立刻报红。',
+               '**修：聊天輸入框上方的「字元數 / 整包位元組」計數器不即時**（使用者回報：要等輸入框失去'
+               '焦點才更新）。根因是它在頁面建構時讀一次輸入內容，而打字只會重建輸入框自己、不會重建它'
+               '旁邊的計數器；「失焦」恰好也是一次重建，所以看起來像是失焦才刷新。現在它**自己監聽輸入**'
+               '（打字時只重建這一列，不在每次按鍵時重建整個訊息頁），譯發預覽的判定（預覽原文 == 目前'
+               '輸入）也一併搬進去；並補了回歸測試 —— 把監聽去掉時測試立刻報紅。',
+               '**Fix: the length counter above the chat input was not live** (reported: it only '
+               'updated once the field lost focus). It was computed by reading the field during a '
+               'page build, and typing only rebuilds the text field itself, never the counter beside '
+               'it; losing focus happens to be one such rebuild, which is why it looked '
+               'focus-driven. It now **listens to the input** (typing rebuilds just that one row, '
+               'not the whole messages page), the translation-preview rule (the preview counts only '
+               'while its source still matches what is typed) moved in with it, and a regression '
+               'test goes red the moment that subscription is removed.')),
+        ],
+    },
     {
         'ver': 'v2.0.9', 'date': '2026-09-28',
         'items': [
@@ -1595,19 +4709,68 @@ def strip_block(s, open_m, close_m):
     return pat.sub('', s)
 
 
+def div_end(s, at):
+    """at 是某个 <div ...> 开标签的起点 → 返回它配对的那个 </div> 的起点。
+
+    为什么要数：首页每个 section 收成 .section-head + .section-body 之后，
+    "这一节最后一个 </div>" 已经不是 .feat-list 了（变成了 .section-body），
+    旧锚点会把整表写到列表容器外面去。
+    """
+    depth, i = 0, at
+    while True:
+        o, c = s.find('<div', i), s.find('</div>', i)
+        if c < 0:
+            raise ValueError('div 不闭合：%r' % s[at:at + 60])
+        if 0 <= o < c:
+            depth += 1
+            i = o + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                return c
+            i = c + 6
+
+
+def md_inline(s):
+    """将内联 markdown（`代码`、**粗体**、*斜体*）转换为 HTML 标签。"""
+    if not s:
+        return ''
+    s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
+    s = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', s)
+    s = re.sub(r'(?<![*\w])\*([^\s*]+)\*(?![*\w])', r'<em>\1</em>', s)
+    return s
+
+
+ROW = (
+    '    <article class="feat reveal">\n'
+    '      <span class="feat-no">%02d</span>\n'
+    '      <span class="feat-ico"><i class="fa-solid {fa}" aria-hidden="true"></i></span>\n'
+    '      <div class="feat-main">\n'
+    '        <h3>{title}</h3>\n'
+    '        <p>{desc}</p>\n'
+    '      </div>\n'
+    '      <ul class="feat-tags">{tags}</ul>\n'
+    '    </article>')
+
+
 def render_cards(lang):
+    """渲染 #features 的分组序号列表。
+
+    序号按列表位置现算（ROW 里的 `%02d`）：数据里不写编号，所以增删条目不会
+    漏改编号。分组标题只在"组变了"时插一次，所以 main() 会挡住「同组被拆成两段」
+    —— 那种错序在页面上看着像漏了一组，很难认出来。
+    """
     out = [F_OPEN]
-    for c in CARDS:
+    group = None
+    for i, c in enumerate(CARDS, 1):
+        if c['group'] != group:
+            group = c['group']
+            out.append('    <p class="feat-group">%s</p>' % GROUP_NAME[group][lang])
         tags = ''.join('<li>%s</li>' % t for t in c['tags'][lang])
-        out.append(
-            '    <article class="card reveal">\n'
-            '      <div class="card-icon {icon}"><i class="fa-solid {fa}"></i></div>\n'
-            '      <h3>{title}</h3>\n'
-            '      <p>{desc}</p>\n'
-            '      <ul class="card-tags">{tags}</ul>\n'
-            '    </article>'.format(icon=c['icon'], fa=c['fa'],
-                                   title=c['title'][lang], desc=c['desc'][lang],
-                                   tags=tags))
+        # 先 % 填编号、再 .format() 填文案：反过来的话，文案里的 `85% ~ 130%`
+        # 会被当成格式符（% 后面跟着空格/波浪线）直接报错。
+        out.append((ROW % i).format(fa=c['fa'], title=md_inline(c['title'][lang]),
+                                    desc=md_inline(c['desc'][lang]), tags=tags))
     out.append('  ' + F_CLOSE)
     return '\n'.join(out)
 
@@ -1623,7 +4786,7 @@ def render_changelog(lang):
         out.append('      <div class="cl-body">')
         for kind, txt in e['items']:
             out.append('        <div class="cl-item"><span class="cl-dot %s"></span>%s</div>'
-                       % (kind, txt[lang]))
+                       % (kind, md_inline(txt[lang])))
         out.append('      </div>')
         out.append('    </div>')
     out.append('  ' + C_CLOSE)
@@ -1635,9 +4798,20 @@ def main():
     for c in CARDS:
         for field in ('title', 'desc'):
             missing = [l for l in LANGS if not c[field].get(l)]
-            assert not missing, '卡片 %s 缺 %s 文案：%s' % (c['title']['zh'], field, missing)
+            assert not missing, '条目 %s 缺 %s 文案：%s' % (c['title']['zh'], field, missing)
         for l in LANGS:
-            assert c['tags'].get(l), '卡片 %s 缺 %s 标签' % (c['title']['zh'], l)
+            assert c['tags'].get(l), '条目 %s 缺 %s 标签' % (c['title']['zh'], l)
+        assert c['group'] in GROUP_NAME, \
+            '条目 %s 的分组 %r 不在 GROUPS 里' % (c['title']['zh'], c['group'])
+    # 同组的条目必须挨着（分组标题只在"组变了"时插一次），而且组的先后要跟
+    # GROUPS 一致：跳着写会让后半个组没有标题，页面上看着像漏了一组。
+    order = []
+    for c in CARDS:
+        if not order or order[-1] != c['group']:
+            assert c['group'] not in order, '分组 %s 的条目被拆成了两段' % c['group']
+            order.append(c['group'])
+    assert order == [g for g, _ in GROUPS if g in order], \
+        '分组的先后跟 GROUPS 对不上：%s' % order
     for e in CL:
         for kind, txt in e['items']:
             missing = [l for l in LANGS if not txt.get(l)]
@@ -1655,6 +4829,10 @@ def main():
     for lang, rel in PAGES.items():
         path = os.path.join(ROOT, rel)
         s = io.open(path, encoding='utf-8', newline='').read()
+        # 归一成 LF 再处理：Windows 下 git（core.autocrlf）把工作区检出成 CRLF，
+        # 而下面所有锚点都是按 LF 写的 —— 不归一就会"找不到锚点"直接崩。写回时
+        # newline='' 保证输出还是 LF，与仓库里存的形态一致（diff 才干净）。
+        s = s.replace('\r\n', '\n').replace('\r', '\n')
         before = len(s)
 
         # 1) 零散文案修正（命中 0 次=已改过；>1 次=结构变了，必须报错）
@@ -1668,11 +4846,12 @@ def main():
             elif n > 1:
                 raise SystemExit('[%s] 片段出现 %d 次，无法安全替换：%s' % (lang, n, old[:40]))
 
-        # 2) 功能卡片：追加到 #features 的 cards 容器末尾
+        # 2) 功能清单：写进 #features 的 .feat-list 容器（整表生成）
         s = strip_block(s, F_OPEN, F_CLOSE)
         fi = s.index('id="features"')
-        close = s.index('\n  </div>\n</section>', fi)
-        s = s[:close] + '\n' + render_cards(lang) + s[close:]
+        # 插到 .feat-list 收尾 </div> 那一行的行首（整表必须留在容器里）。
+        close = s.rindex('\n', 0, div_end(s, s.index('<div class="feat-list">', fi))) + 1
+        s = s[:close] + render_cards(lang) + '\n' + s[close:]
 
         # 3) 更新日志：插到 changelog-list 容器开头（新的在前）
         s = strip_block(s, C_OPEN, C_CLOSE)
@@ -1682,16 +4861,16 @@ def main():
 
         io.open(path, 'w', encoding='utf-8', newline='').write(s)
 
-        counts[lang] = (s.count('<article class="card reveal">'),
+        counts[lang] = (s.count('<article class="feat reveal">'),
                         s.count('<div class="cl-version reveal">'))
-        print('%-6s 卡片 %d · 更新日志 %d 条 · %d → %d 字节'
+        print('%-6s 功能 %d 项 · 更新日志 %d 条 · %d → %d 字节'
               % (lang, counts[lang][0], counts[lang][1], before, len(s)))
 
     if len(set(counts.values())) != 1:
         raise SystemExit('三个语言页数量不一致：%s' % counts)
-    cards, cls = next(iter(set(counts.values())))
-    print('\n✅ 三页一致：%d 张功能卡片（新增 %d），%d 条更新日志（新增 %d）'
-          % (cards, len(CARDS), cls, len(CL)))
+    rows, cls = next(iter(set(counts.values())))
+    print('\n✅ 三页一致：功能 %d 项（表里 %d 项），更新日志 %d 条（表里 %d 条）'
+          % (rows, len(CARDS), cls, len(CL)))
 
 
 if __name__ == '__main__':

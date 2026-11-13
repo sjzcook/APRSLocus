@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>下一格等你来补 · APRSlocus</title>
+<meta name="description" content="那颗一直在转的星球，和它背后那个数字：电波从哪儿来、落在哪里，以及把它一起做出来的人。">
+<meta name="theme-color" content="#0a0e12">
+<!-- 声音那只 <audio> 会 302 到 http 的 CDN（只能这样拿到音源）：这条策略让浏览器
+     把那一跳升级成 https（CDN 本身支持 https），否则混合内容策略会当场掐掉这段音频。
+     这页没有别的 http 子资源，不会误伤。 -->
+<meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+<!-- 彩蛋页：整站没有一处链接指向它，robots 也不收它进 sitemap —— 这页是从**应用里**
+     打开的（App 内置一个入口，用 WebView 载这一页），读它的人已经在 APRSlocus 里了。
+     所以这页不摆下载入口、不摆品牌徽标与口号，页尾也不给「回首页」这种网页式的出口：
+     文案说的是应用里的事（你面前这张地图、球面上那个点），不是网页上的事。 -->
+<meta name="robots" content="noindex, follow">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<script>
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）。
+   必须在首帧前执行，否则会闪一下亮底（token 的键在 <html data-theme> 上）。 */
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t !== 'dark' && t !== 'light') t = 'dark';
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/hero-3d.css?v=27">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+<style>
+  /* 这页没有导航栏，主题按钮固定贴在右上角（只这一页用到，不进共享样式表；
+     按钮本体还是 style.css 里的 .theme-toggle，样子与首页那颗一样）。
+     按钮不在任何一屏里 —— 翻到哪一屏它都在。 */
+  .hero-toggle { position: fixed; top: 22px; right: clamp(20px, 6vw, 96px); z-index: 100; }
+
+  /* ── 分屏 deck ──
+     一屏一件事：每一屏都铺满视口，只有当前那一屏是 flex（其余 display:none）。
+     页面自己不滚（滚动条收起来了）—— 翻页是换屏，不是让读者去翻这份文档。 */
+  html, body { height: 100%; overflow: hidden; }
+  .deck { position: fixed; inset: 0; z-index: 1; }
+  .slide { position: absolute; inset: 0; display: none; flex-direction: column;
+    justify-content: center; align-items: center; padding: 96px clamp(20px, 6vw, 96px); }
+  .slide.on { display: flex; }
+  /* 脚本接手之前的那一帧：先亮第一屏，不留白 */
+  .deck:not(.ready) > .slide:first-child { display: flex; }
+  /* 一屏一件东西：正文柱子居中；比一屏高的那一屏（名单）在自己那一栏里滚 ——
+     滚到边上才轮到翻屏（见页尾脚本）。 */
+  .slide-inner { width: 100%; max-width: 720px; max-height: 100%; overflow-y: auto;
+    scrollbar-width: none; transition: opacity .42s var(--ease); }
+  .slide-inner::-webkit-scrollbar { width: 0; height: 0; }
+  /* 翻页是换屏：内容自己落下，页面不动 —— display 从 none 变回来时 CSS 动画
+     才会起跑，所以每一屏的内容每次都是新落下的。 */
+  .slide.on .rise { animation: deckRise .9s var(--ease) both; }
+  @keyframes deckRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  /* 地图那一屏：整屏交给 hero 自己排。顶部留白读 hero-3d.css 里那个变量（同一个数），
+     底边不留 —— 数字那一屏正好一屏高；min-height 归零，别让 .hero 的 100vh 把
+     这一屏撑出视口。 */
+  .slide.hero { padding-top: var(--hero-pad-top, 140px); padding-bottom: 0; min-height: 0; }
+
+  /* ── 天空层（整页一层，见 body 里那个 .deck-sky）──
+     固定在视口底下、不吃指针事件；翻屏时它不动，只有星球那两块在动：
+     地图那一屏铺开（full），有正文的屏退到右上角、压暗一档（soft）。
+     退开时只缩到 .72（上一版 .58）：缩太小的时候，散开聚成的形状（天线塔、
+     那颗心、73）就成了一团小图 —— 这一层是主角，得占得住画面。
+     动的是**星球那块画布**，不是整层：星尘与网格是背景底纹，跟着一起缩放只会
+     变成一块糊掉的底（网格是重复底图，缩放后线宽也跟着变）。transform-origin
+     放在星球在屏幕上的位置（62% 46%），所以缩小的过程中它始终待在右上方那个点，
+     看着是"退开"，不是"滑走"。缓动约一秒，与点云自己"散开再聚合"是两套速度。 */
+  .deck-sky .planet-canvas, .deck-sky .planet-fallback {
+    transition: transform 1.05s var(--ease), opacity 1.05s var(--ease);
+    transform-origin: 62% 46%;
+  }
+  .deck[data-sky="soft"] .deck-sky .planet-canvas,
+  .deck[data-sky="soft"] .deck-sky .planet-fallback {
+    transform: scale(.72) translate3d(13%, -12%, 0); opacity: .52;
+  }
+  /* 没有 WebGL：退回纯 CSS 星球。hero-3d.css 里那两条是按 .hero 写的，
+     而这页的装饰层不在 .hero 里面，所以选择器得跟着换成 .deck-sky。 */
+  .deck-sky.no-3d .planet-canvas { display: none; }
+  .deck-sky.no-3d .planet-fallback {
+    display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100svh;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .deck-sky .planet-canvas, .deck-sky .planet-fallback { transition: none; }
+  }
+
+  /* ── 壁纸（整页一层，见 body 里那个 .deck-wall）──
+     翻到换天色的那几屏，整页颜色换一档：两层 <i> 叠着交叉淡入，形状与浓淡都写在
+     色阶类里，脚本只管换档。色阶只用站内已有的光晕 token（冷蓝 / 暖橙 / 暗角），
+     深浅两套主题各自跟手 —— 这里没有第二个色系，也没有写死的颜色。
+     浓淡靠「同一层叠几遍」：token 的 alpha 是定值，叠两遍就是两倍浓；
+     换位置换浓淡，于是一页里有六档能认出来的天色。
+     底下那点漂移（几个 % 的位移与缩放）只是让壁纸别像一张贴死的纸。 */
+  .deck-wall { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .deck-wall i { position: absolute; inset: -6%; opacity: 0;
+    transition: opacity 1.35s var(--ease);
+    animation: wallDrift 48s ease-in-out infinite alternate; }
+  .deck-wall i.on { opacity: 1; }
+  @keyframes wallDrift {
+    from { transform: translate3d(-1.2%, -0.8%, 0) scale(1.03); }
+    to { transform: translate3d(1.2%, 1.2%, 0) scale(1.07); }
+  }
+  /* 一档一屏天色。不写色阶 = deep（这页本来的夜，什么都不加）。 */
+  /* 星球与那个数字：光聚在星球身上，旁边慢慢暗下去 */
+  .deck-wall i.w-bloom { background-image:
+      radial-gradient(76% 60% at 62% 46%, var(--halo-cool), transparent 64%),
+      radial-gradient(76% 60% at 62% 46%, var(--halo-cool), transparent 64%),
+      radial-gradient(48% 38% at 62% 44%, var(--halo-cool), transparent 72%); }
+  /* 电波那一章：低处一整片，像天线脚下荡开的光；左边留一点暖 */
+  .deck-wall i.w-wave { background-image:
+      radial-gradient(124% 54% at 50% 98%, var(--halo-cool), transparent 70%),
+      radial-gradient(124% 54% at 50% 98%, var(--halo-cool), transparent 70%),
+      radial-gradient(76% 40% at 12% 86%, var(--halo-warm), transparent 72%); }
+  /* 夜里那几屏：压下去 —— 只在右上留一点冷光，四周收成暗角 */
+  .deck-wall i.w-night { background-image:
+      radial-gradient(84% 66% at 80% 10%, var(--halo-cool), transparent 66%),
+      radial-gradient(132% 112% at 50% 50%, transparent 36%, var(--shadow-color) 100%); }
+  /* 等你自己那一格：中间一点亮，四周还是暗的 */
+  .deck-wall i.w-spark { background-image:
+      radial-gradient(44% 36% at 50% 64%, var(--halo-cool), transparent 66%),
+      radial-gradient(44% 36% at 50% 64%, var(--halo-cool), transparent 66%),
+      radial-gradient(120% 100% at 50% 50%, transparent 44%, var(--shadow-color) 100%); }
+  /* 名单那几屏：暖光从左边抬起来，冷光退到右上角当边 */
+  .deck-wall i.w-warm { background-image:
+      radial-gradient(88% 70% at 20% 76%, var(--halo-warm), transparent 68%),
+      radial-gradient(88% 70% at 20% 76%, var(--halo-warm), transparent 68%),
+      radial-gradient(70% 58% at 88% 8%, var(--halo-cool), transparent 70%); }
+  /* 三百多个呼号那一屏：上冷下暖，摊平收淡，别跟正文抢 */
+  .deck-wall i.w-roster { background-image:
+      radial-gradient(130% 58% at 50% 0%, var(--halo-cool), transparent 70%),
+      radial-gradient(130% 88% at 50% 106%, var(--halo-warm), transparent 74%); }
+  @media (prefers-reduced-motion: reduce) {
+    .deck-wall i { animation: none; transition: none; }
+  }
+
+  /* ── 一屏一句 ──
+     正文不再挤成一段：一章的每一句各占一屏，所以这一句是本屏唯一的东西。
+     同一支字、同一个灰（token 没动），只是字号比正文那一栏大一点。 */
+  .slide-line p { margin: 0; color: var(--text-dim);
+    font-size: clamp(17px, 2vw, 22px); line-height: 1.85; }
+  .slide-slogan p { margin: 0; color: var(--text-dim);
+    font-size: clamp(18px, 2.4vw, 26px); line-height: 1.7; }
+  /* 第一屏那句「点下去有什么」：比邀请小一档、淡一档，是同一件事的下半句 */
+  .slide-line .note { margin-top: 14px; font-size: 15.5px; color: var(--text-faint); }
+  /* 招呼那一屏：h1 下面就是标语，标语当它的副题读（不再单独占一屏） */
+  .slide-hello p { margin: 16px 0 0; color: var(--text-dim);
+    font-size: clamp(17px, 2.2vw, 24px); line-height: 1.7; }
+  /* 标题卡：这一章要说什么（h2 + 引子）。抬头沿用 .section-head 那一套，
+     只是它现在自己占一屏，底下不留空。 */
+  .slide-inner .section-head { margin-bottom: 0; }
+  /* ── 字号：这一页读的是人话，不是参数表 ──
+     引子、名单、那一行 CTA 与页脚提示都偏小（11 ~ 16.5px），一屏只有一件事，
+     字太小就白占着一屏。这六个数只在本页生效 —— 站内别处（style.css）不动。 */
+  .slide-inner .section-head p { font-size: 18px; }
+  .slide-inner .cgroup-title { font-size: 15.5px; }
+  .slide-inner .contributor .c-name { font-size: 15.5px; }
+  .slide-inner .contributor .c-role { font-size: 12.5px; }
+  .slide-inner .cta-line { font-size: 15px; }
+  .slide-inner h1 { margin: 0; font-size: clamp(32px, 4.8vw, 50px); font-weight: 800;
+    letter-spacing: -.02em; line-height: 1.2; }
+  /* 名单那一屏连标题一起端上来，末尾那点外边距不留 */
+  .slide-inner .cgroup:last-of-type { margin-bottom: 0; }
+  /* ── 已点亮用户：一屏装不下的那份名单 ──
+     三百多个呼号排成分栏，一列一列往下读；这一屏比一屏高，所以它在自己那一栏里
+     滚（滚到边才轮到翻屏，见页尾脚本）。窄屏自动少几栏。 */
+  .slide-lit .slide-inner { max-width: 1180px; }
+  .lit-list { list-style: none; margin: 0; padding: 0;
+    columns: 6 116px; column-gap: 24px;
+    font-size: 15px; line-height: 2.05; color: var(--text-dim); }
+  .lit-list li { break-inside: avoid; }
+  /* ── 成员名单（开山 / 早期成员）──
+     不做成一颗颗胶囊：人多的时候一排排名字最好读，也不会有「标签」的味道。
+     与「已点亮用户」那份纯呼号名单同一套做法，只是列数按人数收。 */
+  .name-list { list-style: none; margin: 0; padding: 0;
+    columns: 4 120px; column-gap: 22px;
+    font-size: 15px; line-height: 2.05; color: var(--text); }
+  .name-list li { break-inside: avoid; }
+  /* 名单上的名字是**能点的**（点它 = 点亮它的那粒符号，镜头飞过去）——
+     这里只给一个指针提示，不动任何 token、不动排版。 */
+  .lit-list li, .name-list li, .c-name { cursor: pointer; }
+
+  /* ── 点名的那一段：贴在那一粒星下面 ──
+     跟着那一粒走的一小段字：位置由 planet-3d.js 每帧报回来（PAGE.onSpot）——
+     镜头飞的整段里它跟着飞，最后停在画面正中那一颗金点下面。
+     排的是“能直接截下来发出去”的那一版：一行小字说明他在哪份名单上、
+     呼号撑到海报那一档、星表编号跟在下面一行等宽的码。
+     没有卡片、没有边框、没有底；也不吃指针事件 —— 翻屏还能点。
+     （letter-spacing 会在行尾多出一个字距，居中就偏半个 —— 用同值的
+     text-indent 抵回来。） */
+  .deck-spot { position: fixed; left: 0; top: 0; z-index: 90;
+    pointer-events: none; opacity: 0; transition: opacity .5s var(--ease); }
+  .deck-spot.on { opacity: 1; }
+  .deck-spot-in { position: absolute; left: 0; top: 0; transform: translate(-50%, 26px);
+    text-align: center; white-space: nowrap; }
+  .deck-spot span { display: block; color: var(--text-faint); }
+  /* 品牌那一行：logo 就是首页导航栏那颗同一张图（图标 + 字标）——
+     点名时右下角那枚签名是退开的，截图发出去时品牌得在这里。 */
+  .deck-spot .spot-brand { display: flex; align-items: center; justify-content: center;
+    gap: 10px; color: var(--text-dim); }
+  .deck-spot .spot-brand img { width: 30px; height: 30px; border-radius: var(--radius);
+    box-shadow: 0 8px 22px var(--shadow-cool); }
+  .deck-spot .spot-brand-name { font-size: 13px; font-weight: 700; letter-spacing: .26em;
+    text-indent: .26em; text-transform: uppercase; color: var(--text-dim); }
+  .deck-spot .spot-tag { margin-top: 15px; font-size: 12.5px; letter-spacing: .3em;
+    text-indent: .3em; }
+  .deck-spot b { display: block; margin-top: 7px; font-size: clamp(30px, 5.6vw, 58px);
+    font-weight: 800; line-height: 1.06; letter-spacing: .1em; text-indent: .1em;
+    color: var(--accent); text-shadow: 0 14px 44px var(--shadow-color); }
+  .deck-spot .spot-no { margin-top: 12px; font-family: var(--font-mono);
+    font-size: clamp(12px, 1.5vw, 15px); letter-spacing: .2em; text-indent: .2em;
+    color: var(--text-dim); }
+  /* 最后两行：他是干什么的（页面上写着的就用页面上的），和一句诗。
+     诗按呼号选，同一个呼号永远是同一句（见页尾脚本的 VERSES / verseOf）。 */
+  .deck-spot .spot-desc { margin-top: 10px; font-size: clamp(12px, 1.4vw, 14px);
+    letter-spacing: .12em; text-indent: .12em; color: var(--text-dim); }
+  .deck-spot .spot-verse { margin-top: 16px; font-size: clamp(13px, 1.5vw, 15px);
+    letter-spacing: .14em; text-indent: .14em; color: var(--text-dim); }
+
+  /* ── 点了一个名字：这一屏就只剩他 ──
+     别的人不是“退到几乎看不见”，是**不显示** —— 正文那一整块连着名单一起退开，
+     这一屏成了他一个人的单独一页：球面上一颗金星，下面叫他一声
+     （呼号 / 星表编号，见 .deck-spot）。收回（再点那一粒 / 翻屏）时整块原样回来。
+     opacity 必须带 !important：.rise 上那条 deckRise 动画 fill 的是 both，
+     会把普通声明盖掉。 */
+  .deck.pick .slide.on .slide-inner { opacity: 0 !important; visibility: hidden;
+    pointer-events: none; transition: opacity .42s var(--ease), visibility 0s .42s; }
+  /* 他这一屏上没有别的东西：右上角那颗主题按钮、右下角的音乐开关与署名、
+     底下那句「点一下继续」一起退开 —— 留下的就是能直接截下来的那一张。 */
+  .deck.pick .hero-toggle, .deck.pick .story-bgm, .deck.pick .story-mark,
+  .deck.pick .deck-hint { opacity: 0 !important; pointer-events: none;
+    transition: opacity .42s var(--ease); }
+
+  /* ── 点着谁的时候：按住画面拖动＝自己转这颗球 ──
+     星球平时是「只看不摸」的（.deck-sky 整层不吃指针事件，planet-3d.js 里也没有
+     指针接线）；这一页只在**点着谁**的那一屏破例：左右拖，球跟着转；上下拖，
+     机位抬高 / 压低一点。接线挂在 document 上（见页尾脚本的 0b 段），不依赖命中
+     哪一层，所以这里只给两件事：
+       · 指针形状 —— cursor 是继承属性，写在 .deck 上，整屏跟着变成「抓手」；
+       · touch-action: none —— 手指按住拖动时，浏览器别把它当成滚动 / 缩放手势
+         （不然 pointer 事件中途会被 cancel，拖到一半就断）。
+     收回（点空白 / Esc / 换屏）之后 .pick 一摘，这两条一起失效，星球照旧不接指针。 */
+  .deck.pick { cursor: grab; touch-action: none; }
+  .deck.pick.dragging { cursor: grabbing; }
+
+
+
+  /* 页脚那句「点一下继续」：第一下之后才出现，走到最后一屏自己退场。 */
+  .deck-hint { position: fixed; left: 0; right: 0; bottom: 20px; z-index: 95;
+    text-align: center; font-size: 13.5px; letter-spacing: .08em; color: var(--text-faint);
+    opacity: 0; transition: opacity .9s var(--ease); pointer-events: none; }
+  .deck-hint.on { opacity: .72; }
+
+  /* ── 右下角那枚徽标 ──
+     整页固定，翻到哪一屏都在；它是署名，不是入口，所以不吃指针事件、
+     也不进键盘序列。出现得比正文晚半拍（body.loaded 之后才淡上来）——
+     开场那一下应该只有星球和那句话。 */
+  .story-mark { position: fixed; right: clamp(20px, 6vw, 96px); bottom: 76px; z-index: 90;
+    display: flex; align-items: center; gap: 10px; pointer-events: none;
+    opacity: 0; transition: opacity 1.2s var(--ease) .7s; }
+  body.loaded .story-mark { opacity: .74; }
+  .story-mark img { width: 30px; height: 30px; border-radius: var(--radius);
+    box-shadow: 0 8px 22px var(--shadow-cool); }
+  .story-mark-name { font-size: 12.5px; font-weight: 700; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--text-faint); }
+
+  /* BGM：整页唯一的声音（只有这页有）。右下角一颗音符是开关，右侧留白与上面
+     那颗 .hero-toggle 用同一个式子，两者在同一列上。音源万一载不出来，脚本会
+     退回网易云播放器（330×86 的 iframe）。 */
+  .story-bgm { position: fixed; right: clamp(20px, 6vw, 96px); bottom: 18px; z-index: 90; }
+  .story-bgm iframe { display: block; width: 330px; max-width: calc(100vw - 40px); height: 86px; border: 0; }
+  .bgm-toggle { width: 40px; height: 40px; border-radius: 50%;
+    background: var(--glass); border-color: var(--line); box-shadow: 0 10px 26px var(--shadow-color); }
+  .bgm-toggle.on { color: var(--cyan); border-color: var(--line-cool); }
+
+  @media (max-width: 520px) {
+    .slide { padding: 84px 20px; }
+    .story-bgm { right: 14px; bottom: 14px; }
+    .story-bgm iframe { width: calc(100vw - 28px); }
+    /* 窄屏只剩那枚标：一行字挤在右上角就成噪音了 */
+    .story-mark { right: 16px; bottom: 66px; }
+    .story-mark-name { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .slide.on .rise { animation: none; } }
+</style>
+</head>
+<body>
+
+<!-- main.js 是整站共用的那一份（首屏粒子、滚入显形、主题切换都靠它），它开头就会
+     取导航那几个元素并直接 .classList / .setAttribute —— 四个里缺一个就当场抛错，
+     而 IIFE 里没有 try，后面那些代码（含 body.loaded）全都不执行。这页没有导航栏，
+     所以留一组不显示、也不占位的空壳把这一段走过去。 -->
+<div id="nav" hidden></div>
+<div id="backTop" hidden></div>
+<button id="navBurger" type="button" hidden aria-label="菜单"></button>
+<div id="navLinks" hidden></div>
+
+<!-- 全屏漂浮渐变色块（毛玻璃背后的光斑）：与首页同一层背景 -->
+<div class="bg-blobs" aria-hidden="true">
+  <span class="blob b1"></span>
+  <span class="blob b2"></span>
+  <span class="blob b3"></span>
+  <span class="blob b4"></span>
+</div>
+<!-- 主题按钮不在任何一屏里：固定在右上角，翻到哪一屏它都在。 -->
+<button class="theme-toggle hero-toggle" id="themeToggle" type="button" aria-pressed="false" aria-label="切换深色模式" title="切换深色模式" data-label-dark="切换浅色模式" data-label-light="切换深色模式"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
+
+<!-- 右下角那枚签名徽标（与首页导航栏那颗同一张图）：整页固定，翻到哪一屏都在。
+     它是署名，不是入口 —— 不接指针、不进键盘序列（这一页的出口在最后一屏）。
+     它不抢正文：一直待在右侧那一列里，与右上角的主题按钮、右下角的音符开关
+     同一套玻璃语言。 -->
+<div class="story-mark" aria-hidden="true">
+  <span class="story-mark-name">APRSLocus</span>
+  <img src="assets/logo.png" alt="" width="30" height="30">
+</div>
+
+<noscript><style>
+/* 没有脚本就翻不动屏：把整页摊回一份长文档（每一屏上下排开），照常读。 */
+html, body { height: auto; overflow: auto; }
+/* 天空层是脚本画出来的（这页的星球、星尘、网格都在那里）：没有脚本它就是一层
+   空东西，别让它铺在正文上面。 */
+.deck-sky { display: none; }
+/* 壁纸也是脚本换档的（没有脚本就是一整块死色）：同样收起来 */
+.deck-wall { display: none; }
+.deck { position: static; }
+.slide { position: static; display: block; min-height: 0; height: auto; padding: 96px 20px; }
+.slide.hero { padding-top: var(--hero-pad-top, 140px); padding-bottom: 0; }
+.slide-inner { max-height: none; overflow: visible; }
+.rise, .hero-copy > * { opacity: 1 !important; transform: none !important; animation: none !important; }
+.deck-hint { display: none; }
+.deck-spot { display: none; }
+</style></noscript>
+
+<main id="main">
+
+<!-- ═══════════ 分屏 deck ═══════════
+     一屏一件事：整页就是这一叠屏，点一下（或空格 / 回车 / → / 滚轮 / 滑动）翻一屏。
+     翻页是换屏，页面自身不滚 —— 所以滚动条收起来了，只有那几屏比一屏高的名单
+     在自己的栏里滚（滚到边上才翻屏，见页尾脚本）。
+     屏与屏之间没有别的机关：前一屏收起、这一屏亮出来，CSS 动画自己起跑。 -->
+<div class="deck" id="deck" role="region" aria-label="一个关于电波的故事">
+
+  <!-- ── 壁纸：整页一层，压在最底下（壁纸之上才是星尘、网格、星球）──
+       翻到换天色的那几屏，整页颜色换一档；色阶写在屏上的 data-wall（见页尾脚本）。
+       两层 <i> 叠着交叉淡入 —— 一层动不了两个透明度，所以要两只。
+       它不接指针事件，也不接焦点：它就是天色。 -->
+  <div class="deck-wall" id="deckWall" aria-hidden="true"><i></i><i></i></div>
+
+  <!-- ── 天空层：整页共用一层，不在任何一屏里（就钉在 .deck 里）──
+       网格、星尘、3D 星球、以及没有 WebGL 时的静态球都在这一层。
+       上一版它长在"地图那一屏"里面，翻屏就跟着那一屏一起消失；现在它钉在
+       页面底下不换，翻屏时点云才有机会散开、再聚成下一屏的形状。
+       整层不吃指针事件（星球是只看不摸的画面，不接拖动、不接焦点）。 -->
+  <div class="hero-decor deck-sky">
+    <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
+    <div class="hero-grid"></div>
+
+    <!-- 3D 星球：一层透明点云（无边框、无底色），只看不摸 -->
+    <canvas class="planet-canvas" id="planetCanvas" role="img"
+            aria-label="3D 星球：APRS 台站分布、环带与卫星轨道示意"></canvas>
+    <div class="planet-fallback" aria-hidden="true"><i class="pf-globe"></i><i class="pf-ring"></i></div>
+  </div>
+
+  <!-- ── 星野点名的那一段（整页一层，同壁纸与天空层一样不在任何一屏里）──
+       点一颗星、或点名单上的一个名字，这里报出他在哪份名单上、他是谁、编号多少、
+       他是干什么的，上方是 logo，下面是一句诗（贴着那一粒）—— 这一屏能直接
+       截下来发出去。编号是从名字**算**出来的（两个 32 位哈希拼 20 位）：没有
+       随机数、没有时间，同一个呼号永远是同一串号；那句诗也按同一个哈希挑，
+       同一个呼号永远是同一句 —— 名单增补、页面改版都不会动它们。
+       名单那一行读的是这一屏自己的标题（已点亮用户 / 开发 …）；描述那一行先看
+       页面上写没写（开发 / 贡献者都有分工），没有就用那一份名单自己的说法
+       （见下面脚本的 ROSTER_DESC）。
+       拿不到呼号的那几个（群组、每一位支持者）中间那行就空着，不编一个出来。 -->
+  <div class="deck-spot" id="deckSpot" aria-live="polite">
+    <div class="deck-spot-in">
+      <span class="spot-brand"><img src="assets/logo.png" alt="" width="30" height="30"><span class="spot-brand-name">APRSLocus</span></span>
+      <span class="spot-tag" id="spotTag"></span>
+      <b id="spotCall"></b>
+      <span class="spot-no" id="spotNo"></span>
+      <span class="spot-desc" id="spotDesc"></span>
+      <span class="spot-verse" id="spotVerse"></span>
+    </div>
+  </div>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>点一下，音乐就起来了。</p>
+      <p class="note">再往里，是一颗一直在转的星球。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-hello rise">
+      <h1>你好，很高兴认识你。</h1>
+      <p>保持你的好奇心，探索世界。</p>
+    </div>
+  </section>
+
+  <section class="slide hero" id="hero" data-sky="full" data-wall="bloom">
+  <!-- 装饰层不在这儿了 —— 它搬到了 #deck 的第一个孩子（.deck-sky，页面级固定层，
+       见下面那份注释）。以前它长在这一屏里，翻屏就跟着消失；现在整页共用一层，
+       翻屏时点云才有机会散开、再聚成下一屏的形状。 -->
+
+  <div class="hero-inner">
+
+    <div class="hero-copy">
+      <!-- 这一屏只有这一件事：那个数字（APRSlocus 累计转发报文总量，数值源
+           stats.json）。它是什么、为什么会一直往上走，全在下面的故事里。
+           注意它不再开头 —— 前面还有邀请与招呼两屏，翻过去才到这儿。 -->
+      <div class="hero-stat" id="heroTelemetry"
+           data-stats="stats.json" data-packets="1014641" data-rate="27"
+           data-updated="2026-10-26T19:28:00+08:00">
+        <span class="hs-label">APRSlocus 累计转发报文</span>
+        <span class="tl-value" id="tlPackets">1,014,641</span>
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+  <section class="slide" data-wall="bloom">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>那个数字是谁的</h2>
+        <p>它就在刚才那一屏上，一直往上走。不是刻度，是此刻天空里正在发生的应答。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>它不是统计图上刻好的一格。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>它是此刻，全世界 APRS 台站转发过的每一次应答 —— 可能来自城里某辆车的车载台，也可能来自山头上的一台手台，海面上的一条船。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>你盯久了会发现它并不匀速：有时一阵猛跳，有时半天不动。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>它不解释这些，只是一格一格往上走。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>每跳一格，就是有人在某个地方按下了发射键 —— 你看不见他，他也不知道你在看。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="beacon" data-wall="wave">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>电波从哪来</h2>
+        <p>一条报文到你眼前之前，先得有人把它送上天。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>它可能起于一台手机，顺着网络绕回来；也可能从一根蓝牙线、一块声卡、一台直连的电台里进来。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>路有很多条，落点只有一个 —— 你面前这张地图。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>最老的走法还是电波本身：从一根天线出去，被山头上的中继接住，再递给下一个听得见它的人。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>中间没有人审核，也没有人收钱，全靠一句老规矩 —— 我发了，你收到了，就替我说给下一个人听。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>于是同一张地图上，你会看见不同来路的点：有人从网络里来，有人从电台上来。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>他们未必相识，却在同一片天空下被画在了一起 —— 有些点出发的时候，你这边还是深夜。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>电波没有昼夜，只有谁守在天线后面。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="sphere" data-wall="night">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>夜里还亮着的那些点</h2>
+        <p>球面上每一粒闪，背后都有一台开着的机器，和一个还没睡的人。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>有的点在高速上，一路往北，天线比车顶高出一截；有的点守在山顶的中继站里，一整夜只重复一件事：把听见的往下传；有的点在船上、在货场、在离城区很远的地方，每隔几分钟说一句 —— 我还在，我还好。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>白天它们散得到处都是，夜里反而更清楚：人少了，每一个点都更像一个人。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>你未必认识他们。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>但当你看见一个点忽然往东挪了一格，你就知道：那边有人踩下了油门 —— 或者，刚刚按了一下发射键。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-wall="spark">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>下一格等你来补</h2>
+        <p>你还没开口，球面上就空着一格。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>总有一天你也会按一次发射键：到那时，球面上会多一点光，是你在回答。</p>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-inner slide-line rise">
+      <p>在那之前，先看一眼下面那份名单 —— 球面上已经亮着的那些点，不少是他们留下的。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="heart" data-wall="warm">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>感谢名单</h2>
+        <p>电波不会只从一台机器上发出来 —— 这颗星球也不是一个人做出来的。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 结尾那几屏（名单）：整颗球散成一片星野，名单上的每个人都是其中一粒 ──
+       名字写在星空里，不是写在卡片上：点一粒星、或点名单上的一个名字，
+       镜头就飞过去停在它上面，左下角报出这是谁。取景改回 full（散开的那一屏
+       铺满画面，不再缩到右上角），否则飞过去只剩一小块。 -->
+  <section class="slide" data-shape="scatter" data-sky="full">
+    <div class="slide-inner rise">
+      <div class="cgroup">
+            <div class="cgroup-title">开发</div>
+            <div class="contributors">
+              <span class="contributor"><span class="c-name">BG7LZQ（Darion Dong）</span><span class="c-role">创始人 · 全栈开发</span></span>
+              <span class="contributor"><span class="c-name">BG2HCB（清零）</span><span class="c-role">设置页代码优化</span></span>
+              <span class="contributor"><span class="c-name">BA4UAX</span><span class="c-role">繁体中文翻译</span></span>
+              <span class="contributor"><span class="c-name">BD3QID</span><span class="c-role">英文翻译 · 测试 · 电台直连</span></span>
+              <span class="contributor"><span class="c-name">BA7KSM</span><span class="c-role">翻译</span></span>
+              <span class="contributor"><span class="c-name">BH7GZB</span><span class="c-role">贡献代码</span></span>
+            </div>
+          </div>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full">
+    <div class="slide-inner rise">
+      <div class="cgroup">
+            <div class="cgroup-title">开山成员 · 15 位</div>
+            <ul class="name-list">
+              <li>BG7PGW</li>
+              <li>BG7LMW</li>
+              <li>BG7OSL</li>
+              <li>BG7MYN</li>
+              <li>BH6RIZ</li>
+              <li>BG7ORC</li>
+              <li>BG7MGR</li>
+              <li>BI7LKD</li>
+              <li>BI7JEN</li>
+              <li>BG7NMF</li>
+              <li>BH7LDC</li>
+              <li>BI7NQM</li>
+              <li>BG7OSQ</li>
+              <li>BA7KK</li>
+              <li>BG7PFE</li>
+            </ul>
+          </div>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full">
+    <div class="slide-inner rise">
+      <div class="cgroup">
+            <div class="cgroup-title">早期成员 · 46 位</div>
+            <ul class="name-list">
+              <li>BG4LZY</li>
+              <li>BA3RZL</li>
+              <li>BA4JLD</li>
+              <li>BA4RAB</li>
+              <li>BA8AFU</li>
+              <li>BA8AZJ</li>
+              <li>BD7LGH</li>
+              <li>BG0AVI</li>
+              <li>BG1QGB</li>
+              <li>BG0FCU</li>
+              <li>BH3PYF</li>
+              <li>BH6JOI</li>
+              <li>BH6TAD</li>
+              <li>BH2WTV</li>
+              <li>BI3ATV</li>
+              <li>BD6KIR</li>
+              <li>BG7PJV</li>
+              <li>BA3MDC</li>
+              <li>BG9KAG</li>
+              <li>BG5JVM</li>
+              <li>BG6XVJ</li>
+              <li>BA4IUD</li>
+              <li>BA7LUT</li>
+              <li>BH6SXA</li>
+              <li>BD1FEH</li>
+              <li>BG7OTH</li>
+              <li>BI4APF</li>
+              <li>BG7ODE</li>
+              <li>BD3QYZ</li>
+              <li>YF3CJU</li>
+              <li>BI4BNF</li>
+              <li>BA7OPF</li>
+              <li>BG6TA</li>
+              <li>BG2EFX</li>
+              <li>BG2WX</li>
+              <li>BA7NFI</li>
+              <li>BD4TYW</li>
+              <li>BH2WIX</li>
+              <li>BI8AQ</li>
+              <li>BG7QZC</li>
+              <li>BH4HGA</li>
+              <li>BA7JKT</li>
+              <li>BG2GNI</li>
+              <li>BG5AON</li>
+              <li>BG5WRY</li>
+              <li>BI2RPW</li>
+            </ul>
+          </div>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full">
+    <div class="slide-inner rise">
+      <div class="cgroup">
+            <div class="cgroup-title">赞助</div>
+            <div class="contributors">
+              <span class="contributor"><span class="c-name">STUDENT HAMS 群组</span></span>
+              <span class="contributor"><span class="c-name">BG7PGW</span></span>
+              <span class="contributor"><span class="c-name">BG7ORC</span></span>
+              <span class="contributor"><span class="c-name">BA4JLD</span></span>
+              <span class="contributor"><span class="c-name">BA4IUD</span></span>
+              <span class="contributor"><span class="c-name">BD1FEH</span></span>
+              <span class="contributor"><span class="c-name">BA3RZL</span></span>
+              <span class="contributor"><span class="c-name">BG2EFX</span></span>
+              <span class="contributor"><span class="c-name">BG2WX</span></span>
+              <span class="contributor"><span class="c-name">BA8AZJ</span></span>
+              <span class="contributor"><span class="c-name">BG7LZQ</span></span>
+              <span class="contributor"><span class="c-name">BD4TYW</span></span>
+              <span class="contributor"><span class="c-name">BH2WIX</span></span>
+              <span class="contributor"><span class="c-name">BG7QZC</span></span>
+              <span class="contributor"><span class="c-name">BH4HGA</span></span>
+              <span class="contributor"><span class="c-name">BG2GNI</span></span>
+              <span class="contributor"><span class="c-name">BG5AON</span></span>
+              <span class="contributor"><span class="c-name">BG5WRY</span></span>
+              <span class="contributor"><span class="c-name">BH7NOR</span></span>
+              <span class="contributor"><span class="c-name">APRS.TV</span></span>
+              <span class="contributor"><span class="c-name">每一位支持者</span></span>
+            </div>
+          </div>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full">
+    <div class="slide-inner rise">
+      <p class="cta-line">完整称号、简介与徽标在 <a href="member-card.html">荣誉墙</a>。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="scatter" data-sky="full" data-wall="roster">
+    <div class="slide-inner">
+      <div class="section-head rise">
+        <h2>已点亮用户</h2>
+        <p>截止 2026-10-15</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full">
+    <div class="slide-inner slide-lit rise">
+      <ul class="lit-list">
+        <li>BA3MFT</li>
+        <li>BA3MDC</li>
+        <li>BA3NM</li>
+        <li>BA3OKU</li>
+        <li>BA3OWU</li>
+        <li>BA3QAA</li>
+        <li>BA3QIV</li>
+        <li>BA3QIZ</li>
+        <li>BA3RZL</li>
+        <li>BA4D</li>
+        <li>BA4IGG</li>
+        <li>BA4INO</li>
+        <li>BA4IRT</li>
+        <li>BA4IUD</li>
+        <li>BA4JDF</li>
+        <li>BA4JLD</li>
+        <li>BA4KCQ</li>
+        <li>BA4KNW</li>
+        <li>BA4LGA</li>
+        <li>BA4LGG</li>
+        <li>BA4LGT</li>
+        <li>BA4LHZ</li>
+        <li>BA4LJH</li>
+        <li>BA4LLY</li>
+        <li>BA4QAO</li>
+        <li>BA4QFL</li>
+        <li>BA4SGJ</li>
+        <li>BA4SQI</li>
+        <li>BA4TCW</li>
+        <li>BA4TOG</li>
+        <li>BA4TUE</li>
+        <li>BA4TVO</li>
+        <li>BA4UAX</li>
+        <li>BA4UGU</li>
+        <li>BA5DX</li>
+        <li>BA6QZJ</li>
+        <li>BA7IVU</li>
+        <li>BA7KIR</li>
+        <li>BA7KK</li>
+        <li>BA7LUT</li>
+        <li>BA7NCM</li>
+        <li>BA7NFI</li>
+        <li>BA7NXE</li>
+        <li>BA7OPF</li>
+        <li>BA8AFU</li>
+        <li>BA8AZJ</li>
+        <li>BA8CCU</li>
+        <li>BA8CEM</li>
+        <li>BD1DJL</li>
+        <li>BD1DLD</li>
+        <li>BD1DNA</li>
+        <li>BD1FEH</li>
+        <li>BD2RJ</li>
+        <li>BD3MUE</li>
+        <li>BD3NCC</li>
+        <li>BD3OZV</li>
+        <li>BD3QID</li>
+        <li>BD3QYZ</li>
+        <li>BD3RDE</li>
+        <li>BD3RNC</li>
+        <li>BD3ROE</li>
+        <li>BD3RSS</li>
+        <li>BD3TL</li>
+        <li>BD3VX</li>
+        <li>BD4JK</li>
+        <li>BD4JWD</li>
+        <li>BD4TYW</li>
+        <li>BD4VCX</li>
+        <li>BD4XDX</li>
+        <li>BD4XUZ</li>
+        <li>BD4XZR</li>
+        <li>BD5DJF</li>
+        <li>BD6AJ</li>
+        <li>BD6IOW</li>
+        <li>BD6IYN</li>
+        <li>BD6JJP</li>
+        <li>BD6JVC</li>
+        <li>BD6KID</li>
+        <li>BD6KIR</li>
+        <li>BD7IDI</li>
+        <li>BD7LGH</li>
+        <li>BD7MXN</li>
+        <li>BD7NSK</li>
+        <li>BD7OVG</li>
+        <li>BD7OXH</li>
+        <li>BD7PJN</li>
+        <li>BD7PKU</li>
+        <li>BD7PSI</li>
+        <li>BD8AVG</li>
+        <li>BG0AVI</li>
+        <li>BG0CG</li>
+        <li>BG0DRZ</li>
+        <li>BG0EQG</li>
+        <li>BG0FCU</li>
+        <li>BG0GAA</li>
+        <li>BG1FGT</li>
+        <li>BG1FPX</li>
+        <li>BG1LPG</li>
+        <li>BG1TMI</li>
+        <li>BG2CTW</li>
+        <li>BG2EFY</li>
+        <li>BG2EZF</li>
+        <li>BG2FAS</li>
+        <li>BG2FNS</li>
+        <li>BG2FQR</li>
+        <li>BG2GDS</li>
+        <li>BG2GFC</li>
+        <li>BG2GGF</li>
+        <li>BG2GJM</li>
+        <li>BG2GMX</li>
+        <li>BG2GNI</li>
+        <li>BG2GST</li>
+        <li>BG2HCB</li>
+        <li>BG2HIO</li>
+        <li>BG2HJV</li>
+        <li>BG2HLZ</li>
+        <li>BG2HJU</li>
+        <li>BG2IUR</li>
+        <li>BG2QQA</li>
+        <li>BG2RDZ</li>
+        <li>BG2REN</li>
+        <li>BG2RHE</li>
+        <li>BG2RKH</li>
+        <li>BG2RZJ</li>
+        <li>BG2SKB</li>
+        <li>BG2TAU</li>
+        <li>BG2TPK</li>
+        <li>BG2UGM</li>
+        <li>BG2WRG</li>
+        <li>BG2WRH</li>
+        <li>BG2WX</li>
+        <li>BG2XUG</li>
+        <li>BG3HXE</li>
+        <li>BG3OTT</li>
+        <li>BG4BAH</li>
+        <li>BG4JQQ</li>
+        <li>BG4JTG</li>
+        <li>BG4JVB</li>
+        <li>BG4LVY</li>
+        <li>BG4QBF</li>
+        <li>BG4QL</li>
+        <li>BG4VRG</li>
+        <li>BG5BRG</li>
+        <li>BG5CLL</li>
+        <li>BG5CML</li>
+        <li>BG5DLQ</li>
+        <li>BG5DLS</li>
+        <li>BG5DYX</li>
+        <li>BG5EFJ</li>
+        <li>BG5EIT</li>
+        <li>BG5EQA</li>
+        <li>BG5FDC</li>
+        <li>BG5FHM</li>
+        <li>BG5FIM</li>
+        <li>BG5FLJ</li>
+        <li>BG5FNI</li>
+        <li>BG5FPX</li>
+        <li>BG5FTN</li>
+        <li>BG5GGL</li>
+        <li>BG5GBW</li>
+        <li>BG5HAW</li>
+        <li>BG5HCI</li>
+        <li>BG5HRE</li>
+        <li>BG5JNL</li>
+        <li>BG5JQV</li>
+        <li>BG5JSU</li>
+        <li>BG5JTX</li>
+        <li>BG5JVM</li>
+        <li>BG5WRQ</li>
+        <li>BG6FHP</li>
+        <li>BG6HKT</li>
+        <li>BG6HVG</li>
+        <li>BG6OJB</li>
+        <li>BG6QWN</li>
+        <li>BG6RIB</li>
+        <li>BG6TA</li>
+        <li>BG6TPG</li>
+        <li>BG6UOJ</li>
+        <li>BG6UNJ</li>
+        <li>BG6UZM</li>
+        <li>BG6WUH</li>
+        <li>BG6XVJ</li>
+        <li>BG7BJT</li>
+        <li>BG7EIX</li>
+        <li>BG7HTS</li>
+        <li>BG7IBQ</li>
+        <li>BG7JYY</li>
+        <li>BG7KMY</li>
+        <li>BG7LBL</li>
+        <li>BG7LMW</li>
+        <li>BG7LZQ</li>
+        <li>BG7MGR</li>
+        <li>BG7MHR</li>
+        <li>BG7MZS</li>
+        <li>BG7NIC</li>
+        <li>BG7NIP</li>
+        <li>BG7NHX</li>
+        <li>BG7NTZ</li>
+        <li>BG7OBT</li>
+        <li>BG7ORC</li>
+        <li>BG7OSL</li>
+        <li>BG7OSQ</li>
+        <li>BG7OTB</li>
+        <li>BG7OTJ</li>
+        <li>BG7OX1</li>
+        <li>BG7OXS</li>
+        <li>BG7PFE</li>
+        <li>BG7PFG</li>
+        <li>BG7PGW</li>
+        <li>BG7PJE</li>
+        <li>BG7PJV</li>
+        <li>BG7PKK</li>
+        <li>BG7PTY</li>
+        <li>BG7PUL</li>
+        <li>BG7RJJ</li>
+        <li>BG7RUF</li>
+        <li>BG7S</li>
+        <li>BG7TDT</li>
+        <li>BG7TDX</li>
+        <li>BG7XLH</li>
+        <li>BG7YBW</li>
+        <li>BG7ZJU</li>
+        <li>BG8DGK</li>
+        <li>BG8IF</li>
+        <li>BG8ITN</li>
+        <li>BG8KIY</li>
+        <li>BG8NRN</li>
+        <li>BG8SOM</li>
+        <li>BG9CKQ</li>
+        <li>BG9GOK</li>
+        <li>BG9IXE</li>
+        <li>BG9JXB</li>
+        <li>BG9KBB</li>
+        <li>BG9KBW</li>
+        <li>BG9KLK</li>
+        <li>BG9SMB</li>
+        <li>BH2RPW</li>
+        <li>BH2RSJ</li>
+        <li>BH2UFZ</li>
+        <li>BH2WIX</li>
+        <li>BH2WMQ</li>
+        <li>BH2WTV</li>
+        <li>BH2WWR</li>
+        <li>BH2XLH</li>
+        <li>BH3GUD</li>
+        <li>BH3HEV</li>
+        <li>BH3HXC</li>
+        <li>BH3IMM</li>
+        <li>BH3INQ</li>
+        <li>BH3NEK</li>
+        <li>BH3OEM</li>
+        <li>BH3PYB</li>
+        <li>BH3PYF</li>
+        <li>BH3QFL</li>
+        <li>BH3RAR</li>
+        <li>BH3UWF</li>
+        <li>BH3XZT</li>
+        <li>BH4FNS</li>
+        <li>BH4HGA</li>
+        <li>BH4JGD</li>
+        <li>BH4XBU</li>
+        <li>BH5HSJ</li>
+        <li>BH6ATE</li>
+        <li>BH6BHX</li>
+        <li>BH6BZO</li>
+        <li>BH6ESR</li>
+        <li>BH6QBY</li>
+        <li>BH6QHK</li>
+        <li>BH6RDY</li>
+        <li>BH6RIZ</li>
+        <li>BH6SAJ</li>
+        <li>BH6SXA</li>
+        <li>BH6TAD</li>
+        <li>BH6TBB</li>
+        <li>BH6TKP</li>
+        <li>BH7FJE</li>
+        <li>BH7FNI</li>
+        <li>BH7GGG</li>
+        <li>BH7GLV</li>
+        <li>BH7GSP</li>
+        <li>BH7GZB</li>
+        <li>BH7HCU</li>
+        <li>BH7IZN</li>
+        <li>BH7JFR</li>
+        <li>BH7KMH</li>
+        <li>BH8EQV</li>
+        <li>BH8ESR</li>
+        <li>BH8HFU</li>
+        <li>BH8PUQ</li>
+        <li>BH8RDD</li>
+        <li>BH8RKG</li>
+        <li>BH8UTO</li>
+        <li>BH9ARH</li>
+        <li>BH9CWU</li>
+        <li>BI1GHP</li>
+        <li>BI1MBQ</li>
+        <li>BI1RMN</li>
+        <li>BI1RNW</li>
+        <li>BI1UIH</li>
+        <li>BI2QIH</li>
+        <li>BI2RFV</li>
+        <li>BI2RJK</li>
+        <li>BI2RUY</li>
+        <li>BI2RWI</li>
+        <li>BI2RWJ</li>
+        <li>BI2RYG</li>
+        <li>BI3AEX</li>
+        <li>BI3ATV</li>
+        <li>BI3PHD</li>
+        <li>BI3PXQ</li>
+        <li>BI3QAC</li>
+        <li>BI3QVT</li>
+        <li>BI3SKR</li>
+        <li>BI3URO</li>
+        <li>BI4AAX</li>
+        <li>BI4ALQ</li>
+        <li>BI4APF</li>
+        <li>BI4AVZ</li>
+        <li>BI4BJI</li>
+        <li>BI4BOB</li>
+        <li>BI4BQJ</li>
+        <li>BI4IHH</li>
+        <li>BI4IXO</li>
+        <li>BI4JGM</li>
+        <li>BI4NAA</li>
+        <li>BI4PTE</li>
+        <li>BI4UMB</li>
+        <li>BI4WLT</li>
+        <li>BI6MHB</li>
+        <li>BI6OYU</li>
+        <li>BI7AQG</li>
+        <li>BI7BJK</li>
+        <li>BI7CDF</li>
+        <li>BI7DDL</li>
+        <li>BI7DIJ</li>
+        <li>BI7EKB</li>
+        <li>BI7EZR</li>
+        <li>BI7JEN</li>
+        <li>BI7KIF</li>
+        <li>BI7L</li>
+        <li>BI7LKD</li>
+        <li>BI7LOL</li>
+        <li>BI7NQM</li>
+        <li>BI8AQ</li>
+        <li>BI8DAE</li>
+        <li>BI8SDE</li>
+        <li>BI8SQF</li>
+        <li>BI9AIT</li>
+        <li>BI9BKC</li>
+        <li>BI9CLF</li>
+        <li>BI9CZD</li>
+        <li>BI9KC</li>
+        <li>BL7JV</li>
+        <li>BR7IAU</li>
+        <li>BV2AAA</li>
+        <li>BV2BBA</li>
+        <li>G1RBS</li>
+        <li>KE4PIC</li>
+        <li>KJ6DCI</li>
+        <li>LU4FGS</li>
+        <li>LX6FB</li>
+        <li>XE1J</li>
+        <li>XE1JMB</li>
+        <li>XE3JCL</li>
+        <li>YD1ION</li>
+        <li>YD2BBH</li>
+        <li>YD2OGD</li>
+        <li>YD3BEQ</li>
+        <li>YD6ASL</li>
+        <li>YD7KVL</li>
+        <li>YF3CJU</li>
+        <li>YG1CBG</li>
+        <li>YG1RBS</li>
+        <li>YV4AVN</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slide" data-sky="full" data-wall="bloom">
+    <div class="slide-inner slide-line rise">
+      <p>名单之外，还有一整片正在应答的天空。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="heart" data-wall="warm">
+    <div class="slide-inner slide-line rise">
+      <p>谢谢你们 —— 名单上的每一个名字，和名单外的每一次应答。</p>
+    </div>
+  </section>
+
+  <section class="slide" data-shape="73" data-wall="bloom">
+    <div class="slide-inner slide-slogan rise">
+      <p>那颗星球还在转，那个数字还在往上走 —— 下一次让它亮起来的，可能就是你。</p>
+    </div>
+  </section>
+
+</div>
+
+</main>
+
+<!-- 页脚那句「点一下继续」：第一下之后才亮起来，走到最后一屏自己退场。 -->
+<div class="deck-hint" id="deckHint" aria-hidden="true">点一下继续</div>
+
+<!-- ═══════════ BGM ═══════════
+     整页唯一的声音（网易云音乐「14.3 Billion Years」/ Outer Wilds 原声，循环播放）。
+     这里不再挂那个跨域 iframe —— 它的 <audio> 活在别人的壳子里，读者那一下手势
+     传不进去，「点一下就有声」就永远得看它脸色。换成一枚我们自己的 <audio>：
+     手势还在手上时直接 play()，声音就出得来。
+     右下角那颗音符是开关，与右上角那颗主题按钮同一套玻璃语言、同一个右侧留白，
+     两者在同一列上。音源万一载不出来（被墙、被浏览器挡），脚本会退回原来那个
+     网易云播放器 —— 退路总得留一条。 -->
+<div class="story-bgm" id="bgmBox">
+  <button class="theme-toggle bgm-toggle" id="bgmToggle" type="button" aria-pressed="false" aria-label="背景音乐：播放" title="背景音乐：播放"><i class="fa-solid fa-music" aria-hidden="true"></i></button>
+</div>
+<!-- 声音源：网易云音乐「14.3 Billion Years」（Outer Wilds 原声），循环。
+     不写 controls —— 开关就是上面那颗音符，播放器控件那一条不该出现在这里。 -->
+<audio id="bgm" loop preload="auto" src="https://music.163.com/song/media/outer/url?id=1903408779.mp3"></audio>
+
+<!-- ── 名单与节奏：这段必须在**页尾那段翻屏脚本之前** ──
+     名单只读一次（名字有多少个 → 星野里要补多少粒可点的符号），翻屏脚本做点击
+     映射、模块铺星野，读的都是这同一份（window.__deckNames / PAGE.symbols）：
+     少一处不一致的机会，也少一个“名单读在建立之前”的空数组。
+     节奏覆盖（PAGE）必须在 planet-3d.js 之前写好：它一进来就读这个对象，
+     之后再改没用 —— gatherMs 2400 → 4400（开场慢慢聚成一颗球），
+     scrollEase 0.17 → 0.085（往下拉是滑过去的），deck: true（只有这页开：
+     装饰层是页面级固定层，点云按各屏 data-shape 换形状），zoom / pxSize
+     （星球大一圆、粒子粗一档）；三语首页不传这些键，逐像素与以前一致。 -->
+<script>
+(function () {
+  var sel = ".slide .lit-list li, .slide .name-list li, .slide .c-name";
+  var list = [].slice.call(document.querySelectorAll(sel));
+  window.__deckNames = { sel: sel, list: list };
+  window.__planet3dPage = { gatherMs: 4400, scrollEase: 0.085, deck: true,
+    zoom: 1.18, pxSize: 1.35, symbols: list.length };
+})();
+</script>
+
+<!-- 这一页是分屏 deck：脚本只管两件事 —— 翻屏与音乐。第一下点按同时把音乐
+     叫起来（浏览器只认手势里起的声音），所以那一屏写的就是「点一下」。 -->
+<script>
+(function () {
+  var deck = document.getElementById("deck");
+  var wall = document.getElementById("deckWall");
+  var hint = document.getElementById("deckHint");
+  var audio = document.getElementById("bgm");
+  var btn = document.getElementById("bgmToggle");
+  var box = document.getElementById("bgmBox");
+  var val = document.getElementById("tlPackets");
+  var slides = deck ? deck.getElementsByClassName("slide") : [];
+  var last = slides.length - 1;
+  var cur = 0, begun = false, playing = false, want = false, dead = false, watch = 0;
+  var lastStep = 0, touchY = 0, GAP = 650;
+  var NEXT = [" ", "Enter", "ArrowRight", "ArrowDown", "PageDown"];
+  var PREV = ["ArrowUp", "ArrowLeft", "PageUp", "Backspace"];
+
+  /* ── 0. 星野点名 ──
+     结尾那几屏，名单上的每个人就是球面上的一粒符号
+     （名字有多少个，模块就补多少粒 —— 见 planet-3d.js 的 scatter）。
+     点一粒星、或点名单上的一个名字，是同一件事：镜头飞过去停在那一粒上，
+     那一粒换成暖金，下面报出他在哪份名单上、他是谁、编号多少、他是干什么的
+     （页面上写着分工的就用页面上的，没有的看 ROSTER_DESC）。
+     点着谁的这一屏，其余东西（名单正文、主题按钮、音乐开关、署名、那句提示）
+     一起退开 —— 留下的就是能直接截下来发出去的那一张。收回之后手势照旧。
+     点着人这一屏自己那套操作（拖转 / 收回 / 换人）写在 0b 段。”
+     编号由名字本身哈希出来（两个 32 位 FNV-1a 拼 20 位）：没有随机数、没有时间，
+     同一个呼号永远是同一串号 —— 名单增补、页面改版都不会动它。 */
+  var nameList = (window.__deckNames && window.__deckNames.list) || [];
+  var spotBox = document.getElementById("deckSpot");
+  var spotCall = document.getElementById("spotCall");
+  var spotNo = document.getElementById("spotNo");
+  var spotTag = document.getElementById("spotTag");
+  var spotDesc = document.getElementById("spotDesc");
+  var spotVerse = document.getElementById("spotVerse");
+  var spotOrd = -1;
+
+  /* 那一粒飞去哪儿，这一行字就跟到哪儿：模块每帧报一次它的屏幕位置
+     （planet-3d.js 的 reportSpot），这里只管把它挪过去 —— 镜头飞的整段里
+     它是跟着那一粒一起过去的，不是页脚那一条。收回时模块报 null：不用管，
+     .on 一摘就淡掉了。
+     这一行字跟着那一粒走，但**不许走出画面**：那一粒靠近视口边上的时候
+     把它按回来（点名之后球会转过来正对着它，所以这只是一段路上的事）。 */
+  var spotIn = spotBox ? spotBox.firstElementChild : null;
+  if (window.__planet3dPage) {
+    window.__planet3dPage.onSpot = function (o) {
+      if (!spotBox) return;
+      if (!o) { spotBox.style.opacity = ""; return; }   // 收回：位置与浓淡交回 CSS
+      /* k = 点名到几分 × 那一粒还在不在画面里：自己把球转开之后，这一行字跟着
+         淡掉（淡入淡出都在模块那一侧每帧推进一个数），所以这里直接写进 style。 */
+      if (typeof o.k === "number") spotBox.style.opacity = o.k.toFixed(3);
+      var x = o.x, y = o.y, pad = 14;
+      if (spotIn) {
+        var w = spotIn.offsetWidth, h = spotIn.offsetHeight;
+        var lo = pad + w / 2, hi = window.innerWidth - pad - w / 2;
+        if (lo <= hi) { if (x < lo) x = lo; else if (x > hi) x = hi; }
+        else x = window.innerWidth / 2;
+        if (y + 24 + h > window.innerHeight - pad) y = window.innerHeight - pad - h - 24;
+        if (y < pad - 24) y = pad - 24;
+      }
+      spotBox.style.transform = "translate3d(" + x.toFixed(1) + "px," + y.toFixed(1) + "px,0)";
+    };
+  }
+
+  /* 一次哈希，两串：星表编号与那句诗都从它来 —— 同一个呼号永远同一串号、
+     同一句诗，刷新多少次、名单增补都不变（没有随机数、没有时间）。 */
+  function hashOf(s) {
+    var h1 = 0x811c9dc5, h2 = 0x9e3779b9, i, c;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ (c * (i + 7)), 0x85ebca6b) >>> 0;
+    }
+    return [h1, h2];
+  }
+  function starNo(s) {
+    var h = hashOf(s);
+    /* 不用 BigInt（不必为此抬高门槛）：两串 32 位十进制各自补齐 10 位，
+       拼起来就是 20 位长号。 */
+    var all = ("0000000000" + h[0].toString(10)).slice(-10)
+      + ("0000000000" + h[1].toString(10)).slice(-10);
+    var out = "", i;
+    for (i = 0; i < 20; i += 4) out += (i ? " " : "") + all.substring(i, i + 4);
+    return out;
+  }
+  /* 那几行诗：截图发出去时得有一句像样的。按呼号挑一句（同一个呼号永远同一句），
+     只写在这儿，不改页面上已经写着的文案。 */
+  var VERSES = [
+    "天涯不过一句 73。",
+    "星星不说话，但它一直亮着。",
+    "这颗星上，有一粒是他的。",
+    "电波去过的地方，都算回家。",
+    "隔着几千公里，他也在。",
+    "所有的远，都已经被量过一遍。",
+    "星图上的每一点，都是一个声音。",
+    "星球转着，他的名字在上面。"
+  ];
+  function verseOf(s) { return VERSES[hashOf(s)[1] % VERSES.length]; }
+  /* 他在哪一份名单上：读这一屏自己的标题（已点亮用户 / 开发 / 开山成员 · 15 位 …），
+     不另编一个称呼 —— 页面上怎么写，这里就怎么叫。 */
+  function rosterOf(el) {
+    var host = el && el.closest ? el.closest(".slide") : null;
+    var head = host ? host.querySelector("h2, .cgroup-title") : null;
+    return head ? (head.textContent || "").replace(/\s+/g, " ").trim() : "";
+  }
+  /* 一句描述：先看页面上写没写（开发 / 贡献者那一行都注了分工，如「创始人 · 全栈开发」），
+     没有的（纯呼号的名单）就用这一份名单自己的说法 —— 说法只写在这一张表里，
+     不编人名也不编经历。 */
+  var ROSTER_DESC = {
+    "已点亮用户": "点亮这颗星球的人",
+    "开发": "把这颗星球做出来的人",
+    "开山成员 · 15 位": "最早的那一批",
+    "早期成员 · 46 位": "很早就来了",
+    "赞助": "星球是这么亮起来的"
+  };
+  function descOf(el, roster) {
+    var role = el && el.closest ? el.closest(".contributor") : null;
+    var t = role ? role.querySelector(".c-role") : null;
+    var s = t ? (t.textContent || "").replace(/\s+/g, " ").trim() : "";
+    return s || ROSTER_DESC[roster] || "";
+  }
+  function paintSpot(ord) {
+    spotOrd = ord;
+    if (deck) deck.classList.toggle("pick", ord >= 0);   // 这一屏交给他一个人
+    if (!spotBox) return;
+    var on = ord >= 0;
+    if (on) {
+      var el = nameList[ord];
+      var txt = ((el && el.textContent) || "").replace(/\s+/g, " ").trim();
+      var call = (txt.match(/^[A-Z]{1,2}[0-9][A-Z]{1,4}/) || [""])[0];
+      if (spotTag) spotTag.textContent = rosterOf(el);
+      spotCall.textContent = call;                 // 拿不到呼号：这一行就空着
+      spotNo.textContent = "星表编号 " + starNo(call || txt);
+      if (spotDesc) spotDesc.textContent = descOf(el, spotTag ? spotTag.textContent : "");
+      if (spotVerse) spotVerse.textContent = "「" + verseOf(call || txt) + "」";
+      spotBox.title = txt;
+    } else {
+      spotBox.style.opacity = "";         // 收回：浓淡交回 CSS（.on 一摘就淡掉）
+    }
+    spotBox.classList.toggle("on", on);
+  }
+  function spotOff() {
+    if (spotOrd < 0) return;
+    paintSpot(-1);
+    if (window.__planet3d && window.__planet3d.unfocus) window.__planet3d.unfocus();
+  }
+  /* 点到星野里的一粒（或名单上的一个名字）就点名。名单上的名字是**精确目标**
+     （点的就是它）；星野里的符号得真的点到那一粒才认。点着一个人时再点星野里的
+     另一粒＝换人，点的就是当下那一粒＝收回。点空白处不归这里管 —— 页尾的 click
+     先把它收回去（见那里），不翻屏。 */
+  function spotPick(e) {
+    /* 名单是前面那段脚本建好的（必须早于本段，见 <audio> 下面那段注释）；
+       万一它没跑到（旧缓存、页面被改过顺序），这里再要一次 —— 不要让“点了名字
+       没反应”这种事再出现第二次。 */
+    if (!nameList.length && window.__deckNames) nameList = window.__deckNames.list || [];
+    if (!nameList.length || curShape !== "scatter" || !window.__planet3d) return false;
+    var t = e.target, i = -1, k, onName = false;
+    if (t && t.nodeType === 1) {
+      for (k = 0; k < nameList.length; k++) if (nameList[k] === t) { i = k; break; }
+    }
+    onName = i >= 0;
+    if (!onName && window.__planet3d.symbolAt) i = window.__planet3d.symbolAt(e.clientX, e.clientY);
+    if (i < 0) return false;
+    if (i === spotOrd) { spotOff(); return true; }
+    /* 点着一个人时再点星野里的另一粒：换到他身上（点得准才算 —— 名单那一层这时
+       是隐的，星野里那 13px 的命中圈是唯一的入口）；点空白处则由页尾的 click
+       先收回这一屏，不翻屏。
+       让模块先点头：它那边的符号表与这份名单万一对不上（名字多过符号），
+       它回的就不是这个序号 —— 那一下退回翻屏，不要让页面“点了没反应”。 */
+    if (window.__planet3d.focusSymbol(i) !== i) return false;
+    paintSpot(i);
+    return true;
+  }
+
+  /* ── 0b. 聚焦之后：按住画面＝自己转这颗球 ──
+     点名那一半是自动的（球自己转到那一粒正对镜头、再把它摆到正中）。点着谁之后，
+     画面这一半就交回给人：按住拖动把球转到想看的那一面，自动那一半让位（见
+     planet-3d.js 的 look）。松手停在原地，不弹回去 —— 弹回去就是跳。
+     这一段只在「点着谁」的时候认手势（spotOrd >= 0），别的屏一律照旧：星球不接
+     指针。一次拖动（位移超过 4px）收尾的那一下不再算一次点击 —— 不然松手就把
+     这一屏翻走了。 */
+  var dragOn = false, dragX = 0, dragY = 0, dragMoved = 0, dragAte = false;
+  function canTurn() { return spotOrd >= 0 && window.__planet3d && window.__planet3d.look; }
+  function dragStop() {
+    if (!dragOn) return;
+    dragOn = false;
+    if (deck) deck.classList.remove("dragging");
+    if (dragMoved > 4) {
+      dragAte = true;
+      /* 400ms 后自己作废：那一下收尾的 click 每次都紧接着来，但万一它没来
+         （手松开在窗口外），也不至于把下一次点击吃掉。 */
+      window.setTimeout(function () { dragAte = false; }, 400);
+    }
+  }
+  document.addEventListener("pointerdown", function (e) {
+    if (!canTurn()) return;
+    if (e.button !== undefined && e.button !== 0) return;   // 只认左键 / 单指
+    dragOn = true; dragX = e.clientX; dragY = e.clientY; dragMoved = 0;
+    /* 把这一串指针收在它按下的那一层上：拖出窗口外松手也能收到 pointerup
+       （不然 dragOn 会一直挂着，下一次划动就成了「一边翻屏一边转球」）。 */
+    if (e.target && e.target.setPointerCapture) {
+      try { e.target.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!dragOn) return;
+    var dx = e.clientX - dragX, dy = e.clientY - dragY;
+    dragX = e.clientX; dragY = e.clientY;
+    dragMoved += Math.abs(dx) + Math.abs(dy);
+    if (dragMoved < 4) return;                             // 手抖 / 轻点：还不算拖动
+    if (deck) deck.classList.add("dragging");
+    window.__planet3d.look(dx, dy);
+  });
+  document.addEventListener("pointerup", dragStop);
+  document.addEventListener("pointercancel", dragStop);
+  window.addEventListener("blur", dragStop);
+
+  /* 从头读起：这一页是线性的，中途刷新回来不该落在半路上。 */
+  if (window.history && "scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
+  window.scrollTo(0, 0);
+
+  /* ── 1. 换屏 ──
+     display 从 none 变回来时 CSS 动画才会起跑，所以每一屏的内容每次都是新落下的；
+     页面自身不位移 —— 这一版没有「滚到刚出现的那一句」这回事。 */
+  function show(i) {
+    if (i < 0 || i > last || i === cur) return false;
+    slides[cur].classList.remove("on");
+    cur = i;
+    var el = slides[cur];
+    el.classList.add("on");
+    sky(el);
+    spotOff();          // 翻屏就把点名收回：下一屏多半已经不是那片星野了
+    var inner = el.querySelector(".slide-inner");
+    if (inner) inner.scrollTop = 0;
+    /* 万一某一屏里还带着画布：display:none 时量到的是 0，露脸的下一帧补一次尺寸。
+       （天空层那两块画布已经不在任何一屏里了 —— 它们固定铺满视口，自己量得准。） */
+    if (el.querySelector("canvas")) {
+      requestAnimationFrame(function () { window.dispatchEvent(new Event("resize")); });
+    }
+    if (hint) hint.classList.toggle("on", begun && cur < last);
+    return true;
+  }
+  /* ── 1b. 天空与壁纸：翻到哪一屏，点云散开、聚成那一屏的形状，整页天色也换一档 ──
+     形状写在屏上的 data-shape（sphere / beacon / heart / 73），取景写在 data-sky
+     （full = 地图那一屏铺开，soft = 有正文的屏退到右上角），天色写在 data-wall（壁纸与粒子同档：翻到那一屏，天光与点云的色温一起变）。
+     这三件事都不是 CSS 自己能做的：形状得让 WebGL 那层重新采样点云。
+     只在真的换了的时候才动一次 —— 连续几屏没写 data-shape / data-wall 的时候它
+     什么都不做（点云静静挂在背景里，天色也沿用上一屏那一档）。 */
+  var curShape = "sphere", curWall = "", wallTop = 0;
+  var wallLayers = wall ? wall.getElementsByTagName("i") : [];
+  /* 换天色：新色阶写进**暗着**的那一层，再把它点亮、把原来那层按下去。
+     色阶名与星球同档（粒子跟着天一起变），拼进 class 之前还是先看一眼字符集。 */
+  function wallTo(name) {
+    if (!wallLayers.length || name === curWall || !/^[a-z]{2,10}$/.test(name)) return;
+    curWall = name;
+    var next = wallLayers[1 - wallTop];
+    next.className = "w-" + name;
+    next.classList.add("on");
+    wallLayers[wallTop].classList.remove("on");
+    wallTop = 1 - wallTop;
+    if (window.__planet3d && window.__planet3d.mood) window.__planet3d.mood(name);
+  }
+  function sky(el) {
+    var mode = (el && el.getAttribute("data-sky")) || "soft";
+    if (deck.getAttribute("data-sky") !== mode) deck.setAttribute("data-sky", mode);
+    var s2 = el && el.getAttribute("data-shape");
+    if (s2 && s2 !== curShape && window.__planet3d && window.__planet3d.shape) {
+      curShape = s2;
+      window.__planet3d.shape(s2);
+    }
+    var w2 = el && el.getAttribute("data-wall");
+    if (w2) wallTo(w2);
+  }
+
+  function advance() {
+    if (!begun) { begun = true; react(); start(); }        // 第一下：音乐起来
+    else if (!playing && !dead && !want) start();          // 还没响？那这一下再试一次
+    show(cur + 1);
+  }
+  function back() { show(cur - 1); }
+  /* 正文比一屏高的那一屏（名单）在自己那一栏里滚：手指 / 滚轮落在它上面、还没滚到边，
+     就让它自己滚，滚到头才轮到翻屏 —— 否则名单的后半截没人读得到。 */
+  function scrollable(target, dir) {
+    if (spotOrd >= 0) return false;   // 点着名的时候名单已经不在屏上：整屏只翻页
+    var el = target;
+    while (el && el !== deck) {
+      var max = el.scrollHeight - el.clientHeight;
+      if (max > 4) {                                     // 真有可滚的余量（不是舍入误差）
+        if (dir > 0 ? max - el.scrollTop > 4 : el.scrollTop > 4) return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+  /* 一次手势只走一屏；该翻屏时才 preventDefault（该让正文自己滚的时候不拦） */
+  function step(e, dir) {
+    if (e && (e.ctrlKey || e.metaKey)) return;             // 缩放 / 系统手势不抢
+    /* 点着谁的时候，手势归「转视角」：往回（上滚 / 上滑）＝先退回星野，往前一律
+       不走 —— 看着一个人的时候顺手一下就把整屏翻走，那才是真的「跳」。 */
+    if (spotOrd >= 0) {
+      if (e && e.preventDefault) e.preventDefault();
+      /* 退出这一屏后，同一串惯性的后半段不再继续往回翻（lastStep 把 GAP 也吃上） */
+      if (dir < 0) { spotOff(); lastStep = Date.now(); }
+      return;
+    }
+    if (e && scrollable(e.target, dir)) return;
+    if (e && e.preventDefault) e.preventDefault();
+    var now = Date.now();
+    if (now - lastStep < GAP) return;
+    lastStep = now;
+    if (dir < 0) back(); else advance();
+  }
+  document.addEventListener("click", function (e) {
+    var t = e && e.target;
+    if (dragAte) return;                       // 刚拖完：那一下收尾的 click 不算数
+    if (t && t.closest && t.closest("a, button, iframe, input, select, textarea")) return;
+    if (spotPick(e)) return;                   // 点到星野里的某一粒：点名，不翻屏
+    /* 点着谁的时候，点空白处＝先收回（球自转回标准机位、名单回来），不翻屏 ——
+       不然点哪儿都整屏翻走，正是「跳来跳去」。再点一下才往前走。 */
+    if (spotOrd >= 0) { spotOff(); return; }
+    advance();
+  });
+  document.addEventListener("keydown", function (e) {
+    var k;
+    /* 点着谁的时候键盘也不翻屏：Esc / Backspace 退回星野（先看清，再翻页）。 */
+    if (spotOrd >= 0) {
+      if (e.key === "Escape" || e.key === "Backspace") { e.preventDefault(); spotOff(); }
+      return;
+    }
+    for (k = 0; k < NEXT.length; k++) {
+      if (NEXT[k] === e.key) { e.preventDefault(); advance(); return; }
+    }
+    for (k = 0; k < PREV.length; k++) {
+      if (PREV[k] === e.key) { e.preventDefault(); back(); return; }
+    }
+  });
+  window.addEventListener("wheel", function (e) { step(e, e.deltaY > 0 ? 1 : -1); }, { passive: false });
+  window.addEventListener("touchstart", function (e) {
+    if (e.touches && e.touches.length === 1) touchY = e.touches[0].clientY;
+  }, { passive: true });
+  window.addEventListener("touchmove", function (e) {
+    if (dragOn) return;                                    // 手指正在转球：这一串不算滑动手势
+    if (!e.touches || !e.touches.length) return;
+    var d = touchY - e.touches[0].clientY;
+    if (Math.abs(d) < 24) return;                          // 横向划动 / 轻点：不抢
+    step(e, d > 0 ? 1 : -1);
+  }, { passive: false });
+
+  /* ── 2. 音乐 ──
+     声音源是我们自己的 <audio>：手势还在手上时直接 play()，声音就出得来。
+     右下角那颗音符是开关（点它只开关音乐，不算往前走一屏）。 */
+  function react() {          // 这一下的回响：球面闪一批点，那个数字亮一下
+    try {
+      if (window.__planet3d && window.__planet3d.flash) window.__planet3d.flash(1);
+    } catch (e) {}
+    if (val) { val.classList.remove("bump"); void val.offsetWidth; val.classList.add("bump"); }
+  }
+  function paint(on) {
+    if (!btn) return;
+    btn.classList.toggle("on", !!on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.setAttribute("aria-label", on ? "背景音乐：暂停" : "背景音乐：播放");
+    btn.setAttribute("title", on ? "背景音乐：暂停" : "背景音乐：播放");
+  }
+  /* 退路：音源载不出来（被墙、被浏览器或插件挡掉、超时没动静）就换回原来那个
+     网易云播放器，还读者一颗自己能按的播放键。 */
+  function fallback() {
+    if (dead) return;
+    dead = true;
+    want = false;
+    if (watch) { clearTimeout(watch); watch = 0; }
+    if (box) {
+      box.innerHTML = '<iframe title="背景音乐播放器（网易云音乐）" allow="autoplay"'
+        + ' frameborder="no" border="0" marginwidth="0" marginheight="0" width="330" height="86"'
+        + ' src="//music.163.com/outchain/player?type=2&id=1903408779&auto=1&height=66"></iframe>';
+    }
+  }
+  function start() {
+    if (!audio || dead) return;
+    want = true;
+    paint(true);
+    var p = audio.play();
+    if (p && p.catch) p.catch(function () { want = false; paint(false); });
+    if (!watch) watch = setTimeout(function () {      // 12s 还没动静，就当它载不出来
+      if (audio && audio.paused) fallback();
+    }, 12000);
+  }
+  if (audio) {
+    audio.addEventListener("playing", function () { playing = true; paint(true); });
+    audio.addEventListener("pause", function () { playing = false; want = false; paint(false); });
+    audio.addEventListener("error", fallback);
+  }
+  if (btn) btn.addEventListener("click", function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (audio && want) audio.pause();
+    else { react(); start(); }
+  });
+
+  /* 脚本接手了：第一屏由 .on 决定（.ready 交回那条兜底规则） */
+  deck.classList.add("ready");
+  slides[cur].classList.add("on");
+  sky(slides[cur]);
+})();
+</script>
+
+<!-- 与首页同一份脚本：main.js 负责 body.loaded / 显形 / 主题 / 首屏粒子，
+     planet-3d.js 负责星球与那个会跳的数字。两个 ?v= 与三语首页保持一致。 -->
+<script src="js/main.js?v=8"></script>
+<!-- 名单、节奏覆盖已经在前面写好了（见 <audio> 下面那一段）—— 那一段必须先
+     于页尾那段翻屏脚本：它做点击映射时读的就是那份名单。 -->
+<script src="js/planet-3d.js?v=27"></script>
+</body>
+</html>

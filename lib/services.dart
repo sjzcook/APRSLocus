@@ -18,6 +18,12 @@ class LocService {
   /// 定位模式：'gps' = 纯 GPS；'gps_network' = GPS + 网络辅助；
   /// 'network' = 纯网络（只用基站 / Wi-Fi，不注册 GPS）
   String mode = 'gps_network';
+  /// GPS 采样间隔（毫秒）：用户在设置页可以调（默认 1000）。
+  ///
+  /// 原来是原生侧写死的 1 秒 / 5 米；现在由这里带上，服务启动时随
+  /// `startService` 一起传，运行中改动走 [setSampling]。只作用于 GPS provider ——
+  /// 网络定位固定 10 秒（基站/Wi-Fi 本来也不会更新得更频）。
+  int samplingMs = 1000;
   /// 定位回调。
   ///
   /// [lastKnown] 为真表示这**不是**实时定位，而是系统缓存的「上次已知位置」
@@ -38,8 +44,15 @@ class LocService {
   /// 代价是「基站/Wi-Fi 粗定位」与「GPS」在上层长得一模一样 —— 而前者会一次偏
   /// 几百米到几公里，这就是用户报的「网络让定位飞来飞去」。空串表示平台没给
   /// （iOS/桌面），按「未知」处理，不当作粗定位（保持旧行为，不制造回归）。
+  ///
+  /// [satellites] —— 参与定位的卫星数（null = 平台/机型不提供）。
+  /// 只有 Android 侧会填（`Location.extras["satellites"]`，机型缺失时回退到
+  /// `GnssStatus` 里 usedInFix 的颗数）；iOS / 桌面 / IP 网络定位都是 null。
+  /// 它**不参与任何定位取舍**，只用来：① 信标里可选地带上 `SAT=nn`；
+  /// ② 设置页如实显示「现在几颗星」。所以 null（不知道）与 0（已知一颗都没有）
+  /// 必须区分开，别把 null 当 0。
   void Function(double lat, double lng, double alt, double speed, double bearing,
-      bool lastKnown, double accuracyM, String source)? onFix;
+      bool lastKnown, double accuracyM, String source, int? satellites)? onFix;
   void Function(String status)? onStatus;
   /// 通知栏"连接/断开"按钮点击回调
   void Function()? onToggleConnect;
@@ -49,6 +62,20 @@ class LocService {
   /// 仅保活模式：不采集定位，只维持前台服务（Android）让连接与定时器存活。
   /// 非 Android 平台无此服务，返回 false 表示调用方无需处理。
   bool _keepAliveMode = false;
+
+  /// 上一次真正交给系统的常驻通知文字，用于去重。
+  ///
+  /// 为什么必须去重：[updateNotification] 的调用点很密（每个定位回调、台次/收包
+  /// 统计变化、15 秒保活 tick、链路翻转…），而**文字没变的重发没有任何信息量**。
+  /// 代价是实实在在的：同一条文字反复 `notify()`，很多 ROM 会把常驻通知当成
+  /// 「又来一条」再弹一次（用户报的「反复弹出待确认上报」就是这个）。
+  String _lastNotifText = '';
+
+  /// 通知需要重发：服务刚 startForeground 过，原生手上只有占位文字
+  /// （`LocationService.onStartCommand` 会先写「APRSlocus 运行中」）。
+  /// 缺了这个标记，去重会把服务重启后的第一次刷新当成「没变」而跳过，
+  /// 通知就永远停在占位文字上。
+  bool _notifDirty = true;
 
   /// 启动「仅保活」：**不需要定位权限**，只为让应用在后台不被冻结。
   ///
@@ -61,12 +88,63 @@ class LocService {
       _listenEvents();
       await _channel.invokeMethod('startService', {'mode': 'keepalive'});
       _keepAliveMode = true;
+      _notifDirty = true; // 服务刚起：原生通知是占位文字，下一次刷新必须真发
       onStatus?.call('模拟位置 · 后台保活已启动');
       return true;
     } catch (e) {
       onStatus?.call('后台保活启动失败: $e');
       return false;
     }
+  }
+
+  /// 手机侧采样是否正被外置 GPS「待机」（见 [pauseForExternal]）。
+  bool _pausedForExternal = false;
+  bool get pausedForExternal => _pausedForExternal;
+
+  /// 外置 GPS 供位期间把**手机侧采样**停掉，但保留前台服务。
+  ///
+  /// ⚠ 这里必须是「切模式」而不是 [stop]：`stop()` 会把前台服务、WakeLock 与
+  /// 定位事件订阅一起拆掉，应用退到后台随即被系统冻结 —— APRS-IS 连接静默死掉、
+  /// 信标定时器停摆，而界面上的「已连接」还亮着。用户报的「断开外置 GPS 后
+  /// 自动上报停了、手动上报只有报文没有位置」就是这条路径（`state.dart` 的
+  /// `_syncPhoneGps` 原来在这里调的是 `loc.stop()`）。
+  ///
+  /// 原生侧 `LocationService.setModeStatic` 收到 `keepalive` 会注销 provider
+  /// 监听与「最后已知位置」轮询，前台服务与 WakeLock 原样保留。
+  ///
+  /// 返回值：采样真的停下来了吗（false = 手机定位本来就没在跑）。
+  Future<bool> pauseForExternal() async {
+    if (!_running) return false;
+    try {
+      await _channel.invokeMethod('setLocationMode', {'mode': 'keepalive'});
+      _pausedForExternal = true;
+      return true;
+    } catch (e) {
+      onStatus?.call('手机定位待机失败: $e');
+      return false;
+    }
+  }
+
+  /// 外置 GPS 失效：把手机侧采样接回来（服务一直在，不用重启）。
+  ///
+  /// 返回 false 有两种情况：本来就没停过，或者服务已经不在了 ——
+  /// 后者调用方必须改用 [start]（`state.dart` 的 `_resumePhoneGps` 就这么分）。
+  Future<bool> resumeFromExternal() async {
+    if (!_pausedForExternal) return false;
+    _pausedForExternal = false;
+    if (!_running) return false;
+    try {
+      await _channel.invokeMethod('setLocationMode', {'mode': mode});
+      return true;
+    } catch (e) {
+      onStatus?.call('恢复手机定位失败: $e');
+      return false;
+    }
+  }
+
+  /// 测试用：把服务标记成「已在跑」，省掉在主机上真的启动一套定位。
+  void debugMarkRunning() {
+    _running = true;
   }
 
   /// 订阅原生事件通道（保活/定位共用）
@@ -96,6 +174,9 @@ class LocService {
             // 区分「GPS 实测」与「基站/Wi-Fi 粗定位」—— 后者精度字段常常
             // 报得很乐观（20~40m）却实际偏几百米，只看 accuracy 拦不住。
             (event['provider'] as String?) ?? '',
+            // 参与定位的卫星数：只有 Android 侧会带（机型不给时是 null）。
+            // 与精度/来源同一类 —— 解析层不读的话，上层永远拿不到它。
+            (event['satellites'] as num?)?.toInt(),
           );
         }
       }
@@ -144,9 +225,11 @@ class LocService {
       }
       // 先订阅事件通道，避免漏掉服务启动后的初始定位
       _listenEvents();
-      // 启动前台定位服务（携带定位模式）
-      await _channel.invokeMethod('startService', {'mode': mode});
+      // 启动前台定位服务（携带定位模式与采样间隔）
+      await _channel.invokeMethod('startService',
+          {'mode': mode, 'intervalMs': samplingMs});
       _running = true;
+      _notifDirty = true; // 同上：服务刚起，去重不能把首次刷新吃掉
       onStatus?.call('GPS 定位中…');
       return true;
     } catch (e) {
@@ -161,6 +244,18 @@ class LocService {
     mode = m;
     try {
       await _channel.invokeMethod('setLocationMode', {'mode': m});
+    } catch (_) {}
+  }
+
+  /// 调 GPS 采样间隔（毫秒）。服务在跑时立即生效，没在跑只记下来 ——
+  /// 下一次 [start] 会把它随 `startService` 一起带过去。
+  Future<void> setSampling(int ms) async {
+    if (ms <= 0) return;
+    samplingMs = ms;
+    // 仅保活时没有 provider 监听，没必要惊动原生
+    if (!_running || _keepAliveMode) return;
+    try {
+      await _channel.invokeMethod('setSampling', {'intervalMs': ms});
     } catch (_) {}
   }
 
@@ -209,7 +304,8 @@ class LocService {
           // 而 50km 远超过那些门限，所以 IP 点天然不会写轨迹、也不会被当成
           // 「静止」的可靠依据。
           // source 传 'network'：IP 定位是城市级粗点，与 Wi-Fi 粗定位同类。
-          onFix?.call(lat, lng, 0, 0, -1, true, 50000, 'network');
+          // satellites 传 null：IP 定位没有卫星一说（0 会被误读成「一颗星都没有」）。
+          onFix?.call(lat, lng, 0, 0, -1, true, 50000, 'network', null);
           return true;
         } finally {
           client.close(force: true);
@@ -248,22 +344,105 @@ class LocService {
   void stop() {
     _running = false;
     _keepAliveMode = false;
+    _pausedForExternal = false;
+    _notifDirty = true; // 服务停了，通知也没了：下次重发不能被去重挡住
     _sub?.cancel();
     _sub = null;
     _channel.invokeMethod('stopService').catchError((_) {});
   }
 
   /// 更新状态栏通知文字
-  Future<void> updateNotification(String text) async {
+  ///
+  /// **文字没变就不重发**（服务刚重启过时会强制重发一次，见 [_notifDirty]）。
+  /// 去重的理由见 [_lastNotifText]：调用点太密，而同一条文字反复 `notify()`
+  /// 在部分 ROM 上会被当成新通知再弹一次 —— 用户报的「反复弹出待确认上报」。
+  ///
+  /// [live]：用户开了实时更新（Android 16 的 Live Updates），[short] 是状态栏
+  /// 药丸里那行超短文本（≤7 字符）。两者都算进去重键 —— 改了开关或胶囊文字
+  /// 不重发，用户看不到变化。
+  Future<void> updateNotification(String text,
+      {bool live = false, String short = '', int countdown = 0}) async {
+    final key = '$live|$short|$countdown|$text';
+    if (!_notifDirty && key == _lastNotifText) return;
+    _lastNotifText = key;
+    _notifDirty = false;
     try {
-      await _channel.invokeMethod('updateNotification', {'text': text});
+      await _channel.invokeMethod('updateNotification', {
+        'text': text,
+        'short': short,
+        'live': live,
+        'countdown': countdown
+      });
     } catch (_) {}
+  }
+
+  /// 常驻通知要不要申请 Android 16 的提升（实时更新）。
+  ///
+  /// 独立的通道方法，不蹭 [updateNotification]：那是「通知文字变了」，
+  /// 而这是「换一条策略」，跟着文字走会在没刷新文字时丢掉。
+  void setLiveUpdates(bool on) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      _channel.invokeMethod('setLiveUpdates', {'on': on}).catchError((_) {});
+    } catch (_) {}
+  }
+
+  /// 通知能力自查（Android 专有）：这台机器支不支持实时更新 / 焦点通知，
+  /// 到底缺哪一环。没这个平台就返回空串。
+  Future<String> notifDiag(
+      {String liveText = '', bool dartRunning = false, String dartStatus = ''}) async {
+    try {
+      final v = await _channel.invokeMethod<String>('notifDiag', {
+        'liveText': liveText,
+        'dartRunning': dartRunning,
+        'dartStatus': dartStatus,
+      });
+      return v ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// 原生那边前台服务真的在跑吗。
+  ///
+  /// [running] 只代表「启动调用发出去了」，服务被系统挡下或崩掉时它依然是
+  /// true。界面要的是这个问题的答案，所以单独问一次。
+  Future<bool> serviceAlive() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      final v = await _channel.invokeMethod<bool>('serviceAlive');
+      return v ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 收到 APRS 消息时发系统通知
   Future<void> showMessageNotification(String from, String text) async {
     try {
       await _channel.invokeMethod('showMessage', {'from': from, 'text': text});
+    } catch (_) {}
+  }
+
+  /// 生命守护强提醒（issue #32）：高优先级 + 震动 + 抬头横幅。
+  ///
+  /// 与 [showMessageNotification] 的区别是**打扰级别** —— 碰撞/摔倒与心率异常
+  /// 不能只是安静地挂在通知栏里（用户没看屏幕时等于没提醒）。
+  Future<void> showAlarmNotification(String title, String text) async {
+    try {
+      await _channel.invokeMethod('showAlarm', {'title': title, 'text': text});
+    } catch (_) {}
+  }
+
+  /// 订阅命中时的系统通知。
+  ///
+  /// [id] 是订阅自己的 id：同一条订阅复用同一个通知位，新的命中把旧内容顶掉
+  /// （原生侧 `SUBS_NOTIF_BASE + id.hashCode()`），不会一条订阅占满通知栏。
+  Future<void> showSubscriptionNotification(
+      String title, String text, String id) async {
+    try {
+      await _channel
+          .invokeMethod('showSubs', {'title': title, 'text': text, 'id': id});
     } catch (_) {}
   }
 
@@ -280,6 +459,21 @@ class LocService {
       return await _channel.invokeMethod<int>('getBattery') ?? -1;
     } catch (_) {
       return -1;
+    }
+  }
+
+  /// 现在是不是在充电（null = 本平台没说）。
+  ///
+  /// 单开一条通道方法（`getPower`）而不是把 `getBattery` 的返回值改成 map：
+  /// 那个方法有多个调用点（信标备注、盒子、胶囊读数），改形状就是把它们一起
+  /// 拉下水；低电量提醒只用这一个判断，多一间门窗代价小得多。
+  Future<bool?> chargingNow() async {
+    try {
+      final m = await _channel.invokeMapMethod<String, dynamic>('getPower');
+      final v = m?['charging'];
+      return v is bool ? v : null;
+    } catch (_) {
+      return null;
     }
   }
 }
@@ -308,6 +502,26 @@ class AprsFmt {
     return '$d$m${v >= 0 ? 'E' : 'W'}';
   }
 
+  /// 位置模糊：把经纬度**最低位的数字换成空格**（APRS101 第 8 章）。
+  ///
+  /// 一个空位 = 一格，接收方据此画出一片区域而不是一个点：1 位约 0.1 分
+  /// （约 200 米），2 位约 1 分（约 2 公里），3 位约 10 分（约 20 公里）。
+  ///
+  /// 只换**数字位**：小数点与 N/S/E/W 一律留在原地。有的解析器按字符位切分
+  /// 位置字段，少一个字符就整包解析不出位置。
+  static String blur(String field, int digits) {
+    if (digits <= 0) return field;
+    final dir = field.substring(field.length - 1);
+    final chars = field.substring(0, field.length - 1).split('');
+    var left = digits;
+    for (var i = chars.length - 1; i >= 0 && left > 0; i--) {
+      if (chars[i] == '.') continue;
+      chars[i] = ' ';
+      left--;
+    }
+    return '${chars.join()}$dir';
+  }
+
   /// 位置数据包：CALL>APALOC,TCPIP*:!DDMM.HHN/DDDMM.HHW符号表+符号码+注释
   ///
   /// symbol 参数为符号码（如 '>'）；符号表使用默认主表 '/'
@@ -326,10 +540,13 @@ class AprsFmt {
   /// 锚定注释行首）就匹配不上，会把 `ddd/sss` 当成普通备注文字显示，
   /// 即「速度与方位角出现在备注里」。
   /// 实测：带空格 → course/speed 解析为 None；无空格 → 正常解析。
+  /// [ambiguity] 是位置模糊位数（0 关，见 [blur]）：把发出去的那个点换成一片
+  /// 区域。传 0 时与不带这个参数逐字节相同。
   static String position(
       String call, double latitude, double longitude, String symbol,
-      {String? comment, String path = 'APALOC,TCPIP*'}) {
-    final body = '!${lat(latitude)}/${lng(longitude)}$symbol';
+      {String? comment, String path = 'APALOC,TCPIP*', int ambiguity = 0}) {
+    final body = '!${blur(lat(latitude), ambiguity)}'
+        '/${blur(lng(longitude), ambiguity)}$symbol';
     final c = comment?.trim() ?? '';
     return '$call>$path:$body$c';
   }
@@ -449,6 +666,27 @@ class AprsPhg {
   /// 高度码位 → 展示用米数（设置页回显「这一档实际是多高」）
   static int heightStepMeters(int code) =>
       (heightStepFeet(code) * 0.3048).round();
+
+  /// 解析报文注释里的 PHG 数据扩展（`PHGphgd`）。
+  ///
+  /// 与 [encode] **严格对称**：功率查 [powerStepWatts]、高度查 [heightStepMeters]、
+  /// 增益就是那一位（dB）、方向 0 = 全向（写 360°，不为四个方位引入六语文案）、
+  /// 1…8 依次 N / NE / E / SE / S / SW / W / NW。
+  ///
+  /// 找不到、或位数不够就返回 null —— **不猜**（宁可没有，也不显示一个假的功率）。
+  static ({int watts, int heightM, int gainDb, String dir})? decode(String text) {
+    final m = RegExp(r'PHG([0-9])([0-9])([0-9])([0-9])').firstMatch(text);
+    if (m == null) return null;
+    const dirs = ['360°', 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    final d = int.parse(m.group(4)!);
+    return (
+      watts: powerStepWatts(int.parse(m.group(1)!)),
+      heightM: heightStepMeters(int.parse(m.group(2)!)),
+      gainDb: int.parse(m.group(3)!),
+      dir: d < dirs.length ? dirs[d] : '?',
+    );
+  }
+
 
   /// 功率码位 → 展示用瓦数
   static int powerStepWatts(int code) => powerSteps[code.clamp(0, 9)];

@@ -38,11 +38,31 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   late final TextEditingController _mark;
   late final TextEditingController _space;
   late final TextEditingController _txDelay;
+  late final TextEditingController _amplitude;
   late final TextEditingController _path;
   late final TextEditingController _maxFrame;
   late final TextEditingController _csma;
   final TextEditingController _wavPath = TextEditingController();
   final TextEditingController _wavTnc2 = TextEditingController();
+
+  /// 参数输入框的焦点：任一失焦、且这一组都不再持有焦点时，落定一次
+  /// （见 [_onModBlur]）。Flutter 的 `onEditingComplete` 只在按键盘
+  /// 「完成/回车」时触发，**失焦不触发** —— 只挂它的话，「改完随手点别处」
+  /// 这条最常见的路径什么都没保存（issue #22-1 的根因；音频页此前同样是
+  /// 只在回车时保存）。所以给这几个框都挂上失焦提交。
+  late final FocusNode _sampleRateFocus;
+  late final FocusNode _baudFocus;
+  late final FocusNode _markFocus;
+  late final FocusNode _spaceFocus;
+  late final FocusNode _txDelayFocus;
+  late final FocusNode _amplitudeFocus;
+  late final FocusNode _maxFrameFocus;
+  late final FocusNode _csmaFocus;
+
+  /// 提交串行化的尾链：一次只跑一个 [_applyNow]，后来的排队等前面完成 ——
+  /// 既不交叠写盘，也不丢请求（失焦提交 + `applyParams()` 重开链路要几百
+  /// 毫秒，期间用户完全可能又改了下一个框）。
+  Future<void> _chain = Future<void>.value();
 
   bool _busy = false;
   bool _supported = true;
@@ -53,6 +73,15 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
 
   AppState get st => widget.state;
   AudioLink get audio => widget.state.audio;
+
+  /// 开关「射频信标」：先过用户协议 V2.0 附件一第二项（射频信标发射）。
+  Future<void> _setRfBeacon(bool v) async {
+    if (v && !st.ensureRfConsent(() => unawaited(_setRfBeacon(true)))) return;
+    audio.config.rfBeacon = v;
+    await audio.save();
+    st.reloadUi();
+    if (mounted) setState(() {});
+  }
 
   /// 移动端（Android）不能写任意目录：导出走系统下载目录，导入走系统选择器
   bool get _android => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -92,21 +121,85 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     _mark = TextEditingController(text: '${c.afsk.markHz.round()}');
     _space = TextEditingController(text: '${c.afsk.spaceHz.round()}');
     _txDelay = TextEditingController(text: '${c.afsk.txDelayMs}');
+    _amplitude =
+        TextEditingController(text: c.afsk.amplitude.toStringAsFixed(2));
     _path = TextEditingController(text: c.path);
     _maxFrame = TextEditingController(text: '${c.maxFrame}');
     _csma = TextEditingController(text: '${c.csmaWaitMs}');
     _wavTnc2.text = diagSampleFrame;
+    // 失焦即落定：这几个输入框此前只在回车（onEditingComplete）时保存，
+    // 「改完随手点别处」等于没改（issue #22-1 同款）。
+    _sampleRateFocus = FocusNode()..addListener(_onModBlur);
+    _baudFocus = FocusNode()..addListener(_onModBlur);
+    _markFocus = FocusNode()..addListener(_onModBlur);
+    _spaceFocus = FocusNode()..addListener(_onModBlur);
+    _txDelayFocus = FocusNode()..addListener(_onModBlur);
+    _amplitudeFocus = FocusNode()..addListener(_onBlurAmplitude);
+    _maxFrameFocus = FocusNode();
+    _csmaFocus = FocusNode();
     unawaited(_probe());
     unawaited(_loadDevices());
+  }
+
+  /// 影响收发的调制解调参数框（改变时需要重建调制解调器 / 重开采集）。
+  List<FocusNode> get _modFocuses => [
+        _sampleRateFocus,
+        _baudFocus,
+        _markFocus,
+        _spaceFocus,
+        _txDelayFocus,
+      ];
+
+  /// 调制参数组失焦落定：整组都不再持有焦点时提交一次并重启链路。
+  ///
+  /// 用「整组」而不是单框判据：焦点会在同一组内互相转移，单框失焦不代表
+  /// 用户改完了；落到最后一个框上才落定，正好覆盖「改成一半走去点别处」。
+  void _onModBlur() {
+    if (_modFocuses.any((f) => f.hasFocus)) return;
+    unawaited(_collect().then((_) => _normalizeTexts()));
+  }
+
+  /// 输出幅度失焦落定 —— 它是纯发射参数，**不重启链路**、不打断接收。
+  void _onBlurAmplitude() {
+    if (_amplitudeFocus.hasFocus) return;
+    unawaited(_collect(txOnly: true).then((_) => _normalizeTexts()));
+  }
+
+  /// 失焦时把 state 里（clamp 过的）真值回写进输入框 —— 只在确认离开编辑后做，
+  /// 避免打断输入（见 [_applyNow] 的说明）。
+  ///
+  /// 只回写**当前没有焦点**的框：这样即使回写与另一轮的写盘交叠，也绝不会
+  /// 覆盖用户正在输入的那个框。
+  void _normalizeTexts() {
+    if (!mounted) return;
+    final a = audio.config.afsk;
+    void put(TextEditingController c, FocusNode f, String v) {
+      if (!f.hasFocus && c.text != v) c.text = v;
+    }
+
+    put(_sampleRate, _sampleRateFocus, '${a.sampleRate}');
+    put(_baud, _baudFocus, '${a.baud.round()}');
+    put(_mark, _markFocus, '${a.markHz.round()}');
+    put(_space, _spaceFocus, '${a.spaceHz.round()}');
+    put(_txDelay, _txDelayFocus, '${a.txDelayMs}');
+    put(_amplitude, _amplitudeFocus, a.amplitude.toStringAsFixed(2));
+    put(_maxFrame, _maxFrameFocus, '${audio.config.maxFrame}');
+    put(_csma, _csmaFocus, '${audio.config.csmaWaitMs}');
+    setState(() {});
   }
 
   @override
   void dispose() {
     for (final c in [
-      _sampleRate, _baud, _mark, _space, _txDelay,
+      _sampleRate, _baud, _mark, _space, _txDelay, _amplitude,
       _path, _maxFrame, _csma, _wavPath, _wavTnc2,
     ]) {
       c.dispose();
+    }
+    for (final f in [
+      ..._modFocuses, _amplitudeFocus, _maxFrameFocus, _csmaFocus,
+    ]) {
+      f.dispose();
     }
     super.dispose();
   }
@@ -261,28 +354,68 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   int _intOf(TextEditingController c, int fallback) =>
       int.tryParse(c.text.trim()) ?? fallback;
 
+  /// 当前发射来源的本地化名称（音频页用来提示「不是我在发」）。
+  String _txSourceName(S s) {
+    switch (st.dataSource) {
+      case AppState.srcTnc:
+        return s.dataSourceTnc;
+      case AppState.srcAudio:
+        return s.dataSourceAudio;
+      case AppState.srcPkwdwpl:
+        return s.dataSourcePkwdwpl;
+      default:
+        return s.dataSourceAprsIs;
+    }
+  }
+
   double _doubleOf(TextEditingController c, double fallback) =>
       double.tryParse(c.text.trim()) ?? fallback;
 
   /// 收集输入 → config → 持久化。采样率/音调变化时必须重建调制解调器，
   /// 连接中还要重开采集（[AudioLink.applyParams] 负责）。
-  Future<void> _collect({bool restart = false}) async {
+  ///
+  /// [txOnly] = 只改了纯发射参数（输出幅度）：不重启链路，只重建调制器，
+  /// 不打断正在进行的接收。
+  ///
+  /// 提交经 [_chain] 串行化：失焦提交与「边输边存」可能重入（键盘收起 /
+  /// 输入法组合态），排队执行既不交叠写盘、也不丢请求。
+  Future<void> _collect({bool txOnly = false}) {
+    final run = _chain.then((_) => _applyNow(txOnly: txOnly));
+    // 吞掉这一轮的异常再接回链上：既让链不会断（否则后面的提交全部作废），
+    // 也保证返回给 `unawaited(...)` 的 future 不会抛成未处理异步错误。
+    final guarded = run.catchError((_) {});
+    _chain = guarded;
+    return guarded;
+  }
+
+  Future<void> _applyNow({required bool txOnly}) async {
     final c = audio.config;
-    final oldRate = c.afsk.sampleRate;
-    c.afsk = c.afsk.copyWith(
-      sampleRate: _intOf(_sampleRate, oldRate).clamp(8000, 192000),
-      baud: _doubleOf(_baud, c.afsk.baud).clamp(300, 9600),
-      markHz: _doubleOf(_mark, c.afsk.markHz).clamp(300, 4000),
-      spaceHz: _doubleOf(_space, c.afsk.spaceHz).clamp(300, 4000),
-      txDelayMs: _intOf(_txDelay, c.afsk.txDelayMs).clamp(0, 2550),
+    final old = c.afsk;
+    final next = old.copyWith(
+      sampleRate: _intOf(_sampleRate, old.sampleRate).clamp(8000, 192000),
+      baud: _doubleOf(_baud, old.baud).clamp(300, 9600),
+      markHz: _doubleOf(_mark, old.markHz).clamp(300, 4000),
+      spaceHz: _doubleOf(_space, old.spaceHz).clamp(300, 4000),
+      txDelayMs: _intOf(_txDelay, old.txDelayMs).clamp(0, 2550),
+      amplitude: _doubleOf(_amplitude, old.amplitude).clamp(0.05, 1.0),
     );
+    c.afsk = next;
     c.path = _path.text.trim();
     c.maxFrame = _intOf(_maxFrame, c.maxFrame).clamp(16, 512);
     c.csmaWaitMs = _intOf(_csma, c.csmaWaitMs).clamp(0, 10000);
-    _sampleRate.text = '${c.afsk.sampleRate}';
-    _baud.text = '${c.afsk.baud.round()}';
+    // 不回写输入框文本：这里可能被 `onChanged` 每敲一下触发一次，一改写就会
+    // 把用户正输入的「1」（150 的前半截）clamp 成 300 再覆盖成「300」，根本
+    // 打不完。回写只在失焦时做，见 [_normalizeTexts]。
     await audio.save();
-    if (restart || c.afsk.sampleRate != oldRate) {
+    // 只有真的改了才动链路：失焦会在「看都没改」时也触发一次，若无条件
+    // applyParams() 就会把好好的接收链路断开重连。
+    if (txOnly) {
+      if (next.amplitude != old.amplitude) audio.applyTxParams();
+    } else if (next.sampleRate != old.sampleRate ||
+        next.baud != old.baud ||
+        next.markHz != old.markHz ||
+        next.spaceHz != old.spaceHz ||
+        next.txDelayMs != old.txDelayMs) {
       await audio.applyParams();
       st.reloadUi();
     }
@@ -419,7 +552,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         body: Column(children: [
           // 「数据来源」卡不在这里重复（只在设置→设备）——这一页专注音频参数。
           SettingsHint(s.sourceMovedHint),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
           _captureCard(s),
           const SizedBox(height: 16),
           _paramsCard(s),
@@ -458,6 +591,17 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           audio.connected ? s.connected : s.disconnected,
           valueColor: audio.connected ? C.green : C.slate,
         ),
+        // 发射来源：链路连上 ≠ 从这条链路发。三条链路并列时发射来源只有一个，
+        // 而页面此前没有任何地方体现「我这条是不是发射来源」——
+        // 「能收、发出去没反应」最常见的根因就在这里。
+        SettingsRow2(
+          s.audioTxSourceRow,
+          st.usingAudio ? s.audioTxSourceYes : _txSourceName(s),
+          valueColor: st.usingAudio ? C.green : C.orange,
+        ),
+        if (audio.connected && !st.usingAudio)
+          SettingsHint(s.audioTxNotSourceWarn(_txSourceName(s)),
+              color: C.orange, icon: Icons.warning_amber_rounded),
         SettingsRow2(
           s.audioSynced,
           audio.synced ? s.audioSynced : s.audioUnlocked,
@@ -560,20 +704,29 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       children: [
         SettingsInput(s.audioSampleRate, _sampleRate,
             tip: s.audioSampleRateTip,
-            onEditingComplete: () => unawaited(_collect(restart: true))),
+            focusNode: _sampleRateFocus,
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
         SettingsInput(s.audioBaud, _baud,
             tip: s.audioBaudTip,
-            onEditingComplete: () => unawaited(_collect(restart: true))),
+            focusNode: _baudFocus,
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
         SettingsInput(s.audioToneMark, _mark,
             tip: s.audioMarkTip,
-            onEditingComplete: () => unawaited(_collect(restart: true))),
+            focusNode: _markFocus,
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
         SettingsInput(s.audioToneSpace, _space,
             tip: s.audioSpaceTip,
-            onEditingComplete: () => unawaited(_collect(restart: true))),
+            focusNode: _spaceFocus,
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
         SettingsInput(s.audioTxDelayLabel, _txDelay,
             tip: s.audioTxDelayTip,
-            onEditingComplete: () => unawaited(_collect(restart: true))),
-        SettingsHint(s.audioSampleRateTip),
+            focusNode: _txDelayFocus,
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
       ],
     );
   }
@@ -593,27 +746,41 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           st.reloadUi();
           if (mounted) setState(() {});
         }),
-        SettingsHint(s.audioTxEnabledTip, color: C.orange),
         // 播放设备选择（仅 Windows）——发时用哪个声卡输出，决定接到电台的
         // 是哪一路信号（issue #14）
         ..._deviceRows(s, output: true),
         SettingsSwitch(s.kissRfBeacon, value: audio.config.rfBeacon,
-            color: C.orange, onChanged: (v) async {
-          audio.config.rfBeacon = v;
-          await audio.save();
-          st.reloadUi();
-          if (mounted) setState(() {});
-        }),
+            color: C.orange, onChanged: (v) => unawaited(_setRfBeacon(v))),
         SettingsHint(s.kissRfBeaconTip, color: C.orange),
+        // 这三个是自由文本 / 整数：边输边存（onChanged 里的 _collect 不重启
+        // 链路）就够，无需再挂失焦。
         SettingsInput(s.audioCsmaWait, _csma,
             tip: s.audioCsmaWaitTip,
-            onChanged: (_) => unawaited(_collect())),
+            focusNode: _csmaFocus,
+            onChanged: (_) => unawaited(_collect()),
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
         SettingsInput(s.kissRfPath, _path,
             tip: s.kissRfPathTip,
             onChanged: (_) => unawaited(_collect())),
         SettingsInput(s.kissMaxFrame, _maxFrame,
             tip: s.kissMaxFrameTip,
-            onChanged: (_) => unawaited(_collect())),
+            focusNode: _maxFrameFocus,
+            onChanged: (_) => unawaited(_collect()),
+            onEditingComplete: () =>
+                unawaited(_collect().then((_) => _normalizeTexts()))),
+        // 输出幅度：发射波形的相对幅度（0.05~1.0）。这是「发射对方解不出」
+        // 时最该动的一个旋钮 —— 高了削顶（产生谐波毁掉 FSK 频谱），低了
+        // 对端信噪比不够。此前只读默认值、界面上根本改不了，而削顶/偏低
+        // 两种告警都写着「请调输出幅度」，用户却无从下手。
+        //
+        // 失焦即落定（onEditingComplete 只在回车时触发，见 [_onBlurAmplitude]，
+        // issue #22-1 同款），且只重建调制器、不重启链路（txOnly）。
+        SettingsInput(s.audioTxAmplitude, _amplitude,
+            tip: s.audioTxAmplitudeTip,
+            focusNode: _amplitudeFocus,
+            onEditingComplete: () => unawaited(
+                _collect(txOnly: true).then((_) => _normalizeTexts()))),
         // 发射体检：只在真的发过一次之后显示（没发过时显示 0% 没意义）
         if (audio.lastTxSeconds > 0) ...[
           SettingsRow2(
@@ -631,14 +798,15 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             SettingsHint(s.audioTxLevelLow, color: C.orange,
                 icon: Icons.warning_amber_rounded),
         ],
-        SettingsHint(s.audioTxLevelTip, color: C.grey),
+        // 电台不发射时最该先查的一条：软件不会按 PTT。
+        SettingsHint(s.audioTxPttHint, color: C.orange,
+            icon: Icons.info_outline_rounded),
         SettingsSwitch(s.kissAutoAck, value: audio.config.autoAck,
             color: C.cyan, onChanged: (v) async {
           audio.config.autoAck = v;
           await audio.save();
           if (mounted) setState(() {});
         }),
-        SettingsHint(s.kissAutoAckTip),
         SettingsSwitch(s.kissAutoReconnect, value: audio.config.autoReconnect,
             color: C.green, onChanged: (v) async {
           audio.config.autoReconnect = v;

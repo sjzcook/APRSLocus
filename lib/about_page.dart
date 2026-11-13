@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'terms_version.dart';
 
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
@@ -9,8 +11,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'state.dart';
+import 'blacklist.dart';
 import 'sponsor_page.dart';
 import 'terms_page.dart';
+import 'story_page.dart';
 import 'material.dart';
 
 /// 彩蛋呼号 → 台词
@@ -22,9 +26,12 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// 分享通道：Android 调用系统分享面板（ACTION_SEND）
   static const _shareChannel = MethodChannel('com.aprslocus/share');
+
+  /// 本机安装标识：与远程限制名单里比对的是**同一个值**（只在本机生成，不上传）
+  String _deviceId = '';
 
   bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -221,6 +228,73 @@ class _AboutPageState extends State<AboutPage>
   /// Hero 底图视差量（0~240，随滚动量变化）
   final ValueNotifier<double> _heroScroll = ValueNotifier<double>(0);
 
+  // ─── 封面彩蛋：点一下抖一下 → 翻面 → 把那一页故事递过来 ───
+  // 抖动（damped 正弦）与翻牌各占一个控制值；`_flipped` 是逻辑上的「已翻面」。
+  // 翻牌过程因为要按角度换内容（正面/背面），所以自己 setState，不用 AnimatedBuilder。
+  late final AnimationController _shakeCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  );
+  late final AnimationController _flipCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 640),
+  );
+  bool _flipped = false;
+  Timer? _storyTimer;
+  Offset _eggPos = Offset.zero;
+
+  /// 点击封面：**一次点击就是一次激活** —— 抖一下，翻过面，接着把那一页故事
+  /// 递过去（[_activateHeroEgg]）。
+  ///
+  /// 这里原本是「点一下，等 5 秒再翻面」。等待只会让人以为点坏了：那 5 秒里
+  /// 屏幕一动不动，谁也看不出这是彩蛋还是卡住了。现在翻牌动画一走完就走。
+  void _heroTapped() {
+    if (_flipped) {
+      _unflipHeroEgg();
+      return;
+    }
+    HapticFeedback.mediumImpact();
+    _shakeCtrl.forward(from: 0);
+    _activateHeroEgg();
+  }
+
+  /// 翻到背面 → 等翻牌动画走完 → 打开那一页故事（[openStory]：能内嵌的平台在
+  /// 应用内整屏翻开，不能的交给浏览器）。
+  ///
+  /// 为什么还留着这 0.72 秒：先让人看见「翻过来了」，再把故事递过去；一点就走
+  /// 的话，抖动与翻面这两下就白做了。这期间再点一次（[_unflipHeroEgg]）会把
+  /// 这次打开取消掉。
+  void _activateHeroEgg() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null) _eggPos = box.size.center(Offset.zero);
+    _flipped = true;
+    _fireParticles(_eggPos);
+    HapticFeedback.heavyImpact();
+    _flipCtrl.forward(from: 0);
+    _storyTimer?.cancel();
+    _storyTimer = Timer(const Duration(milliseconds: 720), () {
+      _storyTimer = null;
+      if (!mounted) return;
+      openStory(context);
+    });
+  }
+
+  void _unflipHeroEgg() {
+    // 翻回正面 = 放弃这次彩蛋，顺带取消还没打开的那一页
+    _storyTimer?.cancel();
+    _storyTimer = null;
+    HapticFeedback.selectionClick();
+    _flipCtrl.reverse().then((_) {
+      if (mounted) setState(() => _flipped = false);
+    });
+  }
+
+  /// 抖动位移：0→6px 的正弦衰减，只在每次点击后的 0.7 秒里跑。
+  static double _shakeOffset(double t) {
+    if (t <= 0) return 0;
+    return sin(t * pi * 9) * 6.0 * (1 - t);
+  }
+
   // ─── 粒子动画 ───
   AnimationController? _ctrl;
   final List<_Particle> _particles = [];
@@ -297,6 +371,11 @@ class _AboutPageState extends State<AboutPage>
   @override
   void initState() {
     super.initState();
+    // 取一次本机安装标识。为什么要放在能看到的地方：被限制的人只会看到拦截页，
+    // 而"想核对 / 想申诉"的人得先能看到它 —— 支持往来里我们只认这个值。
+    Blacklist.deviceId().then((v) {
+      if (mounted && v.isNotEmpty) setState(() => _deviceId = v);
+    });
     _ctrl =
         AnimationController(
           vsync: this,
@@ -314,9 +393,12 @@ class _AboutPageState extends State<AboutPage>
 
   @override
   void dispose() {
+    _storyTimer?.cancel();
     _particleOverlay?.remove();
     _particleOverlay = null;
     _ctrl?.dispose();
+    _shakeCtrl.dispose();
+    _flipCtrl.dispose();
     _heroScroll.dispose();
     super.dispose();
   }
@@ -490,20 +572,18 @@ class _AboutPageState extends State<AboutPage>
                           padding: EdgeInsets.zero,
                           child: Column(
                             children: [
-                              _eggRow(t.codeContributionI18n, 'BD3QID'),
+                              _eggRow(
+                                '${t.codeContributionIcomLan} · ${t.codeContributionI18n}',
+                                'BD3QID',
+                              ),
                               _eggRow(t.codeContributionZhTw, 'BA4UAX'),
                               _eggRow(t.codeContributionTranslation, 'BA7KSM'),
                               // BH7GZB：贡献代码（PR #11 —— 位置报文数据扩展 `/A=` 高度与
                               // `PHGphgd` 功率 / 天线高度 / 增益，以及独立状态报文的收发与显示）。
-                              //
-                              // 为什么标签是**通用**的「贡献代码」而不是像上面三行那样写具体做了什么：
-                              // 上面三行各有专属键（国际化 / 繁体界面 / 翻译），而这个人的贡献属于
-                              // 「扩充报文内容」这一类，仓库里没有对应键；新写一个键比复用别人的
-                              // 描述诚实 —— 复用 settingsContribCodeOptimization（「代码优化」）
-                              // 会把清零（BG2HCB）的贡献安到别人头上。
-                              //
-                              // `_row` 而不是 `_eggRow`：他只是普通成员，没有彩蛋，长按不该弹东西。
-                              _row(t.codeContribution, 'BH7GZB'),
+                              _eggRow(t.codeContribution, 'BH7GZB'),
+                              // BG7PFE：中文编码兼容（PR #38 —— 报文文本自动识别
+                              // UTF-8 / GBK，APRS-IS 与 TNC / 声卡两条链路的解码都走它）。
+                              _eggRow(t.codeContributionEncoding, 'BG7PFE'),
                               _row(
                                 t.settingsContribCodeOptimization,
                                 '清零（BG2HCB）',
@@ -638,12 +718,6 @@ class _AboutPageState extends State<AboutPage>
                                 url: 'https://aprslocus.theez.top/',
                               ),
                               _linkRow(
-                                icon: Icons.wechat_rounded,
-                                label: t.qqGroup,
-                                value: t.qqSoftwareName,
-                                url: 'https://qm.qq.com/q/8pL6vc5YA0',
-                              ),
-                              _linkRow(
                                 icon: Icons.link_rounded,
                                 label: t.projectRepo,
                                 value: 'GitCode',
@@ -658,8 +732,48 @@ class _AboutPageState extends State<AboutPage>
                             ],
                           ),
                         ),
+                        const SizedBox(height: 22),
+
+                        // ── 伙伴 ──
+                        _sectionHeader(
+                          t.partners,
+                          Icons.handshake_rounded,
+                          C.blue,
+                        ),
+                        const SizedBox(height: 12),
+                        SoftCard(
+                          padding: EdgeInsets.zero,
+                          child: _partnerRow(
+                            name: 'APRSNET.CN',
+                            desc: t.partnerAprsnetCnDesc,
+                            url: 'https://aprsnet.cn/',
+                          ),
+                        ),
 
                         const SizedBox(height: 28),
+                        const SizedBox(height: 22),
+
+                        // ── 本机安装标识 ──
+                        // 放在这里而不是只放拦截页：被限制的人才会看到拦截页，
+                        // 而"想核对 / 想申诉"的人必须先能**看到**它。
+                        _sectionHeader(t.blId, Icons.fingerprint_rounded, C.blue),
+                        const SizedBox(height: 12),
+                        SoftCard(
+                          padding: EdgeInsets.zero,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _idRow(context),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                                child: Text(
+                                  t.blContact,
+                                  style: ts(11, c: C.grey, h: 1.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         _footer(context),
                       ],
                     ),
@@ -685,11 +799,150 @@ class _AboutPageState extends State<AboutPage>
     );
   }
 
-  /// Hero 封面：实景照片 + 玻璃质感标题。
+  /// 封面：常态是 [_heroFront]，点击触发彩蛋后翻到背面 [_heroBack]。
+  ///
+  /// 翻牌用透视 + 绕 Y 轴旋转；转过 90° 时把内容换成背面并再做一次水平镜像，
+  /// 背面的文字才不会左右反着显示。抖动只作用在最外层位移上，不影响旋转。
+  Widget _heroCard(BuildContext context) {
+    return LayoutBuilder(
+      builder: (ctx, cons) {
+        final h = _heroHeightFor(cons.maxWidth);
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // 点一次抖一次、翻面，然后打开那一页故事；翻到背面后再点一下翻回正面
+          onTap: _heroTapped,
+          child: SizedBox(
+            height: h,
+            width: double.infinity,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_shakeCtrl, _flipCtrl]),
+              builder: (_, _) {
+                final angle = _flipCtrl.value * pi;
+                final showBack = angle > pi / 2;
+                final content = showBack
+                    ? _heroBack(context)
+                    : _heroFront(context);
+                return Transform.translate(
+                  offset: Offset(_shakeOffset(_shakeCtrl.value), 0),
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.0012)
+                      ..rotateY(angle),
+                    child: showBack
+                        ? Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.rotationY(pi),
+                            child: content,
+                          )
+                        : content,
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 封面背面（彩蛋）：深色卡片 + 一句「保持好奇心」。
+  Widget _heroBack(BuildContext context) {
+    final t = S.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1B2440), Color(0xFF2B2A55), Color(0xFF3A2350)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: C.ink.withValues(alpha: 0.24),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            // 两团柔光，给纯深色底一点层次（不引新 token，用白低透明度）
+            Positioned(
+              top: -50,
+              right: -40,
+              child: _heroGlow(140, 0.10),
+            ),
+            Positioned(
+              bottom: -60,
+              left: -30,
+              child: _heroGlow(160, 0.07),
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppLogo(size: 44),
+                    const SizedBox(height: 18),
+                    Text(
+                      t.eggCuriosityWorld,
+                      textAlign: TextAlign.center,
+                      style: ts(
+                        20,
+                        w: FontWeight.w800,
+                        ls: 0.2,
+                        c: Colors.white,
+                        h: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'APRSlocus',
+                      style: ts(
+                        11,
+                        c: Colors.white.withValues(alpha: 0.55),
+                        ls: 2.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 提示可以点回正面（不给文案，省一个 l10n 键）
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 14,
+              child: Icon(
+                Icons.touch_app_rounded,
+                size: 17,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _heroGlow(double size, double alpha) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white.withValues(alpha: alpha),
+    ),
+  );
+
+  /// 封面正面：实景照片 + 玻璃质感标题（[_heroCard] 未翻转时显示）。
   ///
   /// 高度随宽度走（[_heroHeightFor]）：底图是 3:2，固定高度在桌面宽屏下会被
   /// `cover` 裁得只剩中间一条，山峰就切出去了。
-  Widget _heroCard(BuildContext context) {
+  Widget _heroFront(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
       duration: const Duration(milliseconds: 520),
@@ -1039,7 +1292,9 @@ class _AboutPageState extends State<AboutPage>
         const SizedBox(height: 18),
         GestureDetector(
           onTap: () {
-            final info = t.appInfoText(AppState.appVersion);
+            // 顺带带上本机安装标识：用户报问题时复制一次就带全了
+            final info = t.appInfoText(AppState.appVersion) +
+                (_deviceId.isEmpty ? '' : '\n${t.blId}: $_deviceId');
             Clipboard.setData(ClipboardData(text: info));
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -1141,6 +1396,70 @@ class _AboutPageState extends State<AboutPage>
     );
   }
 
+  /// 本机安装标识：短显示 + 点一下复制**全值**。
+  ///
+  /// 不整条显示的原因：32 位十六进制在窄屏上必然溢出（西语那版标签还长），
+  /// 而这里要的是"一眼认得出、点一下能复制走"，不是给人念的。
+  Widget _idRow(BuildContext context) {
+    final short = _deviceId.isEmpty
+        ? '…'
+        : '${_deviceId.substring(0, 8)}…'
+              '${_deviceId.substring(_deviceId.length - 6)}';
+    return InkWell(
+      onTap: _copyId,
+      // 长按 = 切换**本地白名单**（本机豁免远程限制）。在拦截页长按是"解封"，
+      // 这里长按是同一个开关 —— 否则一旦豁免就再也回不去，没法再自测封禁。
+      onLongPress: _toggleLocalExempt,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.copy_rounded, size: 15, color: C.grey),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                short,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: ts(
+                  12,
+                  w: FontWeight.w600,
+                ).copyWith(fontFamily: 'monospace'),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, size: 16, color: C.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 复制本机安装标识（申诉时把它发给我们即可核对）
+  Future<void> _copyId() async {
+    if (_deviceId.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: _deviceId));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(S.of(context).copiedClipboard),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: C.ink,
+      ),
+    );
+  }
+
+  /// 长按安装标识 → 切换本地白名单（本机豁免远程限制）。
+  ///
+  /// 按要求**不给任何提示**（静默切换）。在拦截页长按是"解封"，这里长按是同一个开关 ——
+  /// 否则一旦豁免就再也回不去，没法再自测封禁。
+  Future<void> _toggleLocalExempt() async {
+    final on = await Blacklist.localExempt();
+    await Blacklist.setLocalExempt(!on);
+  }
+
   Widget _row(String label, String value, {VoidCallback? onLongPress}) {
     final row = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1149,8 +1468,15 @@ class _AboutPageState extends State<AboutPage>
       ),
       child: Row(
         children: [
-          Text(label, style: ts(12, c: C.slate)),
-          const Spacer(),
+          Expanded(
+            child: Text(
+              label,
+              style: ts(12, c: C.slate),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(value, style: ts(12, w: FontWeight.w600)),
           if (onLongPress != null) ...[
             const SizedBox(width: 4),
@@ -1182,14 +1508,66 @@ class _AboutPageState extends State<AboutPage>
         child: Row(
           children: [
             Icon(icon, size: 15, color: C.blue),
-            SizedBox(width: 8),
-            Text(label, style: ts(12, c: C.slate)),
-            Spacer(),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: ts(12, c: C.slate),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               value,
               style: ts(12, c: C.blue, w: FontWeight.w600),
             ),
-            SizedBox(width: 4),
+            const SizedBox(width: 4),
+            Icon(Icons.open_in_new_rounded, size: 14, color: C.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 伙伴行：站名 + 一句介绍。
+  ///
+  /// 为什么单开一行而不是复用 [_linkRow]：那些行的右边是「值」——短标签
+  /// （GPL-3.0、GitHub）。伙伴这一行要说的是**一个站 + 它的那句话**，
+  /// 塞进「左标签 + 右值」会把那句话挤成右边一小串。
+  ///
+  /// 用户明确要求那句描述**单独一行**：站名在上、描述在下，行尾一个外链箭头。
+  Widget _partnerRow({
+    required String name,
+    required String desc,
+    required String url,
+  }) {
+    return InkWell(
+      onTap: () =>
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.public_rounded, size: 15, color: C.blue),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: ts(12, w: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(desc, style: ts(11, c: C.grey)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
             Icon(Icons.open_in_new_rounded, size: 14, color: C.grey),
           ],
         ),
@@ -1216,7 +1594,7 @@ class _AboutPageState extends State<AboutPage>
             Text(S.of(context).userAgreement, style: ts(12, c: C.slate)),
             Spacer(),
             Text(
-              'V1.0',
+              kTermsVersion,
               style: ts(12, c: C.blue, w: FontWeight.w600),
             ),
             SizedBox(width: 2),
@@ -1374,10 +1752,17 @@ class _AboutPageState extends State<AboutPage>
         ),
         child: Row(
           children: [
-            Text(label, style: ts(12, c: C.slate)),
-            Spacer(),
+            Expanded(
+              child: Text(
+                label,
+                style: ts(12, c: C.slate),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(call, style: ts(12, w: FontWeight.w600)),
-            SizedBox(width: 6),
+            const SizedBox(width: 6),
             Icon(Icons.chevron_right_rounded, size: 16, color: C.grey),
           ],
         ),

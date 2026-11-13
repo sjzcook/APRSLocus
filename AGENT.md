@@ -124,8 +124,49 @@ push tag v*  ──►  build-windows ┐
 2. 再打 tag → 触发 **Build Release**
 
 `ci-test.yml`（推 `main` / PR / 手动触发）4 个 job：
-`Analyze`（17 条 python 静态检查 + 2 条算法回归 `sim_*` + 3 个 `flutter test` + `flutter analyze`）、
+`Analyze`（18 条 python 静态检查 + 2 条算法回归 `sim_*` + 3 个 `flutter test` + `flutter analyze`）、
 `Build Windows`、`Build Android APK`、`Build iOS (IPA)`。
+
+### 阿里云 OSS 更新渠道（可选，默认不开）
+
+应用内「更新渠道」有两个 OSS 选项 —— **Aliyun OSS**（广州）与
+**Aliyun OSS（香港）**。两者都是把安装包放到公开读的 OSS bucket、由客户端
+走阿里云 CDN 取包，**费用都由开发团队承担**（App 里都提示「请少量使用」）。
+区别只是区域：广州节点国内可达性好，香港节点在**跨境 / 境外网络**下更稳。
+
+| 渠道 id | bucket | 客户端读取地址 | 上传 endpoint |
+| --- | --- | --- | --- |
+| `aliyun` | `aprslocus` | `aprslocus.oss-cn-guangzhou.aliyuncs.com`（默认域名） | `oss-cn-guangzhou.aliyuncs.com` |
+| `aliyun_hk` | `aprslocushk` | `aprslocushk.oss.theez.top`（CNAME 自定义域） | `oss-cn-hongkong.aliyuncs.com` |
+
+- 发版流水线里的 **`publish-oss`** job 会把 `.exe`/`.apk`/`.ipa` 与一份
+  **GitHub 同格式的 releases 索引**一起传到**两个** bucket（索引由
+  `tool/oss_index.py` 生成，会合并线上旧索引以保留历史版本）。**两个节点的
+  索引 url-base 不同**：广州用默认域名，香港必须用 CNAME 自定义域
+  `aprslocushk.oss.theez.top`（否则 App 走香港渠道会去下默认域名的对象，可能
+  400/慢）—— 这一点由 `tool/check_oss_channel.py` 钉住。
+- **凭据只放 Secrets，绝不写明文**（本仓库是公开的）。首次启用需要两步：
+  1. 仓库 **Settings → Secrets and variables → Actions** 添加
+     `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`（阿里云 RAM 用户，需**两个
+     bucket 的读写权限**，不要用主账号 AK）。两个 bucket 共用同一套 AK；
+  2. 把**两个** bucket 的读权限都设为 **公共读**（或对象 `public-read`）——
+     否则客户端匿名 GET 会拿到 403，流水线末尾的匿名自检（两个节点分别做）
+     会当场报红。
+  未配置 Secret 时 `publish-oss` 会**告警并跳过**（该渠道为可选，不该让每次发版
+  都变红，与安卓 keystore 的处理一致）；配置了却传失败则会**当场失败**。
+  它失败不影响 GitHub / Windows / Android / iOS 的正式发版。
+- 接线由 `tool/check_oss_channel.py` 在 CI 里钉住（**两个节点**都查：地址 ↔
+  流水线一致、香港 url-base 指自定义域、选择器/费用文案/加载态齐全），它同时
+  守卫「密钥明文不得进仓库」（匹配 `LTAI…` 前缀的 AccessKey ID）。
+- ⚠️ **`.apk`/`.ipa` 不能直接用 OSS 默认域名下载**：阿里云对 `*.aliyuncs.com`
+  下的这两类扩展名一律返回 `400 ApkDownloadForbidden`（`.exe` 不受影响）。所以
+  上传时给它们加 `.bin` 后缀、索引里的下载 url 指向 `xxx.apk.bin`，而资产名
+  `name` 保持 `xxx.apk`（客户端靠 name 判 ABI / 显示，靠 url 下载，互不影响，
+  **客户端无需改动**）。上传目标名与索引 url 都由 `tool/oss_index.py` 的
+  `delivery_name()` 给出（`--delivery-name`）；改这里务必两处同源。香港节点走
+  **CNAME 自定义域名**，本不受 `ApkDownloadForbidden` 限制，但为与广州保持
+  同一份索引形状，仍沿用 `.bin` 命名。要彻底去掉后缀只能给 bucket 挂 CNAME
+  自定义域名（需备案 + 证书）—— 香港节点已经这么做了。
 
 ---
 
@@ -170,15 +211,19 @@ push tag v*  ──►  build-windows ┐
 
 ```bash
 # 1) 静态检查：CI 跑的那 17 条 + 2 条算法回归
-for s in android_res_ids backup_keys beacon_track const_colors cross_imports \
-         frame_cost hr_garmin ipa_packaging l10n_sync landscape_layout \
-         material_coverage notice pos_quality release_notes transition_backdrop \
+for s in agent_loop android_res_ids backup_keys beacon_track const_colors cross_imports \
+         dark_mode frame_cost hr_garmin ipa_packaging l10n_sync landscape_layout \
+         material_coverage notice oss_channel pos_quality release_notes transition_backdrop \
          ui_wiring widget_members; do python3 tool/check_$s.py || echo "❌ $s"; done
 python3 tool/sim_selffix.py --check && python3 tool/sim_turn_dot.py --check
 
 # 2) CI **不跑**、但改到就得自己跑的（官网 / 引导 / 教程页）
 python3 tool/check_site.py      # 官网三语：结构 / 链接 / 版本号是否出现在首页
 python3 tool/check_guides.py    # 功能引导表 ↔ 6 语言 ↔ 产物 ↔ 页面接入点
+# 改了官网的「带真源的数据块」要重跑对应同步脚本（都是幂等标记块写入，可反复跑）：
+#   python3 tool/sync_site_content.py       # 功能卡片 + 更新日志（**发版后必跑**，否则首页版本号落后）
+#   python3 tool/sync_sponsors_site.py      # 赞助名单（真源 docs/sponsors.json）
+#   python3 tool/sync_friend_links_site.py  # 友情链接（真源 docs/links.json）
 
 # 3) 改了 arb 或 CHANGELOG 时
 python3 tool/check_l10n_sync.py       # arb ↔ 提交进 git 的 gen-l10n 产物
@@ -198,6 +243,14 @@ python3 tool/check_release_notes.py   # Release 正文能否抽全（中英双�
 - 生成器里英文文案的引号嵌套（`page's "X"`）会让 Python 报
   `unterminated string literal`。
 - 版本号只在**发版时**动，且只动 `tool/sync_version.py` 管的那几处。
+- **暗色模式是运行时换调色板，弹窗/面板/卡片的表面色必须走 `C.white`，不能写
+  写死 `Colors.white`**：`Colors.white` 是编译期常量，深色模式下那张弹窗就是一块
+  发亮白板，而浅色模式完全正常 —— 能编译、能过 analyze、能过其它全部检查器，
+  只有切深色肉眼可见。`tool/check_dark_mode.py` 会拦住这种写法（固定彩色横幅上的
+  白底按钮与 `Border.all`/`BoxShadow` 的白色描边不算表面，已在脚本里登记例外）。
+- 官网公告有真源：`docs/notice/{zh,zh_TW,en}.md` 是手写源，改完**必须**跑
+  `python3 tool/sync_notice_site.py` 把三语 `#announce` 区重新生成，否则
+  `check_notice.py` 会在 CI 报红（`docs/index.html 公告正文与 docs/notice/zh.md 不一致`）。
 
 ---
 

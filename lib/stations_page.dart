@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 import 'guide.dart';
+import 'huangyan_island.dart';
 import 'models.dart';
 import 'state.dart';
 import 'aprs_device.dart';
 import 'widgets.dart';
 import 'station_detail.dart';
+import 'station_note.dart';
 import 'stats_panel.dart';
 import 'material.dart';
 
@@ -30,7 +32,11 @@ class _StationsPageState extends State<StationsPage> {
   /// 刻意**不做持久化**：每次进入台站面板都默认回到台站列表，
   /// 不记忆上次选择（与需求一致）。
   bool _statsMode = false;
-  String _sort = 'call';
+
+  /// 排序方式存在 [AppState.stationSort]（落盘 + 进备份）：用户要求
+  /// 「排序按钮能记忆」—— 每次进面板都从头按呼号排很烦。
+  /// 这里只读，改动走 [AppState.setStationSort]。
+  String get _sort => widget.state.stationSort;
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce; // 搜索防抖：台站多时避免逐字重建列表
 
@@ -78,6 +84,11 @@ class _StationsPageState extends State<StationsPage> {
     // 台站筛选（状态/类型/同款软件/设备）—— 与地图共用同一套判定
     final f = st.stationFilter;
     if (!f.isEmpty) s = s.where(f.matches).toList();
+    // 黄岩岛彩蛋：**只**在搜索命中的那一刻临时拼一条进来。
+    //
+    // 它从不进 AppState.stations，所以「在列表里一直往下翻」永远翻不到；
+    // 过滤（国家/类型等）已在前一步完成，此处只在结果里追加，不会污染统计或地图。
+    if (isHuangyanQuery(q)) s.add(huangyanStation(S.of(context)));
     final my = st.myStation;
     switch (_sort) {
       case 'recent':
@@ -113,7 +124,8 @@ class _StationsPageState extends State<StationsPage> {
       builder: (context, _) {
         final st = widget.state;
         final list = _list(st);
-        // 横屏屏幕矮：隐藏统计框，避免头部过高溢出
+        // 横屏屏幕矮：统计行的四个计数藏起来省高度（统计面板那一档照旧），
+        // 但排序入口保留 —— 见下面的筛选行
         final landscape =
             MediaQuery.of(context).orientation == Orientation.landscape;
         return Padding(
@@ -208,8 +220,8 @@ class _StationsPageState extends State<StationsPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 统计行
-                    if (!landscape)
+                    // 竖屏：统计行 + 排序入口一行，筛选行在下面。
+                    if (!landscape) ...[
                       Row(
                         children: [
                           _statMini(
@@ -236,9 +248,23 @@ class _StationsPageState extends State<StationsPage> {
                           _sortMenu(),
                         ],
                       ),
-                    if (!landscape) SizedBox(height: 6),
-                    // 筛选行：单行横向滚动 chips，即点即筛（不含 FMO）
-                    _chipBar(context),
+                      SizedBox(height: 6),
+                    ],
+                    // 筛选行：单行横向滚动 chips，即点即筛（不含 FMO）。
+                    //
+                    // 横屏屏幕矮，四个计数藏起来省一行高度；但**排序入口必须留下**
+                    // （用户报的「横屏下筛选按钮消失」）：它原本和计数挤在同一行，
+                    // 一起藏掉就等于横屏下改不了排序。改成把排序放在筛选行右端。
+                    if (landscape)
+                      Row(
+                        children: [
+                          Expanded(child: _chipBar(context)),
+                          const SizedBox(width: 8),
+                          _sortMenu(),
+                        ],
+                      )
+                    else
+                      _chipBar(context),
                   ],
                 ),
               ),
@@ -561,6 +587,16 @@ class _StationsPageState extends State<StationsPage> {
         children: [
           chip(S.of(context).all, _nothingFiltered, C.slate, _clearAll),
           const SizedBox(width: 4),
+          // 只看收藏（用户要求）：与其它条件并列生效
+          chip(
+            S.of(context).favoriteStations,
+            _f.favoriteOnly,
+            C.orange,
+            () => _setFilter(_f.copyWith(favoriteOnly: !_f.favoriteOnly)),
+          ),
+          const SizedBox(width: 8),
+          _divider(),
+          const SizedBox(width: 8),
           status(S.of(context).online, 'online', C.green),
           const SizedBox(width: 4),
           status(S.of(context).moving, 'moving', C.blue),
@@ -859,7 +895,9 @@ class _StationsPageState extends State<StationsPage> {
     };
     return PopupMenuButton<String>(
       initialValue: _sort,
-      onSelected: (v) => setState(() => _sort = v),
+      // setState 是为了**列表立刻重排**：本页只订阅台站数据流，AppState 的
+      // 通知不一定把这一页带起来。
+      onSelected: (v) => setState(() => widget.state.setStationSort(v)),
       offset: const Offset(0, 28),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
@@ -938,7 +976,7 @@ class _StationsPageState extends State<StationsPage> {
                         children: [
                           Flexible(
                             child: Text(
-                              '${localizedAprsSymbolName(context, s.symbol)} · ${s.comment ?? ''}',
+                              localizedAprsSymbolName(context, s.symbol),
                               style: ts(11, c: C.slate),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -948,6 +986,17 @@ class _StationsPageState extends State<StationsPage> {
                           if (s.deviceName != null) ...[SizedBox(width: 6), _devicePill(s)],
                         ],
                       ),
+                      // 台站备注：**单独一行、可换行、不截断**。原来它和上面那行
+                      // 「符号名」挤在一起且 `maxLines: 1`，稍长的备注（中继频点 /
+                      // 天气 / 活动）就被省略号吃掉；现改由 StationNote 完整展示，
+                      // 并识别备注里的网址（可点、交系统浏览器打开）。
+                      if ((s.comment ?? '').trim().isNotEmpty) ...[
+                        SizedBox(height: 4),
+                        StationNote(
+                          (s.comment ?? '').trim(),
+                          style: ts(11, c: C.slate),
+                        ),
+                      ],
                       SizedBox(height: 6),
                       Wrap(
                         spacing: 14,
@@ -981,6 +1030,16 @@ class _StationsPageState extends State<StationsPage> {
                   ),
                 ),
                 SizedBox(width: 6),
+                // 「收藏」视图下给一颗实心星标：**点一下即取消收藏**（就地清理，
+                // 不用进详情、也不用记住另一个"管理"入口）。用 IconButton 是为了吸收
+                // 点击 —— 不会冒泡去打开详情面板（与下面「在地图显示」同一手法）。
+                if (_f.favoriteOnly)
+                  IconButton(
+                    onPressed: () => st.toggleFavorite(s.call),
+                    icon: Icon(Icons.star_rounded, color: C.orange, size: 20),
+                    tooltip: S.of(context).unfavorite,
+                    visualDensity: VisualDensity.compact,
+                  ),
                 // 在地图显示：直接给 IconButton 有效 onPressed（IconButton 会吸收点击，
                 // 不会再冒泡到外层 InkWell 打开详情面板）
                 IconButton(

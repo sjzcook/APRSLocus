@@ -76,9 +76,21 @@
   "maxSpeedTiers": "最多 5 个速度档",
   "iconDefaultMySymbol": "图标 · 默认(我的符号)",
   "iconNamed": "图标 · {name}",
-  "@iconNamed": {"placeholders": {"name": {"type": "String"}}},
+  "@iconNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "everyNSeconds": "每 {sec} 秒",
-  "@everyNSeconds": {"placeholders": {"sec": {"type": "String"}}},
+  "@everyNSeconds": {
+    "placeholders": {
+      "sec": {
+        "type": "String"
+      }
+    }
+  },
   "tierIdleTitle": "编辑 · 静止/低速档",
   "tierSpeedTitle": "编辑 · 速度档",
   "minSpeedKmh": "最低速度 (km/h)",
@@ -98,11 +110,29 @@
   "weatherWidget": "天气组件",
   "groupChatLabel": "群聊",
   "nItems": "{n} 个",
-  "@nItems": {"placeholders": {"n": {"type": "String"}}},
+  "@nItems": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "nMessages": "{n} 条",
-  "@nMessages": {"placeholders": {"n": {"type": "String"}}},
+  "@nMessages": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "confirmDeleteMessages": "确定要删除全部 {n} 条聊天记录吗？此操作不可恢复。",
-  "@confirmDeleteMessages": {"placeholders": {"n": {"type": "String"}}},
+  "@confirmDeleteMessages": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "weatherSimFollowLive": "跟随实时",
   "wxClear": "晴",
   "wxCloudy": "多云",
@@ -120,7 +150,13 @@
   "restartWizardButton": "重新运行",
   "pasteAprsPacketHint": "粘贴原始 APRS 包，如：\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>测试台",
   "beaconsSentCount": "{n} 次",
-  "@beaconsSentCount": {"placeholders": {"n": {"type": "String"}}},
+  "@beaconsSentCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "myBadgesAndAchievements": "我的徽章与成就",
   "quitApp": "退出应用",
   "quitAppDesc": "退出后 APRSlocus 将停止定位上报与后台接收，并结束进程。",
@@ -135,13 +171,27 @@
   "mapTypeOsm": "OSM 标准",
   "mapTypeOsmHot": "OSM 人道",
   "mapTypeOpenTopo": "OpenTopo 地形",
+  "terrainGroup": "地形",
+  "mapTypeEsriTopo": "Esri 地形(等高线)",
+  "mapTypeEsriRelief": "Esri 地形浮雕",
+  "mapTypeEsriHillshade": "Esri 山体阴影",
+  "tiandituGroup": "天地图",
+  "mapTypeTianditu": "天地图 矢量",
+  "mapTypeTiandituImg": "天地图 影像",
+  "mapTypeTiandituTer": "天地图 地形",
   "mapTypeEsriStreet": "Esri 街道",
   "mapTypeEsriSat": "Esri 影像",
   "simulatedKeepAlive": "模拟位置 · 后台保活",
   "symCatEmergency": "应急救援",
   "symSmallAircraft": "小型飞机",
   "myPositionSet": "已设置我的位置，网格 {grid}",
-  "@myPositionSet": {"placeholders": {"grid": {"type": "String"}}},
+  "@myPositionSet": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      }
+    }
+  },
   "tierIdleShort": "静止/低速",
   "symHouse": "房屋",
   "symPerson": "人",
@@ -269,7 +319,7 @@
   "oobeWelcomeIs": "接入 APRS-IS",
   "oobeCallTitle": "你的呼号",
   "oobeSymbolTitle": "选择台站符号",
-  "oobeServerTitle": "连接 APRS-IS 服务器",
+  "oobeServerTitle": "服务器（可选）",
   "weatherData": "气象数据",
   "fmoInfo": "FMO 台站信息",
   "aprslocusInfo": "APRSlocus 信息",
@@ -291,13 +341,13 @@
   "invalidCoords": "请输入有效的经纬度和半径",
   "filterSaved": "过滤已保存并应用",
   "stationsShown": "台站",
-  "settingsDesc": "配置电台、定位与连接",
+  "settingsDesc": "电台、定位、链路与数据",
   "radioCat": "电台",
   "radioCatDesc": "呼号 · SSID · 符号",
   "beaconCat": "定位上报",
   "beaconCatDesc": "GPS · 信标 · 手动定位",
-  "connectionCat": "连接",
-  "connectionCatDesc": "服务器 · 过滤范围",
+  "connectionCat": "服务器",
+  "connectionCatDesc": "两条链路与过滤范围",
   "displayCat": "显示",
   "displayCatDesc": "坐标 · 主题",
   "chatCat": "聊天",
@@ -314,13 +364,13 @@
   "oobeWelcomeDesc": "开始配置你的 APRS 电台",
   "oobeCallDesc": "输入你的呼号",
   "oobeSymbolDesc": "符号代表台站类型，会随位置信标一起发送",
-  "oobeServerDesc": "连接后接收全球 APRS 台站数据，可保持默认配置直接使用",
+  "oobeServerDesc": "留空即不连接任何服务器，软件只在本地工作。本软件不提供、也不推荐任何服务器地址；需要联网时，请自行填写你信任的服务器与端口。",
   "wizard": "设置向导",
   "setStep": "步骤",
   "chooseSymbol": "选择台站符号",
   "settingsSubtitle": "地图坐标与显示偏好",
   "stationSettingsSubtitle": "呼号、符号与信标",
-  "connectionSettingsSubtitle": "APRS-IS 服务器与接收范围",
+  "connectionSettingsSubtitle": "两条链路可以同时在线，报文两边各收一份。",
   "chatSettingsSubtitle": "消息记录与联系人",
   "dataSettingsSubtitle": "本地数据管理",
   "advancedSettingsSubtitle": "实验室与开发者工具",
@@ -336,11 +386,350 @@
   "showTrails": "显示轨迹",
   "showStations": "显示台站",
   "aboutTitle": "关于",
-  "aboutSubtitle": "APRS 定位追踪与地图",
+  "aboutSubtitle": "APRS 客户端 · 定位与地图",
   "author": "作者",
   "codeContributions": "代码贡献",
   "codeContributionI18n": "国际化 / 英文界面",
   "codeContributionZhTw": "繁体中文界面",
+  "@icomLinkConnected": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomBindHint": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectRadio": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomSwitchTitle": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomCardActive": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingTo": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectTitle": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingSub": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      },
+      "tnc": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescRadio": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "icomTitleSubtitle": "局域网直连 Icom 电台（IC-705 / IC-9700 / IC-7610 / IC-905），收发 12 kHz PCM 音频与 CI-V 控制",
+  "icomLinkStatusTitle": "电台链路状态",
+  "icomLinkConnected": "已与 {model} 建立局域网直连",
+  "icomLinkHandshaking": "未连接或正在握手",
+  "icomBindHint": "开启后，APRS 音频收发数据源将直接绑定至 {model} 局域网直连",
+  "icomLinkPhase": "链路阶段",
+  "icomRfStats": "射频收发统计",
+  "icomAudioFmt": "12000 Hz (LPCM 16-bit 单声道)",
+  "icomProcessing": "处理中...",
+  "icomDisconnectRadio": "断开电台连接",
+  "icomConnectRadio": "立即连接 {model}",
+  "icomNetworkTitle": "电台网络参数",
+  "icomNetworkSubtitle": "选择电台型号预置并配置 IP 与 Network User 凭据",
+  "icomModelPreset": "电台型号预置",
+  "icomIpHint": "电台 IP 地址",
+  "icomUserHint": "电台 Network User 名",
+  "icomPassHint": "电台 Network User 密码",
+  "icomCredHint": "提示：用户名和密码必须与电台内部 Network User Setting 完全一致。",
+  "icomCivTitle": "CI-V 控制与发射设置",
+  "icomCivSubtitle": "PTT 自动控制、前导延时与信标参数",
+  "icomRfBeaconHint": "是否允许通过电台射频自动周期发射信标（半双工，发射时自动静默监听）。",
+  "icomTxDelayLabel": "发射前导延迟 (TX Delay, ms)",
+  "icomCivAddrLabel": "电台 CI-V 地址 (十六进制)",
+  "icomControllerAddr": "控制器地址",
+  "icomControllerAddrValue": "0xE0 (默认)",
+  "icomGuideTitle": "电台设置指引",
+  "icomGuideSubtitle": "在 Icom 电台上的必要准备步骤",
+  "icomGuide1Title": "网络连接",
+  "icomGuide1Body": "IC-705 可在 MENU → SET → WLAN Set 中选择 Connect to Network 连接路由器 Wi-Fi，或选择 Access Point 开启热点供手机直连；IC-9700 / IC-7610 / IC-905 可直接连接路由器 LAN 口，或通过无线网桥接入局域网。",
+  "icomGuide2Title": "添加网络用户",
+  "icomGuide2Body": "进入 WLAN Set / Network Set → Network User Setting，添加一个用户（设置好用户名与密码），并开启允许连接。",
+  "icomGuide3Title": "确认 CI-V 地址与端口",
+  "icomGuide3Body": "进入 MENU → SET → Connectors → CI-V，确认 CI-V Address 与控制端口。",
+  "icomGuide4Title": "设置模式与频率",
+  "icomGuide4Body": "将电台对应频段模式设为 FM-D。",
+  "icomLogTitle": "电台通信诊断日志",
+  "icomLogSubtitle": "查看 Icom 局域网控制包与 CI-V 通信记录",
+  "icomLogEmpty": "暂无通信日志",
+  "icomPhaseOpeningSockets": "正在打开端口…",
+  "icomPhaseDiscovering": "正在发现电台…",
+  "icomPhaseAuthenticating": "正在登录电台…",
+  "icomPhaseNegotiating": "正在协商音频流…",
+  "icomPhaseOpeningStreams": "正在打开数据流…",
+  "icomPhaseReady": "已连接（等待音频）",
+  "icomPhaseReceiving": "已连接（接收中）",
+  "icomPhaseReconnect": "连接中断，正在重连…",
+  "icomPhaseFailed": "连接失败",
+  "icomPhaseUnsupported": "当前平台不支持 IC-705 局域网直连",
+  "icomSwitchTitle": "WLAN 电台（{model}）",
+  "icomLanAddr": "电台地址",
+  "icomCardActive": "当前已启用 {model} 局域网直连模式。",
+  "icomConnectingTo": "正在连接 {radio}",
+  "icomConnectTitle": "连接 {radio} 电台",
+  "icomConnectingSub": "正在连接 {radio}（{tnc}）…",
+  "icomDescHost": "{host} · 局域网直连电台收发与 CI-V 控制",
+  "icomDescRadio": "通过局域网直连 {radio} 电台收发报文与控制",
+  "modelIc705Desc": "便携全模式 QRP 电台（内置 Wi-Fi AP / STA）",
+  "modelIc9700Desc": "VHF/UHF/1.2GHz 全模式基站（以太网 LAN / Wi-Fi）",
+  "modelIc7610Desc": "HF/50MHz 双接收 SDR 基站（以太网 LAN）",
+  "modelIc905Desc": "144MHz~10GHz 全模式微波电台（以太网 LAN）",
+  "modelCustomName": "自定义 / 其他 (Custom)",
+  "modelCustomDesc": "自定义 Icom 电台 CI-V 地址与端口",
+  "assetWindowsPackage": "Windows 安装包",
+  "assetApkPackage": "APK 安装包",
+  "honorTagPerseverance": "养生",
+  "@agentTestOk": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentError": {
+    "placeholders": {
+      "msg": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentToolCalling": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "agentMode": "智能体模式",
+  "agentModeDesc": "开启后屏幕上出现一个 AI 聊天框，可以对话让它帮你改设置、发消息、查台站（需自行配置接口 Key）",
+  "agentSettings": "智能体设置",
+  "agentSettingsDesc": "接口地址 / Key / 模型，以及允许智能体执行哪些操作",
+  "agentEnabled": "启用智能体",
+  "agentBaseUrl": "接口地址 (Base URL)",
+  "agentApiKey": "接口 Key (API Key)",
+  "agentModel": "模型",
+  "agentPreset": "预设",
+  "agentPresetCustom": "自定义",
+  "agentSystemPrompt": "系统提示词（可选）",
+  "agentAllowSend": "允许发送消息",
+  "agentAllowSendDesc": "允许智能体代为发送私信、群消息与信标",
+  "agentAllowSettings": "允许修改设置",
+  "agentAllowSettingsDesc": "允许智能体修改应用设置（关闭后仅可查看）",
+  "agentTest": "测试连接",
+  "agentTesting": "正在测试…",
+  "agentTestOk": "连接成功：{model}",
+  "agentNeedConfig": "请先填写接口地址、Key 和模型",
+  "agentChatTitle": "智能体助手",
+  "agentInputHint": "告诉智能体你想做什么…",
+  "agentSend": "发送",
+  "agentClear": "清空对话",
+  "agentClearConfirm": "确定清空当前对话？",
+  "agentWelcome": "你好，我是 APRSLocus 的智能体助手。你可以让我帮你改设置、发送消息、查看台站。请先在「智能体设置」里配置接口 Key。",
+  "agentThinking": "思考中…",
+  "agentError": "出错了：{msg}",
+  "agentConfirmTitle": "智能体请求执行操作",
+  "agentConfirmRun": "允许",
+  "agentConfirmDeny": "拒绝",
+  "agentDenied": "已拒绝该操作",
+  "agentExecuted": "已执行",
+  "agentToolResult": "工具结果",
+  "agentStopped": "已停止",
+  "agentStop": "停止",
+  "agentOpenSettings": "智能体设置",
+  "agentNeedsEnable": "请先在实验功能中开启「智能体模式」",
+  "agentToolCalling": "正在执行：{name}",
+  "agentMinimize": "收起",
+  "agentApiKeyTip": "Key 只保存在本机，不会上传到任何 APRSlocus 服务器。",
+  "agentPresetHint": "快速填充接口与模型",
+  "agentInterfaceSection": "接口配置",
+  "agentPermissions": "权限",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentMemory": "长期记忆",
+  "agentMemoryDesc": "让智能体跨对话记住你的偏好与常用信息",
+  "agentMemoryOn": "启用长期记忆",
+  "agentMemoryHint": "智能体可自行调用「记住 / 忘记」工具，也可由你直接说「记住…」。记忆只存在本机。",
+  "agentMemoryEmpty": "暂无记忆。对智能体说「记住…」即可添加。",
+  "agentMemoryClear": "清空全部记忆",
+  "agentMemoryClearConfirm": "确定清空全部长期记忆？此操作不可撤销。",
+  "agentCompress": "对话压缩",
+  "agentCompressDesc": "历史变长时自动把旧对话折叠成摘要，省上下文",
+  "agentCompressOn": "启用自动压缩",
+  "agentCompressHint": "超过约 40 条消息时自动压缩。摘要会保留在系统提示里，最近的对话不受影响。",
+  "agentCompressNow": "立即压缩",
+  "agentCompressNothing": "没有可压缩的内容",
+  "agentCompressDone": "已压缩对话",
+  "agentAllowNetwork": "允许联网请求",
+  "agentAllowNetworkDesc": "允许智能体主动发起 HTTP 请求（GET / POST / PUT / DELETE…）。默认关闭；开启后每次请求仍需你确认。",
+  "agentNoFinalAnswer": "已达到本轮的连续操作次数上限，没能给出结论。再发一句「继续」让它接着做。",
+  "agentTool_http_request": "发起网络请求",
+  "agentTool_save_memory": "记住一条信息",
+  "agentTool_list_memories": "查看记忆",
+  "agentTool_forget_memory": "忘记一条信息",
+  "huangyanTitle": "黄岩岛",
+  "huangyanBadge": "隐藏台站 · 中国固有领土",
+  "huangyanTagline": "南海中沙群岛东部的环礁，中国固有领土",
+  "huangyanShort": "中国固有领土 · 南海中沙群岛东部环礁",
+  "huangyanGrid": "OL98gd",
+  "huangyanGeoHead": "地理位置",
+  "huangyanGeoBody": "黄岩岛（又称民主礁）位于南海中沙群岛东部，是一个呈等腰三角形的大环礁，周长约 55 公里，礁盘面积约 150 平方公里，其中包括长约 15 公里的潟湖。礁缘多数隐没于水下，退潮时可见部分礁块露出海面，是中沙群岛中唯一露出水面的岛礁。",
+  "huangyanHistoryHead": "历史由来",
+  "huangyanHistory1": "中国很早便有关于黄岩岛的历史记载。元代天文学家郭守敬奉旨「四海测验」，1297 年曾在该海域设立观测点；此后历代官方舆图与航海文献均把黄岩岛列入中国版图，海南、广东一带渔民世代在此海域捕鱼作业，并称之为「黄岩」，西方海图后沿称 Scarborough Shoal。",
+  "huangyanHistory2": "现代以来，中国政府一直对黄岩岛及其附近海域行使主权和管辖。1983 年，中国地名委员会正式公布标准名称为「黄岩岛」。",
+  "huangyanHamHead": "业余无线电",
+  "huangyanHamBody": "在业余无线电领域，黄岩岛以 DXCC 实体呼号前缀 BS7 为人熟知。1995 年，中国与多国爱好者联合发起 BS7H 远征，让这片环礁首次出现在全球广播电台的日志之中，此后被称为「稀有而令人向往」的 DX 目的地。",
+  "huangyanLegal": "本卡片所引资料仅用于业余无线电科普展示。黄岩岛是中国固有领土，中国对其及其附近海域拥有无可争辩的主权。",
+  "huangyanTagReef": "珊瑚环礁",
+  "huangyanTagDxcc": "DXCC BS7",
+  "huangyanTagAxis": "中沙群岛",
+  "huangyanFootNote": "资料整理自公开地理与历史文献，仅供科普参考。",
+  "huangyanOpen": "打开介绍页",
+  "agentTabConnection": "连接",
+  "agentTabPermissions": "权限",
+  "agentTabAutomation": "自动化",
+  "agentSystemPromptHint": "留空则使用内置提示",
+  "agentAlwaysAllow": "始终允许",
+  "agentAlwaysAllowDesc": "已放行的工具，执行时不再询问。在确认条上点「始终允许」可加入此列表。",
+  "agentAlwaysAllowEmpty": "暂无。在操作确认条上点「始终允许」即可添加。",
+  "agentAlwaysAllowClear": "清除全部放行",
+  "agentAutoReply": "自动回复",
+  "agentAutoReplyDesc": "收到新消息时让智能体自动回一条（实验）",
+  "agentAutoReplyOn": "启用自动回复",
+  "agentAutoReplyHint": "仅回复私聊；受安静时段与冷却限制；需开启「允许发送消息」。",
+  "agentReplyGroups": "也回复群聊",
+  "agentReplyGroupsDesc": "群里自动说话风险更大，默认关闭",
+  "agentQuietHours": "安静时段",
+  "agentQuietHoursDesc": "形如 23:00-07:00；留空=不限。此时间段内不自动回复。",
+  "agentTasks": "定时任务",
+  "agentTasksDesc": "到点让智能体自动跑一段指令",
+  "agentTasksEmpty": "暂无定时任务",
+  "agentTaskNew": "新建定时任务",
+  "agentTaskPrompt": "指令",
+  "agentTaskPromptHint": "例如：总结最近一小时的台站",
+  "agentTaskInterval": "间隔（分钟）",
+  "agentTaskIntervalHint": "0 = 只跑一次；循环最短 1 分钟",
+  "agentTaskCreate": "创建",
+  "agentTaskDelete": "删除",
+  "agentTaskEvery": "每 {n} 分钟",
+  "agentTaskOnce": "只跑一次",
+  "agentAutoReplyPrompt": "【自动回复】{from} 发来消息：{text}\n你可以调用只读工具（查台站、消息等）获取事实，但不要执行任何改动设置或发送消息的操作。最终只输出要回复给对方的那一句话。",
+  "agentTool_get_app_state": "读取应用状态",
+  "agentTool_list_groups": "列出群组",
+  "agentTool_search_stations": "搜索台站",
+  "agentTool_list_stations": "列出台站",
+  "agentTool_station_detail": "台站详情",
+  "agentTool_read_messages": "读取消息",
+  "agentTool_send_message": "发送消息",
+  "agentTool_send_beacon_now": "立即发送信标",
+  "agentTool_set_preferences": "修改偏好设置",
+  "agentTool_set_station_filters": "修改台站过滤",
+  "agentTool_set_nickname": "修改呼号信息",
+  "agentTool_navigate": "切换页面",
+  "agentTool_create_task": "新建定时任务",
+  "agentTool_list_tasks": "列出定时任务",
+  "agentTool_cancel_task": "取消定时任务",
+  "agentTool_set_connection_server": "修改服务器地址",
+  "agentTool_set_connection_source": "修改连接方式",
+  "agentTool_connect": "连接",
+  "agentTool_disconnect": "断开连接",
+  "agentTool_nearby_stations": "附近台站",
+  "agentTool_reply_message": "回复消息",
+  "agentTool_send_group_message": "群发消息",
+  "agentTool_create_group": "创建群组",
+  "agentTool_set_task_enabled": "暂停/恢复任务",
+  "agentTool_list_strategy": "列出策略图层",
+  "agentTool_strategy_add_point": "添加标点",
+  "agentTool_strategy_add_rally": "添加集合点",
+  "agentTool_strategy_add_circle": "添加圆圈",
+  "agentTool_strategy_add_line": "添加划线",
+  "agentTool_strategy_update": "修改策略元素",
+  "agentTool_strategy_delete": "删除策略元素",
+  "agentTool_strategy_clear": "清空策略图层",
+  "agentTool_strategy_request_snapshot": "请求重播图层",
+  "agentTool_unknown": "执行操作",
+  "agentMessageTasks": "消息触发",
+  "agentMessageTasksDesc": "收到新消息时让智能体跑一段指令",
+  "agentMessageTasksEmpty": "暂无消息触发任务",
+  "agentMessageTaskNew": "新建消息触发任务",
+  "agentMessageTaskPromptHint": "例如：把这条消息里的位置记下来",
+  "agentMessageTaskEvery": "收到消息时",
+  "agentMessageTaskRunPrompt": "【消息触发】已启用你的第 {n} 条消息触发任务。\n任务指令：{task}\n本条新消息来自 {from}：{text}\n请执行该任务指令，只输出执行结果或结论本身，不要输出这句说明。",
+  "agentNoticeTitle": "智能体使用告知",
+  "agentNoticeAccept": "同意并启用",
+  "agentNoticeDecline": "暂不启用",
+  "agentNoticeBody": "智能体会把你与它的对话内容，以及它读取到的本机数据（如台站、位置、消息、设置等），发送给你所配置的第三方大模型服务（如 OpenAI、DeepSeek、自建接口等）进行处理。请勿在对话中提供国家秘密、商业秘密、个人隐私或敏感位置信息。\n\n请自行确认你所选择的模型服务合法合规，并自行承担因数据出境、个人信息处理等产生的责任。我们不运营任何上述服务，与其也不存在隶属、代理或合作关系。\n\n智能体默认只能读取数据；发送消息、修改设置等有副作用的操作需要你在聊天框内单独授权并逐次确认，你也可以随时关闭智能体。\n\n点击「同意并启用」表示你已阅读、理解并接受上述内容（详见《用户协议》智能体相关条款）。",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentStreamReply": "逐字回复",
+  "agentStreamReplyDesc": "模型边生成边显示。后端不支持流式时自动退回整段显示，不会少一句回复。",
+  "agentToolHistory": "工具操作历史",
+  "agentToolHistoryEmpty": "还没有工具操作记录。让智能体帮你做点事，这里会一条条记下来。",
+  "agentToolWorking": "正在操作：{tool}",
+  "agentToolDenied": "已拒绝",
+  "agentToolFailed": "失败",
+  "@agentToolWorking": {"placeholders": {"tool": {"type": "String"}}},
   "codeContributionTranslation": "翻译",
   "dataSourceTxHint": "可以同时勾选多条链路一起收报文，但**发射只有一条**（右侧圆点为发射来源）——同一个呼号从两条链路发出去会造成重复报文。",
   "dataSourceTxBadge": "发射",
@@ -373,13 +762,58 @@
   "grpNameTooLong": "群名最长 {max} 个字符（过长会让邀请报文超出 APRS 消息上限）",
   "grpInviteSent": "已向 {n} 位成员发出邀请",
   "grpSelfPending": "等待群主确认",
-  "@grpSysJoined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysLeft": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysJoinReq": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysDeclined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpInviteBody": {"placeholders": {"from": {"type": "String"}, "name": {"type": "String"}}},
-  "@grpNameTooLong": {"placeholders": {"max": {"type": "int"}}},
-  "@grpInviteSent": {"placeholders": {"n": {"type": "int"}}},
+  "@grpSysJoined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysLeft": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysJoinReq": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysDeclined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpInviteBody": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpNameTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "@grpInviteSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deviceOverviewTitle": "设备",
   "deviceOverviewSubtitle": "数据来源、链路状态与自检",
   "deviceCurrentLink": "当前链路",
@@ -408,18 +842,60 @@
   "tncTxTestOk": "已写入 TNC（累计 {n} 帧）。若电台仍不发射，问题在 TNC 侧：试初始化串或检查 TxDelay。",
   "tncTxTestFail": "未写入：{err}",
   "tncNeedConnected": "请先连接 TNC",
-  "@tncInitSent": {"placeholders": {"n": {"type": "int"}}},
-  "@tncTxTestOk": {"placeholders": {"n": {"type": "String"}}},
-  "@tncTxTestFail": {"placeholders": {"err": {"type": "String"}}},
+  "@tncInitSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@tncTxTestOk": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncTxTestFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "msgLenCounter": "{chars}/67 字符 · 整包 {bytes}/512 字节",
   "msgOverSpecAsk": "这条消息 {chars} 个字符，超过 APRS 规范的 67 字符上限。多数客户端仍能读出，但部分客户端/网关会截断或拒收，对方可能解析不出来。仍要发送吗？",
   "msgOverServerLimit": "整包 {bytes} 字节，超过 APRS-IS 单行上限 512 字节，服务器可能直接丢弃整包（连报头都送不到）。请缩短约 {over} 字节。",
   "msgSendAnyway": "仍要发送",
   "msgSpecLimitHint": "APRS 规范建议单条消息不超过 67 字符：超长文本在部分客户端上会显示不全或解析失败。",
   "msgBlockedTooLong": "已阻止发送：整包超出 APRS-IS 上限",
-  "@msgLenCounter": {"placeholders": {"chars": {"type": "int"}, "bytes": {"type": "int"}}},
-  "@msgOverSpecAsk": {"placeholders": {"chars": {"type": "int"}}},
-  "@msgOverServerLimit": {"placeholders": {"bytes": {"type": "int"}, "over": {"type": "int"}}},
+  "@msgLenCounter": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      },
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverSpecAsk": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverServerLimit": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "over": {
+        "type": "int"
+      }
+    }
+  },
   "beaconRfBeaconOff": "射频信标未开启",
   "beaconRfEnableHint": "射频来源的自动发射需要显式打开「射频信标」。在此之前不会自动发射位置（倒计时也不会走动）。",
   "beaconRfEnableAction": "开启射频信标",
@@ -482,22 +958,124 @@
   "audioRestart": "重启音频链路",
   "audioTxDisabled": "「允许发射」已关闭，仅接收",
   "audioLoopbackHint": "自检会真的做一次调制→解调；Android 发射时会暂停麦克风采集（半双工）",
-  "@diagPassed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagFailed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagAx25Mismatch": {"placeholders": {"got": {"type": "String"}}},
-  "@diagTncLoopbackOk": {"placeholders": {"len": {"type": "int"}}},
-  "@diagAfskLoopbackOk": {"placeholders": {"samples": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagAfskLoopbackFail": {"placeholders": {"n": {"type": "int"}}},
-  "@diagPlatformOk": {"placeholders": {"name": {"type": "String"}}},
-  "@diagCaptureOk": {"placeholders": {"bytes": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagCaptureFailed": {"placeholders": {"err": {"type": "String"}}},
-  "@diagSpeakerFail": {"placeholders": {"err": {"type": "String"}}},
-  "@diagFileIoOk": {"placeholders": {"rate": {"type": "int"}}},
-  "@diagFileWriteFail": {"placeholders": {"err": {"type": "String"}}},
-  "@testTxFail": {"placeholders": {"err": {"type": "String"}}},
-  "@audioStatRx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatTx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatDrop": {"placeholders": {"n": {"type": "int"}}},
+  "@diagPassed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFailed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAx25Mismatch": {
+    "placeholders": {
+      "got": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagTncLoopbackOk": {
+    "placeholders": {
+      "len": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackOk": {
+    "placeholders": {
+      "samples": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackFail": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagPlatformOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagCaptureOk": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagCaptureFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagSpeakerFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagFileIoOk": {
+    "placeholders": {
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFileWriteFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@testTxFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioStatRx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatTx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatDrop": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "notifAudioConnected": "音频链路在线",
   "notifAudioDisconnected": "音频链路已断开",
   "connConnectingAudio": "正在打开音频（{name}）…",
@@ -551,16 +1129,79 @@
   "audioWavFound": "解出 {n} 条报文",
   "audioWavWritten": "已写入 {path}",
   "audioWavFailed": "文件读写失败：{err}",
-  "@connConnectingAudio": {"placeholders": {"name": {"type": "String"}}},
-  "@connAudioConnected": {"placeholders": {"rate": {"type": "String"}}},
-  "@connRetryAudio": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connRetryAudioDetail": {"placeholders": {"detail": {"type": "String"}, "seconds": {"type": "int"}}},
-  "@connAudioLinkLost": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connAudioPositionSent": {"placeholders": {"call": {"type": "String"}}},
-  "@audioBadFrames": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavFound": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavWritten": {"placeholders": {"path": {"type": "String"}}},
-  "@audioWavFailed": {"placeholders": {"err": {"type": "String"}}},
+  "@connConnectingAudio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioConnected": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryAudio": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryAudioDetail": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioLinkLost": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioPositionSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioBadFrames": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavFound": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavWritten": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioWavFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "connTncConnected": "TNC 已连接 · {arg}",
   "connTncPositionSent": "TNC 已连接 · 位置已发送 ({arg})",
   "connRetryTnc": "TNC 连接失败 · {n}s 后重试…",
@@ -671,23 +1312,143 @@
   "translateNotNeeded": "该内容无需翻译（数字 / 符号 / 呼号）",
   "translateBubbleCount": "已翻译 {n} 条",
   "translatePrivacyNote": "翻译会把消息文本发送到你选择的第三方接口，请自行评估隐私",
-  "@connTncConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@connTncPositionSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connRetryTnc": {"placeholders": {"n": {"type": "int"}}},
-  "@connRetryTncDetail": {"placeholders": {"e": {"type": "String"}, "n": {"type": "int"}}},
-  "@connTncLinkLost": {"placeholders": {"n": {"type": "int"}}},
-  "@translateCustomBodyTip": {"placeholders": {"text": {"type": "String"}, "from": {"type": "String"}, "to": {"type": "String"}}},
-  "@translateFreeFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateAutoAllFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateOutPreview": {"placeholders": {"text": {"type": "String"}}},
-  "@translateOutPreviewHint": {"placeholders": {"lang": {"type": "String"}}},
-  "@translateSentAs": {"placeholders": {"text": {"type": "String"}}},
-  "@translateTooLongAfter": {"placeholders": {"n": {"type": "int"}}},
-  "@translateTestOk": {"placeholders": {"text": {"type": "String"}}},
-  "@translateFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateBubbleCount": {"placeholders": {"n": {"type": "int"}}},
-  "@dateDividerFull": {"placeholders": {"y": {"type": "int"}, "m": {"type": "int"}, "d": {"type": "int"}, "w": {"type": "String"}}},
-  "@dateWeekday": {"placeholders": {"d": {"type": "String"}}},
+  "@connTncConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncPositionSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryTnc": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryTncDetail": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connTncLinkLost": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateCustomBodyTip": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFreeFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateAutoAllFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreview": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreviewHint": {
+    "placeholders": {
+      "lang": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateSentAs": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateTooLongAfter": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateTestOk": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateBubbleCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@dateDividerFull": {
+    "placeholders": {
+      "y": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      },
+      "d": {
+        "type": "int"
+      },
+      "w": {
+        "type": "String"
+      }
+    }
+  },
+  "@dateWeekday": {
+    "placeholders": {
+      "d": {
+        "type": "String"
+      }
+    }
+  },
   "notifTncConnected": "TNC 已连接",
   "notifTncDisconnected": "TNC 未连接",
   "dataSourceTitle": "数据来源",
@@ -697,6 +1458,96 @@
   "dataSourceTnc": "TNC",
   "dataSourceTncDesc": "通过蓝牙或串口的 TNC 与电台直接收发",
   "dataSourceSwitchHint": "切换数据来源会断开当前连接",
+  "honorResetRow": "清除已阅读荣誉",
+  "honorResetTitle": "清除已阅读荣誉？",
+  "honorResetConfirm": "清空「已阅读」记录，下次进入会把当前已拥有的荣誉重新展示一遍。",
+  "honorResetButton": "清除",
+  "honorResetDone": "已阅读荣誉已清除",
+  "heatLevel": "热力图档位",
+  "heatLevelLow": "弱",
+  "heatLevelMid": "中",
+  "heatLevelHigh": "强",
+  "mapLabelsAlways": "始终显示地图标签",
+  "mapLabelsAlwaysDesc": "无论台站多少、缩放多小，都在地图上显示每个台站的呼号标签。",
+  "startFromFavorites": "从收藏台站开始",
+  "boxConnectAction": "连接盒子",
+  "boxLinkUnsupported": "当前平台暂不支持盒子链路（需要蓝牙或 USB 串口）",
+  "boxNoDevicePaired": "未找到设备 · 先到系统蓝牙设置里配对盒子，或插上 USB 串口线（OTG）",
+  "dataNoticeTitle": "数据与网络使用告知",
+  "dataNoticeBody": "连接第三方 APRS 服务器是您自己的选择。本软件不提供、不运营、也不推荐任何服务器地址。\n\n连接后，您的呼号、位置、消息等内容会经该服务器与 APRS-IS 网络传输，可能被他人接收、存储或公开存档；APRS 是明文的，请勿发送国家秘密、商业秘密、个人隐私或敏感位置信息。\n\n请自行确认所连接的服务器以及您的使用行为合法合规，并自行承担因数据出境、个人信息处理、无线电管理等产生的责任。我们不运营任何服务器，与任何第三方服务器之间也不存在隶属、代理或合作关系。\n\n点击「同意并连接」表示您已阅读、理解并接受上述内容（详见《用户协议》第 2.4、2.5、4.8 条）。",
+  "dataNoticeAccept": "同意并连接",
+  "dataNoticeDecline": "暂不连接",
+  "blTitle": "本设备已被限制使用",
+  "agentAuthTitle": "智能体需要授权",
+  "agentAuthBody": "智能体不对普通用户开放。请下载并填写承诺书，发送到下方邮箱；审核通过后，你的呼号会被加入授权名单，软件会从官网自动拉取。",
+  "agentAuthCallLabel": "本机呼号",
+  "agentAuthStep1Title": "下载承诺书",
+  "agentAuthStep1Desc": "点下方「下载承诺书」，用浏览器打开官方承诺书全文。",
+  "agentAuthStep2Title": "填写并发送",
+  "agentAuthStep2Desc": "如实填写承诺书后，把邮件发送到：",
+  "agentAuthStep3Title": "等待审核并重新检查",
+  "agentAuthStep3Desc": "审核通过后点「重新检查」即可启用；名单与封禁名单同一套架构，从官网拉取。",
+  "agentAuthDownload": "下载承诺书",
+  "agentAuthEmail": "用邮件发送",
+  "agentAuthMailTo": "申请邮箱：",
+  "agentAuthMailSubject": "智能体授权申请",
+  "agentAuthMailBody": "你好，我申请使用 APRSLocus 智能体功能，并已按承诺书内容如实填写、承诺遵守相关约定。我的呼号如下：",
+  "agentAuthRecheck": "重新检查授权",
+  "agentAuthChecking": "正在检查…",
+  "agentAuthBack": "暂不启用",
+  "agentAuthGranted": "已获授权，智能体已启用",
+  "agentAuthStillPending": "暂未查到授权，可能仍在审核中",
+  "agentAuthHint": "智能体功能需要授权后才能使用，本机呼号不在授权名单中。",
+  "blBody": "依据《用户协议》第 8.2 条，我们有权限制、暂停或终止违反协议者的使用。本设备（呼号或安装标识）已被列入限制名单，因此无法继续使用本软件。",
+  "blReason": "原因",
+  "blMatched": "命中项",
+  "blId": "本机安装标识",
+  "blContact": "如果你认为这是误判，请通过 GitHub 仓库提交 Issue，并附上上面的安装标识 —— 那是我们核对时的唯一依据。",
+  "blRetry": "重新检查",
+  "blChecking": "正在检查…",
+  "donateNotice": "赞赏完全出于自愿：不换取任何功能、优先支持或服务承诺，且不予退还；未成年人请在监护人同意后再进行。",
+  "boxDeviceTitle": "APRSlocusBOX",
+  "boxDeviceDesc": "小盒子：连上后用手机改配置、喂位置、发信标",
+  "boxBindTitle": "盒子连接",
+  "boxModeTip": "盒子的「链路模式」要先设成 bt 或 both，蓝牙才可用；wifi 模式下请用 USB 串口连。link 与 bt 改完要重启盒子才生效。",
+  "boxBtLinkWarn": "盒子现在是 link = wifi：蓝牙管理用不了 —— 改成 bt/both 并重启盒子，或者插 USB 串口",
+  "boxBaud": "串口线速（USB / 桌面）",
+  "boxStatTitle": "盒子状态",
+  "boxStatLinkMode": "链路模式",
+  "boxStatBeacon": "自动信标",
+  "boxStatHost": "APRS-IS 服务器",
+  "boxStatGps": "GPS 波特率",
+  "boxStatEvents": "事件计数",
+  "boxLastEvent": "最近事件",
+  "boxNoEventYet": "还没有事件",
+  "boxCfgTitle": "盒子配置",
+  "boxCfgSubtitle": "键名与盒子文档逐字一致，点一项即可修改",
+  "boxCfgRead": "读取配置",
+  "boxCfgEmpty": "还没读到配置 —— 先连接，再点「读取配置」",
+  "boxCfgRebootHint": "link 与 bt 是开机设置：改完必须重启盒子才生效",
+  "boxCfgSent": "已发送到盒子",
+  "boxCfgEditTitle": "修改配置项",
+  "boxCfgEditHint": "会发送 CFG 键=值；留空表示清空该值",
+  "boxCfgMasked": "密码不回显：留空表示不改，只有填了新值才会写入",
+  "boxCfgNoChange": "未修改（密码不回显）",
+  "boxFeedTitle": "把位置喂给盒子",
+  "boxFeedSubtitle": "盒子没有 GPS 时用它；喂进去的位置 60 秒内有效",
+  "boxFeedAuto": "自动喂位置（30 秒一次）",
+  "boxFeedSend": "发送当前位置",
+  "boxFeedStop": "停止喂位置",
+  "boxFeedNoFix": "手机还没有定位 —— 先在主页拿到定位",
+  "boxActTitle": "盒子动作",
+  "boxActBeacon": "立即信标",
+  "boxActStatus": "状态报文",
+  "boxActNet": "重连 APRS-IS",
+  "boxActClear": "清空台站",
+  "boxActTest": "格式自检",
+  "boxActReboot": "重启盒子",
+  "boxPushTitle": "手机状态给盒子",
+  "boxPushStatus": "推送实时状态（心率 / 速度 / 倒计时 / 里程 / 附近台站）",
+  "boxPushHint": "盒子 PHONE 页显示这些；只写盒子屏幕，不上射频。与「喂位置」是两件事。",
+  "boxPassHint": "盒子的 APRS-IS passcode 是 -1（**只收不发**）：要发射就在下面把 `pass` 改成你的 passcode —— 注意要**基础呼号**（不含 -SSID）的那个",
+  "boxEvtTitle": "盒子事件",
   "dataSourcePkwdwpl": "PKWDWPL（Kenwood 航点）",
   "dataSourcePkwdwplDesc": "用蓝牙/串口读取电台输出的 Kenwood $PKWDWPL 航点语句（只收不发）",
   "dataSourcePkwdwplHint": "PKWDWPL 是**只读**链路：能收台站、不参与发射（发射请用 APRS-IS / TNC / 音频）",
@@ -713,7 +1564,13 @@
   "deviceInUseByTnc": "已被 TNC 使用，不能重复绑定",
   "deviceInUseByPkwdwpl": "已被 PKWDWPL 使用，不能重复绑定",
   "rxOnlyBanner": "{arg} 已连接 · 仅接收（当前发射来源未连接）",
-  "@rxOnlyBanner": {"placeholders": {"arg": {"type": "String"}}},
+  "@rxOnlyBanner": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
   "pkwdwplTip": "在电台菜单里把 PC / GPS 端口的输出格式设为 \"$PKWDWPL\"（一般 4800 8N1）；这条链路只读，不会发射任何报文",
   "pkwdwplStrictChecksum": "严格校验和（不符即丢弃）",
   "pkwdwplStrictChecksumTip": "默认关闭：验证不符时只标注并记日志，不丢句子 —— 本地线缆上的不符多半是固件格式与手册有出入，整条丢弃会让界面「什么都不显示」，反而更难排查",
@@ -724,9 +1581,27 @@
   "pkwdwplStatMismatch": "校验和不符",
   "pkwdwplStatIgnored": "其它 NMEA 语句（已忽略）",
   "pkwdwplLogEmpty": "暂无 PKWDWPL 日志",
-  "@connConnectingPkwdwpl": {"placeholders": {"arg": {"type": "String"}}},
-  "@connPkwdwplConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@pkwdwplStats": {"placeholders": {"rx": {"type": "String"}}},
+  "@connConnectingPkwdwpl": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connPkwdwplConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkwdwplStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      }
+    }
+  },
   "tncBindTitle": "蓝牙 TNC",
   "tncBindSubtitle": "绑定并连接电台侧的 TNC",
   "tncBoundDevice": "已绑定设备",
@@ -783,9 +1658,30 @@
   "tncGroupDisabled": "射频模式不支持群聊广播",
   "tncMsgLimitHint": "单条限 {n} 字符（APRS 消息规范）",
   "tncMsgTooLong": "超出射频模式单条消息长度上限",
-  "@tncStats": {"placeholders": {"rx": {"type": "String"}, "tx": {"type": "String"}}},
-  "@connectingToTnc": {"placeholders": {"name": {"type": "String"}}},
-  "@tncMsgLimitHint": {"placeholders": {"n": {"type": "String"}}},
+  "@tncStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      },
+      "tx": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectingToTnc": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncMsgLimitHint": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "licenseSection": "许可证声明",
   "licenseName": "GNU GPL v3",
   "licenseStatement": "本软件依据 GNU GPL v3 开源许可证发布。你可以在遵守许可证条款的前提下运行、研究、修改和再分发本软件；修改和再分发时须遵守 GPL v3 的相应义务。本软件不附带任何担保。",
@@ -803,8 +1699,9 @@
   "features": "功能特性",
   "openSource": "开源致谢",
   "feedback": "用户反馈",
+  "feedbackEntryDesc": "到仓库提 Issue",
+  "openLinkFailed": "打开链接失败",
   "officialWebsite": "官方网站",
-  "qqGroup": "QQ 交流群",
   "projectRepo": "项目仓库",
   "testMembers": "测试成员",
   "aiSupport": "AI 算力支持",
@@ -825,9 +1722,9 @@
   "chatSettings2": "聊天设置",
   "dataSettings2": "数据设置",
   "advancedSettings2": "高级设置",
-  "connectionSettings2": "连接设置",
+  "connectionSettings2": "服务器",
   "myCallsign": "我的呼号",
-  "beaconEnabled": "启用位置信标",
+  "beaconEnabled": "自动上报",
   "smartBeacon": "智能信标(按速度分档)",
   "packetConsole": "数据包控制台",
   "rawMode": "原始模式",
@@ -1090,7 +1987,13 @@
   "clearStations": "清除台站列表",
   "stationListDesc": "收到的台站与它们的轨迹，保存在本机",
   "clearStationsConfirm": "确定要清除全部台站吗？共 {n} 个，清除后不可恢复（消息 / 日志 / 数据包不受影响）。",
-  "@clearStationsConfirm": {"placeholders": {"n": {"type": "String"}}},
+  "@clearStationsConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "stationsCleared": "已清除台站列表",
   "clearCache": "清除缓存",
   "resetAll": "重置全部设置",
@@ -1167,8 +2070,8 @@
   "disconnect": "断开连接",
   "connectAprsIs": "连接 APRS-IS",
   "packetsReceived": "收包",
-  "passcodeUnverified": "Passcode 未验证",
-  "passcodeWarning": "登录密码可能错误，无法正常收发消息",
+  "passcodeUnverified": "登录未验证",
+  "passcodeWarning": "Passcode 或账号口令可能不对，无法正常收发消息",
   "goSettings": "去设置",
   "connectingServer": "正在连接服务器…",
   "notConnectedAprsServer": "未连接 APRS-IS 服务器",
@@ -1177,7 +2080,6 @@
   "connectAction": "连接",
   "backgroundRunTip": "后台运行提示：为保证后台持续定位上报，请到系统设置中允许 APRSlocus 后台运行、关闭省电优化，并允许自启动。",
   "connectedAprsIs": "已连接 APRS-IS",
-  "qqGroupDesc": "APRSlocus 软件 · 反馈问题/交流使用",
   "reselectPoint": "重新选点",
   "disableClustering": "关闭聚合",
   "enableClustering": "开启聚合",
@@ -1233,11 +2135,11 @@
   "nameLabel": "名称",
   "viewSponsorDetails": "查看作者与赞助详情 →",
   "thanks": "感谢",
-  "qqSoftwareName": "APRSlocus 软件",
   "usageNotice": "本软件仅供业余无线电爱好者学习交流使用\n请遵守当地无线电管理法规",
   "licenseNotice": "GNU GPL v3 开源协议 · Copyright © BG7LZQ",
   "appInfoText": "APRSlocus v{version}\n作者: BG7LZQ (Darion)\n网站: Theez.top",
   "eggBg7lzq": "哎呦你干嘛~",
+  "eggCuriosityWorld": "请保持你的好奇心探索世界。",
   "eggBg7pgw": "闹呢？",
   "eggBg7lmw": "默不作声...",
   "eggBg7osl": "你的胆子肥嘟嘟的",
@@ -1497,8 +2399,20 @@
     }
   },
   "@deleteGroupConfirm": {
-  "@deleteConversationConfirm": {"placeholders": {"call": {"type": "String"}}},
-  "@clearGroupChatConfirm": {"placeholders": {"name": {"type": "String"}}},
+    "@deleteConversationConfirm": {
+      "placeholders": {
+        "call": {
+          "type": "String"
+        }
+      }
+    },
+    "@clearGroupChatConfirm": {
+      "placeholders": {
+        "name": {
+          "type": "String"
+        }
+      }
+    },
     "placeholders": {
       "name": {
         "type": "String"
@@ -1621,7 +2535,7 @@
   "locModeNetwork": "纯网络",
   "locModeNetworkDesc": "仅基站 / Wi-Fi，误差百米级；最省电，适合没有 GPS 的设备",
   "locModeNetworkHint": "纯网络模式下只有基站 / Wi-Fi 定位：误差常在几百米，且**不会**写进轨迹与历史；除非打开「强制接受网络定位自动上报」，否则不会自动发信标。",
-  "beaconingSection": "信标上报",
+  "beaconingSection": "自动上报",
   "beaconIntervalTip": "位置信标的发送间隔，至少 5 秒",
   "beaconNetInterval": "纯网络上报间隔（秒）",
   "beaconNetIntervalTip": "纯网络模式使用固定间隔；网络定位没有可靠速度，不使用智能信标（按速度 / 距离 / 转弯）",
@@ -1749,6 +2663,7 @@
   "vectorMapLoadFailed": "矢量地图加载失败\n{error}",
   "loadingVectorMap": "加载矢量地图…",
   "updateChannel": "更新渠道",
+  "updateChannelQinglingHint": "自建镜像通道（清零）",
   "serverReturned": "服务器返回 {code}",
   "invalidResponseData": "返回数据格式错误",
   "noVersionsFound": "没有找到任何版本",
@@ -2130,7 +3045,7 @@
   "settingsStationIdentitySubtitle": "呼号、SSID 与备注",
   "settingsDisplayInfoSubtitle": "我的符号与当前定位",
   "settingsLocSourceSubtitle": "选择坐标来源",
-  "settingsBeaconSubtitle": "发送间隔与上报内容",
+  "settingsBeaconSubtitle": "上报开关、间隔与内容",
   "settingsManualLocSubtitle": "无定位时可手动输入或选点",
   "settingsManualLocHint": "无法自动定位时，可手动输入经纬度或用地图选点，用于信标上报与台站距离计算。",
   "settingsConnStatusSubtitle": "连接状态与信息",
@@ -2451,7 +3366,7 @@
   "chatRecords": "聊天记录",
   "chatRecordsCleared": "聊天记录已清空",
   "deviceCat": "设备",
-  "deviceCatDesc": "电台设备 · 待开放",
+  "deviceCatDesc": "数据来源 · 链路与网关",
   "deviceSettings2": "设备设置",
   "deviceSettingsSubtitle": "连接你的电台设备",
   "underConstruction": "前方施工，尚未开放",
@@ -2474,42 +3389,122 @@
   "achievementsSection": "成就",
   "notLit": "未点亮",
   "honorCriteriaLine": "获得条件：{c}",
-  "@honorCriteriaLine": {"placeholders": {"c": {"type": "String"}}},
+  "@honorCriteriaLine": {
+    "placeholders": {
+      "c": {
+        "type": "String"
+      }
+    }
+  },
   "badgeFallback": "徽章",
   "honoredBadges": "已点亮 {n}/{m} 徽章",
-  "@honoredBadges": {"placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}},
+  "@honoredBadges": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
   "achievementsProgress": "{n}/{m} 成就",
-  "@achievementsProgress": {"placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}},
+  "@achievementsProgress": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
   "beaconNotConnected": "未连接",
   "beaconWaitingFix": "等待定位",
+  "beaconNeedConfirm": "待确认上报",
+  "reportStartNow": "开始上报",
   "beaconSoon": "即将",
   "beaconNextIn": "距下次上报 {s}",
-  "@beaconNextIn": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconNextIn": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "beaconImminent": "即将上报…",
   "notifConnected": "已连接",
   "notifConnecting": "连接中",
   "notifDisconnected": "未连接",
   "notifOnline": "{n} 在线",
-  "@notifOnline": {"placeholders": {"n": {"type": "String"}}},
+  "@notifOnline": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "notifRx": "收 {n}",
-  "@notifRx": {"placeholders": {"n": {"type": "String"}}},
+  "@notifRx": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "notifBeacon": "信标 {v}",
-  "@notifBeacon": {"placeholders": {"v": {"type": "String"}}},
+  "@notifBeacon": {
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
+  },
   "selectAll": "全选",
   "deselectAll": "取消全选",
   "selectedCount": "已选 {n} 项",
-  "@selectedCount": {"placeholders": {"n": {"type": "int"}}},
+  "@selectedCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deleteSelected": "删除 ({n})",
-  "@deleteSelected": {"placeholders": {"n": {"type": "int"}}},
+  "@deleteSelected": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deleteSelectedConfirm": "确定删除选中的 {n} 个会话？此操作不可恢复。",
-  "@deleteSelectedConfirm": {"placeholders": {"n": {"type": "int"}}},
+  "@deleteSelectedConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "chatManageHint": "点击会话进行选择，长按也可选中",
   "conversationsDeleted": "已删除 {n} 个会话",
-  "@conversationsDeleted": {"placeholders": {"n": {"type": "int"}}},
+  "@conversationsDeleted": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "stationActions": "台站操作",
   "deleteStation": "删除台站",
   "deleteStationConfirm": "确定删除台站 {name} 吗？删除后将从台站列表移除；若再次收到其报文会重新出现。",
-  "@deleteStationConfirm": {"placeholders": {"name": {"type": "String"}}},
+  "@deleteStationConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "unfavorite": "取消收藏",
   "copyCallsign": "复制呼号",
   "callsignCopied": "呼号已复制",
@@ -2521,10 +3516,22 @@
   "adifNoSelection": "请先选择要导出的会话",
   "adifExported": "已导出 {n} 条记录",
   "adifExportDone": "导出完成",
-  "@adifExported": {"placeholders": {"n": {"type": "int"}}},
+  "@adifExported": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "adifExportFailed": "导出失败，请检查存储权限或剩余空间",
   "adifSavedTo": "已保存到：{path}",
-  "@adifSavedTo": {"placeholders": {"path": {"type": "String"}}},
+  "@adifSavedTo": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
   "adifCopyPath": "复制路径",
   "adifPathCopied": "路径已复制",
   "chatShortLabel": "单聊",
@@ -2547,19 +3554,35 @@
   "sysLinkOff": "未启用",
   "sysRx": "收 {n}",
   "@sysRx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysTx": "发 {n}",
   "@sysTx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysBeacon": "信标 {t}",
   "@sysBeacon": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "sysStations": "台站 {n}",
   "@sysStations": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysFixOk": "已定位",
   "sysLinkAudio": "音频",
@@ -2577,10 +3600,14 @@
   "backupCopyDone": "备份内容已复制到剪贴板",
   "backupSavedTo": "已保存到：{path}",
   "@backupSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "backupCatSettings": "设置配置",
-  "backupCatSettingsDesc": "电台、信标、地图、筛选、数据来源、服务器",
+  "backupCatSettingsDesc": "电台、信标、地图、筛选、数据来源、服务器、历史轨迹",
   "backupCatStations": "台站与联系人",
   "backupCatStationsDesc": "收藏、手动添加的联系人及其备注",
   "backupCatMessages": "消息记录",
@@ -2593,7 +3620,11 @@
   "backupCatHonorsDesc": "解锁记录、计数与默认徽章",
   "backupItems": "{n} 项",
   "@backupItems": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSelectAll": "全选",
   "backupNoSelection": "请至少选择一个分组",
@@ -2605,22 +3636,38 @@
   "backupPreview": "备份内容",
   "backupFromVersion": "来源版本 {v}",
   "@backupFromVersion": {
-    "placeholders": {"v": {"type": "String"}}
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
   },
   "backupExportedAt": "导出时间 {t}",
   "@backupExportedAt": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "backupImportSelected": "导入所选",
   "backupImportConfirmTitle": "确认导入？",
   "backupImportConfirm": "所选分组会被备份里的内容覆盖，且无法撤销。建议先导出一次当前数据。",
   "backupImported": "已导入 {n} 项",
   "@backupImported": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSkipped": "跳过 {n} 项（本版本不认识的内容）",
   "@backupSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupImportNothing": "备份里不包含所选分组的数据",
   "backupRestartTitle": "导入完成",
@@ -2663,7 +3710,11 @@
   "themeDelete": "删除主题",
   "themeDeleteConfirm": "删除主题「{name}」？此操作无法撤销。",
   "@themeDeleteConfirm": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeReset": "恢复默认",
   "themeResetAll": "重置本主题",
@@ -2678,7 +3729,11 @@
   "themeIconImportHint": "PNG/JPG/WebP/GIF/BMP/SVG，≤2MB",
   "themeIconImportDone": "已导入图标：{name}",
   "@themeIconImportDone": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeIconWebHint": "Web 版不支持导入图片，请使用内置图标库",
   "themeIconErrFormat": "不支持的图片格式（支持 PNG/JPG/WebP/GIF/BMP/SVG）",
@@ -2693,7 +3748,11 @@
   "themeImportPaste": "从剪贴板导入",
   "themeImportDone": "已导入 {n} 个主题",
   "@themeImportDone": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "themeErrNotJson": "文件不是有效的 JSON",
   "themeErrNotTheme": "这不是 APRSlocus 主题文件",
@@ -2733,13 +3792,21 @@
   "themeExportWithImages": "导出时包含图片",
   "themeExportWithImagesHint": "导出文件会包含图片本体（约 {size}），对方导入后能直接看到同样的背景与图标；文件因此不再适合手工编辑。",
   "@themeExportWithImagesHint": {
-    "placeholders": {"size": {"type": "String"}}
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   },
   "themeExportNoImages": "当前主题没有引用图片，导出文件只含配色与文字",
   "themeExportClipboardTooBig": "图片较大，无法通过剪贴板传递，请用「导出全部主题」保存为文件",
   "themeImportImagesSkipped": "有 {n} 张图片未导入（过大或格式不支持）",
   "@themeImportImagesSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupThemeImagesHint": "备份会包含主题引用的图片本体；不包含时，换机恢复后主题会回退成内置图标",
   "backupThemeImagesOff": "不含图片：备份更小，但换机恢复后主题会缺少背景与自定义图标",
@@ -2795,7 +3862,11 @@
   "audioWavExportToDownloads": "导出到下载目录",
   "audioWavSavedTo": "已保存到 {path}",
   "@audioWavSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "audioWavCopyPath": "复制路径",
   "audioWavPathCopied": "路径已复制",
@@ -2807,27 +3878,56 @@
   "audioTxLevelTip": "发射前系统会把媒体音量拉到最大、并暂停麦克风采集；峰值太低或削顶都会让对端解不出",
   "audioTxPeak": "峰值 {p}% · {sec}s · 前导 {flags} flag",
   "@audioTxPeak": {
-    "placeholders": {"p": {"type": "int"}, "sec": {"type": "String"}, "flags": {"type": "int"}}
+    "placeholders": {
+      "p": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "String"
+      },
+      "flags": {
+        "type": "int"
+      }
+    }
   },
   "audioTxLevelClip": "波形削顶：请把「输出幅度」调到 0.8 以下（削顶会产生谐波）",
   "audioTxLevelLow": "电平偏低：对方可能解不出，请调高「输出幅度」与设备音量",
   "audioWiringHint": "接电台请用音频线（耳机口 → 电台数据口/话筒）；手机扬声器在 2200Hz 衰减很大，对着麦克风很难解出。对端是电脑上的 Direwolf 时，先用「导出」出的 WAV 验证一遍，能解出就说明问题在音频通路而不是协议",
   "packetLimitRf": "整包 {bytes} 字节 · 射频单帧上限 {max} 字节",
   "@packetLimitRf": {
-    "placeholders": {"bytes": {"type": "int"}, "max": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
   },
   "packetLimitIs": "整包 {bytes} 字节 · APRS-IS 单行上限 512 字节",
   "@packetLimitIs": {
-    "placeholders": {"bytes": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      }
+    }
   },
   "packetTcpipWarning": "含 TCPIP*：射频上会被自动剔除（那是 APRS-IS 的路径）",
   "packetSent": "已交给链路发送：{line}",
   "@packetSent": {
-    "placeholders": {"line": {"type": "String"}}
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
   },
   "packetSendFailed": "未发送：{err}",
   "@packetSendFailed": {
-    "placeholders": {"err": {"type": "String"}}
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
   },
   "tncSerialBaud": "串口线速 (bd)",
   "tncSerialBaudTip": "USB 串口线与电台数据口必须同速，否则一个字节都收不到。常见值：9600 / 19200 / 38400 / 57600 / 115200。蓝牙 SPP 没有波特率概念，绑蓝牙设备时此项不生效。",
@@ -2852,7 +3952,7 @@
   "uiLayoutSheetDesc": "地图常驻整屏；台站 / 消息 / 数据包 / 设置装进底部可拖拽卡片，上滑或点把手即可展开",
   "uiLayoutHint": "切换后立即生效，两种布局的设置各自保留；卡片收起时地图上的按钮会自动上移",
   "linkNotConnected": "未连接",
-  "linkTapForSettings": "点一下查看连接设置",
+  "linkTapForSettings": "点一下查看服务器设置",
   "uiMaterialGlassFull": "满血磨砂玻璃",
   "uiMaterialGlassFullDesc": "最透、最糊，而且**小组件也一起糊**（工具钮 / 图例 / 小提示都有磨砂）—— 观感最重，也最吃显卡",
   "posAccuracy": "位置精度",
@@ -2882,11 +3982,23 @@
   "tierMinDist": "移动距离 (米)",
   "tierMinDistHint": "自上次上报以来移动超过这个距离，就补报一次；0 = 关闭（只按间隔）",
   "orMoveM": "或移动 {dist} m",
-  "@orMoveM": {"placeholders": {"dist": {"type": "String"}}},
+  "@orMoveM": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "tierMinTurn": "航向变化 (度)",
   "tierMinTurnHint": "转过这个角度就补报一次（可填 10~180）；0 = 关闭。只在行驶中生效（停着不动时航向是噪声）",
   "orTurnDeg": "或转 {deg}°",
-  "@orTurnDeg": {"placeholders": {"deg": {"type": "String"}}},
+  "@orTurnDeg": {
+    "placeholders": {
+      "deg": {
+        "type": "String"
+      }
+    }
+  },
   "inputTapHint": "点击输入",
   "callCommentEmpty": "未填写 · 点这里输入",
   "noticeTitle": "公告",
@@ -2894,9 +4006,21 @@
   "noticeLoading": "正在获取…",
   "noticeReadMore": "查看全文",
   "noticeCached": "缓存 · {ago}",
-  "@noticeCached": {"placeholders": {"ago": {"type": "String"}}},
+  "@noticeCached": {
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
   "noticeOfflineCache": "离线缓存 · {time}（联网后会自动更新）",
-  "@noticeOfflineCache": {"placeholders": {"time": {"type": "String"}}},
+  "@noticeOfflineCache": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "timeJustNow": "刚刚",
   "refresh": "刷新",
   "noticeEntryDesc": "查看官网发布的最新公告",
@@ -2983,31 +4107,67 @@
   "garminUrlHint": "livetrack.garmin.com/session/…/token/…",
   "beaconGarminSource": "佳明 LiveTrack 上报中",
   "beaconGarminNext": "佳明上报 · {s} · ❤{hr}",
-  "@beaconGarminNext": {"placeholders": {"s": {"type": "String"}, "hr": {"type": "String"}}},
+  "@beaconGarminNext": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      },
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceLabel": "位置来源",
   "hrSourceLabel": "心率来源",
   "ownSourcePhoneGps": "手机 GPS",
   "positionBeaconDetail": "位置信标 · 网格 {grid} · {detail}",
   "beaconAttachedHr": "心率 {hr}",
   "beaconAttachedNone": "未附带心率",
-  "@positionBeaconDetail": {"placeholders": {"grid": {"type": "String"}, "detail": {"type": "String"}}},
-  "@beaconAttachedHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@positionBeaconDetail": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "@beaconAttachedHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceIdle": "未追踪（未启动定位）",
   "ownSourceGarminLive": "追踪中（手机 GPS 已让位）",
   "ownSourceGarminStale": "链接有效，但佳明没有新点（暂时用不到）",
   "ownSourceHrIdle": "未连接（点一下连接心率带）",
   "hrLineHr": "心率 {hr}",
-  "@hrLineHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@hrLineHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "garminShareNoLink": "分享的内容里没有找到佳明 LiveTrack 链接",
   "hrFromGarmin": "心率来自佳明 LiveTrack（手表）",
-  "sourceMovedHint": "要启用 / 切换数据来源（链路），请到「设置 → 设备」",
-  "posSourcePrecedence": "同时可用时的优先级：模拟/手动位置 › 佳明（手表有实时数据时）› 手机 GPS",
+  "sourceMovedHint": "电台链路（TNC、WLAN 电台、声卡）在「设置 → 设备」里启用",
+  "posSourcePrecedence": "同时可用时的优先级：模拟/手动位置 › 外接 GPS 模块 › 佳明（手表有实时数据时）› 手机 GPS",
   "posSourceUsing": "当前使用：{src}",
   "posSrcSim": "模拟/手动位置",
   "posSrcGarmin": "佳明 LiveTrack",
   "posSrcPhone": "手机 GPS",
   "posSrcNone": "未定位",
-  "@posSourceUsing": {"placeholders": {"src": {"type": "String"}}},
+  "@posSourceUsing": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
   "garminNotStarted": "未开启追踪",
   "garminAutoFilled": "已自动填入分享链接",
   "garminLinkOk": "链接有效",
@@ -3015,7 +4175,13 @@
   "beaconForceCoarseHint": "默认不开启：网络定位（基站 / Wi-Fi）常偏几百米，自动发出去等于向全网宣告一个错坐标。只有设备没有 GPS（平板 / 只有网络定位）时才建议打开 —— 打开后粗定位也会自动发射；地图与轨迹仍按原样过滤粗点，不会因此变乱。手动「立即上报」不受这个开关影响。",
   "beaconCoarseForced": "网络定位（粗）· {s}",
   "beaconCoarseForcedNote": "正在用网络定位（粗）上报",
-  "@beaconCoarseForced": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconCoarseForced": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "advancedMenu": "高级设置",
   "aprsStatus": "独立状态报文",
   "aprsStatusHint": "这一点发的是**独立一帧**状态报文（`>` 开头、不含坐标、不会移动你在 aprs.fi 上的位置），与上面那行备注是两种不同的 APRS 报文。留空则发送内置的 APRSlocus 在线帧。",
@@ -3026,22 +4192,64 @@
   "beaconAntHeightLabel": "天线高度（英尺）",
   "beaconGainLabel": "增益（dB）",
   "beaconPhgPreview": "报文中将包含：{phg}",
-  "@beaconPhgPreview": {"placeholders": {"phg": {"type": "String"}}},
+  "@beaconPhgPreview": {
+    "placeholders": {
+      "phg": {
+        "type": "String"
+      }
+    }
+  },
   "beaconPhgTip": "功率 / 天线高度 / 增益同属一个 PHG 数据扩展，填了任一项就一起编码发出（规范里它是固定的 7 字节字段）。功率取不超过实际值的最大档：25 W 报 25、30 W 也只报 25 —— 写大了等于虚报覆盖范围。天线高度是「高于当地平均地面」，与上面自动发送的 /A= 海拔是两个不同的量。",
+  "phgTitle": "PHG 天线信息",
+  "phgPower": "功率",
+  "phgHeight": "天线高度",
+  "phgGain": "增益",
+  "phgDirection": "方向",
+  "phgOmni": "全向",
   "beaconPowerLabel": "功率（瓦）",
   "txButton": "发射",
   "txPartPosition": "位置报文",
   "txPartStatus": "状态报文",
   "txSent": "已发射：{parts}",
-  "@txSent": {"placeholders": {"parts": {"type": "String"}}},
+  "@txSent": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
   "txNoFixKeptStatus": "已发射：{parts}（还没有定位，带 PHG 的位置报文没能发出）",
   "connStatusSent": "已连接 · 状态报文已发送 ({call})",
   "connTncStatusSent": "TNC 已连接 · 状态报文已发送 ({arg})",
   "connAudioStatusSent": "音频已发射 · 状态报文已发送 ({call})",
-  "@txNoFixKeptStatus": {"placeholders": {"parts": {"type": "String"}}},
-  "@connStatusSent": {"placeholders": {"call": {"type": "String"}}},
-  "@connTncStatusSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connAudioStatusSent": {"placeholders": {"call": {"type": "String"}}},
+  "@txNoFixKeptStatus": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "@connStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncStatusSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
   "codeContribution": "贡献代码",
   "historyCharts": "折线图",
   "historyChartsShow": "显示折线图",
@@ -3063,18 +4271,57 @@
   "beaconBarTierNetwork": "网络定位固定间隔",
   "beaconBarTierSmart": "智能档",
   "beaconBarTierSmartFrom": "智能档 · ≥{speed} km/h",
-  "@beaconBarTierSmartFrom": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTierSmartFrom": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTierFixed": "固定间隔",
   "beaconBarTimeLeft": "时间 {time}",
-  "@beaconBarTimeLeft": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTimeLeft": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarDistLeft": "距离 {dist}",
-  "@beaconBarDistLeft": {"placeholders": {"dist": {"type": "String"}}},
+  "@beaconBarDistLeft": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLeft": "转弯 {cur}° / {need}°",
-  "@beaconBarTurnLeft": {"placeholders": {"cur": {"type": "String"}, "need": {"type": "String"}}},
+  "@beaconBarTurnLeft": {
+    "placeholders": {
+      "cur": {
+        "type": "String"
+      },
+      "need": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLowSpeed": "转弯待机 · 需 ≥{speed} km/h",
-  "@beaconBarTurnLowSpeed": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTurnLowSpeed": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnWait": "转弯待机 · {time} 后可判",
-  "@beaconBarTurnWait": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTurnWait": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "netSymbol": "网络定位时的台站图标",
   "netSymbolHint": "纯网络定位的点可能偏几百米到几公里，换一个图标能让别人一眼看出「这是网络标的位」。默认跟随「我的符号」。",
   "netSymbolFollow": "跟随我的符号",
@@ -3097,7 +4344,19 @@
   "hrAlarmTelTip": "告警时「拨打」用这个号码，默认 120。不同地区/场景可以改成 112 或队友的号码。",
   "hrAlarmTitle": "心率异常",
   "hrAlarmBody": "检测到心率 {bpm} bpm，超出你设置的 {low}~{high} 范围。\n\n如果身体不适，请立即拨打急救电话；也可以向附近 100 公里内的台站发出求助信息，附近有火腿收到就能看到。",
-  "@hrAlarmBody": {"placeholders": {"bpm": {"type": "String"}, "low": {"type": "String"}, "high": {"type": "String"}}},
+  "@hrAlarmBody": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmDismiss": "我没事",
   "hrAlarmCall": "拨打急救电话",
   "hrAlarmSendNearby": "向附近台站求助",
@@ -3105,11 +4364,32 @@
   "hrAlarmNoNearby": "附近 100 公里内没有已知台站",
   "hrAlarmSendConfirmTitle": "确认发送求助",
   "hrAlarmSendConfirmBody": "将向最近的 {n} 个台站各发一条消息：\n{calls}\n\n这些消息会出现在对方的手机上，请确认后再发。",
-  "@hrAlarmSendConfirmBody": {"placeholders": {"n": {"type": "String"}, "calls": {"type": "String"}}},
+  "@hrAlarmSendConfirmBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "calls": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmSent": "已向 {n} 个台站发出求助",
-  "@hrAlarmSent": {"placeholders": {"n": {"type": "String"}}},
+  "@hrAlarmSent": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmNotif": "心率异常 {bpm} bpm",
-  "@hrAlarmNotif": {"placeholders": {"bpm": {"type": "String"}}},
+  "@hrAlarmNotif": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      }
+    }
+  },
   "locExtGpsActive": "外置 GPS 供位 · 手机 GPS 已待机",
   "locExtGpsLost": "外置 GPS 已失效 · 改用手机 GPS",
   "locPhoneGpsActive": "手机 GPS 已接管",
@@ -3131,7 +4411,13 @@
   "beaconIncludeSteps": "步数",
   "stepsTodayLabel": "今日步数",
   "stepsCount": "{n} 步",
-  "@stepsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@stepsCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "stepsUnsupported": "这台设备没有计步传感器",
   "stepsNeedPermission": "需要授权才能读取",
   "stepsGrant": "授予「身体活动」权限",
@@ -3156,7 +4442,16 @@
   "downloadCanceled": "已取消下载",
   "downloadBackgroundHint": "可以离开这一页或把应用切到后台，下载会继续（进度也在通知栏里）。但应用进程被系统结束时会中断。",
   "notifUpdateDownload": "正在下载更新 {tag} · {pct}%",
-  "@notifUpdateDownload": {"placeholders": {"tag": {"type": "String"}, "pct": {"type": "String"}}},
+  "@notifUpdateDownload": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
   "notifUpdateReady": "更新包已下载 · 打开更新页安装",
   "notifUpdateFailed": "更新包下载失败",
   "sportRankGateNoSensor": "这台设备没有计步传感器：开关打开也**不会真的发出步数**（本来就没有步数可发）。打开它只是让你能看别人的榜单 —— 这没问题，看得到别人是因为你同意了「互相可见」这套规则。",
@@ -3164,11 +4459,766 @@
   "crashCard": "碰撞与摔倒检测",
   "crashCardSub": "用手机加速度判断，检测到就提醒（测试）",
   "crashEnabled": "启用碰撞/摔倒提醒",
-  "crashHowItWorks": "判据是**两段式**：① 加速度出现一个很陡的尖峰（车祸与摔倒都会有）；② 之后连续 12 秒几乎没有运动。两段都要满足才会提醒。\n\n为什么要第二段：只看尖峰的话，**过减速带、手机掉在桌上、甩一甩**全都算，一天响好几次就没人再看了。代价是**轻微碰撞（人还能动）不会提醒** —— 这个功能的定位是「人已经动不了了」，不是「发生过撞击」。",
+  "crashHowItWorks": "判据分两种：**摔倒**要①先有一段自由落体（失重，总加速度接近 0）②落地冲击③之后连续 12 秒几乎没有运动；**碰撞**没有失重可依据，就要求那次冲击**明显更狠**（约为灵敏度的两倍），再加「之后连续 12 秒几乎不动」。\n\n为什么要这些条件：只看一个尖峰的话，**把手机放在桌上稍微使劲、过减速带、甩一甩**全都算 —— 一天响好几次就没人再看了。区分「摔倒（有失重）」与「碰撞（无失重、要更狠）」正是为了挡掉「放手机」这类日常动作。代价是**轻微碰撞不会提醒** —— 这个功能的定位是「人已经动不了了」，不是「发生过撞击」。",
   "crashNoSensor": "这台设备没有加速度计，检测不了",
   "crashPending": "检测到冲击，正在观察",
   "crashFalsePositive": "**它会误报**：过减速带之后正好停了 12 秒（等红灯）就满足两段判据。提醒里第一个按钮就是「我没事」，按掉即可，不影响其它功能。",
   "crashAlarmTitle": "检测到疑似碰撞或摔倒",
-  "crashAlarmBody": "手机检测到一次强烈的冲击，之后一直没有明显移动（约 12 秒）。\n\n如果你没事，按「我没事」即可；如果身体不适或无法行动，请立即拨打急救电话，或向附近 100 公里内的台站发出求助信息。\n\n**这是启发式判断，不是工程级碰撞检测**：过减速带、手机摔落在地上都可能触发。",
-  "crashNotif": "生命守护：检测到疑似碰撞"
+  "crashAlarmBody": "手机检测到一次强烈的冲击，之后一直没有明显移动（约 12 秒）。\n\n如果你没事，按「我没事」即可；如果身体不适或无法行动，请立即拨打急救电话，或向附近 100 公里内的台站发出求助信息。\n\n**这是启发式判断，不是工程级碰撞检测**。",
+  "crashNotif": "生命守护：检测到疑似碰撞",
+  "icomLanTitle": "WLAN 电台直连",
+  "icomLanEnable": "启用 WLAN 电台直连",
+  "icomLanHost": "电台 IP",
+  "icomLanPort": "控制端口",
+  "icomLanUsername": "用户名（Network User）",
+  "icomLanPassword": "密码（Network User）",
+  "icomLanHint": "在电台 WLAN 设置里开启遥控并设置 Network User 名/密码，手机与电台保持同一网段。WLAN 电台局域网音频固定 12000 Hz。",
+  "codeContributionIcomLan": "WLAN 电台直连",
+  "honorCelebrateTitle": "恭喜获得新荣誉",
+  "honorCelebrateOk": "太棒了",
+  "confirmSendToGroup": "确认发送到 {group}？",
+  "@confirmSendToGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmInviteMember": "确认邀请 {call} 加入群聊？",
+  "@confirmInviteMember": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmCreateGroup": "确认创建群聊并向 {n} 位成员发出邀请？",
+  "@confirmCreateGroup": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "choosePackage": "选择安装包",
+  "pkgRecommended": "推荐",
+  "choosePackageHint": "64 位包用于绝大多数手机（应用内更新下的是这个）；带 _armeabi-v7a 的是 32 位老机型；_x86_64 只用于模拟器 / Chromebook。点一行会打开该包的下载地址。",
+  "lifeGuardStrongHint": "告警会通过**高优先级系统通知**提醒（响铃 / 震动 / 锁屏横幅），不只是应用内弹窗 —— 手机放在兜里或没看屏幕时，弹窗是看不见的。请确保系统允许本应用通知，并关闭该通知渠道的免打扰。",
+  "crashSensitivity": "检测灵敏度",
+  "crashSensGentle": "灵敏",
+  "crashSensStandard": "标准",
+  "crashSensFirm": "抗颠簸",
+  "crashSensHint": "灵敏度决定「多大的冲击才算数」：摔倒按此阈值，碰撞则要求约两倍。手机放裤兜里骑车，正常颠簸就用「抗颠簸」；固定在车把上同理。默认「标准」。灵敏度只影响**检测**（哪个撞击算数），不影响后续的告警动作。",
+  "crashFallAlarmTitle": "检测到疑似摔倒",
+  "crashFallAlarmBody": "手机先自由落体、随后一次落地冲击，再之后一直没有明显移动（约 12 秒）—— 这是摔倒的典型加速度特征。\n\n如果你没事，按「我没事」即可；如果身体不适或无法行动，请立即拨打急救电话，或向附近 100 公里内的台站发出求助信息。\n\n**这是启发式判断，不是工程级检测**。",
+  "crashKindHint": "会区分**碰撞**与**摔倒**：摔倒几乎总是先有一段自由落体（失重，总加速度接近 0），再是落地冲击；车祸撞击没有那一段。所以判据是 —— 有失重就按「摔倒」（用灵敏度阈值）；没有失重就按「碰撞」，并要求冲击约两倍于阈值才认（这样「把手机放在桌上」这类动作不会误报）。这只是把判断说得更准，两类的处理方式完全一样（都是我没事 / 打电话 / 求助）。",
+  "stationRetention": "台站保留天数",
+  "stationRetentionTip": "超过这个天数没再听到的台站，会在启动时自动清理。0 = 关闭自动清理（仍可手动清理）。收藏 / 手动添加 / 你自己的台站永不清理。",
+  "pruneOldData": "清理过时台站",
+  "pruneOldDataDesc": "按天数清理长期没再听到的台站，只留下还有用的",
+  "pruneHint": "只清理普通台站；收藏与手动添加的台站会保留。清理不可恢复。",
+  "pruneNone": "没有需要清理的台站",
+  "pruneConfirm": "将清理 {n} 天没有再听到的 {m} 个台站（收藏 / 手动添加的会保留），此操作不可恢复。",
+  "pruneDone": "已清理 {n} 个过时台站",
+  "retentionOff": "未启用自动清理（保留天数为 0）；可手动清理，或先设置保留天数",
+  "@pruneConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@pruneDone": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "prunePreview": "将清理 {n} 个",
+  "@prunePreview": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "nDays": "{n} 天",
+  "retentionDaysOff": "关闭（不自动清理）",
+  "pruneWithin": "清理多少天前的台站",
+  "pruneWithinTip": "手动清理使用的天数，与上面的自动清理保留天数**相互独立** —— 选几天就只清掉「这么多天没再听到」的普通台站。",
+  "prunePickDays": "请先选择天数",
+  "factoryReset": "清除所有数据并重新初始化",
+  "factoryResetDesc": "连呼号与所有设置一起清除，重新运行首次引导",
+  "factoryResetIntro": "把本应用恢复到「刚安装」的状态：",
+  "factoryResetCallsign": "呼号与 SSID",
+  "factoryResetSettings": "服务器、信标、界面等全部设置",
+  "factoryResetWarn": "此操作不可恢复，且会重新运行首次引导。建议先导出一次备份。",
+  "factoryResetButton": "清除所有数据并重新初始化",
+  "factoryResetConfirm": "将清除呼号、服务器、信标与界面等**全部设置**，以及台站、消息、日志、轨迹等**全部数据**，然后重新运行首次引导。此操作**不可恢复**。确定继续吗？",
+  "@nDays": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActions": "上报",
+  "reportNow": "立即上报",
+  "reportAutoStart": "开启自动上报",
+  "reportAutoStop": "停止自动上报",
+  "reportTagAuto": "自动",
+  "reportTagOnce": "单次",
+  "reportStatusAuto": "自动上报中",
+  "reportStatusOnce": "单次上报",
+  "reportToggleHint": "点一下切换：自动上报＝按间隔 / 距离 / 转弯自动发射；单次上报＝只有点「立即上报」才发射（两者都可以随时手动发一次）。",
+  "reportRfEnabledToast": "已开启射频信标并开始自动上报",
+  "reportEnabledToast": "已开启自动上报",
+  "reportDisabledToast": "已停止自动上报，改为仅单次上报",
+  "autoReportEntryHint": "开关随时可在主界面改：地图左下/底部的「自动 / 单次」按钮点一下即切换，旁边「立即上报」立即发一次。",
+  "backupTracks": "包含 {n} 天的历史轨迹",
+  "@backupTracks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sendPositionBeacon": "发射位置信标",
+  "strategyMap": "策略地图",
+  "strategyMapHint": "与同群队友共享标点、路线与集合点（经 APRS 消息）",
+  "strategyPickGroup": "选择群组",
+  "strategyNeedGroup": "请先加入或选择一个群组",
+  "strategyNoGroup": "先加入一个群组才能使用策略地图",
+  "strategyAddPoint": "标点",
+  "strategyAddLine": "划线",
+  "strategyAddCircle": "画圈",
+  "strategyAddRally": "集合点",
+  "strategyNavigate": "导航",
+  "strategyEditInfo": "编辑信息",
+  "strategyDeleteItem": "删除",
+  "strategyClearAll": "清空图层",
+  "strategyClearConfirm": "清空本群共享的全部标点、路线与集合点？此操作会同步给所有队友。",
+  "strategyLabel": "名称",
+  "strategyLabelHint": "为这个点起个名（可选）",
+  "strategyRadius": "半径（米）",
+  "strategyRadiusHint": "半径（米），例如 800",
+  "strategySend": "共享",
+  "strategyShared": "已共享到群",
+  "strategyEmpty": "图层还是空的 —— 用下方工具放一个标点或集合点",
+  "strategySnapshot": "同步",
+  "strategyLineHint": "依次点击地图放点（至少 2 个），点「完成」结束",
+  "strategyNeedTwoPoints": "划线至少需要两个点",
+  "strategyItemOf": "由 {call} 共享",
+  "@strategyItemOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyPan": "平移",
+  "strategySendFailed": "已显示，但未发送成功（请检查连接）",
+  "strategyTeammates": "队友位置",
+  "strategyTeammateOf": "{call} 的位置",
+  "strategyColor": "颜色",
+  "strategyColorDefault": "默认",
+  "strategySeeInMap": "点击查看策略地图",
+  "strategySharedItem": "{call} 共享了一个{kind}",
+  "@strategyTeammateOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategySharedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyRetry": "重发未确认",
+  "strategyRetryAll": "重发全部",
+  "strategyAckPending": "{n} 帧未被确认（射频丢包时点重发）",
+  "strategyAckOk": "队友已确认收到",
+  "strategyRetryNone": "没有未确认的帧",
+  "@strategyAckPending": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "groupRfNotice": "射频模式：群聊与策略帧都按广播发送，队友守听同一频段即可收到。策略帧需队友回执确认，丢包时在策略地图页点重发。",
+  "chatNeedConnect": "未连接服务器，无法发送；请先连接数据来源。",
+  "strategyUpdatedItem": "{call} 更新了{kind}",
+  "strategyDeletedItem": "{call} 删除了{kind}",
+  "strategyClearedMsg": "{call} 清空了共享图层",
+  "@strategyUpdatedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyDeletedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyClearedMsg": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "sendLocation": "发送位置点",
+  "needFixToSendLocation": "还没有定位，暂时无法发送位置点",
+  "msgLocation": "位置点",
+  "locationTapToView": "点击在地图查看",
+  "locationPickTitle": "选点发送位置点",
+  "locationPickHint": "在地图上点击要发送的坐标",
+  "locationMyPos": "我的位置",
+  "locationSendTo": "发送给 {call}",
+  "@locationSendTo": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMore": "更多",
+  "stationTapToView": "点击查看台站",
+  "locationPickStations": "选择台站",
+  "locationSearchHint": "搜索呼号 / 别名",
+  "locationNoStation": "没有匹配的台站",
+  "locationPrevPage": "上一页",
+  "locationNextPage": "下一页",
+  "shareStation": "分享台站",
+  "shareStationPick": "发送到哪个会话？",
+  "shareStationSent": "已分享 {call}",
+  "locationPageInfo": "第 {n} / {m} 页",
+  "@locationPageInfo": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@shareStationSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "packetSource": "来源",
+  "packetSrcLocal": "本机",
+  "packetSrcAprsIs": "APRS-IS",
+  "packetSrcTnc": "TNC",
+  "packetSrcAudio": "声卡",
+  "packetSrcPkwdwpl": "Kenwood",
+  "audioTxAmplitude": "输出幅度（0.05~1.0）",
+  "audioTxAmplitudeTip": "发射波形的相对幅度。削顶（≥99%）会产生谐波、直接毁掉 FSK 频谱；过低则对端信噪比不够。默认 0.6 留约 4dB 余量；接电台时先试 0.5~0.7，再看「发射体检」的峰值。",
+  "audioTxSourceRow": "发射来源",
+  "audioTxSourceYes": "是本链路",
+  "audioTxNotSourceWarn": "音频链路已连上，但当前发射来源不是它 —— 消息与信标会从「{src}」发出。需要从音频发射时，去「设置 → 设备」把音频选为发射来源。",
+  "@audioTxNotSourceWarn": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTxPttHint": "音频链路不会去按电台的 PTT —— 它只是播放一段 AFSK 音频。要让电台真的发射，必须由电台自己键控：把电台设为 VOX 声控发射，或用支持声控/数据口PTT 的接线。若电台一直不发射，先查这一条。",
+  "updateChannelAliyunHint": "⚠️ 由开发团队付费，请少量使用 🙏",
+  "connectingAliyun": "正在通过阿里云 OSS 检查更新 ☁️",
+  "icomAudioSampleRate": "音频采样率",
+  "icomAudioFmtValue": "12000 Hz (LPCM 16-bit 单声道)",
+  "icomLanHotspotRoutingHint": "连上电台热点后，电台数据会绑定到 Wi-Fi 局域网，移动数据仍用于 APRS-IS 上网；若系统把这条热点当成了默认上网通道，请在该 Wi-Fi 的高级设置里关闭「自动切换网络」。",
+  "posSrcSpp": "外接 GPS 模块",
+  "locationExtGps": "外接 GPS（蓝牙）",
+  "dataSourceNmeaGps": "外接 GPS（蓝牙）",
+  "dataSourceNmeaGpsDesc": "读取 GPS 模组输出的 NMEA 0183 定位语句，作为本机位置来源（只收不发）",
+  "dataSourceNmeaGpsHint": "这条链路供的是本机位置（不是别人的报文）：接上后位置优先用它，模组断流 30 秒后自动交回手机 GPS",
+  "extGpsDeviceTitle": "外接 GPS",
+  "extGpsDeviceDesc": "蓝牙 SPP / 串口上的 NMEA 0183 位置来源",
+  "extGpsBindTitle": "设备与连接",
+  "extGpsBindSubtitle": "扫描已配对设备并绑定（蓝牙权限与其它链路共用）",
+  "extGpsTip": "接上后位置优先用模组（常架在车顶或窗外，比手机与手表准）；拿不到新定位 30 秒后自动交回手机 GPS。",
+  "extGpsReadOnly": "只收不发：模组只输出位置，不参与发射",
+  "extGpsStatTitle": "定位接收",
+  "extGpsStats": "已收定位 {rx} 条",
+  "extGpsStatNoFix": "语句有效但还没定上",
+  "extGpsStatMismatch": "校验和不符",
+  "extGpsStatRejected": "丢弃/无效语句",
+  "extGpsStatIgnored": "其它 NMEA 语句（已忽略）",
+  "extGpsSatellites": "卫星",
+  "extGpsAccuracy": "精度",
+  "extGpsWaitingFix": "已连接，正在搜星（还没有一次可用定位）",
+  "extGpsSilent": "已连接，但没有收到任何语句（查供电 / 是否被别的应用占着）",
+  "extGpsLogEmpty": "暂无外接 GPS 日志",
+  "ownSourceExtGpsLive": "外接模块供位（手机 GPS 已让位）",
+  "deviceInUseByOther": "已被其它链路占用，不能重复绑定",
+  "extGpsStrictChecksum": "严格校验和（不符即丢弃）",
+  "extGpsStrictChecksumTip": "默认开启：GPS 模组按标准发语句，校验和不符基本只有线路噪声一种解释 ——整条丢弃，别让一个坏字节把定位带偏。少数杂牌模组确实会发错校验和，那时把这里关掉（丢弃条数与日志会一直显示）。",
+  "beaconSppSource": "外接 GPS 上报中",
+  "beaconSppNext": "外接 GPS 上报 · {s}",
+  "@extGpsStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      }
+    }
+  },
+  "@beaconSppNext": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
+  "linkScanAction": "扫描设备",
+  "linkConnectAction": "连接设备",
+  "linkBoundDevice": "已绑定设备",
+  "linkNotBound": "未绑定设备",
+  "linkNoPaired": "未找到设备 · 请先在系统蓝牙设置里配对，或插上 USB 串口线（OTG）",
+  "beaconIncludeSats": "卫星数",
+  "beaconSatsNow": "当前卫星数",
+  "beaconSatsHint": "卫星数来自正在供位的那个来源 —— 手机 GPS（Android）或外接 GPS 模组（GGA 语句）。SAT=nn 是非标准备注字段（与 STEPS= 同类），第三方地图只会当备注文字显示；来源不提供这个值时不会发送，而不是发一个 0。",
+  "extGpsFixTitle": "当前定位",
+  "extGpsFixSubtitle": "模组最近报上来的那一条定位 —— 坐标与龄期是这一页最该盯的两个数",
+  "extGpsFixAge": "最近定位",
+  "extGpsFixType": "定位类型",
+  "extGpsFixType2d": "二维定位（2D）",
+  "extGpsFixType3d": "三维定位（3D）",
+  "extGpsFixTypeNoFix": "未定位（GSA 说还没定上）",
+  "extGpsFixTypeNone": "模组没报（不发 GSA）",
+  "extGpsFixUtc": "模组时间（UTC）",
+  "extGpsFixSource": "触发语句",
+  "extGpsFixRaw": "最近语句",
+  "extGpsFixHint": "精度是按 HDOP 估算的（≈ HDOP × 5 m），不是实测值；定位类型来自 GSA 语句，只发 RMC/GGA 的模组没有这一项；「模组时间」来自卫星，可能还没同步上。",
+  "beaconSatsUnknown": "当前来源未提供卫星数：网络定位（基站 / Wi-Fi）本身没有卫星，部分 Android 机型 / 系统也不返回该数据。",
+  "lockMapCenter": "锁定地图中心",
+  "unlockMapCenter": "取消锁定地图中心",
+  "partners": "伙伴",
+  "partnerAprsnetCnDesc": "信标不止，回响不息",
+  "serverMissing": "未配置",
+  "serverMissingWarning": "服务器地址没填 · 连不上 APRS-IS，先填一个服务器地址再连接",
+  "historyExportGpx": "导出 GPX",
+  "gpxRangeTitle": "选择要导出的时间范围",
+  "gpxRangeToday": "今天",
+  "gpxRangeWeek": "最近 7 天",
+  "gpxRangeMonth": "最近 30 天",
+  "gpxRangeYear": "最近 1 年",
+  "gpxRangeCustom": "自定义时间",
+  "gpxRangeEmpty": "这个范围里没有轨迹点。",
+  "gpxExported": "已导出 {days} 天 · {points} 个轨迹点",
+  "gpxExportFailed": "导出失败，请检查存储权限或剩余空间",
+  "gpxSavedTo": "已保存到：{path}",
+  "@gpxExported": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@gpxSavedTo": {"placeholders": {"path": {"type": "String"}}},
+  "permCheckTitle": "权限被关掉了",
+  "permCheckLocation": "定位权限没开，地图标不出位置，也不能上报。",
+  "permCheckNotify": "通知权限没开，提醒和生命守护告警都看不到。",
+  "searchHistoryTitle": "最近搜过的",
+  "serverHistoryTitle": "最近连过的服务器",
+  "serverAccountTitle": "账号",
+  "serverAccountHint": "服务器给的账号",
+  "serverPasswordTitle": "口令",
+  "serverPasswordHint": "服务器给的口令",
+  "serverAccountNote": "只有 APRSNETCN 这类服务器要账号和口令，标准 APRS-IS 留空就行。",
+  "acnSyncTitle": "同步 24 小时台站",
+  "acnSyncLast": "上次同步",
+  "acnSyncDone": "服务器上有 {total} 台，新并入 {added} 台",
+  "acnSyncNoAccount": "填了账号和口令才能同步。",
+  "@acnSyncDone": {"placeholders": {"total": {"type": "String"}, "added": {"type": "String"}}},
+  "stationSource": "来源",
+  "acnCardTitle": "APRSNETCN SERVER",
+  "acnCardSubtitle": "基于 APRSNETCN SERVER 协议的服务器，收发都能走它。",
+  "acnLinkSwitch": "APRSNETCN",
+  "acnLinkStatus": "链路状态",
+  "acnLinkNote": "报文从你在链路卡片上勾选的那条发。这条链路收来的台站会标成来自服务器，也不做网关转递。",
+  "acnAccountNote": "服务器发给白名单呼号的账号口令。留空就只按 passcode 收报文。",
+  "packetSrcAcn": "APRSNETCN",
+  "acnLoginTitle": "登录",
+  "acnLoginOk": "已验证",
+  "acnLoginRejected": "账号或口令不对",
+  "acnSyncNow": "立即同步",
+  "acnSyncing": "同步中…",
+  "acnSyncHint": "按下按钮才拉，连上链路不会自己拉。",
+  "sourceGroupInternet": "互联网链接",
+  "sourceGroupRadio": "电台链路",
+  "acnPageLead": "一台基于 APRSNETCN SERVER 协议的 APRS-IS 服务器。地址填在「设置 → 服务器」里，收发都走它。两条链路可以同时在线，各收各的。",
+  "acnServerProto": "服务器协议",
+  "acnServerRetention": "位置保留 {hours} 小时",
+  "acnDefaultFilter": "默认订阅",
+  "acnAllPackets": "全部报文",
+  "acnOpenMap": "台站地图",
+  "@acnServerRetention": {"placeholders": {"hours": {"type": "String"}}},
+  "channelsSubtitle": "两台服务器可以同时在线，报文两边各收一份。",
+  "acnOpenSettings": "地址与账号",
+  "acnFilterTitle": "筛选",
+  "acnFilterSubtitle": "半径内的台站，加上你列的呼号。",
+  "acnFilterRadius": "半径（公里）",
+  "acnFilterCalls": "再加上这些呼号",
+  "acnFilterCallsHint": "呼号，按回车加上",
+  "txChannel": "发送渠道",
+  "txChannelHint": "报文只从这一条发。",
+  "translateProviderBili": "B站 Index-Translate",
+  "translateProviderBiliDesc": "免密钥，免费。B 站公开的翻译模型，公共接口不保证一直可用。",
+  "translateBiliUrl": "接口地址",
+  "translateBiliModel": "模型",
+  "translateBiliTip": "公共接口可能限流。自己部署时把地址和模型换成自己的。",
+  "txSourcePick": "用这条链路发送",
+  "acnPasscodeHint": "留空就用 APRS-IS 那条链路的 passcode",
+  "aprsIsServerTitle": "APRS-IS 服务器",
+  "aprsIsServerLead": "地址、端口与 passcode 都填在这里。",
+  "aprsIsCardSubtitle": "登录参数与连接状态",
+  "aprsIsEntryDesc": "地址、端口与 passcode",
+  "txKindPosition": "位置与状态报文",
+  "notifLiveTitle": "实时通知",
+  "notifLiveHint": "开启后，Android 16 会把常驻通知提成状态栏那一小条，iPhone 上显示在灵动岛和锁屏；显示什么在下面选。系统不支持时还是普通常驻通知。",
+  "notifTitle": "通知",
+  "notifStyleTitle": "通知显示样式",
+  "notifStylePlain": "普通常驻通知",
+  "notifStylePlainDesc": "通知栏里一条常驻通知，展开看全部文字。",
+  "notifStyleLive": "实时更新",
+  "notifDiag": "通知诊断",
+  "notifDiagDesc": "看这台手机支持不支持实时更新、焦点通知，缺哪一环。",
+  "notifStyleFocus": "小米焦点通知",
+  "notifStyleFocusDesc": "小米、Redmi、POCO 上试小米的焦点通知（超级岛）；没有厂商许可时，照样退回实时更新或普通通知。",
+  "notifLiveTextTitle": "实时更新的文字",
+  "notifLiveTextDefault": "默认",
+  "notifLiveTextCounts": "收发数",
+  "notifLiveTextGrid": "网格",
+  "notifLiveTextCourse": "朝向",
+  "notifLiveTextBeacon": "发射倒计时",
+  "notifLiveOff": "这一档暂时停用：在部分系统上它会把常驻通知弄没。现在按普通常驻通知发。",
+  "notifLiveTextMsgs": "未读消息",
+  "notifLiveTextNear": "附近台站",
+  "notifLiveTextSpeed": "速度",
+  "notifLiveTextAlt": "高度",
+  "notifLiveTextHr": "心率",
+  "notifLiveTextBatt": "电量",
+  "notifLiveTextTrip": "本次里程",
+  "notifLiveNearShort": "{n} 台",
+  "@notifLiveNearShort": {"placeholders": {"n": {"type": "String"}}},
+  "consentTitle": "上传与发射的单独同意",
+  "consentLead": "开启上传或发射之前，先单独确认下面三件事。",
+  "consentNatureTitle": "信息性质",
+  "consentNatureBody": "你即将上传的内容包含行踪轨迹，属于《个人信息保护法》下的敏感个人信息。",
+  "consentNeedTitle": "必要性",
+  "consentNeedBody": "APRS 功能依赖把位置发到公开网络，不存在不上传就能实现同等功能的替代方式。",
+  "consentImpactTitle": "对个人权益的影响",
+  "consentImpactBody": "数据进入 APRS-IS 后由第三方服务器存储，部分公开服务器对位置的留存可达 180 天或更久。数据一旦进入公开网络，无法撤回，也无法删除。",
+  "consentAgree": "我同意",
+  "consentScopeInternet": "APRS-IS 信标上传",
+  "consentScopeRf": "射频信标发射",
+  "consentScopeIgate": "iGate 转发",
+  "consentAccept": "同意并开启",
+  "consentCancel": "暂不开启",
+  "consentPickOne": "至少勾选一项要开启的功能。",
+  "consentPickAgree": "请先勾选「我同意」。",
+  "consentSection": "单独同意",
+  "consentSectionHint": "关掉一项，对应的功能立刻停止发送新的数据。已经发出去的数据收不回来。",
+  "consentLogTitle": "同意日志",
+  "consentLogEmpty": "还没有记录。",
+  "consentLogClear": "清除同意日志",
+  "consentLogClearHint": "只清日志，已经作出的同意不受影响。",
+  "consentLogCleared": "同意日志已清除",
+  "consentActGrant": "同意",
+  "consentActRevoke": "撤回",
+  "autoStartTitle": "打开软件时",
+  "autoStartNone": "不做操作",
+  "autoStartConnect": "自动连接",
+  "autoStartReport": "自动上报",
+  "autoStartNoneHint": "打开软件后什么都不做。",
+  "autoStartConnectHint": "打开软件后自动连上服务器，上报仍然要你自己点。",
+  "autoStartReportHint": "打开软件后自动连上服务器，并直接开始上报位置。",
+  "autoStartAskTitle": "要开启吗",
+  "autoStartAskConnect": "以后每次打开软件都会自动连接服务器。",
+  "autoStartAskReport": "以后每次打开软件都会自动连接服务器，并开始上报位置。",
+  "autoStartAskOk": "开启",
+  "autoStartAskCancel": "取消",
+  "mvTitle": "需要更新",
+  "mvBody": "本版本已停止支持。更新到 {min} 或更高版本之后才能继续使用。",
+  "mvCurrent": "当前版本",
+  "mvRequired": "最低版本",
+  "mvReason": "说明",
+  "mvUpdate": "去更新",
+  "mvExit": "退出应用",
+  "mvChecking": "正在检查…",
+  "@mvBody": {"placeholders": {"min": {"type": "String"}}},
+  "featureCat": "功能",
+  "featureCatDesc": "自选模块与精简模式",
+  "featureLite": "精简模式",
+  "featureLiteDesc": "只留 APRS 收发，界面换成极简布局。",
+  "featureModules": "模块",
+  "featureLiteBlocks": "精简模式下模块都关着，关掉精简模式再选。",
+  "featureWeather": "天气",
+  "featureTranslate": "翻译",
+  "manualTitle": "使用手册",
+  "ssidCustom": "自定义后缀",
+  "ssidCustomHint": "1–2 位数字或字母",
+  "ssidInvalid": "后缀只能是 1–2 位数字或字母",
+  "ssidUse": "用这个",
+  "icomTxTailLabel": "发射后置延迟 (Post TX Delay, ms)",
+  "cracCertTitle": "操作证书查询",
+  "cracCertName": "姓名",
+  "cracCertNumber": "证书编号",
+  "cracCertId": "身份证件 ID",
+  "cracCertPrivacy": "姓名和证书编号只用于这次查询验证。服务器不收集，软件也不收集，结果只留在本机。",
+  "cracCertQuery": "查询",
+  "cracCertQuerying": "查询中…",
+  "cracCertResult": "查询结果",
+  "cracCertNeedName": "先填姓名",
+  "cracCertNeedKey": "证书编号要填",
+  "cracCertNotFound": "没有查到记录",
+  "cracCertFailed": "查询失败：",
+  "cracCertSaved": "已记到呼号 {call}",
+  "cracCertOtherCall": "这条登记的是 {call}，没记到当前呼号",
+  "cracCertType": "证书类别",
+  "cracCertCall": "呼号",
+  "cracCertPassDate": "通过日期",
+  "cracCertIssueDate": "核发日期",
+  "cracCertRegion": "地点",
+  "cracCertValid": "有效期至",
+  "cracCertBadge": "{type} 类操作证",
+  "@cracCertSaved": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertOtherCall": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertBadge": {"placeholders": {"type": {"type": "String"}}},
+  "cracCertInfo": "认证信息",
+  "cracCertChecked": "查询时间",
+  "cracCertClear": "清除认证信息",
+  "cracCertClearAsk": "清除后这一页不再显示认证信息，可以重新查。",
+  "cracCertClearDone": "已清除认证信息",
+  "devLockTitle": "开发人员口令",
+  "devLockTip": "已锁定，长按输口令",
+  "devLockWrong": "口令不对",
+  "cracCertVerified": "已认证",
+  "gpsSampleTitle": "GPS 采样间隔",
+  "gpsSampleSec": "{s} 秒",
+  "@gpsSampleSec": {"placeholders": {"s": {"type": "String"}}},
+  "historyRecord": "记录历史轨迹",
+  "historyEmptyOff": "记录没开。打开上面的开关才会记。",
+  "cracCertClosed": "暂不开放",
+  "cracCertWhyRequired": "APRS-IS 协议 软件开发者有责任与义务验证软件使用者为业余无线电爱好者",
+  "cracCertEntry": "操作证验证",
+  "cracCertVoluntary": "验证自愿，不验证也能照常用。",
+  "cracCertLocal": "查询由程序直接完成，没有人工审核。结果只回本机，只保留是否通过和证书类别。",
+  "oobeCallInvalid": "呼号格式不对。常见的写法是 BG7LZQ 或 JA1AA。",
+  "oobeSsidInvalid": "后缀只能是一位或两位数字、字母。",
+  "oobeFinishLocal": "完成",
+  "oobeDoneTitle": "配置完成",
+  "oobeDoneLocalNote": "地址留空，现在是纯本地模式。要联网去设置里的服务器。",
+  "oobeDoneConnectNote": "点完成后会连接 {link}。",
+  "oobeDoneSymbolLabel": "符号",
+  "oobeDoneUnset": "未填",
+  "oobeDoneMap": "看台站",
+  "oobeDoneMapDesc": "地图和台站两个页签里是附近的台站。",
+  "oobeDoneBeacon": "发位置",
+  "oobeDoneBeaconDesc": "连上之后，地图页底部有开始上报的按钮。",
+  "oobeDoneManualDesc": "设置里有使用手册。设备怎么接、发不出去怎么查都写在里面。",
+  "@oobeDoneConnectNote": {"placeholders": {"link": {"type": "String"}}},
+  "oobeRestore": "从备份恢复",
+  "trayCloseToTray": "关闭窗口时最小化到托盘",
+  "trayMenuShow": "显示主窗口",
+  "trayMenuHide": "隐藏到托盘",
+  "trayMenuQuit": "退出 APRSLocus",
+  "beaconFuzz": "定位模糊",
+  "beaconFuzzOff": "关",
+  "beaconFuzz200m": "约 200 米",
+  "beaconFuzz2km": "约 2 公里",
+  "beaconFuzz20km": "约 20 公里",
+  "subsTitle": "订阅",
+  "subsLead": "盯住一个台站、一个中继，或者报文里的一个词。命中记在下面。",
+  "subsAdd": "加一条订阅",
+  "subsKindStation": "台站",
+  "subsKindDigi": "中继",
+  "subsKindKeyword": "关键词",
+  "subsFieldStation": "呼号，可省略 SSID",
+  "subsFieldDigi": "中继或网关呼号",
+  "subsFieldKeyword": "报文里出现的词",
+  "subsEmpty": "还没有订阅",
+  "subsEmptyNote": "加一条之后，命中的报文会出现在这里。",
+  "subsHitsTitle": "命中记录",
+  "subsNoHits": "还没有命中。",
+  "subsHitsCount": "{n} 条",
+  "subsClear": "清空",
+  "subsAdded": "已订阅 {v}",
+  "subsExists": "{v} 已经订阅过了",
+  "subsRemoved": "已取消订阅",
+  "subsMenuOn": "订阅这个台站",
+  "subsMenuOff": "取消订阅",
+  "subsCopied": "已复制报文",
+  "@subsHitsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@subsAdded": {"placeholders": {"v": {"type": "String"}}},
+  "@subsExists": {"placeholders": {"v": {"type": "String"}}},
+  "msgSendId": "发送 ID",
+  "msgOtherSsid": "该消息由其他 SSID 接收，可以选用 {to} 或本机 ID 发送。",
+  "@msgOtherSsid": {"placeholders": {"to": {"type": "String"}}},
+  "beaconIncludeLoad": "电脑 CPU 与内存占用",
+  "myOtherSsidLabel": "我的其他 SSID",
+  "ssidCmdActivate": "激活",
+  "ssidCmdBeacon": "发信标",
+  "ssidCmdStop": "停止上报",
+  "ssidCmdSent": "已发给 {call}：{cmd}",
+  "ssidCmdNoLink": "链路没连上，指令发不出去",
+  "@ssidCmdSent": {"placeholders": {"call": {"type": "String"}, "cmd": {"type": "String"}}},
+  "msgRecvTitle": "消息接收",
+  "msgRecvSsid": "其他 SSID 的消息也收",
+  "subsRoleTitle": "看它做什么",
+  "subsRoleSource": "自己发出的",
+  "subsRolePath": "经它中继的",
+  "subsPacketTitle": "报文",
+  "subsPacketAll": "全部",
+  "subsPacketBeacon": "信标",
+  "subsPacketMessage": "消息",
+  "subsHitSource": "发出",
+  "subsHitPath": "中继",
+  "myOtherSsidNone": "还没收到同一呼号的其他 SSID",
+  "subsEdit": "修改订阅",
+  "subsNotify": "系统通知",
+  "subsNotifyTitle": "订阅命中 · {value}",
+  "subsNotifyMore": "另有 {n} 条",
+  "@subsNotifyTitle": {"placeholders": {"value": {"type": "String"}}},
+  "@subsNotifyMore": {"placeholders": {"n": {"type": "String"}}},
+  "coordFormat": "经纬度格式",
+  "coordFormatDec": "十进制度",
+  "coordFormatDm": "度分",
+  "coordFormatDms": "度分秒",
+  "mapCenterCoord": "中心经纬度",
+  "oobeServerSkip": "跳过，稍后在设置里填",
+  "advChannels": "高级连接通道设置",
+  "codeContributionEncoding": "中文编码兼容",
+  "oobeFeatureTitle": "要哪些功能",
+  "oobeFeatureDesc": "关掉的模块不会出现在设置里。以后想改，设置 → 功能。",
+  "historyOverlay": "历史叠层",
+  "historyOverlayShare": "分享图片",
+  "historyOverlayExport": "导出图片",
+  "historyOverlayExportFailed": "导出图片失败",
+  "historyOverlayEmpty": "还没有可叠加的轨迹。",
+  "historyOverlayAll": "全部显示",
+  "historyOverlaySummary": "{days}/{total} 天 · {km}",
+  "@historyOverlaySummary": {"placeholders": {"days": {"type": "String"}, "total": {"type": "String"}, "km": {"type": "String"}}},
+  "powerSave": "省电模式",
+  "powerSaveTip": "GPS 每 30 秒取一次位置，地图上的台站动画停下。",
+  "lowBatteryWarn": "电量只剩 {level}%，开省电模式？",
+  "@lowBatteryWarn": {"placeholders": {"level": {"type": "String"}}},
+  "syncTitle": "云同步",
+  "syncLead": "消息与历史轨迹存到服务器上，换设备再拉回来。",
+  "syncAccount": "账号",
+  "syncPassword": "口令",
+  "syncLogin": "登录",
+  "syncLogout": "退出登录",
+  "syncLoggedIn": "已登录 {call}",
+  "syncNeedLogin": "先登录",
+  "syncMode": "同步方式",
+  "syncModeOff": "关闭",
+  "syncModeManual": "手动",
+  "syncModeAuto": "自动",
+  "syncModeAutoHint": "自动那档启动时拉一次，之后按上面的间隔跑。",
+  "syncMessages": "消息",
+  "syncTracks": "历史轨迹",
+  "syncNow": "立即同步",
+  "syncRunDone": "同步完成",
+  "syncClear": "清空云端数据",
+  "syncClearHint": "服务器上这个呼号的消息、轨迹与备份全部删掉，本机不动。",
+  "syncClearAsk": "确认清空云端数据？",
+  "syncClearDone": "云端数据已清空",
+  "syncPlainHint": "连接是明文 HTTP，口令与内容不加密。",
+  "syncLastAt": "上次同步",
+  "syncNever": "还没同步过",
+  "syncFailed": "同步失败",
+  "syncTrackSummary": "{days} 天 · {points} 个点",
+  "syncMsgSummary": "{n} 条",
+  "syncBackupElsewhere": "云端备份在「备份与恢复」页里上传与取回。",
+  "syncNoWeb": "网页版不能用",
+  "syncBusy": "正在同步",
+  "backupCloud": "云端备份",
+  "backupCloudUpload": "存到云端",
+  "backupCloudRestore": "从云端取回",
+  "backupCloudHint": "云端备份不带历史轨迹，轨迹在「云同步」里单独存。",
+  "backupCloudDone": "已存到云端",
+  "backupCloudEmpty": "云端还没有备份",
+  "backupCloudFailed": "云端操作失败",
+  "@syncLoggedIn": {"placeholders": {"call": {"type": "String"}}},
+  "@syncTrackSummary": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@syncMsgSummary": {"placeholders": {"n": {"type": "String"}}},
+  "syncServer": "服务器",
+  "syncServerNow": "当前地址",
+  "syncServerHint": "换地址要重新登录，旧地址上的数据不搬。",
+  "syncCloudData": "云端数据",
+  "syncAccountHint": "账号就是服务器接入名单里那条，与「APRSNETCN」链路页填的是同一个。",
+  "syncContent": "同步内容",
+  "syncContentHint": "两个都关掉就只登录，不传也不收。",
+  "syncAutoEvery": "自动同步间隔",
+  "syncEveryMin": "{n} 分钟",
+  "syncDevicesTitle": "登录的设备",
+  "syncDeviceThis": "本机",
+  "syncDeviceRemove": "移除",
+  "syncDeviceRemoved": "这台设备已移除，它下次同步要重新登录。",
+  "syncBackups": "云端备份",
+  "syncBackupsCount": "共 {n} 份",
+  "syncDeviceHint": "列表里是登录过这台服务器的设备。移除一台，它下次同步要重新登录。",
+  "@syncEveryMin": {"placeholders": {"n": {"type": "String"}}},
+  "@syncBackupsCount": {"placeholders": {"n": {"type": "String"}}},
+  "syncNoServer": "先在上面填 APRSNETCN 服务器地址。",
+  "acnHttpPort": "HTTP 端口",
+  "updatePkgWelcomeTitle": "欢迎更新到 {v}",
+  "updatePkgWelcomeBody": "新版本已经装好了。这次下载的安装包还在「下载」文件夹里，留着可以装到别的设备，删掉能腾出空间。",
+  "updatePkgInDownloads": "在「下载」文件夹",
+  "updatePkgRemember": "以后也这样处理，不再询问",
+  "updatePkgDelete": "删除安装包",
+  "updatePkgKeep": "保留安装包",
+  "updatePkgKept": "安装包留在「下载」文件夹",
+  "updatePkgSigOk": "签名已校验",
+  "updatePkgSigBad": "安装包签名与本机不一致，已经删掉。请从官方渠道重新下载。",
+  "updatePkgSigUnknown": "读不出安装包的签名，已经删掉。请重新下载。",
+  "updatePkgNoFile": "「下载」里找不到这个安装包，请重新下载。",
+  "updatePkgAction": "安装包处理",
+  "updatePkgAfterUpdate": "装上新版后",
+  "updatePkgActionAsk": "每次询问",
+  "updatePkgActionDelete": "自动删除",
+  "updatePkgActionKeep": "一直保留",
+  "@updatePkgWelcomeTitle": {"placeholders": {"v": {"type": "String"}}},
+  "updatePkgSigChecking": "正在校验签名",
+  "updatePkgSigMismatch": "签名与本机不一致",
+  "updatePkgSigUnchecked": "读不出签名",
+  "connectingChannel": "正在连 {name}",
+  "@connectingChannel": {"placeholders": {"name": {"type": "String"}}},
+  "updateCheckChecking": "正在联网校验",
+  "updateCheckOk": "联网校验通过，版本号、摘要、签名都一致",
+  "updateCheckOffline": "没有联网，无法校验版本号是否一致",
+  "updateCheckNotFound": "仓库里查不到这一版的摘要，无法校验",
+  "updateCheckVersion": "包里的版本号与仓库这一版不一致",
+  "updateCheckSha": "包的摘要与仓库里那份不一致",
+  "updatePkgWhatsNew": "这一版改了什么",
+  "updatePkgWelcomeHello": "新版本已经装好了。",
+  "updatePkgDeleteTitle": "安装包还要不要留",
+  "updatePkgUnverifiedTitle": "无法校验这个安装包",
+  "updatePkgUnverifiedBody": "没联网、或者仓库里查不到这一版，版本号、摘要与签名对不上。继续安装的话，风险自负。",
+  "installAnyway": "继续安装",
+  "updatePkgUnreadable": "读不出这个安装包"
 }

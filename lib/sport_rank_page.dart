@@ -62,6 +62,17 @@ class _SportRankPageState extends State<SportRankPage> {
     }
 
     final ranked = st.sportRank();
+    // 自己也要占**列表里的一个名次**（用户要求）。
+    //
+    // 榜上每个数字都来自别人主动上报的 STEPS，而自己的步数是本机计步传感器给的 ——
+    // 所以自己永远不在 ranked 里，以前只在榜单上面挂一张卡。这里按今日步数算出名次，
+    // 下面渲染时插进列表（沿用既有的「· 我」标记）。
+    final mySteps = st.stepsToday;
+    final iAmListed = ranked.any((e) => e.$1.call == st.myFullCall);
+    final myRank = (mySteps <= 0 || iAmListed)
+        ? -1
+        : 1 + ranked.where((e) => e.$2 > mySteps).length;
+
     // 没带步数的 APRSlocus 台站：只列出来（不排），让用户知道自己并不孤单
     final noSteps = st.stations
         .where((x) =>
@@ -85,8 +96,8 @@ class _SportRankPageState extends State<SportRankPage> {
         const SizedBox(height: 16),
         // ③ 榜单
         SettingsSectionCard(
+          // 副标题原来等于**页头副标题**（同一句话在一屏里出现两次），去掉
           title: s.sportRankToday,
-          subtitle: S.of(context).sportRankDesc,
           icon: Icons.emoji_events_rounded,
           color: C.green,
           children: [
@@ -96,16 +107,23 @@ class _SportRankPageState extends State<SportRankPage> {
                 child: Text(s.sportRankEmpty,
                     style: ts(12, c: C.grey, h: 1.5)),
               )
-            else
-              for (var i = 0; i < ranked.length; i++)
+            else ...[
+              for (var i = 0; i < ranked.length; i++) ...[
+                if (myRank == i + 1)
+                  _myRankTile(context, st, myRank, mySteps),
                 _rankTile(context, st, i + 1, ranked[i].$1, ranked[i].$2),
+              ],
+              // 自己排在最后一名时（步数最少），补在末尾
+              if (myRank == ranked.length + 1)
+                _myRankTile(context, st, myRank, mySteps),
+            ],
           ],
         ),
         if (noSteps.isNotEmpty) ...[
           const SizedBox(height: 16),
           SettingsSectionCard(
+            // 副标题原来用的是**开关的文案**（beaconIncludeSteps）—— 语义不对，去掉
             title: s.sportRankNoSteps,
-            subtitle: S.of(context).beaconIncludeSteps,
             icon: Icons.person_search_rounded,
             color: C.grey,
             children: [
@@ -241,9 +259,9 @@ class _SportRankPageState extends State<SportRankPage> {
             onChanged: (v) =>
                 setState(() => st.setBeaconIncludeSteps(v))),
         SettingsHint(
-          st.beaconIncludeSteps
-              ? s.stepsHint
-              : S.of(context).sportRankNote,
+          // 关着的时候别再复述页头那句长说明（同一屏第二次出现）；改成讲清
+          // 「打开后会发出什么」—— 代价写在手边，用户才好决定。
+          st.beaconIncludeSteps ? s.stepsHint : s.sportRankGateWhatSent,
           color: C.grey,
         ),
       ],
@@ -259,9 +277,13 @@ class _SportRankPageState extends State<SportRankPage> {
       3 => const Color(0xFFB45309),
       _ => C.grey,
     };
+    // 一行要能回答：**这是谁、多远、多久前、多少步**。
+    // （原来副标题写的是卡片标题「今日 · …」—— 那不是行信息，是复制粘贴留下的占位。）
+    final mine = x.call == st.myFullCall;
     return SettingsNavRow(
-      title: x.call,
-      subtitle: '${s.sportRankToday} · ${_ago(context, x.lastHeard)}',
+      // 名次写成数字（只有前三名有奖牌色，其余看不出第几）；自己那一行标出来
+      title: '$rank. ${x.call}${mine ? ' · ${s.sportRankMe}' : ''}',
+      subtitle: _lineInfo(context, st, x),
       icon: rank <= 3 ? Icons.emoji_events_rounded : Icons.person_rounded,
       color: medal,
       trailing: s.stepsCount('$steps'),
@@ -269,23 +291,78 @@ class _SportRankPageState extends State<SportRankPage> {
     );
   }
 
-  Widget _noStepsTile(BuildContext context, AppState st, Station x) {
+  /// 榜单里的「我」那一行。
+  ///
+  /// 与别人的行只差两点：副标题写「今日步数」（本机计步，没有"多久前收到"这回事）、
+  /// 不可点开（自己不需要跳台站详情）。
+  Widget _myRankTile(BuildContext context, AppState st, int rank, int steps) {
     final s = S.of(context);
+    final medal = switch (rank) {
+      1 => const Color(0xFFC9A227),
+      2 => const Color(0xFF9CA3AF),
+      3 => const Color(0xFFB45309),
+      _ => C.green,
+    };
+    return SettingsNavRow(
+      title: '$rank. ${st.myFullCall} · ${s.sportRankMe}',
+      subtitle: s.stepsTodayLabel,
+      icon: rank <= 3 ? Icons.emoji_events_rounded : Icons.person_rounded,
+      color: medal,
+      trailing: s.stepsCount('$steps'),
+      // 自己这一行不跳台站详情（没有对应的 Station）；点一下说明步数从哪来。
+      //
+      // ⚠ 文字必须用**白字**显式指定：SnackBar 的底色在亮色主题下也是深色
+      // （`C.ink`），而 `ts(12)` 取色默认是 `C.ink`（深）—— 深字叠深底，
+      // 整条提示就是"黑乎乎一片"，一个字都看不清（用户报的就是这个）。
+      // 与开发者选项 `_confirmResetGuides` 的提示同一套配色（深底 + 白字）。
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(s.stepsHint, style: ts(12, c: Colors.white)),
+          backgroundColor: C.ink,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+      },
+    );
+  }
+
+  Widget _noStepsTile(BuildContext context, AppState st, Station x) {
     return SettingsNavRow(
       title: x.call,
-      subtitle: _ago(context, x.lastHeard),
+      subtitle: _lineInfo(context, st, x),
       icon: Icons.person_outline_rounded,
       color: C.grey,
-      trailing: s.sportRankNoSteps,
+      // 尾标原来是卡片标题（「未带步数」）—— 每行重复标题没有信息量，去掉
       onTap: () => _open(context, st, x),
     );
   }
 
-  /// 打开台站详情。类名是 [StationDetail]（不是 StationDetailPage），
-  /// 参数顺序是 `state` 在前 —— 与仓库里其它调用点保持一致。
+  /// 行副标题：`3.2km · 5 分钟前`。
+  /// 没有我的定位、或对方报文里没带坐标时**只写时间** —— 不写 `--`，也不去算
+  /// "到几内亚湾的距离"（(0,0) 是"没有位置"的哨兵值）。
+  String _lineInfo(BuildContext context, AppState st, Station x) {
+    final ago = _ago(context, x.lastHeard);
+    final lat = st.myLat, lng = st.myLng;
+    if (lat == null || lng == null) return ago;
+    if (x.lat == 0 && x.lng == 0) return ago;
+    final km = x.distKm(lat, lng);
+    if (km.isNaN || km.isInfinite || km <= 0) return ago;
+    return '${km.toStringAsFixed(1)}km · $ago';
+  }
+
+  /// 打开台站详情 —— **用全应用统一的底部面板**（`showModalBottomSheet`）。
+  ///
+  /// 为什么不是 `Navigator.push` 整页：台站页、地图点标记都是弹面板
+  /// （见 `stations_page.dart` / `map_page.dart`）—— 同一个"点开一个台站"的动作，
+  /// 在排行榜里变成翻页就很不合理（用户原话）。参数与其它调用点逐字一致。
   void _open(BuildContext context, AppState st, Station x) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => StationDetail(state: st, station: x)),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StationDetail(state: st, station: x),
     );
   }
 

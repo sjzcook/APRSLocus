@@ -4,13 +4,13 @@
 
 # APRSlocus
 
-**APRS 定位追踪与地图 · APRS Tracking & Mapping**
+**APRS 定位追踪与地图 · 本机 APRS 客户端（不预置服务器地址）**
 
 专为业余无线电爱好者打造的轻量级 APRS 客户端 —— 实时定位、台站追踪、消息收发、地图显示，一站式掌握电波世界的一举一动。
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%20%7C%20iOS%20%7C%20Linux%20%7C%20macOS%20%7C%20Web-lightgrey.svg)]()
-[![Version](https://img.shields.io/badge/Version-1.6.18-green.svg)]()
+[![Version](https://img.shields.io/badge/Version-2.2.8-green.svg)]()
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blueviolet.svg)](https://flutter.dev)
 
 作者：[BG7LZQ (Darion)](https://theez.top) · 官网：[aprslocus.theez.top](https://aprslocus.theez.top/) · 最新版发布：[GitHub Releases](https://github.com/dariondong/APRSLocus/releases)
@@ -42,9 +42,10 @@
 ## ✨ 核心特性
 
 ### 🗺️ 实时地图追踪
-- **多地图类型**：高德普通 / 高德卫星 / 矢量地图 / Carto（浅色·深色·航行者）/ OSM（标准·人道）/ OpenTopo 地形 / Esri（街道·影像），设置页一键切换
+- **多地图类型**：国内地图（高德地图·高德卫星、腾讯地图·腾讯卫星、百度地图·百度卫星）/ 矢量地图（标准·Carto Positron）/ Carto（浅色·深色·航行者）/ OSM（标准·人道）/ 地形（OpenTopo、Esri 等高线·浮雕·山体阴影）/ 天地图（矢量·影像·地形）/ Esri（街道·影像），设置页一键切换
+- **离线地图**：支持框选矩形区域下载离线瓦片包与存储管理，无网环境下正常浏览地图
 - **矢量地图**：基于 `flutter_map` + `vector_map_tiles` 客户端实时渲染，数据量小、缩放清晰、**无需 API Key**，坐标为 WGS-84，支持显示我的轨迹与选中台站轨迹
-- **高德瓦片（GCJ-02）**：国内定位无缝对齐，内置 WGS-84 ↔ GCJ-02 坐标转换
+- **国内坐标与投影对齐**：高德/腾讯（GCJ-02）与百度（BD-09）瓦片无缝对齐，内置 WGS-84 ↔ GCJ-02 ↔ BD-09 坐标转换与百度专用投影计算
 - **实时台站显示**：所有台站位置一目了然，在线 / 移动 / 静止 / 离线状态以绿 / 蓝 / 黄 / 灰区分，活跃台站带脉冲动画
 - **台站聚合（Clustering）**：台站较多时按网格聚合成聚合球（显示数量，点击放大展开），显著降低渲染卡顿，可随时开关
 - **自身轨迹**：地图显示我的位置移动轨迹（蓝色轨迹线，最多 200 个点）
@@ -88,38 +89,34 @@
 - **调试日志页**：分级日志（调试 / 信息 / 警告 / 错误），一键复制 / 清空，便于排查
 
 ### ⚡ 连接与后台
-- **四种数据来源，可多选同时收**：
+- **五种数据来源，可多选同时收**：
   - **APRS-IS** —— 互联网接入，公共服务器自动连接，后台保持在线
   - **TNC** —— 蓝牙 SPP 或串口，KISS 帧直接收发（可作双向网关）
   - **音频** —— 声卡 AFSK 1200（Bell 202）软 TNC，话筒/扬声器接电台
   - **PKWDWPL** —— 读 Kenwood 电台输出的 `$PKWDWPL` NMEA 航点语句，**只收不发**
+  - **Icom WLAN** —— IC-705 / IC-9700 / IC-7610 / IC-905 走 Wi-Fi 或以太网直连电台：PTT 与频率走 CI-V、音频走网络，不占音频口
 
   多条链路可以一起收报文（都进同一条解析管线），**发射来源单独指定一条**
   （同一呼号从两条链路发出去会造成重复报文）。
 - TCP 直连（桌面 / 移动）与 WebSocket（Web 平台）双实现
-- 默认服务器 `rotate.aprs2.net:14580`，解析 `# logresp` 验证登录，Passcode 未验证时主页黄色警告横幅
+- 服务器地址与端口由你自己填写（留空 = 不连接任何服务器），解析 `# logresp` 验证登录，Passcode 未验证时主页黄色警告横幅
 - **渐进式重连**（8 → 16 → 32 → 60 秒）
 - **Android 前台定位服务**：GPS 持续上报 + 系统通知，通知栏可直接"连接 / 断开"服务器、一键"退出"应用
 - 收到消息 / 群聊事件推送系统通知
 - 按国家 / 地区接收台站筛选，按经纬度 + 半径过滤接收范围（50 / 100 / 200 / 500 / 1000 / 2000 km 快捷预设）
 
 ### 🎨 个性化与体验
-- **多语言**：简体中文 / 繁體中文 / English / 跟随系统，首次启动可选
+- **多语言**：支持 6 种界面语言（简体中文 / 繁體中文 / English / 日本語 / Bahasa Indonesia / Español / 跟随系统），首次启动可选
 - **深色模式** + 自定义主题色，即时生效
 - **界面缩放**（85% ~ 130%，滑块 + 预设快捷），一键重新加载界面
 - **六步引导向导（OOBE）**：语言 → 欢迎 → 呼号 / SSID → 符号 → 接收筛选 → 服务器连接，上手零门槛
 - 详情页 / 设置页丰富的交互彩蛋
 
 ### 📱 桌面小组件（Android）
-- **可自由缩放**，按主屏空间自动换布局，共 4 档：
-  - **4×2 主面板**：左大温度 + 右 2×2 指标格 + 底部 2 条提示
-  - **2×4 小面板**：竖长排布，提示可堆叠 3~5 条（最接近 App 内天气面板）
-  - **2×2 紧凑档**：温度 + 天气 + 只给「最要紧」的那一条提示
-  - **4×1 单行档**：一整条通栏，温度 + 天气 + 今日高低温 + 一条提示
-- **业余无线电操作提示**：与 App 内天气面板**同一套判定规则**（安全警示 → 注意 → 通联机会 → 操作提示），危险级用红色圆点与红底标出
-- **指标按天气排序**：雾天先看能见度、雨雪天先看降水量、低温先看露点、常规看气压 —— 格子少所以分主次，而不是平铺一份通用清单
-- **背景渐变随天气（7 档）与系统深色模式变化**，配色与天气面板同源
-- 顶栏显示**观测时刻**（数据不新鲜时一眼可见，不假装总是最新）；点整块打开 App
+- **三款独立小组件**，适配不同使用场景：
+  - **天气面板小组件**：可自由缩放（4×2 主面板 / 2×4 竖长 / 2×2 紧凑 / 4×1 单行通栏），业余无线电操作提示随天气动态切换，背景随天气与系统深色模式自适应渐变
+  - **链路与系统状态小组件**：直观展示 APRS-IS / TNC / 音频 / PKWDWPL / Icom 直连状态与当前连接呼号
+  - **短波传播小组件**：实时呈现地磁 K 指数、太阳通量（SFI）、太阳黑子数（SSN）与 HF 各波段传播预测建议
 
 ### 🚀 自动更新
 - 应用内检查更新，支持 **GitHub / GitCode** 双渠道切换
@@ -133,11 +130,11 @@
 
 | 平台 | 状态 | 说明 |
 |------|------|------|
-| **Android** | ✅ 完整支持 | 最低 Android 5.0，APK 直装 |
+| **Android** | ✅ 完整支持 | 最低 Android 7.0 (API 24)，APK 直装 |
 | **Windows** | ✅ 完整支持 | 绿色单文件 EXE + Inno Setup 安装包 |
 | **iOS** | 🧪 可构建 | CI 已支持编译（无签名验证），需自行签名部署 |
 | **Linux** | 🔧 工程就绪 | Flutter Linux runner 已配置 |
-| **macOS** | 🔧 工程就绪 | Flutter macOS runner 已配置 |
+| **macOS** | 🧪 可构建 | CI 已支持自动化构建与打包（.app / zip 无签名，自用/测试分发） |
 | **Web** | 🔧 工程就绪 | WebSocket 连接 APRS-IS，自动定位暂未支持（可手动输入坐标） |
 
 > 最新测试版安装包请在 [GitHub Releases](https://github.com/dariondong/APRSLocus/releases) 页面获取。
@@ -149,7 +146,7 @@
 ### Android
 1. 下载 `APRSLocus_<版本号>.apk`
 2. 允许"安装未知来源"后安装
-3. 最低支持 Android 5.0
+3. 最低支持 Android 7.0 (API 24)
 
 ### Windows
 1. 下载 `APRSlocus-<版本号>-setup.exe`（Inno Setup 安装包）或绿色单文件 EXE
@@ -163,23 +160,24 @@
 
 | 步骤 | 内容 |
 |------|------|
-| 1️⃣ | 选择界面语言（简体中文 / 繁體中文 / English / 跟随系统） |
+| 1️⃣ | 选择界面语言（简体中文 / 繁體中文 / English / 日本語 / 印尼语 / 西班牙语 / 跟随系统） |
 | 2️⃣ | 欢迎页：了解核心功能，建议先试用**演示模式** |
 | 3️⃣ | 输入你的业余无线电**呼号**（如 `BG7LZQ-3`）并选择 **SSID 后缀**（移动端建议 `3`，手持台建议 `7`） |
 | 4️⃣ | 选择代表台站类型的**符号**（汽车 / 房屋 / 人 / 卡车 / 自行车 / 房车 / 气象站 / 警局） |
 | 5️⃣ | 按国家 / 地区选择**接收台站**（默认中国），可开启"其他台站"接收中继 / 气象 / FMO / APRSlocus |
-| 6️⃣ | 配置服务器与 **Passcode**，完成即自动连接 APRS-IS 并开始上报位置 |
+| 6️⃣ | 配置服务器与 **Passcode**（**可以留空**：留空 = 不连接任何服务器）；填了就自动连接并开始上报位置 |
 
 > **关于 Passcode**：密码填 `-1` 即可连接，但**未验证的 Passcode 无法正常收发消息**。建议到 [APRS Passcode 查询](https://aprs.cool/AprsPG) 生成你的专属 Passcode 并填入。
 
-完成引导后，应用会自动连接 APRS-IS 服务器并开始上报位置、接收周边台站。
+完成引导后，**如果你填了服务器**，应用会自动连接并开始上报位置、接收周边台站；**留空则不连接任何服务器**（也能用蓝牙 TNC / 声卡音频 / PKWDWPL / Icom 电台直连，随时可在设置里改）。
 
 ---
 
 ## 📚 使用指南
 
 ### 🗺️ 地图页
-- 切换地图类型：设置 → 显示 → 地图类型（高德 / 高德卫星 / 矢量 / Carto 系列 / OSM 系列 / OpenTopo / Esri）
+- 切换地图类型：设置 → 显示 → 地图类型（高德 / 腾讯 / 百度 / 矢量 / Carto 系列 / OSM 系列 / 地形系列 / 天地图系列 / Esri）
+- 离线地图：设置 → 数据 → 离线地图（按矩形区域下载与离线浏览）
 - 开启台站聚合：地图控制栏聚合开关
 - 显示 / 隐藏自身轨迹与选中台站轨迹
 - 顶部搜索框按呼号快速定位台站，点击台站 Marker 查看详情
@@ -204,11 +202,13 @@
 | 分区 | 主要选项 |
 |------|----------|
 | **电台** | 呼号、SSID、符号、备注、显示信息、网格、当前位置 |
-| **定位 / 信标** | GPS 来源、信标开关、上报间隔、上报内容（速度 / 航向 / 电量）、手动定位、地图选点 |
+| **定位 / 信标** | GPS 来源、信标开关、智能信标（按转弯/距离）、上报间隔、上报内容（速度 / 航向 / 电量）、手动定位、地图选点 |
 | **连接** | 服务器地址、端口、Passcode、WebSocket URL、接收范围过滤（经纬度 + 半径）、最大台站数 |
-| **显示** | 深色模式、自定义主题色、语言切换、界面缩放、重新加载界面、地图类型 |
-| **数据** | 数据包 / 台站 / 消息历史管理 |
-| **高级** | 开发者模式、重新运行设置向导、调试日志、检查更新 |
+| **显示** | 深色模式、自定义主题色、界面材质（磨砂玻璃 / 云母）、语言切换、界面缩放、地图类型 |
+| **设备** | 蓝牙 / 串口 TNC、声卡音频（AFSK 1200）、PKWDWPL 航点、Icom 电台直连（IC-705 / IC-9700 / IC-7610 / IC-905） |
+| **数据** | 数据包 / 台站 / 消息历史管理、离线地图瓦片管理、ADIF 日志导出、备份与恢复 |
+| **高级** | 开发者模式、重新运行设置向导、调试日志、佳明 LiveTrack 联动、蓝牙心率带、聊天翻译 |
+| **更新** | 独立检查更新入口（支持 GitHub / GitCode 双渠道） |
 
 ---
 
@@ -219,7 +219,7 @@
 APRSlocus 发送的位置信标遵循 APRS 1.0 标准：
 
 ```
-BG7LZQ-3>APALOC,TCPIP*:!2148.90N/11049.14E/> /A=000328 090/050 Bat:70% APRSlocus v1.6.18
+BG7LZQ-3>APALOC,TCPIP*:!2148.90N/11049.14E/> /A=000328 090/050 Bat:70% APRSlocus v2.0.26
 ```
 
 - 路径中的 `APALOC` 标识本台站使用 APRSlocus 软件
@@ -244,12 +244,12 @@ BG7LZQ-3>APALOC,TCPIP*:!2148.90N/11049.14E/> /A=000328 090/050 Bat:70% APRSlocus
 | 类别 | 技术 |
 |------|------|
 | **框架** | [Flutter](https://flutter.dev)（Dart 3.x） |
-| **地图** | [高德地图](https://lbs.amap.com)（瓦片）、[flutter_map](https://pub.dev/packages/flutter_map)、[vector_map_tiles](https://pub.dev/packages/vector_map_tiles)、Carto、OpenStreetMap、OpenTopoMap、Esri ArcGIS |
+| **地图** | [高德地图](https://lbs.amap.com)（瓦片）、[天地图](https://www.tianditu.gov.cn)（瓦片）、[flutter_map](https://pub.dev/packages/flutter_map)、[vector_map_tiles](https://pub.dev/packages/vector_map_tiles)、Carto、OpenStreetMap、OpenTopoMap、Esri ArcGIS |
 | **网络** | APRS-IS（TCP Socket / WebSocket） |
 | **协议** | APRS 1.0（位置 / 消息 / 气象 / 状态 / 物体 / Mic-E 等） |
 | **定位** | Android FusedLocationProvider + 前台服务 |
-| **国际化** | flutter_localizations + ARB（简体中文 / 繁體中文 / English） |
-| **CI / 发版** | GitHub Actions（Windows / Android / iOS 构建 + Release 自动发版） |
+| **国际化** | flutter_localizations + ARB（简体中文 / 繁體中文 / English / 日本語 / 印尼语 / 西班牙语） |
+| **CI / 发版** | GitHub Actions（Windows / Android / iOS / macOS 构建 + Release 自动发版） |
 
 ---
 
@@ -260,18 +260,28 @@ APRSLocus/
 ├── lib/                      # Flutter 应用源码
 │   ├── main.dart             # 入口
 │   ├── app.dart              # 应用根组件（主题 / 语言 / 缩放）
-│   ├── home_page.dart        # 主界面（5 Tab：地图 / 台站 / 消息 / 数据包 / 设置）
+│   ├── home_page.dart        # 主界面 1.0 外壳（5 Tab：地图 / 台站 / 消息 / 数据包 / 设置）
+│   ├── shell2.dart           # 主界面 2.0 外壳（沉浸地图基底 + 胶囊导航）
 │   ├── map_page.dart         # 地图页
 │   ├── vector_map.dart       # 矢量地图（flutter_map）
-│   ├── tile_map.dart         # 瓦片地图（高德 / Carto / OSM / OpenTopo / Esri）
+│   ├── tile_map.dart         # 瓦片地图（高德 / 腾讯 / 百度 / Carto / OSM / 地形 / 天地图 / Esri）
+│   ├── offline_map_page.dart # 离线地图管理页
 │   ├── stations_page.dart    # 台站列表
 │   ├── station_detail.dart   # 台站详情
 │   ├── messages_page.dart    # 消息页（单聊 + 群聊）
 │   ├── packets_page.dart     # 原始数据包页
 │   ├── log_page.dart         # 调试日志页
 │   ├── oobe_page.dart        # 首次启动引导向导
-│   ├── settings_page.dart    # 设置首页
+│   ├── settings_page.dart    # 设置首页（8 大分类入口）
 │   ├── settings_pages.dart   # 各设置子页
+│   ├── device_page.dart      # 外设与电台总览页
+│   ├── ic705_device_page.dart# Icom 电台直连设置页
+│   ├── tnc_device_page.dart  # 蓝牙 / 串口 TNC 设置页
+│   ├── audio_page.dart       # 声卡音频 AFSK 设置页
+│   ├── pkwdwpl_device_page.dart# Kenwood PKWDWPL 航点设置页
+│   ├── export_adif_page.dart # ADIF 日志导出页
+│   ├── garmin_page.dart      # 佳明 LiveTrack 联动
+│   ├── track_history_page.dart# 历史轨迹回放页
 │   ├── check_update_page.dart# 检查更新页
 │   ├── about_page.dart       # 关于页
 │   ├── sponsor_page.dart     # 赞助与鸣谢页
@@ -279,10 +289,10 @@ APRSLocus/
 │   ├── models.dart           # 数据模型（台站 / 消息 / 群聊 / 符号）
 │   ├── services.dart         # 定位服务 + APRS 包格式化
 │   ├── aprs_parse.dart       # APRS 报文解析
-│   ├── coord.dart            # WGS-84 / GCJ-02 坐标转换
+│   ├── coord.dart            # WGS-84 / GCJ-02 / BD-09 坐标转换
 │   ├── theme.dart            # 主题与样式
-│   ├── l10n/                 # 国际化资源（中 / 英）
-│   └── net/                  # APRS-IS 连接器（TCP / WebSocket）
+│   ├── l10n/                 # 国际化资源（中 / 繁 / 英 / 日 / 印尼 / 西班牙）
+│   └── net/                  # 网络与通信层（APRS-IS / Icom LAN / 音频 WinMM / TNC）
 ├── android/                  # Android 工程
 ├── ios/                      # iOS 工程
 ├── linux/                    # Linux 工程
@@ -319,7 +329,7 @@ flutter pub get
 ```bash
 flutter build windows --release
 # 使用 Inno Setup 打包（版本号自动跟随 pubspec.yaml）
-ISCC /DMyAppVersion=1.6.18 installer.iss
+ISCC /DMyAppVersion=2.0.26 installer.iss
 ```
 
 ### 构建 Android APK
@@ -340,7 +350,7 @@ flutter build ios --release --no-codesign
 ```
 
 ### 版本号
-- 应用版本统一维护于 `pubspec.yaml`（`version: 1.6.18+10618`）
+- 应用版本统一维护于 `pubspec.yaml`（`version: 2.0.26+20026`）
 - 打 `v*` tag 推送后，[GitHub Actions](.github/workflows/build-release.yml) 自动构建 Windows / Android / iOS 并发布 Release，更新日志自动从 `CHANGELOG.md` 提取
 
 ---
@@ -362,7 +372,7 @@ flutter build ios --release --no-codesign
 <details>
 <summary><b>Q：连接失败 / 频繁掉线？</b></summary>
 
-应用内置渐进式重连（8 → 16 → 32 → 60 秒）。若持续失败，请检查网络、确认服务器地址（默认 `rotate.aprs2.net:14580`）与端口是否被拦截，或在"连接设置"中更换服务器后点击"重新连接"。
+应用内置渐进式重连（8 → 16 → 32 → 60 秒）。若持续失败，请检查网络、确认服务器地址（你填的那个）与端口是否被拦截，或在"连接设置"中更换服务器后点击"重新连接"。
 </details>
 
 <details>
@@ -394,10 +404,11 @@ Android 端使用前台服务持续定位以保持 APRS 在线，可在"定位 /
 ## 🙏 致谢与贡献
 
 - [高德地图](https://lbs.amap.com) — 地图瓦片 / JS API 服务
+- [天地图](https://www.tianditu.gov.cn) — 国家地理信息公共服务平台底图瓦片
 - [APRS-IS](https://aprs-is.net) — 全球 APRS 数据网络
 - [flutter_map](https://pub.dev/packages/flutter_map) / [vector_map_tiles](https://pub.dev/packages/vector_map_tiles) — 矢量地图渲染
 - [OpenFreeMap](https://openfreemap.org) — 免费矢量瓦片底图
-- **BD3QID** — 国际化（i18n）贡献
+- **BD3QID (nimenhagg)** — 国际化（i18n）及 Icom 电台 Wi-Fi / 以太网直连（IC-705 / IC-9700 / IC-7610 / IC-905 LAN / CI-V）贡献
 - **BA4UAX** — 繁体中文翻译
 - **BA7KSM** — 翻译
 - **imThree** — Bug 提交与反馈
@@ -419,6 +430,7 @@ Android 端使用前台服务持续定位以保持 APRS 在线，可在"定位 /
 | **GitCode 仓库** | https://gitcode.com/DarionDong/APRSLocus |
 | **作者网站** | https://theez.top |
 | **QQ 交流群** | https://qm.qq.com/q/8pL6vc5YA0 |
+| **Discord 社群** | https://discord.gg/CqUKYJUfU |
 
 ---
 

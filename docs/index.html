@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>APRSlocus — APRS 定位追踪与地图</title>
-<meta name="description" content="APRSlocus：给业余无线电爱好者用的 APRS 客户端。打开就能看到附近的台站，位置、消息、信标都在同一张图上，Android 和 Windows 都能跑。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="description" content="APRSlocus —— 业余无线电爱好者用的 APRS 客户端，一个在本机运行的免费工具。它不提供、也不预置任何服务器地址：要联网请自行填写 APRS-IS 服务器，或改用蓝牙 / 串口 TNC、声卡音频与 Icom 电台直连。台站、消息与信标都在同一张地图上，Android / Windows 可用。">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="APRSlocus — APRS 定位追踪与地图">
-<meta property="og:description" content="给业余无线电爱好者用的 APRS 客户端：附近台站、位置消息、信标都在同一张图上，Android 和 Windows 都能跑。">
+<meta property="og:description" content="APRSlocus —— 业余无线电爱好者用的 APRS 客户端，一个在本机运行的免费工具。它不提供、也不预置任何服务器地址：要联网请自行填写 APRS-IS 服务器，或改用蓝牙 / 串口 TNC、声卡音频与 Icom 电台直连。台站、消息与信标都在同一张地图上，Android / Windows 可用。">
 <meta property="og:url" content="https://aprslocus.theez.top/">
 <meta property="og:image" content="https://aprslocus.theez.top/assets/logo.png">
 <meta property="og:image:width" content="192">
@@ -19,19 +19,18 @@
 <meta property="og:locale:alternate" content="en_US">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="APRSlocus — APRS 定位追踪与地图">
-<meta name="twitter:description" content="给业余无线电爱好者用的 APRS 客户端，Android 和 Windows 都能跑。">
+<meta name="twitter:description" content="APRSlocus —— 业余无线电爱好者用的 APRS 客户端（本机工具）。不提供、也不预置任何服务器地址：服务器与连接方式由你自己填写。">
 <meta name="twitter:image" content="https://aprslocus.theez.top/assets/logo.png">
 <script>
-/* 主题：localStorage 优先，否则跟随系统。必须在首帧前执行，
-   否则深色偏好用户会先闪一下白屏（CSS 键在 <html data-theme> 上）。 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）。
+   必须在首帧前执行，否则会闪一下亮底（token 的键在 <html data-theme> 上）。 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -56,11 +55,16 @@
 <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/">
 <link rel="canonical" href="https://aprslocus.theez.top/">
 <link rel="icon" type="image/png" href="assets/favicon.png">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/hero-3d.css?v=27">
+<link rel="stylesheet" href="css/motion.css?v=1">
+<link rel="stylesheet" href="css/nav.css?v=2">
+<link rel="stylesheet" href="css/features.css?v=5">
+<link rel="stylesheet" href="css/ui2.css?v=1">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 </head>
 <body>
-<a class="skip-link" href="#features">跳到主要内容</a>
+<a class="skip-link" href="#main">跳到主要内容</a>
 
 <!-- ═══════════ 进入动画：启动遮罩 ═══════════ -->
 <div class="preloader" id="preloader" aria-hidden="true">
@@ -70,7 +74,7 @@
     <div class="pre-bar"><i></i></div>
   </div>
 </div>
-<noscript><style>.preloader{display:none}.hero-copy>*,.hero-phone{opacity:1!important;transform:none!important}</style></noscript>
+<noscript><style>.preloader{display:none}.hero-copy>*,.planet-canvas{opacity:1!important;transform:none!important}</style></noscript>
 
 <div class="scroll-progress" id="scrollProgress"></div>
 
@@ -91,16 +95,27 @@
     </a>
     <nav class="nav-links" id="navLinks">
       <a href="promo.html" class="nav-new">2.0 宣传</a>
-      <a href="#announce">公告</a>
       <a href="#features">功能</a>
       <a href="#ui2">界面</a>
-      <a href="#platforms">平台</a>
-      <a href="#changelog">更新</a>
-      <a href="#getting-started">上手</a>
-      <a href="#faq">问答</a>
       <a href="manual/index.html">手册</a>
-      <a href="#community">社区</a>
-      <a href="guide.html">解说</a>
+      <!-- 2.0 时这里横着排了 13 个链接：窄屏挤成一团，大屏也是两排小字。
+           收成一个「更多」：常用的四个留在外面，其余进面板 —— 链接一个没少。 -->
+      <div class="nav-more" id="navMore">
+        <button class="nav-more-btn" id="navMoreBtn" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="navMoreList">
+          更多<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div class="nav-more-list" id="navMoreList">
+          <a href="#announce">公告</a>
+          <a href="#platforms">平台</a>
+          <a href="#changelog">更新</a>
+          <a href="#getting-started">上手</a>
+          <a href="#faq">问答</a>
+          <a href="guide.html">解说</a>
+          <a href="card.html">名片</a>
+          <a href="#community">社区</a>
+          <a href="#friends">友链</a>
+        </div>
+      </div>
       <a class="nav-cta" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">下载 2.0</a>
       <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false" aria-label="切换深色模式" title="切换深色模式" data-label-dark="切换浅色模式" data-label-light="切换深色模式"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
       <span class="lang-switch-group"><a class="lang-switch" href="./" hreflang="zh-Hans">简中</a><a class="lang-switch" href="zh-TW/" hreflang="zh-Hant">繁中</a><a class="lang-switch" href="en/" hreflang="en">EN</a></span>
@@ -112,409 +127,344 @@
 </header>
 
 <style>
-.hero-phone .phone-screen>.ph-shot{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:30;background:#F4F7FC}
-.hero-phone .phone-notch{display:none}
-.hero-phone .phone{background:linear-gradient(150deg,#525b6e,#2b3242 40%,#0c0f16);border:none;aspect-ratio:900/1900}
-.hero-phone .deskwin{display:none!important}
-.hero-phone{display:flex;align-items:center;justify-content:center;height:auto;min-height:700px;overflow:visible}
-.hero-phone .phone{position:relative;right:auto;bottom:auto;width:min(360px,86%);aspect-ratio:9/19}
-.hero-phone::after{display:none}
 .nav-links{flex-wrap:nowrap;gap:2px}
 .nav-links>a{padding:9px 11px;font-size:14px}
 html{overflow-x:hidden}
 </style>
 
+<!-- ═══════════ 主体内容：hero → 友链 ═══════════ -->
+<main id="main">
+
 <!-- ═══════════ HERO ═══════════ -->
 <section class="hero" id="hero">
-  <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
-  <div class="hero-grid"></div>
+  <!-- 装饰层：网格、星尘、3D 星球、以及没有 WebGL 时的静态球，全都在这一层。
+       整层不吃指针事件（星球是只看不摸的画面，不接拖动、不接焦点），
+       hero 的直接子元素就只剩三块：装饰层 → 文案 → 向下那个箭头。 -->
+  <div class="hero-decor">
+    <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
+    <div class="hero-grid"></div>
+
+    <!-- 3D 星球：直接长在 hero 上的一层透明点云（无边框、无底色），只看不摸 -->
+    <canvas class="planet-canvas" id="planetCanvas" role="img"
+            aria-label="3D 星球：APRS 台站分布、环带与卫星轨道示意"></canvas>
+    <div class="planet-fallback" aria-hidden="true"><i class="pf-globe"></i><i class="pf-ring"></i></div>
+  </div>
 
   <div class="hero-inner">
+
     <div class="hero-copy">
-      <span class="hero-badge"><span class="pulse-dot"></span><b>APRSlocus 2.0</b><span class="sep"></span><span class="rel-tag">TOUCH SKY</span></span>
-      <div class="hero-wordmark">TOUCH SKY</div>
-      <p class="hero-slogan">APRS <span class="grad">定位追踪</span> 与 <span class="grad">地图</span></p>
-      <p class="hero-sub">
-        一个给业余无线电爱好者用的 APRS 客户端。<br>
-        打开就能看到附近的台站，位置、消息、信标都在同一张图上，Android 和 Windows 都能跑。
-      </p>
-      <div class="hero-release" id="heroRelease" style="display:inline-flex;align-items:center;gap:12px;margin:8px 0 6px;padding:12px 18px;border-radius:16px;background:var(--glass);border:1px solid var(--line);box-shadow:0 12px 30px rgba(45,70,120,.14);backdrop-filter:blur(14px)">
-        <span id="hrIcon" style="font-size:20px">✅</span>
-        <span>
-          <b style="font-size:14px">APRSlocus 2.0 <span id="hrState" style="color:#0369a1">已发布</span></b>
-          <span id="hrTimer" style="display:block;font-size:12.5px;color:#5b6b85">2.0 已发布 · <a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener" style="color:#0369a1;font-weight:700">立即下载 →</a></span>
-        </span>
-      </div>
-      <div class="hero-actions">
-        <a class="btn btn-primary" id="heroDownload" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
-          <i class="fa-solid fa-mobile-screen"></i>
-          <span id="heroDlText">下载 2.0 最新版</span>
-        </a>
-        <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
-          <i class="fa-solid fa-desktop" style="width:20px;height:20px"></i>
-          Windows 安装包
-        </a>
-        <a class="btn btn-text" href="promo.html">2.0 宣传页<svg viewBox="0 0 24 24"><path d="M8 5l7 7-7 7V5z"/></svg></a>
-        <a class="btn btn-text" href="#getting-started">开始使用<svg viewBox="0 0 24 24"><path d="M8 5l7 7-7 7V5z"/></svg></a>
-      </div>
-      <div class="hero-meta">
-        <span>APRS-IS · TNC · 音频 · PKWDWPL 四种来源</span>
-        <span>Android / Windows</span>
-      </div>
+      <!-- 第一屏只有这一件事：那个数字（APRSlocus 累计转发报文总量，数值源 stats.json）；"这是什么"的说明在折线之下 -->
+        <div class="hero-stat" id="heroTelemetry"
+             data-stats="stats.json" data-packets="1014641" data-rate="27"
+             data-updated="2026-10-26T19:28:00+08:00">
+          <span class="hs-label">APRSlocus 累计转发报文</span>
+          <span class="tl-value" id="tlPackets">1,014,641</span>
+        </div>
     </div>
 
-    <!-- 手机 + 桌面窗口：交错重叠展示（手机在前、桌面窗口垫后） -->
-    <div class="hero-phone">
-      <!-- 手机模拟器（窄屏布局：系统状态栏 + 应用顶栏 + 地图控件 + 底部 5 Tab） -->
-      <div class="phone">
-        <div class="phone-notch"></div>
-        <div class="phone-screen">
-          <img class="ph-shot" src="assets/hero-2.0.png" alt="APRSlocus 2.0 界面" width="900" height="1900">
-          <div class="ph-statusbar">
-            <span class="ph-time">14:28</span>
-            <span class="ph-sig">
-              <i class="sig"></i><i class="sig"></i><i class="sig"></i><i class="sig"></i>
-              <svg viewBox="0 0 24 24"><path d="M8 12l4 3-4 3v-2H4v-2h4v-2zm8-8 6 6-6 6v-3h-4v-2h4V4z"/></svg>
+    <div class="hero-copy-next">
+      <!-- 折线之下才是「这是什么」：滚上来才淡出（站点的 .reveal） -->
+      <div class="hero-intro reveal" data-delay="0">
+        <!-- 页面唯一的 h1：品牌名（连版本与口号）。下面那句巨型主题字是同一句口号的
+             放大版，重复一遍对读屏没有信息量，标成装饰。 -->
+        <h1 class="hero-badge"><span class="pulse-dot" aria-hidden="true"></span><b>APRSlocus 2.0</b><span class="sep" aria-hidden="true"></span><span class="rel-tag">TOUCH SKY</span></h1>
+        <div class="hero-wordmark" aria-hidden="true">TOUCH SKY</div>
+        <p class="hero-slogan">APRS <span class="grad">定位追踪</span> 与 <span class="grad">地图</span></p>
+        <p class="hero-sub">
+          一个业余无线电爱好者用的 APRS 客户端 —— 在本机运行的工具。<br>
+          不提供、也不预置任何服务器地址：要联网请自行填写 APRS-IS 服务器，
+          或改用蓝牙 TNC / 声卡音频 / Icom 电台直连。
+        </p>
+        <p class="hero-invite">
+          <span class="hi-mark" aria-hidden="true">✦</span>上面那个数字，是全世界 APRS 台站累计转发过的报文总量 —— 电波穿过夜空，最后都落在这颗星球上，下一格等你来补。
+        </p>
+      </div>
+
+      <!-- 再往下：真正要动手的那一块（版本卡 + 下载按钮 + 来源） -->
+        <div class="hero-cta reveal" data-delay="0">
+          <p class="hero-release">
+            <span class="hr-icon" aria-hidden="true">✅</span>
+            <span class="hr-body">
+              <b class="hr-name">APRSlocus 2.0 <span class="hr-state">已发布</span></b>
+              <span class="hr-note">2.0 已发布 · <a class="hr-link" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">立即下载 →</a></span>
             </span>
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" id="heroDownload" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
+              <i class="fa-solid fa-mobile-screen" aria-hidden="true"></i>
+              <span id="heroDlText">下载 2.0 最新版</span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
+              <i class="fa-solid fa-desktop" aria-hidden="true"></i>
+              Windows 安装包
+            </a>
+            <a class="btn btn-ghost" href="https://aprslocushk.oss.theez.top/APRSLocus_2.1.5.apk" target="_blank" rel="noopener">
+              <i class="fa-solid fa-cloud-arrow-down" aria-hidden="true"></i>
+              快速镜像下载
+            </a>
+            <a class="btn btn-text" href="promo.html">2.0 宣传页<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5l7 7-7 7V5z"/></svg></a>
+            <a class="btn btn-text" href="#getting-started">开始使用<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5l7 7-7 7V5z"/></svg></a>
           </div>
-          <div class="ph-appbar">
-            <b>地图</b>
-            <span class="ph-stat g"><i class="dot"></i><span class="skel-tag-short"></span></span>
-          </div>
-          <div class="ph-map" id="phoneMap">
-            <div class="ph-grid"></div>
-            <div class="ph-chip"><span class="skel-chip"><i></i><span class="w20"></span></span><span class="skel-chip"><i></i><span class="w20"></span></span><span class="skel-chip"><i></i><span class="w20"></span></span></div>
-            <div class="ph-legend">
-              <span class="skel-chip"><i></i><span class="w30"></span></span>
-              <span class="skel-chip"><i></i><span class="w30"></span></span>
-              <span class="skel-chip"><i></i><span class="w30"></span></span>
-              <span class="skel-chip"><i></i><span class="w30"></span></span>
-            </div>
-            <div class="ph-rcol">
-              <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2l9 3-9 3-9-3 9-3zm-9 6l9 3 9-3v4l-9 3-9-3V8zm0 6l9 3 9-3v4l-9 3-9-3v-4z"/></svg></i>
-              <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M3 5v14l8-7L3 5zm9 7 8 7V5l-8 7z"/></svg></i>
-              <i class="rbtn zoom up">+</i>
-              <i class="rbtn zoom dn">−</i>
-              <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M5 7.5h9a4 4 0 0 1 0 8H5v2h9a6 6 0 0 0 0-12H5v2zM5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm14 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></i>
-              <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-4-8a4 4 0 1 0 8 0 4 4 0 0 0-8 0zm4 2a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg></i>
-              <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-13h2v3h3v2h-3v3h-2v-3H8v-2h3V7z"/></svg></i>
-            </div>
-            <div class="ph-marker" style="left:26%;top:30%"><i class="p-online"></i><span class="skel-call"></span></div>
-            <div class="ph-marker" style="left:62%;top:24%"><i class="p-moving"></i><span class="skel-call"></span></div>
-            <div class="ph-marker" style="left:72%;top:58%"><i class="p-stopped"></i><span class="skel-call"></span></div>
-            <div class="ph-marker" style="left:38%;top:66%"><i class="p-fmo"></i><span class="skel-call"></span></div>
-            <div class="ph-self"></div>
-            <div class="ph-trail"></div>
-            <div class="ph-coord"><span class="sc"></span><span class="skel-bar"></span><i class="vd"></i><span class="skel-bar"></span><i class="vd"></i><span class="skel-bar"></span><i class="datum"></i></div>
-          </div>
-          <div class="ph-nav">
-            <span class="on"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>地图</span>
-            <span><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6c0 4-3 7-6 10-3-3-6-6-6-10a6 6 0 0 1 6-6zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>台站</span>
-            <span><svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V4z"/></svg>消息<i class="dot">2</i></span>
-            <span><svg viewBox="0 0 24 24"><path d="M7 2h10l2 2v18H5V4l2-2zm3 2v4h4V4h-4zm-3 8v2h10v-2H7zm0 4v2h10v-2H7z"/></svg>数据包</span>
-            <span><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.8 7.2 17l.9-5.4L4.2 7.7l5.4-.8L12 2zm0 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>设置</span>
+          <div class="hero-meta">
+            <span>APRS-IS · TNC · 音频 · PKWDWPL 四种来源</span>
+            <span>Android / Windows</span>
           </div>
         </div>
-      </div>
-      <div class="phone-glow"></div>
-
-      <!-- Windows 桌面窗口（横屏宽屏布局：标题栏 + 侧栏 + 顶栏 + 地图，骨架填充） -->
-      <div class="deskwin">
-        <div class="dw-title">
-          <img class="dw-logo" src="assets/logo.png" alt="">
-          <b>APRSlocus</b>
-          <div class="dw-ctrls"><i class="min"></i><i class="max"></i><i class="close"></i></div>
-        </div>
-        <div class="dw-body">
-          <div class="dw-side">
-            <div class="dw-brand">
-              <img src="assets/logo.png" alt="">
-              <div><b>APRSlocus</b><em>APRS 定位追踪</em></div>
-            </div>
-            <div class="dw-nav">
-              <a class="on"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>地图</a>
-              <a><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6c0 4-3 7-6 10-3-3-6-6-6-10a6 6 0 0 1 6-6zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>台站</a>
-              <a><svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V4z"/></svg>消息</a>
-              <a><svg viewBox="0 0 24 24"><path d="M7 2h10l2 2v18H5V4l2-2zm3 2v4h4V4h-4zm-3 8v2h10v-2H7zm0 4v2h10v-2H7z"/></svg>数据包</a>
-              <a><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.8 7.2 17l.9-5.4L4.2 7.7l5.4-.8L12 2z"/></svg>设置</a>
-            </div>
-            <div class="dw-my">
-              <div class="dw-my-head">
-                <i class="dw-my-ic"><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6c0 4-3 7-6 10-3-3-6-6-6-10a6 6 0 0 1 6-6zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></i>
-                <div class="skel-line w60"></div>
-                <i class="skel-dot"></i>
-              </div>
-              <div class="dw-my-row"><span class="skel-line w40"></span><span class="push"><span class="skel-line w30"></span></span></div>
-              <div class="dw-my-row"><span class="skel-dot g"></span><span class="skel-line w50"></span><span class="push"><span class="skel-dot g"></span><span class="skel-line w30"></span></span></div>
-              <div class="dw-my-row"><span class="skel-line w35"></span><span class="push"><span class="skel-line w25"></span></span></div>
-              <div class="dw-my-ops"><span class="skel-btn"></span><span class="skel-btn"></span></div>
-            </div>
-          </div>
-          <div class="dw-main">
-            <div class="dw-top">
-              <b>地图</b>
-              <div class="dw-search">
-                <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 1 0 4.9 14.3l5 5 1.4-1.4-5-5A8 8 0 0 0 10 2zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"/></svg>
-                <input placeholder="搜索呼号 / 台站" readonly>
-              </div>
-              <span class="dw-stat g"><span class="skel-tag"></span></span>
-              <span class="dw-stat b"><span class="skel-tag"></span></span>
-              <span class="dw-stat s"><span class="skel-tag"></span></span>
-            </div>
-            <div class="dw-map">
-              <div class="ph-grid"></div>
-              <div class="dw-chip"><span class="skel-chip"><i></i><span class="w20"></span></span><span class="skel-chip"><i></i><span class="w20"></span></span><span class="skel-chip"><i></i><span class="w20"></span></span></div>
-              <div class="dw-legend">
-                <span class="skel-chip"><i></i><span class="w30"></span></span>
-                <span class="skel-chip"><i></i><span class="w30"></span></span>
-                <span class="skel-chip"><i></i><span class="w30"></span></span>
-                <span class="skel-chip"><i></i><span class="w30"></span></span>
-              </div>
-              <div class="dw-rcol">
-                <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2l9 3-9 3-9-3 9-3zm-9 6l9 3 9-3v4l-9 3-9-3V8zm0 6l9 3 9-3v4l-9 3-9-3v-4z"/></svg></i>
-                <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M3 5v14l8-7L3 5zm9 7 8 7V5l-8 7z"/></svg></i>
-                <i class="rbtn zoom up">+</i>
-                <i class="rbtn zoom dn">−</i>
-                <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M5 7.5h9a4 4 0 0 1 0 8H5v2h9a6 6 0 0 0 0-12H5v2zM5 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm14 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></i>
-                <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-4-8a4 4 0 1 0 8 0 4 4 0 0 0-8 0zm4 2a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg></i>
-                <i class="rbtn"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-13h2v3h3v2h-3v3h-2v-3H8v-2h3V7z"/></svg></i>
-              </div>
-              <div class="dw-marker" style="left:26%;top:32%"><i class="p-online"></i><span class="skel-call"></span></div>
-              <div class="dw-marker" style="left:62%;top:24%"><i class="p-moving"></i><span class="skel-call"></span></div>
-              <div class="dw-marker" style="left:74%;top:56%"><i class="p-stopped"></i><span class="skel-call"></span></div>
-              <div class="dw-marker" style="left:40%;top:64%"><i class="p-fmo"></i><span class="skel-call"></span></div>
-              <div class="ph-self"></div>
-              <div class="ph-trail"></div>
-              <div class="dw-coord"><span class="sc"></span><span class="skel-bar"></span><i class="vd"></i><span class="skel-bar"></span><i class="vd"></i><span class="skel-bar"></span><i class="datum"></i></div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
+
   </div>
+
 
   <a class="hero-scroll" href="#features" aria-label="向下滚动"><span></span></a>
 </section>
 
 <!-- ═══════════ 公告 · TOUCH SKY ═══════════ -->
 <section class="section announce" id="announce">
-  <div class="announce-card reveal">
-    <div class="announce-ribbon"><span class="ar-dot"></span>公告 · Announcement</div>
+  <div class="section-body">
+    <div class="announce-card reveal">
+      <div class="announce-ribbon"><span class="ar-dot"></span>公告 · Announcement</div>
 
-    <header class="announce-head">
-      <p class="announce-kicker">📡 2.0.9 已发布 · 生命守护测试上线</p>
-      <h2 class="announce-title">生命守护「碰撞与摔倒检测」测试上线<span class="announce-en">v2.0.9 · crash &amp; fall detection (beta)</span></h2>
-      <p class="announce-sub">用手机加速度判断「一次强烈冲击之后你一直没有动静」，检测到就弹提醒并推系统通知栏。它是测试功能、会误报 —— 请先读完注意事项，再决定要不要让它一直开着。</p>
-    </header>
+      <header class="announce-head">
+        <p class="announce-kicker">✅ 安全公告</p>
+        <h2 class="announce-title">审计完成：恢复更新（v2.2.0）<span class="announce-en">Audit complete · 12 Nov 2026</span></h2>
+        <p class="announce-sub">注入的构建流程从未执行，密钥未被读取。v2.2.0 已用新签名证书重建，可恢复更新；因签名变更需卸载重装。</p>
+      </header>
 
-    <div class="announce-body">
-      <p><b>2.0.9 已发布。</b> 这一版把<b>生命守护</b>从「心率异常告警」扩到<b>碰撞与摔倒检测</b> —— 手机感知到一次强烈冲击、而之后你一直没有动静，它就会弹提醒，并推到系统通知栏。</p>
-      <p><b>这是测试功能，请按「可能有用、也可能误报」来用。</b> 下面把判据与注意事项一次说清，读完再决定要不要让它一直开着。</p>
-      <p><b>一、它怎么判断「你可能出事了」</b></p>
-      <p>两段判据，<b>两段都满足</b>才提醒：</p>
-      <p><b>① 冲击</b> —— 去掉重力之后的加速度瞬时超过 <b>3.2 g</b>。车祸与摔倒都会给出这样一个尖峰；急刹这类「持续加速度」不算尖峰（重力已经从读数里分离出去了）。</p>
-      <p><b>② 随后静止</b> —— 冲击之后连续 <b>12 秒</b>几乎没有明显运动。</p>
-      <p>为什么必须有第二段：只看尖峰的话，<b>过减速带、手机掉在桌上、甩一甩</b>全都算，一天响好几次就没人再看了。代价要说明白：<b>轻微碰撞（人还能动）不会提醒</b> —— 这个功能管的是「人已经动不了了」，不是「发生过撞击」。</p>
-      <p>另有两道防抖：应用启动后 <b>20 秒</b>内不做判断（刚拿起来、放下也会产生尖峰）；两次提醒之间至少间隔 <b>3 分钟</b>（一次事故之后会连续出现多个尖峰）。</p>
-      <p><b>二、注意事项（请逐条读）</b></p>
-      <ul class="announce-list"><li><b>它会误报。</b> 过减速带之后正好等红灯停了 12 秒，就满足两段判据。提醒里第一个按钮就是「我没事」，按掉即可，不影响其它功能。</li><li><b>是启发式判断，不是工程级碰撞检测。</b> 阈值固定、不看行车方向、不融合 GPS、不做任何多方确认。</li><li><b>它只提醒，不代替你行动。</b> 拨打急救电话、向附近台站求助，都必须<b>你亲手按</b> —— 应用不会自动拨号，也不会自动发出任何求救。</li><li><b>「向附近台站求助」不是 110 / 120。</b> 它是取 100 公里内最近的 <b>5 个</b> APRSLocus 台站各发一条 `SOS CRASH HR=… 坐标`（心率告警时是 `SOS HR=…`），发送前还会再确认一次。对方<b>不一定在线、不一定看手机</b>；附近没有已知台站就发不出去（界面会如实提示）。</li><li><b>依赖手机硬件与运行状态。</b> 需要手机有加速度计（没有的话页面上会写明「这台设备检测不了」）；加速度计不需要额外授权。<b>系统结束应用进程之后不会有提醒</b> —— 它没有做后台常驻服务。</li><li><b>默认开启</b>，可在<b>设置 → 生命守护</b>关闭。它<b>不需要</b>你开着定位或发射信标：即使不定位，它也继续守着（这是刻意做的，出门骑行常关定位省电）。</li><li><b>请不要把它当作唯一的安全措施。</b> 骑行、驾驶请照常注意安全；真遇到紧急情况，请直接拨打 <b>110 / 120</b>。</li></ul>
-      <p><b>三、原有的心率告警前提没变</b></p>
-      <p>生命守护里原有的<b>心率异常告警</b>照旧：需要<b>外置心率设备已连接、且在正常推数据</b>（蓝牙心率带或佳明 LiveTrack），读数达到或越过你设的上限 / 下限才弹，<b>读数过期不报警</b>。上限、下限与紧急号码都在同一页，改完立即生效。</p>
-      <p><b>四、这一版还修了三处</b></p>
-      <ul class="announce-list"><li><b>步数一直显示「请授权」，其实已经授权了。</b> 读数为 -1 有三种完全不同的原因：没有计步传感器 / 没有活动识别权限 / <b>还没收到第一个硬件事件</b>（没有权限时系统只是不派发事件、并不报错）。之前混为一谈，于是「刚授权还没走过路」被显示成「请授权」。现在分成四态：不支持 / 需授权 / <b>等待数据</b> / 正常。</li><li><b>生命守护页的开关点了没反应</b>（写回了状态，但页面不跟着刷新）。</li><li><b>速度档编辑弹层的「保存」被三大金刚键压住</b> —— 底部现在同时让出键盘与系统导航栏。</li></ul>
-      <p><b>测试期请多反馈。</b> 如果它在不该响的时候响了（或者该响没响），把<b>机型 + 当时的场景</b>（过减速带、急刹、手机掉落……）发到 <a href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">GitHub Issues</a> 就行 —— 这类判据只能靠真实场景来调。</p>
-      <p><b>73！</b></p>
-      <p><b>APRSLocus 开发团队</b></p>
-      <p>2026 年 9 月 29 日</p>
+      <div class="announce-body">
+        <p>2026 年 11 月 12 日的异常提交已审计完毕。结论是：被注入的构建流程一次也没有执行，构建阶段注入的密钥没有被读取。v2.2.0 已用<b>全新签名证书</b>重新构建，可以恢复更新。</p>
+        <p><b>公告级别：已解除 · 最后更新 2026 年 11 月 12 日 18:20</b></p>
+        <p><b>一、审计结论</b></p>
+        <ul class="announce-list"><li>注入的构建流程由 v* 标签触发。两次注入各只存在约 48 秒即被一条 ci: restore 撤回，期间没有任何一次构建被它触发。</li><li>因此构建阶段注入的密钥（含签名证书、对象存储密钥）从未被读取，此前公告中「密钥已暴露」的判断不成立。</li><li>异常提交与诱饵 PR 现均已清除，仓库内无残留文件，工作流与注入前逐字节一致。</li></ul>
+        <p><b>二、这一版必须卸载重装</b></p>
+        <ul class="announce-list"><li>出于谨慎，签名证书仍按「可能已泄露」处理，已整体更换并重新签发。</li><li><b>签名换了，安装包不能覆盖安装。</b> 请先导出备份，再卸载旧版，然后安装 v2.2.0。</li><li>新签名的 SHA-1 与 SHA-256 见下方，可自行核对。</li></ul>
+        <p><b>三、发布包与校验</b></p>
+        <ul class="announce-list"><li>v2.2.0 及以后的安装包都由新证书签名。</li><li>官网与 GitHub Releases 上的 SHA-256 请以官方渠道为准。</li></ul>
+        <p><b>新签名证书指纹</b></p>
+        <p>SHA-1:   BE:7C:EC:BA:1C:8F:9B:78:64:9A:2E:03:5C:D7:62:9E:BA:B1:4A:0C</p>
+        <p>SHA-256: 0F:2C:52:7A:9C:D6:6A:43:A8:71:F3:51:92:C7:5C:B7:5F:C1:B8:5B:6F:63:BA:45:8C:B5:A9:82:0A:2E:38:8A</p>
+        <ul class="announce-list"><li>旧版本（v2.1.43 及更早）的签名已作废，日后出现旧签名的「新版本」一律视为伪造。</li></ul>
+        <p><b>四、官方不会做的事</b></p>
+        <ul class="announce-list"><li>不会通过任何渠道索要密码、验证码。</li><li>不会要求远程控制你的设备。</li></ul>
+        <p><b>五、渠道</b></p>
+        <ul class="announce-list"><li>网站：<a href="https://aprslocus.theez.top" target="_blank" rel="noopener">aprslocus.theez.top</a></li><li>反馈与举报：<a href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">GitHub Issues</a></li><li>可信版本与校验值只以官方渠道为准，未经证实的安装包与补丁不要转发。</li></ul>
+      </div>
+
+      <div class="announce-actions">
+        <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+          <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+          查看完整更新日志
+        </a>
+        <a class="btn btn-primary" href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">
+          <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+          反馈与建议
+        </a>
+      </div>
     </div>
+  </div>
+</section>
 
-    <div class="announce-actions">
-      <a class="btn btn-primary" href="https://github.com/dariondong/APRSLocus/releases/tag/v2.0.9" target="_blank" rel="noopener">
-        <i class="fa-solid fa-download"></i>
-        下载 2.0.9
-      </a>
-      <a class="btn btn-ghost" href="https://github.com/dariondong/APRSLocus/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
-        <i class="fa-solid fa-list-check"></i>
-        查看完整更新日志
-      </a>
-      <a class="btn btn-text" href="https://github.com/dariondong/APRSLocus/issues" target="_blank" rel="noopener">
-        <i class="fa-solid fa-comment-dots"></i>
-        反馈与建议
-      </a>
+<!-- ═══════════ 2.0 界面预览 ═══════════ -->
+<section class="section" id="ui2">
+  <div class="section-head reveal">
+    <h2>2.0 界面 · 渲染预览</h2>
+    <p>全新 UI 2.0：地图打底、悬浮胶囊导航、可拖拽面板。 <a href="promo.html">查看完整宣传页 →</a></p>
+  </div>
+  <div class="section-body">
+    <div class="ui2one">
+      <div class="ui2one-img"><span class="dev"><img loading="lazy" src="assets/hero-2.0.png" alt="APRSlocus 2.0 界面" width="900" height="1900"></span></div>
+      <div class="ui2one-txt">
+        <h3>地图打底 · 万物悬浮</h3>
+        <ul>
+          <li>地图常驻整屏，切页不销毁</li>
+          <li>底部悬浮胶囊导航，滑动指示胶囊</li>
+          <li>可拖拽内容面板，44px 把手随便抓</li>
+          <li>右上悬浮胶囊：天气 / 连接状态 / 定位</li>
+          <li>磨砂玻璃 · 云母材质，深浅主题随心换</li>
+        </ul>
+        <a class="btn btn-primary" href="promo.html">查看 2.0 宣传页 →</a>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- ═══════════ 功能特性 ═══════════ -->
-<!-- ═══════════ 2.0 界面预览 ═══════════ -->
-<section class="section" id="ui2">
-  <div class="section-head" style="max-width:760px;margin:0 auto 44px;text-align:center">
-    <div style="width:42px;height:3px;border-radius:3px;background:var(--grad);margin:0 auto 16px"></div>
-    <h2 style="font-size:clamp(28px,4.4vw,44px);font-weight:800;letter-spacing:-.02em">2.0 界面 · 渲染预览</h2>
-    <p style="color:var(--text-dim);margin-top:12px">全新 UI 2.0：地图打底、悬浮胶囊导航、可拖拽面板。 <a href="promo.html" style="color:var(--cyan);font-weight:700">查看完整宣传页 →</a></p>
-  </div>
-  <div class="ui2one">
-    <div class="ui2one-img"><span class="dev"><img loading="lazy" src="assets/hero-2.0.png" alt="APRSlocus 2.0 界面" width="900" height="1900"></span></div>
-    <div class="ui2one-txt">
-      <h3>地图打底 · 万物悬浮</h3>
-      <ul>
-        <li>地图常驻整屏，切页不销毁</li>
-        <li>底部悬浮胶囊导航，滑动指示胶囊</li>
-        <li>可拖拽内容面板，44px 把手随便抓</li>
-        <li>右上悬浮胶囊：天气 / 连接状态 / 定位</li>
-        <li>磨砂玻璃 · 云母材质，深浅主题随心换</li>
-      </ul>
-      <a class="btn btn-primary" href="promo.html">查看 2.0 宣传页 →</a>
-    </div>
-  </div>
-  <style>
-    .ui2one{max-width:1040px;margin:0 auto;display:grid;grid-template-columns:auto 1fr;gap:56px;align-items:center}
-    .ui2one-img{display:flex;justify-content:center}
-    .ui2one-img .dev{display:block;width:300px;padding:10px;border-radius:44px;background:linear-gradient(150deg,#525b6e,#2b3242 40%,#0c0f16);box-shadow:0 34px 80px rgba(45,70,120,.3);box-sizing:border-box}
-    .ui2one-img img{display:block;width:280px;height:591px;object-fit:contain;border-radius:36px;background:#F4F7FC}
-    .ui2one-txt h3{font-size:clamp(22px,2.6vw,30px);font-weight:800;margin-bottom:16px}
-    .ui2one-txt ul{list-style:none;display:grid;gap:10px;margin-bottom:24px}
-    .ui2one-txt li{position:relative;padding-left:26px;color:var(--text-dim);font-size:15.5px}
-    .ui2one-txt li::before{content:"";position:absolute;left:0;top:9px;width:12px;height:12px;border-radius:4px;background:linear-gradient(135deg,#38bdf8,#0284c7)}
-    @media(max-width:900px){.ui2one{grid-template-columns:1fr;gap:32px}.ui2one-img img{width:min(300px,72vw)}}
-  </style>
-</section>
-
 <section class="section" id="features">
   <div class="section-head reveal">
     <h2>它能干什么</h2>
     <p>不止是「看台站」——地图、消息、射频、传播与天气，火腿用得上的都在这。</p>
   </div>
-  <style>
-    #features .cards{grid-template-columns:repeat(3,1fr);gap:24px}
-    #features .card{padding:30px 28px;border-radius:20px;display:flex;flex-direction:column}
-    #features .card-icon{width:56px;height:56px;border-radius:16px;margin-bottom:20px;box-shadow:0 12px 26px rgba(45,70,120,.22)}
-    #features .card h3{font-size:20px;font-weight:800;margin-bottom:12px;letter-spacing:-.01em}
-    #features .card p{font-size:14.5px;line-height:1.75;color:var(--text-dim)}
-    #features .card-tags{margin-top:auto;padding-top:18px}
-    #features .card-tags li{font-size:12px}
-    @media(max-width:1024px){#features .cards{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:640px){#features .cards{grid-template-columns:1fr}}
-  </style>
+  <div class="section-body">
 
-  <div class="cards">
-    <article class="card reveal">
-      <div class="card-icon c1"><i class="fa-solid fa-location-dot"></i></div>
-      <h3>实时地图追踪</h3>
-      <p>高德瓦片 / 高德卫星 / 矢量 / Carto（浅色·深色·航行者）/ OSM（标准·人道）/ OpenTopo / Esri 十多种底图可切。一台站一个标记（v1.6.149 起去掉聚合），也能看轨迹回放，低缩放密度看热力图。</p>
-      <ul class="card-tags"><li>GCJ-02 / WGS-84</li><li>热力图</li><li>轨迹显示</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c2"><i class="fa-solid fa-tower-broadcast"></i></div>
-      <h3>位置信标</h3>
-      <p>一键上报位置，按 APRS 1.0 标准格式发送，自动带上高度、速度、航向和电量，上报间隔可调。</p>
-      <ul class="card-tags"><li>标准格式</li><li>自动附带信息</li><li>演示模式</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c3"><i class="fa-solid fa-message"></i></div>
-      <h3>消息通信</h3>
-      <p>单聊、群聊统一在会话列表里，带 ACK 确认。支持群聊邀请、成员管理、未读角标，中文消息也没问题。</p>
-      <ul class="card-tags"><li>ACK 确认</li><li>群聊管理</li><li>中文兼容</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c4"><i class="fa-solid fa-shield"></i></div>
-      <h3>台站识别与筛选</h3>
-      <p>接入 aprs.org 官方设备库，从报文目的呼号识别台站所用设备（厂商 + 型号 + 车台 / 手台 / 跟踪器 / App / 网关…）。列表可筛状态、类型、设备类别与具体型号；详情页可跳 QRZ 呼号库与 aprs.fi 看轨迹。</p>
-      <ul class="card-tags"><li>官方设备识别</li><li>类别 / 型号筛选</li><li>QRZ / aprs.fi</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c5"><i class="fa-solid fa-file-lines"></i></div>
-      <h3>数据包与日志</h3>
-      <p>原始报文用等宽字体展示，长按可复制；解析结果按位置 / 消息 / 气象 / 状态分类。内置分级日志方便排查问题。</p>
-      <ul class="card-tags"><li>原始报文</li><li>类型筛选</li><li>调试日志</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c6"><i class="fa-solid fa-wifi"></i></div>
-      <h3>连接与后台</h3>
-      <p>自动连 APRS-IS 公共服务器，TCP / WebSocket 都支持，断线按 8 → 16 → 32 → 60 秒渐进重连。Android 用前台服务保持在线。</p>
-      <ul class="card-tags"><li>自动重连</li><li>前台服务</li><li>系统通知</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c7"><i class="fa-solid fa-arrows-rotate"></i></div>
-      <h3>自动更新</h3>
-      <p>应用内检查更新，GitHub / GitCode 两个渠道可切，按平台分流下载，也能装历史版本。</p>
-      <ul class="card-tags"><li>双渠道</li><li>按平台分流</li><li>历史版本</li></ul>
-    </article>
-
-    <article class="card reveal">
-      <div class="card-icon c8"><i class="fa-solid fa-palette"></i></div>
-      <h3>个性化体验</h3>
-      <p>简体中文 / 繁體中文 / English / 日本語 / Indonesia / Español 可切换，支持深色模式和自定义主题色，界面可缩放 85% ~ 130%。首次启动有六步引导。</p>
-      <ul class="card-tags"><li>六种语言</li><li>深色模式</li><li>OOBE 引导</li></ul>
-    </article>
+    <div class="feat-list">
 <!-- site-sync:features -->
-    <article class="card reveal">
-      <div class="card-icon c9"><i class="fa-solid fa-tower-cell"></i></div>
-      <h3>四种数据来源</h3>
-      <p>互联网（APRS-IS）、蓝牙 / 串口 TNC（KISS）、声卡音频 AFSK 1200（Bell 202 软 TNC），以及读取 Kenwood 电台输出的 <code>$PKWDWPL</code> 航点语句（只收不发）。几条链路可以同时收报文，发射来源单独指定一条。</p>
-      <ul class="card-tags"><li>APRS-IS</li><li>TNC</li><li>音频</li><li>PKWDWPL</li></ul>
+    <p class="feat-group">地图与追踪</p>
+    <article class="feat reveal">
+      <span class="feat-no">01</span>
+      <span class="feat-ico"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>实时地图追踪</h3>
+        <p>高德瓦片 / 高德卫星 / 矢量 / Carto（浅色·深色·航行者）/ OSM（标准·人道）/ OpenTopo / Esri 十多种底图可切。一台站一个标记（v1.6.149 起去掉聚合），也能看轨迹回放，低缩放密度看热力图。</p>
+      </div>
+      <ul class="feat-tags"><li>GCJ-02 / WGS-84</li><li>热力图</li><li>轨迹显示</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c10"><i class="fa-solid fa-right-left"></i></div>
-      <h3>网关（iGate）</h3>
-      <p>把射频收到的报文转到 APRS-IS，自动带 <code>qAr</code> / <code>qAR</code> 来路标识；带环路防护（含 <code>TCPIP*</code> 或已有 q 构造的报文绝不送回），同一帧 30 秒内只注入一次。可选双向模式会把网络侧发给「刚在射频上听到过」的台站的消息送到射频。</p>
-      <ul class="card-tags"><li>RF→IS</li><li>防环</li><li>去重</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">02</span>
+      <span class="feat-ico"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>沉浸地图（导航风格）</h3>
+        <p>专为「边开车边看」设计的导航风格页面：大字号方向 / 距离 / 速度，左侧「附近台站」面板，目标台站居中，Android 与 Windows 都能用。</p>
+      </div>
+      <ul class="feat-tags"><li>导航风格</li><li>附近台站</li><li>大字号</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c11"><i class="fa-solid fa-language"></i></div>
-      <h3>双向聊天翻译</h3>
-      <p>内置多引擎翻译，默认走免费接口、<b>无需任何密钥</b>。收到的和发出的消息都能译，可对照原文，也能在发送前先把自己的输入译成对方的语言。</p>
-      <ul class="card-tags"><li>免密钥</li><li>对照翻译</li><li>发送前翻译</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">03</span>
+      <span class="feat-ico"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>离线地图</h3>
+        <p>把当前视图整片瓦片下到本机（断点续传、单区域上限 20 万张），断网、无信号也能看；四级降级保证地图始终可看可点。</p>
+      </div>
+      <ul class="feat-tags"><li>按视图下载</li><li>断点续传</li><li>四级降级</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c12"><i class="fa-solid fa-compass"></i></div>
-      <h3>沉浸地图（导航风格）</h3>
-      <p>专为「边开车边看」设计的导航风格页面：大字号方向 / 距离 / 速度，左侧「附近台站」面板，目标台站居中，Android 与 Windows 都能用。</p>
-      <ul class="card-tags"><li>导航风格</li><li>附近台站</li><li>大字号</li></ul>
+    <p class="feat-group">通信与网关</p>
+    <article class="feat reveal">
+      <span class="feat-no">04</span>
+      <span class="feat-ico"><i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>位置信标</h3>
+        <p>一键上报位置，按 APRS 1.0 标准格式发送，自动带上高度、速度、航向和电量，上报间隔可调。</p>
+      </div>
+      <ul class="feat-tags"><li>标准格式</li><li>自动附带信息</li><li>演示模式</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c13"><i class="fa-solid fa-chart-line"></i></div>
-      <h3>天气 · 统计 · 荣誉</h3>
-      <p>天气面板（动态背景跟随实时天气强度变化）、台站统计面板（最近上报 / 最远距离 / 报文速率），以及荣誉墙。</p>
-      <ul class="card-tags"><li>天气面板</li><li>统计面板</li><li>荣誉墙</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">05</span>
+      <span class="feat-ico"><i class="fa-solid fa-message" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>消息通信</h3>
+        <p>单聊、群聊统一在会话列表里，带 ACK 确认。支持群聊邀请、成员管理、未读角标，中文消息也没问题。</p>
+      </div>
+      <ul class="feat-tags"><li>ACK 确认</li><li>群聊管理</li><li>中文兼容</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c14"><i class="fa-solid fa-file-export"></i></div>
-      <h3>数据导出</h3>
-      <p>一键导出 ADIF —— 业余无线电通用的日志交换格式，频率可自定义，导出后可直接导入其它日志软件。</p>
-      <ul class="card-tags"><li>ADIF</li><li>频率自定义</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">06</span>
+      <span class="feat-ico"><i class="fa-solid fa-language" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>双向聊天翻译</h3>
+        <p>内置多引擎翻译，默认走免费接口、<b>无需任何密钥</b>。收到的和发出的消息都能译，可对照原文，也能在发送前先把自己的输入译成对方的语言。</p>
+      </div>
+      <ul class="feat-tags"><li>免密钥</li><li>对照翻译</li><li>发送前翻译</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c15"><i class="fa-solid fa-table-cells-large"></i></div>
-      <h3>桌面小组件</h3>
-      <p>Android 桌面小组件：天气（4 档自适应尺寸）、短波传播、系统状态三套；组件不自己联网，由应用单向推送快照，省电可控。</p>
-      <ul class="card-tags"><li>Android</li><li>4 档自适应</li><li>不自行联网</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">07</span>
+      <span class="feat-ico"><i class="fa-solid fa-right-left" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>网关（iGate）</h3>
+        <p>把射频收到的报文转到 APRS-IS，自动带 <code>qAr</code> / <code>qAR</code> 来路标识；带环路防护（含 <code>TCPIP*</code> 或已有 q 构造的报文绝不送回），同一帧 30 秒内只注入一次。可选双向模式会把网络侧发给「刚在射频上听到过」的台站的消息送到射频。</p>
+      </div>
+      <ul class="feat-tags"><li>RF→IS</li><li>防环</li><li>去重</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c16"><i class="fa-solid fa-satellite-dish"></i></div>
-      <h3>短波与电离层传播</h3>
-      <p>短波面板与独立组件：SFI / Kp / A 指数、黑子、X 射线、太阳风，四个波段对的「日 / 夜」条件一眼看清；数据来自 hamqsl.com（N0NBH），30 分钟缓存。</p>
-      <ul class="card-tags"><li>SFI / Kp / A</li><li>日 · 夜</li><li>30 分钟缓存</li></ul>
+    <p class="feat-group">台站与数据</p>
+    <article class="feat reveal">
+      <span class="feat-no">08</span>
+      <span class="feat-ico"><i class="fa-solid fa-shield" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>台站识别与筛选</h3>
+        <p>接入 aprs.org 官方设备库，从报文目的呼号识别台站所用设备（厂商 + 型号 + 车台 / 手台 / 跟踪器 / App / 网关…）。列表可筛状态、类型、设备类别与具体型号；详情页可跳 QRZ 呼号库与 aprs.fi 看轨迹。</p>
+      </div>
+      <ul class="feat-tags"><li>官方设备识别</li><li>类别 / 型号筛选</li><li>QRZ / aprs.fi</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c17"><i class="fa-solid fa-map-location-dot"></i></div>
-      <h3>离线地图</h3>
-      <p>把当前视图整片瓦片下到本机（断点续传、单区域上限 20 万张），断网、无信号也能看；四级降级保证地图始终可看可点。</p>
-      <ul class="card-tags"><li>按视图下载</li><li>断点续传</li><li>四级降级</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">09</span>
+      <span class="feat-ico"><i class="fa-solid fa-file-lines" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>数据包与日志</h3>
+        <p>原始报文用等宽字体展示，长按可复制；解析结果按位置 / 消息 / 气象 / 状态分类。内置分级日志方便排查问题。</p>
+      </div>
+      <ul class="feat-tags"><li>原始报文</li><li>类型筛选</li><li>调试日志</li></ul>
     </article>
-    <article class="card reveal">
-      <div class="card-icon c18"><i class="fa-solid fa-paintbrush"></i></div>
-      <h3>主题与备份</h3>
-      <p>主题不只是换色：颜色、图标、文字、背景图都能改（17 个颜色令牌），可导出成 JSON 分享；设置与数据可整体备份，换机一键导入。</p>
-      <ul class="card-tags"><li>17 色令牌</li><li>JSON 分享</li><li>一键备份</li></ul>
+    <article class="feat reveal">
+      <span class="feat-no">10</span>
+      <span class="feat-ico"><i class="fa-solid fa-tower-cell" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>五种数据来源</h3>
+        <p>互联网（APRS-IS）、蓝牙 / 串口 TNC（KISS）、声卡音频 AFSK 1200（Bell 202 软 TNC）、Kenwood 航点 <code>$PKWDWPL</code>（只收不发），以及 WLAN 电台直连（支持 IC-705 / IC-9700 / IC-7610 / IC-905 等 Wi-Fi / 以太网型号，CI-V 控制与局域网音频）。多条链路可以同时收报文，发射来源单独指定一条。</p>
+      </div>
+      <ul class="feat-tags"><li>APRS-IS</li><li>TNC</li><li>音频</li><li>PKWDWPL</li><li>WLAN 电台</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">11</span>
+      <span class="feat-ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>天气 · 统计 · 荣誉</h3>
+        <p>天气面板（动态背景跟随实时天气强度变化）、台站统计面板（最近上报 / 最远距离 / 报文速率），以及荣誉墙。</p>
+      </div>
+      <ul class="feat-tags"><li>天气面板</li><li>统计面板</li><li>荣誉墙</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">12</span>
+      <span class="feat-ico"><i class="fa-solid fa-file-export" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>数据导出</h3>
+        <p>一键导出 ADIF —— 业余无线电通用的日志交换格式，频率可自定义，导出后可直接导入其它日志软件。</p>
+      </div>
+      <ul class="feat-tags"><li>ADIF</li><li>频率自定义</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">13</span>
+      <span class="feat-ico"><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>短波与电离层传播</h3>
+        <p>短波面板与独立组件：SFI / Kp / A 指数、黑子、X 射线、太阳风，四个波段对的「日 / 夜」条件一眼看清；数据来自 hamqsl.com（N0NBH），30 分钟缓存。</p>
+      </div>
+      <ul class="feat-tags"><li>SFI / Kp / A</li><li>日 · 夜</li><li>30 分钟缓存</li></ul>
+    </article>
+    <p class="feat-group">系统与体验</p>
+    <article class="feat reveal">
+      <span class="feat-no">14</span>
+      <span class="feat-ico"><i class="fa-solid fa-wifi" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>连接与后台</h3>
+        <p>自动连 APRS-IS 公共服务器，TCP / WebSocket 都支持，断线按 8 → 16 → 32 → 60 秒渐进重连。Android 用前台服务保持在线。</p>
+      </div>
+      <ul class="feat-tags"><li>自动重连</li><li>前台服务</li><li>系统通知</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">15</span>
+      <span class="feat-ico"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>自动更新</h3>
+        <p>应用内检查更新，GitHub / GitCode 两个渠道可切，按平台分流下载，也能装历史版本。</p>
+      </div>
+      <ul class="feat-tags"><li>双渠道</li><li>按平台分流</li><li>历史版本</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">16</span>
+      <span class="feat-ico"><i class="fa-solid fa-palette" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>个性化体验</h3>
+        <p>简体中文 / 繁體中文 / English / 日本語 / Indonesia / Español 可切换，支持深色模式和自定义主题色，界面可缩放 85% ~ 130%。首次启动有六步引导。</p>
+      </div>
+      <ul class="feat-tags"><li>六种语言</li><li>深色模式</li><li>OOBE 引导</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">17</span>
+      <span class="feat-ico"><i class="fa-solid fa-table-cells-large" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>桌面小组件</h3>
+        <p>Android 桌面小组件：天气（4 档自适应尺寸）、短波传播、系统状态三套；组件不自己联网，由应用单向推送快照，省电可控。</p>
+      </div>
+      <ul class="feat-tags"><li>Android</li><li>4 档自适应</li><li>不自行联网</li></ul>
+    </article>
+    <article class="feat reveal">
+      <span class="feat-no">18</span>
+      <span class="feat-ico"><i class="fa-solid fa-paintbrush" aria-hidden="true"></i></span>
+      <div class="feat-main">
+        <h3>主题与备份</h3>
+        <p>主题不只是换色：颜色、图标、文字、背景图都能改（17 个颜色令牌），可导出成 JSON 分享；设置与数据可整体备份，换机一键导入。</p>
+      </div>
+      <ul class="feat-tags"><li>17 色令牌</li><li>JSON 分享</li><li>一键备份</li></ul>
     </article>
   <!-- /site-sync:features -->
+    </div>
   </div>
 </section>
 
@@ -524,30 +474,32 @@ html{overflow-x:hidden}
     <h2>能跑的平台</h2>
     <p>Android 与 Windows 有现成的安装包，下载就能用。</p>
   </div>
+  <div class="section-body">
 
-  <div class="platforms">
-    <a class="platform reveal" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
-      <span class="pl-logo a"><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6c0 4-3 7-6 10-3-3-6-6-6-10a6 6 0 0 1 6-6zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></span>
-      <div class="pl-body">
-        <h3>Android <em class="tag ok">完整支持</em></h3>
-        <p>最低 Android 5.0，APK 直装，前台服务持续在线。</p>
-      </div>
-      <span class="pl-arrow">→</span>
-    </a>
+    <div class="platforms">
+      <a class="platform reveal" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
+        <span class="pl-logo a"><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6c0 4-3 7-6 10-3-3-6-6-6-10a6 6 0 0 1 6-6zm0 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg></span>
+        <div class="pl-body">
+          <h3>Android <em class="tag ok">完整支持</em></h3>
+          <p>最低 Android 7.0 (API 24)，APK 直装，前台服务持续在线。</p>
+        </div>
+        <span class="pl-arrow">→</span>
+      </a>
 
-    <a class="platform reveal" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
-      <span class="pl-logo w"><svg viewBox="0 0 24 24"><path d="M3 5h18v4H3V5zm0 6h18v4H3v-4zm0 6h12v2H3v-2z"/></svg></span>
-      <div class="pl-body">
-        <h3>Windows <em class="tag ok">完整支持</em></h3>
-        <p>绿色单文件 EXE + Inno Setup 安装包，双击即用。</p>
-      </div>
-      <span class="pl-arrow">→</span>
-    </a>
-  </div>
+      <a class="platform reveal" href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">
+        <span class="pl-logo w"><svg viewBox="0 0 24 24"><path d="M3 5h18v4H3V5zm0 6h18v4H3v-4zm0 6h12v2H3v-2z"/></svg></span>
+        <div class="pl-body">
+          <h3>Windows <em class="tag ok">完整支持</em></h3>
+          <p>绿色单文件 EXE + Inno Setup 安装包，双击即用。</p>
+        </div>
+        <span class="pl-arrow">→</span>
+      </a>
+    </div>
 
-  <div class="dl-note reveal">
-    <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4zm4 14V7.8l-4-2-4 2V16c0 2.6 1.6 4.7 4 5.7 2.4-1 4-3.1 4-5.7zM11 9h2v3h3v2h-3v3h-2v-3H8v-2h3V9z"/></svg>
-    最新测试版安装包（APK / EXE）请在 <a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">GitHub Releases</a> 页面获取
+    <div class="dl-note reveal">
+      <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4zm4 14V7.8l-4-2-4 2V16c0 2.6 1.6 4.7 4 5.7 2.4-1 4-3.1 4-5.7zM11 9h2v3h3v2h-3v3h-2v-3H8v-2h3V9z"/></svg>
+      最新测试版安装包（APK / EXE）请在 <a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">GitHub Releases</a> 页面获取
+    </div>
   </div>
 </section>
 
@@ -557,45 +509,47 @@ html{overflow-x:hidden}
     <h2>首次启动，跟着向导走</h2>
     <p>第一次打开会进引导向导，按步骤填完就能连上 APRS-IS 并开始上报位置。</p>
   </div>
+  <div class="section-body">
 
-  <div class="steps">
-    <div class="step reveal">
-      <div class="step-num">1</div>
-      <h3>选择语言</h3>
-      <p>中文 / English / 跟随系统</p>
-    </div>
-    <div class="step reveal">
-      <div class="step-num">2</div>
-      <h3>了解功能</h3>
-      <p>建议先试用演示模式</p>
-    </div>
-    <div class="step reveal">
-      <div class="step-num">3</div>
-      <h3>填写呼号</h3>
-      <p>如 <code>BG7LZQ-3</code>，选择 SSID 后缀</p>
-    </div>
-    <div class="step reveal">
-      <div class="step-num">4</div>
-      <h3>选择符号</h3>
-      <p>汽车 / 房屋 / 人 / 气象站 …</p>
-    </div>
-    <div class="step reveal">
-      <div class="step-num">5</div>
-      <h3>接收筛选</h3>
-      <p>按国家 / 地区选择接收台站</p>
-    </div>
-    <div class="step reveal">
-      <div class="step-num">6</div>
-      <h3>配置服务器</h3>
-      <p>填入 Passcode，完成即自动连接</p>
-    </div>
-  </div>
+    <ol class="steps">
+      <li class="step reveal">
+        <div class="step-num">1</div>
+        <h3>选择语言</h3>
+        <p>中文 / English / 跟随系统</p>
+      </li>
+      <li class="step reveal">
+        <div class="step-num">2</div>
+        <h3>了解功能</h3>
+        <p>建议先试用演示模式</p>
+      </li>
+      <li class="step reveal">
+        <div class="step-num">3</div>
+        <h3>填写呼号</h3>
+        <p>如 <code>BG7LZQ-3</code>，选择 SSID 后缀</p>
+      </li>
+      <li class="step reveal">
+        <div class="step-num">4</div>
+        <h3>选择符号</h3>
+        <p>汽车 / 房屋 / 人 / 气象站 …</p>
+      </li>
+      <li class="step reveal">
+        <div class="step-num">5</div>
+        <h3>接收筛选</h3>
+        <p>按国家 / 地区选择接收台站</p>
+      </li>
+      <li class="step reveal">
+        <div class="step-num">6</div>
+        <h3>配置服务器</h3>
+        <p>填入 Passcode，完成即自动连接</p>
+      </li>
+    </ol>
 
-  <div class="oobe-tip reveal">
-    <div class="tip-icon">💡</div>
-    <div>
-      <b>Passcode 小贴士：</b>密码填 <code>-1</code> 即可连接，但<u>未验证的 Passcode 无法正常收发消息</u>。建议到
-      <a href="https://aprs.cool/AprsPG" target="_blank" rel="noopener">APRS Passcode 查询</a> 生成你的专属 Passcode 后填入。
+    <div class="oobe-tip reveal">
+      <div class="tip-icon">💡</div>
+      <div>
+        <b>Passcode 小贴士：</b>密码填 <code>-1</code> 即可连接，但<u>未验证的 Passcode 无法正常收发消息</u>。建议到
+        <a href="https://aprs.cool/AprsPG" target="_blank" rel="noopener">APRS Passcode 查询</a> 生成你的专属 Passcode 后填入。
+      </div>
     </div>
   </div>
 </section>
@@ -606,28 +560,30 @@ html{overflow-x:hidden}
     <h2>信标 · 符号</h2>
     <p>遵循 APRS 1.0 标准，兼容主流 APRS 软件，图标全部来自官方符号表。</p>
   </div>
+  <div class="section-body">
 
-  <div class="showcase-grid">
-    <div class="beacon-box reveal">
-      <div class="beacon-title">
-        <span>信标示例 · Position Beacon</span>
-        <span class="lang-tag">APRS 1.0</span>
+    <div class="showcase-grid">
+      <div class="beacon-box reveal">
+        <div class="beacon-title">
+          <span>信标示例 · Position Beacon</span>
+          <span class="lang-tag">APRS 1.0</span>
+        </div>
+        <div class="beacon-code">
+          <pre><code><span class="tok-c">BG7LZQ-3</span><span class="tok-m">&gt;</span><span class="tok-p">APALOC,TCPIP*</span><span class="tok-m">:</span><span class="tok-o">!</span><span class="tok-n">2148.90N</span><span class="tok-m">/</span><span class="tok-n">11049.14E</span><span class="tok-s">/&gt;</span> <span class="tok-c">/A=000328 090/050 Bat:70%</span> <span class="tok-p">APRSlocus v1.6.18</span></code></pre>
+          <button class="copy-btn" id="copyBeacon" aria-label="复制信标" title="复制到剪贴板">
+            <svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v2h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2zm2 2v13h10V7h-1v8a2 2 0 0 1-2 2H9z"/></svg>
+          </button>
+        </div>
+        <ul class="beacon-notes">
+          <li><code>APALOC</code> — 标识本台站使用 APRSlocus</li>
+          <li><code>/A=000328</code> — 高度（英尺）</li>
+          <li><code>090/050</code> — 航向 / 速度</li>
+          <li><code>Bat:70%</code> — 电量</li>
+        </ul>
       </div>
-      <div class="beacon-code">
-        <pre><code><span class="tok-c">BG7LZQ-3</span><span class="tok-m">&gt;</span><span class="tok-p">APALOC,TCPIP*</span><span class="tok-m">:</span><span class="tok-o">!</span><span class="tok-n">2148.90N</span><span class="tok-m">/</span><span class="tok-n">11049.14E</span><span class="tok-s">/&gt;</span> <span class="tok-c">/A=000328 090/050 Bat:70%</span> <span class="tok-p">APRSlocus v1.6.18</span></code></pre>
-        <button class="copy-btn" id="copyBeacon" aria-label="复制信标" title="复制到剪贴板">
-          <svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v2h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2zm2 2v13h10V7h-1v8a2 2 0 0 1-2 2H9z"/></svg>
-        </button>
-      </div>
-      <ul class="beacon-notes">
-        <li><code>APALOC</code> — 标识本台站使用 APRSlocus</li>
-        <li><code>/A=000328</code> — 高度（英尺）</li>
-        <li><code>090/050</code> — 航向 / 速度</li>
-        <li><code>Bat:70%</code> — 电量</li>
-      </ul>
-    </div>
 
     
+    </div>
   </div>
 </section>
 
@@ -637,17 +593,1055 @@ html{overflow-x:hidden}
     <h2>更新日志</h2>
     <p>近期重点版本的主要变化（中间数十个以修复为主的版本已合并，完整记录见 <a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">GitHub Releases</a>）。</p>
   </div>
+  <div class="section-body">
 
-  <div class="changelog-list">
+    <div class="changelog-list">
 <!-- site-sync:changelog -->
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.8</span>
+        <span class="cl-date">2026-11-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>联网校验会去官方仓库查摘要，镜像渠道也不再一律说无法校验。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>摘要对不上时，那一行写出两边的摘要前几位。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.7</span>
+        <span class="cl-date">2026-11-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>强提醒的正文有了小标题与条目，证书指纹用等宽字排。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>强提醒每次打开都重新去官网拉一次，改了内容下次打开就生效。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>同一条改了文字会重新弹一次。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.6</span>
+        <span class="cl-date">2026-11-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>强提醒每次打开只弹一次，关掉以后不会再跳出来。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>从后台切回应用时也会补拉一次强提醒。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.5</span>
+        <span class="cl-date">2026-11-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>欢迎与「安装包要不要留」分成两步问。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>无法校验安装包时，安装前要你再确认一次。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>打开应用时可能整页弹出一条强提醒，内容由官网下发。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>过滤范围多了一个按钮，点一下就把过滤中心设成你现在的位置。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>数据上限搬到数据页的最上面。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>更新页会联网核对安装包的版本号、仓库里那份的摘要和签名。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>没联网时更新页会说明无法校验版本号。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>装上新版的第一屏列出这一版改了什么。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.3</span>
+        <span class="cl-date">2026-11-12</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>更新页会显示这个安装包的签名校没校。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>更新渠道的清单改由官网下发，渠道地址变了不用等新版。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.2</span>
+        <span class="cl-date">2026-11-12</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>下载的安装包放在手机的「下载」文件夹里。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>下载完会核对签名，对不上的包不会留下来。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>装上新版第一次打开时问一句要不要删掉安装包。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.2.1</span>
+        <span class="cl-date">2026-11-12</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>「设置 → 服务器 → APRSNETCN」多了 HTTP 端口一格，默认 8899。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>24 小时台站与云同步按这一格连。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>云端把历史轨迹全部留下，换一台机器登录后能拉回每一天。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>首次引导第 3 步的「从备份恢复」按钮点不动，现在能用了。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.43</span>
+        <span class="cl-date">2026-11-06</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>云同步的地址跟着「APRSNETCN SERVER」那条链路走，地址填了才连。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>服务器地址空着时，同步卡那一行写「未填」，不再自己找一台服务器。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>没填地址就点同步，会提示先在上面填 APRSNETCN 服务器地址。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>别人发给你的、你发给别人的消息，服务器看到了都记一份。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>第一次同步把云端的消息整份拉回来，重装以后记录还在。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.42</span>
+        <span class="cl-date">2026-11-06</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>云同步搬到了「设置 → 服务器 → APRSNETCN SERVER」，跟那条链路在同一页配。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>「设置 → 功能」多了一个云同步开关。关掉之后不再联网，两条链路照旧收发。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>同步内容可以分开选：消息、历史轨迹各一个开关。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>自动同步的间隔可以选五分钟、十五分钟或一小时。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>云端数据里多了备份份数，还能看到哪几台设备登录过，别的设备可以移出。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.41</span>
+        <span class="cl-date">2026-11-06</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>云同步：登录 APRSNETCN 账号之后，收发的消息与每天的历史轨迹存到服务器上，换一台设备登录同一个呼号就都回来了。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>云端备份：备份页可以把勾选的几组存到云端，也能从云端取回，云端留最新三份。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>云同步在「设置 → 服务器」里，跟两条互联网链路挨着。服务器地址跟着 APRSNETCN 链路走。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.40</span>
+        <span class="cl-date">2026-11-05</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>历史轨迹叠层：历史轨迹页多了一个入口，把台账里每一天画在同一张底图上。一天一条线、一个颜色，底部一排日期片点一下就能藏起或放回那一天，视野一次套到所有选中的点上。导出一张 PNG，Android 存到下载目录或直接拉起分享面板，桌面写进下载目录。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>地图浮层不再互相压住：工具列的底部预留改成「两道横幅都挂着时的顶部锚点」与「上报横杠出现时的底部占用」两者取大，列数仍然只跟窗口尺寸走并封顶三列；顶端那两条一次性提示并进左上那一列，不再糊在信息条上。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>省电模式（设置 → 定位）：GPS 采样压到不低于 30 秒，自己选的那一档不被改掉，关掉省电模式就回来；地图上移动台站的脉冲动画也停下。低电量 20% / 10% / 5% 各提一次，充电中不提，电量回到 25% 以上重新计数，提醒上带一个直接开启省电模式的按钮。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>更新渠道页去掉付费提示：顶部那条「阿里云 OSS 由开发团队付费」整条删掉，两条阿里云渠道的副标题换成它们真正的地址，与 GitCode 那一行同一个口径。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.39</span>
+        <span class="cl-date">2026-10-31</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>音频输出跟随耳机 / Type-C / 蓝牙：本 App 的播放原来被标成「提示音」内容类型，部分 ROM 会直接送扬声器 —— 别的 App 插上耳机就转耳机，只有本 App 还在外放。现在按媒体内容处理，并显式绑定到系统当前已连接的输出设备；没有外接时仍走系统默认。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>「位置上报」按钮更可靠：加大命中区并由按钮自己吃掉手势，地图底部横杠不再抢点击（长按也不会误弹身份面板）；还没拿到本轮定位时给出「等待定位」提示而不是禁用，未连接时明确说没发出去、不再显示「已发送」。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>顶栏与上报条的按钮尺寸统一：天气、连接状态、连接按钮、快捷按钮、上报动作组都是 30px 高，圆角与字号也一致，并排时不再高低不齐。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>横屏地图操作控件不再被导航栏遮挡：横屏时系统导航栏 / 挖孔在屏幕右侧，地图原来只让了底部安全区 —— 贴右的工具列、上报横杠、底部坐标条会被盖住。现在右侧安全区一并计算，搜索与选点提示也相对可见地图区居中。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.38</span>
+        <span class="cl-date">2026-10-29</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>地图右侧那排按钮只跟窗口尺寸走。拉开内容面板不再让它换列或换位置。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>启用一条通道，这条通道的位置发射也跟着打开；设备页去掉重复的小字，每条链路只留名字和通没通。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>声卡在收报文时，地图的上报横条底下多一条声压条。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>度分、度分秒的分与秒补到两位，读数位数不再跳；消息里的位置气泡也按设置里的格式显示。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>首次引导加一步「要哪些功能」：天气和七个模块在那里就能选，关掉的不出现在设置里。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.37</span>
+        <span class="cl-date">2026-10-28</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>位置报文同时发往射频和互联网时，两条链路各用各的报头。射频那份不再带 TCPIP*，中继路径保住了。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>设备面板新增「高级连接通道设置」，默认关。关着时位置与状态报文发给所有已连上的链路，消息仍按上次勾的那条发。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>右侧那排按钮的分栏不再跟屏幕上的临时占位走。横幅出现、开始上报、拉开面板都不会让它重排。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>收到的报文自动识别 UTF-8 和 GBK，中文不再变成乱码。中心经纬度读数默认关，想看在右侧工具列点那颗准星。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.36</span>
+        <span class="cl-date">2026-10-27</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>经纬度可以按度分、度分秒显示，地图读数、我的位置、台站详情都跟着变。报文和存储仍是十进制。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>屏幕正中多了一个中心标记和经纬度读数，手机没有悬停也能看中心在哪。设置 → 显示 → 地图 可以关。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>订阅命中弹一条系统通知，标题是订阅值，正文是呼号和报文内容。同一条规则 30 秒内只计数，不刷屏。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>往一个方向拖地图，经度不再越滚越大。右侧按钮按剩下的高度分列，最下面那颗不再被上报条压住。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.35</span>
+        <span class="cl-date">2026-10-26</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>沉浸地图不再用一色圆点，换成台站自己的 APRS 符号，离线台站去饱和。单击台站后那条小条重排成卡片，贴近屏幕边缘时会夹回画面。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>设置 → 订阅：盯住一个台站、一个中继，或者报文里的一个词。命中集中在一页，能看到原文；台站面板里也能直接订阅这一台。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>发给我其他 SSID 的消息也收下了，气泡上会标出来，输入栏上方可选「发送 ID」。设备快捷面板多了「我的其他 SSID」，装 APRSlocus 的那几台可远程激活、发信标、停止上报。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>卫星弱又没开强制网络上报时，轨迹点放稀，精度太差就不记，等下一次有效定位。地图缩小时不再整片闪一下。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.34</span>
+        <span class="cl-date">2026-10-24</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>设置 → 自动上报 多了「定位模糊」一档：关、约 200 米、约 2 公里、约 20 公里。默认关。按 APRS101 的位置模糊，把最低位的几个数字换成空格，对方看到一片方格而不是一个点。只改发出去的那一包，本机地图与轨迹仍按真实坐标。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>首页的自动/单次开关不再被「开始上报」按钮挤掉。连着但还没确认上报时，两枚并排出现，两个方向随时切。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.33</span>
+        <span class="cl-date">2026-10-23</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>桌面版多了系统托盘。关窗口不再退出，窗口收进托盘，托盘菜单里可以显示主窗口、隐藏到托盘、退出。设置里有「关闭窗口时最小化到托盘」一档，默认开着。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>台站备注不再截到 60 字，台站列表、详情面板与地图浮窗都显示全文。台站详情面板里的原始报文改为整条折行。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>1.0 界面收拾了一遍：侧栏与顶栏对齐，窄屏底栏与侧栏同一套选中态，未连接与验证码两条横幅同一个形状。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.32</span>
+        <span class="cl-date">2026-10-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>新手引导重做成八步：语言、用户协议、欢迎、呼号、符号、接收筛选、服务器、配置完成。每一步只问一件事。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>呼号按软件里同一套规则校验，形状不对就停在原地提示。把 -SSID 直接写在呼号框里也行，会自动拆到后缀，下面实时显示完整呼号。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>服务器的最后一步跟着地址走，地址留空时按钮只写「完成」。新增的最后一页回读呼号、符号和服务器，再指出看台站、发位置、使用手册三处地方。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>欢迎页多了一个「从备份恢复」。换机或重装的人在这里整份导入备份，不用先走完七步再进设置，呼号、符号、筛选和服务器跟着一起回来。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.31</span>
+        <span class="cl-date">2026-10-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>电台页多了一块「操作证验证」，点进去是单独一页，先读说明再点我同意，才出现表单。填姓名和证书编号，程序向 CRAC 的验证接口查一次，结果只回本机、只保留是否通过和证书类别。验证自愿，只有内地呼号显示这一块。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.30</span>
+        <span class="cl-date">2026-10-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>历史轨迹以前一直在记，现在默认关。要记就在历史轨迹页顶部把开关打开，关着时那一页会直接说记录没开。已经记下的那些天照旧能看、能删、能导出。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>精简模式的页签下面补回上报状态条，左边是现在这一发是什么，右边是自动或单次与立即上报，手动发一包不用再去设置页。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.29</span>
+        <span class="cl-date">2026-10-22</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>GPS 模式下偶发停在「已保存位置」不再定位，切到模拟位置再切回来才恢复。现在启动会等配置加载完成再起定位，回到前台也会补一次检查。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>GPS 采样间隔可以自己调，1 秒到 30 秒六档，默认 1 秒。只在 Android 且不是纯网络模式时出现。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.28</span>
+        <span class="cl-date">2026-10-21</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>IC-705 走 WLAN 发射时，报尾不会在松 PTT 前被切掉。后置发射延迟默认 200 ms，可在 IC-705 页调整。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>iPhone 的灵动岛和锁屏显示当前状态，与 Android 16 的状态栏胶囊同源。需 iOS 16.2 及以上。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.27</span>
+        <span class="cl-date">2026-10-20</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>设置里新增「功能」页，排行榜、荣誉墙、赞助、生命守护、翻译、轨迹、ADIF、天气都能单独关掉。关掉只是收起入口，重新打开就回来。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>新增精简模式：上面一行状态，下面四个页签，只留 APRS 收发。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>设置里新增「使用手册」，在应用内打开官网手册，跟着系统语言走。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>呼号后缀支持自定义输入，1-2 位数字或字母都行。字母后缀只有自家的 APRSNETCN 服务器收。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>设置页去掉大半解释性小字，只留会让人做错的那几条。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.26</span>
+        <span class="cl-date">2026-10-20</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>低于官网要求的最低版本时，软件只显示更新页，返回键直接退出应用。更新到下限以上之后闸门自己消失。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.25</span>
+        <span class="cl-date">2026-10-20</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>地图上双击就放大一级，围绕你点的那一点，与右下角的「+」同一档动画。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>上报设置里新增「打开软件时」三档：不做操作、自动连接服务器、直接进入上报。默认不做操作，换档前会先弹确认框。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>自动上报没有开启时，点「待确认上报」只发报一次，不再顺手把自动上报打开。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.24</span>
+        <span class="cl-date">2026-10-20</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>第一次开自动上报、开射频信标或开网关之前，先用单独一页把信息性质、必要性、对个人权益的影响讲清楚，三个功能项按项勾选，默认全不勾。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>用户协议升到 V2.0，三语 59 条，新增第五章「信标上传与发射：须经单独同意」与附件一。设置里新增「单独同意」卡，可以随时撤回并查看同意日志。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.23</span>
+        <span class="cl-date">2026-10-19</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>顶栏点一下就呼出设备快捷面板，两条互联网链路与各路电台一屏切换。新版外壳那颗定位换成了它，经典布局的顶栏也加了一颗。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>聊天气泡淡入着出现，往上挪一点点再落稳，同一条只播一次。长按地图页的上报状态条直接弹出电台身份面板，呼号与备注改完即存。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.22</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>通知栏的小图标换成 APP 自己的剪影，大图标用启动图标；实时更新的胶囊里也是这颗。小米焦点通知那一档删掉了——要厂商白名单，没授权只会被系统忽略。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.21</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>实时更新接上了：上一版那两个方法走的是反射，release 包被 R8 裁掉就找不到，现在直接调用。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.20</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>实时更新修好了：申请提升的两个方法在 androidx 兼容层上，平台的 Notification.Builder 上没有，所以以前一直没反应。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.19</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>通知显示样式多一档「小米焦点通知」，没有厂商许可时照样退回实时更新或普通通知。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>显示页多一个「通知诊断」，把本机支持到什么程度列成几行，可以复制。实时更新不再被缺一个能力查询就整体挡住。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.18</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>显示页里能选常驻通知的样式：普通常驻通知，或者申请 Android 16 的实时更新。选了它，状态栏那一小条里显示距下次上报的倒计时；提不上去就自动退回普通通知。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.17</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>发射来源分成两条：位置与状态报文选一条链路，消息选另一条，两条选同一条也照样工作。消息按自己那条链路的通断判断发没发出去。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>位置与状态报文可以勾好几条链路同时发，射频与网络各一份。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>APRSNETCN 不再有自己的半径与呼号，两条链路共用服务器页上的同一套过滤规则。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>台站备注与状态报文单独一张卡，一种报文一行。快捷面板里 APRS-IS 那一行点得进去它自己的设置页。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.16</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>设置里的连接设置叫服务器。一级列出 APRS-IS 与 APRSNETCN SERVER 两条链路，各有开关、连接状态与发射圆点，点进去才填地址和端口。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>任何服务器地址都不预填。两条链路的地址框一开始都是空的，恢复出厂也清空。地址空着时不去试默认服务器，24 小时台站同步直接跳过。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.15</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>APRSNETCN 和 APRS-IS 摆成两条并列的链路。可以只连它，也可以选它作为发送链路，选了就不会改从 APRS-IS 发。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>发送来源改成每张链路卡上的一个圆点，原来那张发送渠道卡删掉了。这条链路有自己的 passcode，留空就沿用 APRS-IS 那一格。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>台站详情里状态报文单独一块，写明标签。台站备注留在呼号那一列。两种报文不再混在一起。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.14</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>台站详情的状态报文回到呼号右侧。上一版把它挪到发送消息下面，滚屏才看得到，看着像没了。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>设备页那张数据来源卡里，APRSNETCN 的勾选放回来了，两条互联网链路并排。</div>
+        <div class="cl-item"><span class="cl-dot up"></span>连接设置页把 APRSNETCN 做成 APRS-IS 那张卡的等价版本：自己的开关、状态、登录结果、地址、端口、账号口令、筛选，发送渠道单独一张卡。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.13</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>连接设置页同时列出两条互联网链路：APRS-IS 与 APRSNETCN SERVER 各有开关、连接状态与登录结果，地址账号在各自的子页里填。设备页里那一格删了。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>发送渠道改成单选。下拉里选 APRS-IS 或 APRSNETCN SERVER，报文只从选中的那条走；副链路没在线时退回主链路。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>APRSNETCN 链路有了自己的筛选：半径默认一千公里，可以另外加呼号，不再沿用主链路的范围与群呼号。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>翻译接口多了 B 站 Index-Translate，免密钥，自动模式里排第一站；地址与模型都能改，自己部署也能用。台站同步改成翻页拉完，不再只拿前两千台。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.12</span>
+        <span class="cl-date">2026-10-18</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>APRSNETCN SERVER 那一页改成直说：一台基于 APRSNETCN SERVER 协议的 APRS-IS 服务器，地址填进连接设置，收发都走它；在这一页打开，是让它与主链路同时在线，各收各的。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>两条链路都在线时，发出去的每一帧两台服务器各收一份，主链路指的是同一台机器时只发一次。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>台站详情页的呼号旁边加一枚来源标签：APRS-IS、APRSNETCN、TNC、声卡、PKWDWPL，服务器 24 小时台站接口补进来的也标 APRSNETCN。它跟着台站一起存，重启还在。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.11</span>
+        <span class="cl-date">2026-10-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span>APRSNETCN SERVER 从连接设置里搬出来单独一页：地址、端口、账号口令、登录结果、重新连接，排法与 APRS-IS 那一页一致。服务器地址和端口不再写死，填哪台就连哪台，留空就不连。数据来源卡分两组：互联网链接里它和 APRS-IS 并排，TNC、WLAN 电台、声卡归到电台链路。24 小时台站现在只在按下「立即同步」时拉，连上链路不再自己去请求。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.10</span>
+        <span class="cl-date">2026-10-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>连接设置多了「APRSNETCN 副链路」：它和主链路同时在线、只收不发，发报文仍走主链路那台服务器。名单账号与口令填在副链路自己那一格，口令错了卡片里会说明原因。服务器 24 小时里的台站可以点「立即同步」拉进来，只补空，已有的呼号不动；连上链路不会自己去请求。两条链路收到同一帧只记一次。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.9</span>
+        <span class="cl-date">2026-10-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span>数据包页搜索框与连接设置里的服务器地址多了「最近用过的」：点开挑一条就填回去，选错的也能当场删掉，最多留八条。公告里的内嵌视频按屏幕宽度铺开，竖屏不再有黑边，横条也不会留下一大片空白。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.8</span>
+        <span class="cl-date">2026-10-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>外接 GPS 模块供位时手机定位只待机，不再把后台服务一起停掉；模块断流或被拔掉，手机定位会自己接回来，接回失败隔十秒再试。模块只是开着、没在供位时，网络定位也不再被它挡住，室内也能重新拿到位置。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.7</span>
+        <span class="cl-date">2026-10-17</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span>台站页的筛选、地图的图层筛选、锁定地图中心的三态都会记住上次的选择，重启后照旧，也跟备份走。以前每次打开地图都要把航向锁定重新点两下。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.6</span>
+        <span class="cl-date">2026-10-16</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>历史轨迹可以导出成 GPX</b>：今天、最近 7 天、30 天、1 年，或者自己挑一段起止时间。导出的文件落在系统的「下载」目录里，导完可以直接分享出去，用别的软件打开就是一条条带时间的轨迹点。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>地图右侧的「跟随」改成三态</b>：关、锁定中心·正北朝上、锁定中心·航向朝上，点一下就能换。台站页横屏下的排序入口不再消失，按哪个字段排也会记住，跟着备份一起走。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>横屏下地图画的轨迹、信标点、精度圈和热力图不再画到左侧卡片与底部横条底下（卡片是磨砂的，以前蓝线就从卡片里透出来）；上报横条开详细档时，最左边会显示这一发要发的信标符号；启动时体检一次权限，只说「本来有、现在被关掉」的那几项。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.5</span>
+        <span class="cl-date">2026-10-15</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>地图跟着你走</b>：右侧工具列多了一颗「锁定地图中心」。点开以后你走动时地图一直把你的位置摆在中间，不用每次手动回中；缩放仍由你掌握。拖地图、或者点某个台站聚焦过去，锁定自动解开。</div>
+        <div class="cl-item"><span class="cl-dot new"></span>关于页新增「伙伴」一节，收录 APRSNET.CN。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>服务器地址没填时点「连接」不再只是转圈</b>：设置页的服务器一栏会标出「未配置」并写明原因，点连接则弹一句提示，附一个直达连接设置的入口。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.4</span>
+        <span class="cl-date">2026-10-14</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>「待确认上报」不再反复弹</b>：常驻通知以前可能一秒重发一次（定位、台站、电量、倒计时的任何变化都会重写通知文字），系统把它当成新通知再弹一回；现在文字没变就不去碰系统，通知也标成「只提醒一次」。更根上的一处是：链路抖一下（掉线后自动重连、被服务器踢、换发射来源）会把本次连接里你已经点过的「开始上报」抹掉 —— 上报停住，界面与通知跳回「待确认上报」。现在只有你自己点的连接 / 断开 / 恢复出厂才作废这次确认；计划外掉线、自己又连回来的，确认留着，接着上报。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.3</span>
+        <span class="cl-date">2026-10-14</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修好「安卓取不到卫星数」</b>：新机型普遍不再往定位结果里塞卫星数，退路的系统 GNSS 状态里「哪几颗参与了定轨」也不是每台机器都填 —— 于是信标设置页的「当前卫星数」一直是一个「—」。现在按三级取数：定位自带的数 → 参与定轨的颗数 → <b>在视颗数</b>，哪一级有值就用哪一级；监听注册失败也会每 30 秒自己重试一次，不再永久停在「不知道」。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.2</span>
+        <span class="cl-date">2026-10-14</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>信标可带上卫星数</b>：<code>SAT=nn</code> 是可选的备注字段，来源是正在供位的那个来源 —— 手机 GPS（Android 读参与定位的颗数）或外接 GPS 模组的 <code>GGA</code> 语句。默认关；来源不提供这个值时不发，而不是发一个会被读成「一颗星都没有」的 0。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>外接 GPS 设备页多了一张「当前定位」卡</b>：坐标、海拔、速度、航向、卫星数、精度（含原始 HDOP）、定位类型（<code>GSA</code> 的 2D / 3D，也会明确说「模组没报」）、模组时间（UTC）、触发语句与最近一条原始语句都在明面上；龄期（「N 秒前」）每秒刷新，断流后一眼能看出「已经多久没有新定位」。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>不再说「连接 TNC」</b>：外接 GPS 与 PKWDWPL 设备页以前沿用 TNC 那一套按钮文案，点下去看着像要连电台 —— 现在改成按设备说话（扫描设备 / 连接设备 /已绑定设备…），只有真正的 TNC 页才说「连接 TNC」。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.1</span>
+        <span class="cl-date">2026-10-14</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>外接 GPS 定位来源</b>：蓝牙 SPP / USB 串口接入 NMEA 0183 模组（<code>RMC</code> / <code>GGA</code> / <code>GLL</code> / <code>ZDA</code> / <code>GSA</code> / <code>VTG</code>），作为本机位置，只收不发。位置优先级：模拟位置 ＞ 外接模块 ＞ 佳明手表 ＞ 手机 GPS。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>设备页新增「外接 GPS」子页</b>：扫描 / 绑定 / 连接 / 断开 / 重启，以及定位接收统计；数据来源卡把手机 GPS / 外接模块 / 佳明列在一处并写明优先级；信标横杠显示位置来源（如「外接 GPS 上报 · 45s」）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.1.0</span>
+        <span class="cl-date">2026-10-14</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>封面彩蛋不再等那五秒</b>：关于页封面上那颗蛋，以前点一下要盯着一张不动的封面等五秒 —— 谁也分不清那是彩蛋还是卡住了。现在<b>一点就是一次激活</b>：抖动、翻面、粒子一起发生，翻牌动画刚走完，那一页故事就递到眼前；再点一下翻回正面，故事也不再打开。故事<b>能内嵌的平台（Android / iOS / macOS）直接在应用内整屏翻开</b>，只有 Windows / Linux / Web 才交给系统浏览器。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>离开这一页，音乐就停</b>：故事页自带背景音乐，以前退出这一页（返回或切到后台）之后声音还在响 —— Android 的 WebView 拆掉后，页面里的音频（<code>audio</code> 元素）并不会自己安静。现在退出前先把声音按停、退场动画里再把整页腾空，切到后台也同样按停。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.68</span>
+        <span class="cl-date">2026-10-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>智能体回复更快</b>：2.0.67 的「逐字回复」请求体里<b>漏了 <code>stream</code></b>，后端按普通请求回一整段 JSON，应用判定「没拿到流」后<b>又把同样的请求发了一遍</b> —— 每轮白等一倍时间、白花一倍 token。现在流式请求真的带 <code>stream</code>：一次请求、边收边显示；后端不认这个字段时照旧自动退回整段式，<b>不会少一句回复</b>。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>智能体不再「调几次工具就断掉」</b>：单个工具出错不再带走整轮对话（异常变成<b>这次调用的结果</b>回给模型）；一轮的工具往返次数用完后会补一次<b>不带工具</b>的收尾请求，把结论说出来，而不是干停在最后一个工具气泡上。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>台站备注更完整</b>：备注单独成行、可换行、默认不限行数，长备注不再被省略号吃掉；备注里的网址（<code>https://…</code> / <code>www.…</code>）自动变成<b>可点链接</b>，台站列表 / 台站详情 / 地图信息浮窗三处一致。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>智能体更快</b>：默认系统提示从 5.3KB 瘦到 2KB —— 它原本把 57 个工具的用法逐条复述了一遍，而每个工具的说明本来就随请求一起发。工具描述也一并精简（名字 / 参数 / 取值都不变）。系统提示 + 工具schema 每轮都要重发，两份合计小了约四分之一，回复更快。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>台站状态报文更省、不再闪</b>：APRS-IS 保活以前每 15 秒先发一帧 <code>>APRSlocus CONNECT …</code>、再发一帧你的自定义状态，白占一帧还让 aprs.fi 上的状态在两者间反复闪。现在<b>只发一帧、谁有内容发谁</b>：填了自定义发自定义，没填才发内置默认帧；CONNECT 身份帧只在连上的一瞬间发一次。自定义帧万一写失败仍会自动补发，状态不会被 CONNECT 顶掉。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.67</span>
+        <span class="cl-date">2026-10-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>智能体可以「逐字回复」了</b>：回复不再是「转半天整段蹦出来」，而是边生成边逐字上屏，长回答尤其明显。优先走真流式（SSE 逐块增量）；后端不支持流式（忽略 <code>stream</code>、或 Web 平台）时自动退回整段请求，再用打字机效果补上逐字观感 —— <b>不会少一句回复</b>。设置页「接口」折里可开关（默认开）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>智能体「工具操作历史」+ 工作状态冒泡</b>：聊天框标题栏新增「工具操作历史」按钮，记下它<b>每一次</b>工具调用（工具 / 参数 / 结果 / 时间 / 成功 · 被拒 · 失败），最新在前、可一键清空，按钮带数字角标。有活儿时旁边还会冒一个状态气泡：「正在操作：xxx」或「思考中…」，不用盯着对话猜它在干嘛。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>台站详情 PHG 更清楚</b>：功率 / 天线高度 / 增益 / 方向从一行灰字改成一张<b>橙色小卡片</b>，四项各自带标签与单位，一眼可读；全向方位显示为「全向」，不再露出 <code>360°</code>。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>数据包页更清晰</b>：每条报文的「呼号 → 目标」单独成行，不再和徽标、时间挤在一起被省略号截掉；「原始模式」不再截断，完整显示整条报文（路径 / 数据扩展 / 备注不再被吃掉），可换行、长按复制。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.66</span>
+        <span class="cl-date">2026-10-13</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>智能体可以操作「策略地图」了</b>：现在能用一句话让智能体在群里给队友标点、画线、画圈、放集合点 —— 它调用 <code>strategy_add_point</code> / <code>strategy_add_line</code> 等新工具，元素立刻落到每个人图上并广播给群；也能用 <code>list_strategy</code> 看清图上有哪些元素、按 id 修改或删除，或 <code>strategy_clear</code> 一键清空。只读的 <code>list_strategy</code> 免确认；会发 APRS 帧的写操作仍需「允许发送 / 允许修改设置」权限与逐次确认。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.65</span>
+        <span class="cl-date">2026-10-12</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复 WLAN 电台直连无法更改射频中继路径</b>：「WLAN 电台直连」（IC-705 / IC-9700 / IC-7610 / IC-905）子页原本没有中继路径入口，想改 <code>WIDE1-1,WIDE2-1</code> 之类的射频路线无处可填。现在该页补上「射频中继路径」输入框，与 TNC / 音频页同一个键、同一个语义（留空 = 不指定中继），改完立即生效。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.64</span>
+        <span class="cl-date">2026-10-11</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复连电台热点后 APRS-IS 断线</b>：连上 IC-705 等电台发出的 Wi-Fi 热点后，系统把它当成默认上网通道、暂停移动数据 —— 于是电台连上了，APRS-IS 反而掉了。现在改为向系统申请一条<b>本地 Wi-Fi 网络</b>并把电台的 UDP 流量<b>绑定到 Wi-Fi</b>，APRS-IS 仍走移动数据，两条路各走各的；低版本 Android 退回原有方式。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.55</span>
+        <span class="cl-date">2026-10-10</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增香港节点：阿里云 OSS（香港）更新通道</b>。更新页多出与该渠道并列的「Aliyun OSS（香港）」，与广州节点同属团队承担的 CDN 分发，区别只是阿里云区域 —— 广州国内可达性好，香港在<b>跨境 / 境外网络</b>下更稳；两条渠道都会显示「请少量使用 🙏」。发版流水线现在把每个版本的安装包与索引<b>同时</b>推到广州（<code>aprslocus</code>）与香港（<code>aprslocushk</code>）两个 bucket，香港走自定义域 <code>aprslocushk.oss.theez.top</code>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.54</span>
+        <span class="cl-date">2026-10-10</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>改地图交互</b>：单击台站标记不再「飞过去」并放大，而是<b>选中并显示呼号标签 / 信息窗</b>，想连着看几个相邻台站时地图不再跳；详情改为<b>双击</b>（或点信息窗）进入。同时<b>提升卫星影像可读性</b>：台站符号加一圈深色光晕，主地图与策略地图的呼号标签在卫星图上改为「深底白字」。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.53</span>
+        <span class="cl-date">2026-10-10</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复阿里云 OSS 渠道下载 400</b>：OSS 默认域名对 <code>.apk</code> / <code>.ipa</code> 下载一律返回 <code>ApkDownloadForbidden</code>（<code>.exe</code> 不受影响）。改为上传时给这两类对象加 <code>.bin</code> 后缀、索引里的下载地址随之指向 <code>xxx.apk.bin</code>，而资产名不变 —— 客户端无需改动。发版自检现在会真去下每个资产。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.52</span>
+        <span class="cl-date">2026-10-10</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增阿里云 OSS 更新通道（可选）</b>：在 GitHub / GitCode / Qingling 之外再加一条，安装包放在阿里云对象存储、客户端走<b>阿里云 CDN</b>（<code>aprslocus.oss-cn-guangzhou.aliyuncs.com</code>）取包，国内可达性好。默认<b>不启用</b>，需在更新页手动切换。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>费用提示</b>：该通道流量费由<b>开发团队</b>承担，切到它时更新页顶部会常驻一条提示，请<b>少量使用</b> 🙏。发版流水线新增 <code>publish-oss</code>，把安装包与一份 GitHub 同格式的 releases 索引一并上传；凭据只从 GitHub Secrets 读取，<b>不写进仓库</b>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.51</span>
+        <span class="cl-date">2026-10-10</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增 Qingling（清零）更新通道</b>：国内直连 GitHub 取更新包常失败，现多一条可选渠道，指向<b>自建镜像</b>（先取回发行版、再以 GitHub 同格式接口提供，客户端不直连 GitHub）。通道地址集中在 <code>updateChannelBases</code>，更新页与启动提示共用一份，避免漏改。清零通道走 <b>HTTPS + 内置自签证书钉扎</b>（只钉交付服务器那一个主机，其余渠道仍走默认信任链），传输加密、中间人无法篡改，且无需域名 / 备案 / 买证书。默认仍是 GitHub。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复测试流水线产物</b>：Windows 测试版此前只打 Flutter 启动器（约 123 KB，缺 <code>flutter_windows.dll</code> 与 <code>data/</code>，双击无反应）→ 改为单文件安装器并加 <code>if-no-files-found: error</code>；iOS 测试版产物名会丢掉fork 标识 → 保留版本后缀。另：v2.0.50 已发布，本次带新功能，版本递增到 <b>2.0.51</b>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.50</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复音频参数改了不保存</b>：在音频设置里改采样率 / 波特率 / 音调 /TX 前导延时 / <b>输出幅度</b>，改完不按回车、直接点别处会<b>悄悄丢掉</b>——没按回车的输入框只挂了 <code>onEditingComplete</code>，而它只在回车时触发、<b>失焦不触发</b>。现在<b>失焦即落定</b>，回车仍可立即确认；输出幅度只重建调制器、<b>不中断接收</b>。IC-705 的电台参数与 TNC 串口线速同款问题一并修好。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.49</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复声卡能收不能发</b>：接电台时对方解不出，是因为<code>输出幅度</code>这个决定是否削顶的增益<b>在界面上根本改不了</b>，而两条告警都写着「请调输出幅度」。发射卡现新增<b>「输出幅度」输入框</b>，改完立即生效（只重建调制器，不打断正在进行的接收）。同时<b>标明当前发射来源</b>（音频连上 ≠ 从音频发），并提示<b>软件不会按电台 PTT</b>（需 VOX 或数据口键控）。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>数据包页标明来源</b>：每条报文都带<b>来源徽标</b>（APRS-IS / TNC / 声卡 / PKWDWPL / 本地），排查「射频通不通、网关有没有转」时一眼看清这条从哪来。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.48</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复设置页箭头没贴右</b>：标题用了「松份额」<code>Flexible</code>，文字短时会留剩余空间、箭头左飘；改成紧份额 <code>Expanded</code> 后箭头恒定贴右，说明列起点也随之对齐。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.47</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>点空白收起键盘</b>：点聊天框以外任意处即取消输入聚焦；<b>设置页整理对齐</b>（图标底座 / 图标 / 箭头尺寸统一，说明文字左端对齐）；「关于」下方新增「<b>用户反馈</b>」入口，直达<b>仓库 Issue</b>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.46</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>输入框更顺手</b>：主操作键平时是「＋」（发位置点），<b>一点进输入框就变成「发送」</b>；「<b>译发</b>」也从「＋」里<b>挪到外面常驻</b>，一键可用。分享出去的位置点点一下会弹<b>小面板</b>，可直接选<b>在地图查看</b>或<b>导航</b>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.45</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>选台站，能搜能翻页</b>：私聊「+ → 发送位置点」里新增「选择台站」，<b>按呼号 / 别名搜索</b>、<b>分页浏览</b>（每页 20 条、上/下页带文字按钮），有定位时按<b>近 → 远</b>排序；行尾可先看台站详情。台站详情「更多」里也能<b>把这个台站分享到其它会话</b>。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>位置点自由选、样式统一</b>：分享位置点在地图上<b>任取坐标</b>（或「我的位置」）；点按后<b>套用台站面板</b>，可直接<b>呼出导航</b>。对话里的<b>呼号识别修正</b>：只要形如呼号即可点击，已在台站列表用实线、暂未收到的用虚线，点开都能看台站面板。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.44</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>私聊也能发位置</b>：一对一会话里点输入栏「+」即可<b>在私聊发送位置点</b>——拖动地图任取坐标，或直接「我的位置」；还能<b>分享某个台站</b>。对方收到后是一条专用卡片消息。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>消息里的呼号可点击</b>：对话中识别到的台站呼号像超链接一样，点一下即打开台站详情；分享台站的位置卡片点按同样是打开台站面板（自由选点则跳主地图）。输入栏也收敛成微信式的一个「+」。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.43</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>策略地图更顺手</b>：点队友/自己标点直接打开<b>台站详细面板</b>；「导航」交给手机地图应用（高德 → 系统地图 → 浏览器 OSM）；地图上新增<b>「我」的位置</b>（蓝点 + 呼号 + 方位角）与「定位到我」一键回位。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>策略变动在群聊留痕</b>：新增 / 改动 / 删除 / 清空图层都会在群聊留一条提示，队友点一下即跳进策略地图；<b>群聊发送不再弹确认</b>，直接发（未连接服务器会先拦下提示）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.42</span>
+        <span class="cl-date">2026-10-09</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>策略地图升级</b>：地图上新增<b>队友位置 + 方位角小角标</b>（按去 SSID 的基呼号匹配群成员台站，静止/无航向就不画），<b>线 / 圈可选颜色</b>（全网一致六色调色板），画点等<b>策略消息在群聊留可点击提示</b>，点一下直接跳进对应群的策略地图。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>射频也能用群聊与策略地图</b>：<code>groupChatAllowed</code> 放开为始终可用，射频（TNC / 音频）下策略帧改用带 ack 格式，借队友的标准自动 ack 判断送达；90 秒未确认视为「不确认」（队友可能关了自动 ack），可在策略地图页手动重发。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修复策略点「跳转导航」</b>：策略点不在台站表里，补画一枚焦点标记，跳转改为瞬时落位（不再走过渡动画），不会再停在「飞了一半」的中间态。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.41</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>群内「策略地图」</b>：与队友 / 群组共享<b>标点、线、圈、集合点</b>，复用现有群组、数据经 APRS 消息传输（帧前缀 <code>$M</code>，超长的线自动分片，任何帧都 ≤ 67 字符）；元素支持<b>跳转导航</b>与编辑附带信息，可「清空图层」同步全群。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>地图长按快捷消息</b>：长按 beacon / 台站弹出快捷消息面板，复用现有发送链路。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>移除 OOBE Passcode 提示</b>：首次启动引导里不再出现「获取 Passcode」提示。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.40</span>
+        <span class="cl-date">2026-10-08</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>消息页「发射位置信标」按钮</b>：消息页大标题右侧新增一键按钮，随手手动发射一次位置信标（与地图页「立即上报」同一动作），不改动自动上报开关；位置还没就绪时如实提示「等待定位」，窄面板下自动缩为图标。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.39</span>
+        <span class="cl-date">2026-10-08</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>备份包含历史轨迹</b>：导出备份时，「设置配置」分组会一并带上<b>历史轨迹</b>（按天原样搬运），换机导入后轨迹照常保留、可继续翻账。备份格式升到 <b>v2</b>，旧备份（v1）仍可导入；轨迹在导入时<b>按天合并</b>，本机较新的一天不会被旧备份顶掉。轨迹是不带类型标签的独立载荷，不参与偏好白名单校验。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>关于页文案</b>：副标题去掉「本机」限定词，六语言统一为「APRS 客户端 · 定位与地图」，不再让人误以为只在本机运行。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.38</span>
+        <span class="cl-date">2026-10-07</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>天地图图层</b>：底图新增「天地图」分组，共三张 —— <code>天地图 矢量</code>（vec）、<code>天地图 影像</code>（img）、<code>天地图 地形</code>（ter）。天地图的底图<b>本身不含地名</b>，文字在单独的透明注记层（cva/cia/cta），因此每张底图都会<b>叠上对应注记</b>（矢量叠 cva、影像叠 cia、地形叠 cta）；底图与注记分开缓存、离线时一起下载，不会出现「有图无地名」。天地图实测为 <b>WGS-84</b>（与 Esri/OSM 影像零偏移），因此不做 GCJ 纠偏，可与 OSM 互为兜底；瓦片支持到 z18。Key 走构建期注入（CI Secret <code>TIANDITU_KEY</code>），源码不落 key；未配置时自动退到 OSM，地图照常可用。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.37</span>
+        <span class="cl-date">2026-10-07</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>地形 / 等高线图图层</b>：地图底图新增「地形」分组，一次给到四张对登山友好的地形底图 —— <code>OpenTopo 地形</code>（带等高线，从「其他」移入）、<code>Esri 地形(等高线)</code>（路网 + 地名 + 等高线，最像纸质等高线地形图）、<code>Esri 地形浮雕</code>（纯浮雕，看整体地形最干净）、<code>Esri 山体阴影</code>（只看沟壑走向）。四张都免 Key、可离线下载、与 OSM 互为兜底；它们本就是 WGS-84 国际瓦片，因此不做 GCJ 纠偏，不会整体偏位。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.36</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>连上服务器后手动确认再上报</b>：无论用哪种方式定位，连上服务器后都<b>不再自动上报位置</b>。主界面上报动作组给出一枚正式的「开始上报」按钮 —— 拿到本轮有效定位前置灰显示「等待定位」，确认坐标有效后点一下才开始按间隔自动上报，并立刻补发一次让用户在地图上看到自己。断开 / 重连 / 重开 App 都会复位这个确认，绝不回到「连上就自动上报」；顺带去掉了连接成功后自动弹出的询问弹窗，改为这枚按钮（不打扰）。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>荣誉墙更好看</b>：成员荣誉墙加上工具条 —— 搜索框（按姓名 / 呼号 / 称号过滤）、实时概览（多少位伙伴、多少枚徽章）、以及可横向滚动的徽章图例（点一下直达对应分组）。卡片、分组标题与响应式布局一并打磨，键盘也能导航；<b>荣誉卡的导出样式（PNG）保持原样不变</b>。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.35</span>
+        <span class="cl-date">2026-10-06</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>模拟位置重启后不自动生效</b>：选了「模拟位置 + 手动定位」并保存了坐标后，下次启动 App 虽然把坐标装了回来，上报闸却一直关着 —— 界面停在「等待定位」，必须再点一次「应用坐标」才能定位上报。原因：启动时把保存的坐标一律当成「上次的实时定位」关闸（GPS 模式下这是对的，防止定位没开就报旧坐标），而 GPS 的自动定位路径又会被「模拟位置」挡掉，于是这个闸永远开不了。现在模拟位置下保存的坐标<b>就是</b>用户选定的坐标，启动即放行、并同步过滤中心；顺带把模拟位置的保活前台服务也在启动时拉起（与 GPS 模式对称）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.34</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>非整数缩放级别下地图发糊</b>：实测各图源返回的像素后发现，除了高德街道（wprd 主机 + <code>scl=2</code>）给 512px，Carto / OSM / Esri / 腾讯 / 高德卫星<b>都只有 256px</b> —— 图源本身不是主因。真正的问题在选层级：地图用 <code>zoom.floor()</code> 取瓦片级，于是整档 <code>[z, z+1)</code> 都取 z 级瓦片，越接近 <code>z+1</code> 源图被拉得越大（z=12.9 时 <b>1.93×</b>），再乘屏幕像素密度 2~3 倍，物理上放大 4~6 倍，必然糊。改用 <code>zoom.round()</code>：放大封顶在 √2≈1.41×，后半档转为缩小，<b>对所有图源</b>都生效。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.33</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>上报界面合并，一处开关两处按钮</b>：把分散在地图状态栏、我的面板、沉浸页的「立即上报」收进共用的 <code>ReportActions</code>（自动上报开关 + 立即上报按钮），删掉重复实现与「上报成功」的假提示；设置里统一叫「自动上报」并加了指回主界面的说明。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.32</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>数据维护页重排 + 恢复出厂</b>：把「台站保留天数」从「连接设置 → 存储上限」移进「数据维护」页、与清理按钮同页（改为下拉选择）；手动清理不再复用自动清理的天数，而是<b>当场选一个独立天数</b>；新增<b>「清除所有数据并重新初始化」</b>——连呼号、服务器、信标、界面等全部设置一起清除，并重新运行首次引导。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.31</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>自定义状态「有时还显示 CONNECT」</b>：状态报文是「内置身份帧 + 自定义状态」一对，写的是 aprs.fi 上同一个「台站状态」栏、后到者覆盖。补发那一帧原本是「发射即忘」，socket 抖动时可能静默写失败，于是 aprs.fi 停在 CONNECT 上、每轮保活又续一次。现在连接器<b>回传发送成败</b>，保活记住「上次自定义帧丢了」，<b>下一拍立刻补发自定义帧本身</b>（不再发 CONNECT）直到成功 —— 状态不会再被内置文本顶掉。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.30</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>数据维护：按天数清理过时台站</b>（issue #33）：设置里可设「台站保留天数」，超过该天数<b>没再听到</b>的台站会在启动时自动清理；「数据维护」页还提供<b>立即清理</b>入口，并先显示会清掉多少个。<b>只清普通台站</b> —— 收藏 / 手动添加 / 你自己的台站永不被清理，恰好卡在阈值上的也保留；保留天数 0 = 关闭自动清理。清理不可恢复，所以绝不静默全清。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.29</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>稍微使劲放手机就触发碰撞提醒</b>（issue #32 后续）：旧判据是「一个冲击尖峰 + 之后 12 秒不动」，而放手机恰好同时满足这两条。阈值调高也救不了 —— 这是判据本身的问题。现在把两种事件的要求<b>分开</b>：<b>摔倒</b>要有自由落体（失重）再落地冲击；<b>碰撞</b>没有失重可依据，就要求冲击<b>明显更狠</b>（约两倍阈值）。真实车祸峰值动辄 20g 以上，照样抓得到，轻放手机的 3~8g 被挡掉。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修一个自由落体判据的 bug</b>：此前判「失重」用的是<b>去掉重力</b>的线性加速度，而它在静止时恒为 0 —— 于是「放着不动」被当成了「一直在自由落体」，每次冲击都被判成摔倒。现在改用<b>含重力的总加速度</b>（静止≈1g，只有真失重才趋近 0）。说明卡也据实更新了。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.28</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>生命守护「强提醒」</b>：碰撞 / 摔倒、心率异常触发时，除了应用内弹窗，还会发一条<b>高优先级系统通知</b>（响铃 + 震动 + 锁屏/抬头横幅）。此前告警只挂在那条安静（<code>IMPORTANCE_LOW</code>）的常驻通知上，系统不为它震动也不弹横幅 —— 手机放兜里（摔倒或开车时最常见的状态）根本察觉不到。强提醒走<b>单独</b>的高优先级通道；Android 需要 <code>VIBRATE</code> 权限（已加）。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>碰撞 / 摔倒检测算法优化</b>：在原有「冲击 + 随后约 12 秒静止」之外，再看冲击前有没有<b>自由落体</b>（加速度模 ≤ 0.35 g 持续 ≥ 80 毫秒）—— 摔倒几乎总是先自由落体再落地冲击，车祸撞击则没有那一段。据此把告警区分为<b>摔倒</b>与<b>碰撞</b>，标题、图标与说明文字随之变化。两类告警的<b>处理方式完全一样</b>，这只是把判断说得更准；仍然是启发式，弹窗里照旧写明「不是工程级检测」。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>检测灵敏度三档</b>：设置 → 生命守护新增「灵敏 / 标准 / 抗颠簸」。原来阈值写死，适配不了不同携带方式 —— 手机放裤兜里骑车，正常颠簸就能越过阈值；固定在车把上又一路误报。灵敏度只影响<b>检测</b>（哪个撞击算数），不影响告警动作；随备份一起走。同时 <b>iOS 补齐</b>了本地通知与同款碰撞/摔倒检测。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.27</span>
+        <span class="cl-date">2026-10-05</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>连接成功时用户自定义状态包被内置身份帧顶掉</b>（issue #31）：连上 APRS-IS 会先发一帧身份状态帧宣告在线，它会把 aprs.fi 上「台站状态」那一栏改成内置文本。此前只有 15 秒保活帧会补一帧自定义状态，连接成功这条路径<b>漏了</b> —— 于是每次重连都把用户设的状态顶掉一次。现在两处都补发。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.26</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>地图「我的位置」标记显示方位角</b>：圆环上多出一个朝航向的三角箭头（蓝底白边，与圆点同一套视觉语言），一眼就能看出自己朝哪边走。纯网络定位 / 静止未取得航向时不画，不拿猜的方向误导。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>左下角「我的位置」面板显示的上报间隔与倒计时不一致</b>：面板那行「自动上报中 · 每 Ns」读的是<b>固定间隔</b>字段，而右边的倒计时读的是<b>当前生效间隔</b>。纯网络模式下两者不同（生效值 = 网络间隔，默认 300 秒），于是间隔卡在 GPS 模式留下的旧值不动。现在两处都改用生效间隔。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.25</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>群发前提示一次确认</b>：无论从消息页选中群聊发送，还是从群跟踪页的快捷聊天面板发给整个群，发送前都会弹一次「确认发送到 &lt;群呼号&gt;？」。群发是一键发给全体成员，发出去收不回来，值得先问一句。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>邀请前提示一次确认</b>：单成员邀请（手动输入呼号或点成员旁的对勾）与建群时的批量邀请，都会先弹一次确认（建群那句会写明「将邀请 N 位成员」）。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>升级 / 更改文件重装后「今日步数」归零</b>（issue #22-2）：今日步数此前只存在内存里、从不落盘，任何一次冷启动、覆盖安装或改文件重编译都会先回到 0，若一直没等到传感器读数就永远停在 0。现在<b>每次步数变化即落盘</b>，启动时把今日步数接回来；跨天照常按日期归零，同一天内设备重启则把重启前已累计的部分接续上，不再凭空少一截。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.24</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>荣誉庆祝不再区分新老用户</b>：此前「只有被新授予的称号才弹」，自己本来已有的荣誉从不展示。现在改为：<b>本地没有「已阅读」记录，就把当前已拥有的全部荣誉依次弹一遍</b>（全新安装、旧版本升级、记录被清除都算无记录）；看过一次即落盘，之后不再重复（除非该账号新获荣誉）。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>步数排行榜点「我」那一行，弹出的提示条黑乎乎一片</b>：提示文字用了 <code>ts(12)</code>，其默认取色是深色，压在同样是深色的提示条底上 —— 深字叠深底，一个字都看不清。改为显式白字（设置页里同类的一处一并修）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>开发者选项新增「清除已阅读荣誉」</b>（设置 → 实验室与开发者工具）：清掉本机「已阅读」记录，下次判定会把当前已拥有的荣誉重新展示一遍，方便预览与自测。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.23</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>显示设置新增「始终显示地图标签」</b>：打开后，无论台站多密、缩得多小，地图上都会显示每个台站的呼号标签（栅格与矢量两套地图都生效）。默认关，沿用原取舍（台站 ≤ 60 个或放大到 13 级以上才显示）—— 打开会明显变密、标签也可能互相重叠，渲染也更费；该偏好随备份一起走。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>拦截页「长按解封」按不出来</b>：远程限制名单里<b>软封</b>的隐藏解封入口（长按本机安装标识）此前被两处手势抢走 —— 标识用的是可选中文本，长按会弹出系统选区工具栏；旁边的复制图标又因长按提示抢走同一手势。于是长按永远不是「解封」，用户看到的就是「变成复制/选择工具栏」。现在标识行是<b>单一手势区</b>：点一下 = 复制、长按 = 解封（软封有效；硬封仍按设计静默无反应）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.22</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修好「老用户看不到新荣誉庆祝」</b>：上一版的新荣誉庆祝只在你关闭过动画后才记录「已见」，而旧版本没有这个功能 —— 升级后设备上只有荣誉表、没有已见记录，旧逻辑把这种情况当成全新安装、「等第一份在线名单再建基线」，而那份名单<b>已经含刚授予的称号</b>，于是新荣誉被算进基线、<b>永远不弹</b>。现在按「本地是否已有荣誉表」区分：老用户升级时立刻用本地缓存建基线，同一会话内到达的在线新授予即可正常弹出；全新安装仍等在线名单，不会把已有荣誉狂弹一遍。<b>一次授予多枚只弹一枚</b>也修了：现在按顺序逐枚弹，关闭一枚自动补下一枚。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>首次运行的向导不再预填连接参数</b>：服务器、端口与 Passcode 一律留空（仅以灰色提示常值），不再默认填好 <code>rotate.aprs2.net</code> / <code>14580</code> / <code>-1</code> —— 软件不预置、也不推荐任何服务器地址；重新运行向导时仍会回填你保存过的值。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.21</span>
+        <span class="cl-date">2026-10-04</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新获荣誉时弹出「恭喜获得」庆祝动画</b>：打开软件后若检测到账号<b>被新授予</b>荣誉（成员称号或 FIRST FIX），会弹出一屏庆祝：半透明遮罩上金箔粒子四散，中央白底卡片里徽章带光环 / 射线浮现，随后荣誉名、描述与主按钮依次淡入。造型沿用全 App 的浅色卡片语言，徽章配色与荣誉墙一致；点按任意处或按钮关闭，<b>同一枚荣誉只弹一次</b>。判定只在<b>在线名单</b>到达后进行，全新安装不会把已有荣誉误当新授予弹一遍。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.20</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>手指落在台站上时地图无法缩放/拖动</b>：台站标记的手势会把地图的手势挡掉（<code>HitTestBehavior.opaque</code>），改成 <code>translucent</code> 后标记与地图都收到指针 —— 点 = 选中台站，拖动/捏合 = 地图；栅格与矢量两套地图都改了。<b>矢量地图的热力图失效</b>也修了：原来被 <code>!_usePluginMap</code> 整个排除，现在矢量地图也画热力（用 flutter_map 相机投影）。<b>「从收藏台站开始」新建会话黑屏</b>也修了：它会先把「新建会话」对话框关掉，选完人后又关了一次，把整个消息页弹掉 —— 现在只有对话框还开着时才关。<b>手动选点（模拟位置）没有系统通知</b>也修了：手动设坐标会停掉前台服务却没把保活起回来 —— 现在会起回来。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>热力图档位</b>（设置 → 显示 → 地图）：弱 / 中 / 强，调整热力光斑的大小与浓度，两套地图共用同一个值。<b>台站详情重新显示 PHG</b>（功率 / 天线高度 / 增益 / 方向），这次是独立一行、不再挤进三列指标。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.19</span>
+        <span class="cl-date">2026-10-03</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>地图不再卡</b>（三处根因）：矢量地图原来<b>完全没有视口裁剪</b>、还把全世界台站塞进 MarkerLayer，而台站版本号每个报文都 +1 —— 于是每个报文都重建几千个标记；现在只建视口内的 + 标记带 <code>key</code> 按身份复用 + 台站密时不画呼号标签。<b>瓦片拖动不丝滑</b>也修了：手势期间压住新瓦片的下载与解码，手停再补。<b>数据包页</b>每行重播淡入动画（时长还随行号无限增长）也改成只播一次。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增</b>：设置主页的连接状态面板点一下 → 弹出「链路方式」浮动面板（数据来源快捷切换，与「连接 → 设备」页同一张卡片）；「新建会话」下面加「从收藏台站开始」；台站列表加「收藏」筛选，收藏视图下每行一颗星标点一下即取消收藏；<b>运动排行榜把自己排进列表</b>。另外修好：佳明链接断开时请求堆叠（可能卡顿/闪退）、盒子「连接 TNC」的错误文案、设置主页过时的「待开放」、地图图例已去掉。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.18</span>
+        <span class="cl-date">2026-10-02</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增：WLAN 电台直连</b>（支持 IC-705 / IC-9700 / IC-7610 / IC-905 等 Wi-Fi 与以太网型号）。手机与电台在同一局域网即可收发 APRS 音频，不用声卡或 TNC；PTT 与频率控制走 CI-V、音频走网络，不占用音频口；新增独立的电台设备页与并列的数据来源入口，并带 19 个新测试。由社区贡献者 nimenhagg 实现（PR #29）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.17</span>
+        <span class="cl-date">2026-10-02</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>用户协议更新到 V1.2</b>：明确"不预置、不推荐任何服务器地址，默认不连接任何 APRS-IS / iGate / 网络服务器"，并补齐自行配置的责任、合法使用与数据安全条款；首次引导里服务器留空即不联网（不再预填公共服务器、不再自动连接）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.16</span>
+        <span class="cl-date">2026-10-02</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>启动时的远程检查更及时</b>：现在每次启动都会检查一次（原来要等最长 6 小时）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.15</span>
+        <span class="cl-date">2026-10-01</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>用户协议更新到 V1.1（含赞赏声明）</b>。三语同步、34 → 41 条，把「软件实际会做的事」补齐了：网关转发等于<b>代表他人在业余频段上发射</b>（3.5）；未成年人需监护人同意、无资格不得发射（3.6）；发出内容要真实、准确、合法并尊重各国法律与文化习俗（3.7）；与哪些第三方通信（天气发送位置、翻译发送文本、更新向 GitHub 请求…，不使用即不发生，5.3）；「生命守护」等不是医疗设备、不是紧急救援（7.6）；数据可能传入第三方软件服务的免责（7.7）；<b>关于赞赏</b>（自愿、不换取功能、不予退还、未成年人需监护人同意，9.4）。应用内公告与赞赏页都有同一口径的说明。同版还修了三处：<b>蓝牙连不上就闪退</b>（阻塞的连接跑在主线程 → 系统判定无响应）、<b>电量半天不动</b>（只在有定位时才读）、<b>运动排行榜</b>的占位文字与排序口径（只统计今天，且自己也在榜上并标出）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.14</span>
+        <span class="cl-date">2026-10-01</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：盒子上的「APRSLOCUS」实时仪表盘</b>。接着上一版的盒子支持，这一版把<b>手机那侧的实时状态</b>也推给盒子：心率、速度、方位、<b>自动上报倒计时</b>（带进度条）、里程（本次/累计）、电量、步数、定位精度、APRS-IS 与未读 —— 跑步骑车时手机在包里，挂在车把上的盒子一眼就能看到。心率测到就放大当主角，没测到自动换成速度；附近台站另拆一页 <b>NEARBY</b>（整屏 8 行）。协议改用 <code>TEL k=v …</code>：应用以后加字段<b>不用动固件</b>（不认识的键静默跳过；空值不发，盒子写 <code>--</code>，绝不显示假的 0）。另：<code>IS rx-only</code> 现在三处写清原因（首页 <code>set pass</code>、SYS 页的服务器原话、应用事件日志）并给出修法（<code>pass</code> 填<b>基础呼号</b>的 passcode）；倒计时改为<b>盒子本地每秒递减</b>，状态推送收紧到 5 秒。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.13</span>
+        <span class="cl-date">2026-10-01</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：APRSlocusBOX（APRS 小盒子）—— 用手机管你那台小盒子</b>。「设备」页多了一条 <b>APRSlocusBOX</b>：连上盒子之后，手机上就能读它的配置、改它的配置、把手机的位置喂给它、催它发一帧信标、看它到底在干什么。连接走<b>蓝牙 SPP 或 USB 串口</b>（独立通道，管盒子不会打断正在收发的 TNC）；配置是全部 23 个键（键名与盒子文档逐字一致），改完还会自动回读 —— 显示的是<b>盒子里的真值</b>；盒子推回来的 <code>EVT …</code> 事件与命令回执一并显示，可一键复制。这一版还把<b>手机这侧看到的东西</b>推给盒子：自己的速度/方位/海拔/有没有定位/APRS-IS 通不通/未读消息，以及<b>附近台站列表</b>（按距离，最多 8 条）—— 盒子新增的 <b>PHONE 页</b>显示这些。盒子只跑蓝牙（自己不上 APRS-IS）时，「旁边有谁」在它上面本来是空的，现在这份数据能顶上去。两条刻意的规矩：盒子<b>不是</b>「数据来源」（它自己就上 APRS-IS，本应用再收一遍只会重复），且<b>绝不自动发射</b> —— 信标与状态报文必须人点，自动的只有本地的位置喂养与状态推送（都不上射频）。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.12</span>
+        <span class="cl-date">2026-10-01</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：更新页不再让你自己选包，也不再跳浏览器</b>。上一版把三个包的名单摆出来、点一行去浏览器下载 —— 这是错的：绝大多数人只知道「我要更新」，让他去理解<code>armeabi-v7a</code> 是什么、该选哪一个，等于把应用该做的事推给用户。现在更新页<b>按本机 CPU 自动挑好对应的包</b>（<code>Abi.current()</code>，无需原生通道）并<b>直接在应用内下载</b>：32 位老机型自动拿到 32 位包、模拟器拿到 x86_64，不会再出现「下完提示与设备不兼容」；认不出架构时回退到分架构之前的行为，所以也不会变成「挑不到包」。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.11</span>
+        <span class="cl-date">2026-10-01</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot up"></span><b>安卓安装包按 CPU 架构分包：81.6 MB → 约 30 MB</b>。实测上一版 81.6 MB 里<b>76.6 MB（94%）是三套原生库</b>（应用代码编译出的机器码 + Flutter 引擎，分别对应 arm64-v8a / armeabi-v7a / x86_64），而一台手机只用得上其中一套。现在 Release 里有<b>三个各约 30 MB</b> 的包：64 位沿用原来的文件名（<b>应用内更新默认下这个，逻辑一行没改</b>）、32 位、x86_64（模拟器 / Chromebook）。「64 位沿用原名」是刻意的：更新取资产列表里第一个 <code>.apk</code>，而资产按名字升序返回，<code>.</code> 比 <code>_</code> 小 —— 所以它永远排第一，这条不变量有专门的检查与自测盯着。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>更新页新增「选择安装包」</b>：该版本有多个包时，一行一个（<b>文件名 · 架构 · 大小</b>），第一个标「推荐」= 应用内更新会挑的那个；<b>点一行在浏览器打开该包的下载地址</b>，方便只支持 32 位的老机型直接取 <code>_armeabi-v7a</code>。顺带修掉一处显示问题：下载中以前英雄卡与下方卡片<b>各画一条进度条</b>（同一个下载看着像两个任务），现在只留一条。</div>
+      </div>
+    </div>
+    <div class="cl-version reveal">
+      <div class="cl-head">
+        <span class="cl-tag">v2.0.10</span>
+        <span class="cl-date">2026-09-30</span>
+      </div>
+      <div class="cl-body">
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：支持国区（中国大陆）佳明 LiveTrack</b>。佳明的账号体系分国际区与国区两套服务器：国际区在 <code>livetrack.garmin.com</code>、国区在 <code>livetrack.garmin.cn</code>。此前只认国际区域名 —— 国区用户从佳明 App 分享过来只会看到「没有找到 LiveTrack 链接」，而且<b>连一次网络请求都没发出</b>，功能是静默失效的。现在三种域名写法都认（<code>.com</code> / <code>.cn</code> / <code>.com.cn</code>），<b>没有 <code>https://</code> 的一段链接也认</b>（从聊天窗口里复制出来的常常就是那样），并补了两处兜底：解析时会在<b>整篇文档</b>里找 <code>trackPoints</code>（国区与老版分享页不是 Next.js 的流式块形态），抓取时照旧跟随 301 跳转。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：macOS 上主界面中文乱码</b>。正文几乎全部走同一个文字样式，而它的「主字体」在 macOS 上被写死成一个 CoreText <b>私有字体名</b>（<code>.SF NS Text</code>）—— 这个名字解析不到时，中文就<b>没有可回退的字体</b>，于是地图页、设置页的中文整片乱码。现在 macOS 交回系统默认字体（本来就是 SF，观感一致，但「挑字体 + 中文回退」交给系统做），并把中文回退表补全（<code>PingFang SC</code> / <code>Microsoft YaHei</code> / <code>Noto Sans CJK SC</code> …）；等宽区域（报文、日志、荣誉墙）也补上了中文回退 —— 等宽字体同样不含中文字形。新增判据：不许再出现那个私有字体名，回退表必须含三平台的中文字体。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：聊天输入框上方的「字符数 / 整包字节」计数器不实时</b>（用户上报：要等输入框失去焦点才更新）。根因是它在页面构建时读一次输入内容，而打字只会重建输入框自己、不会重建它旁边的计数器；「失焦」恰好也是一次重建，所以看起来像是失焦才刷新。现在它<b>自己监听输入</b>（打字时只重建这一行，不在每次按键时重建整个消息页），译发预览的判定（预览原文 == 当前输入）也一并搬进去；并补了回归测试 —— 把监听去掉时测试立刻报红。</div>
+      </div>
+    </div>
     <div class="cl-version reveal">
       <div class="cl-head">
         <span class="cl-tag">v2.0.9</span>
         <span class="cl-date">2026-09-28</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**新：生命守护增加「碰撞与摔倒检测」（测试）** —— 用手机加速度判断，检测到就弹提醒（我没事 / 拨打急救 / 向附近台站求助），通知栏也会提示。判据是**两段式**：加速度出现很陡的尖峰**且**之后连续 12 秒几乎没动。只报尖峰的话，过减速带、手机掉桌上都会响，一天几次就没人看了；代价是「轻微碰撞（人还能动）不提醒」——它管的是「人已经动不了了」。它会误报（过减速带+等红灯），所以第一个按钮就是「我没事」，页面上也写明这是启发式判断，不是工程级碰撞检测。</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：步数一直显示「请授权」，但其实已授权**。读数为 -1 有三种原因：没有传感器 / 没有活动识别权限 / **还没收到第一个硬件事件**（没权限时系统只是不派发事件、不报错），之前混为一谈，于是「刚授权还没走过路」被显示成「请授权」。现在原生单独上报权限，四态（不支持/需授权/**等待数据**/正常）只留一个判定出口；顺带修掉「计步依赖传感器辅助开关」与「等待数据也显示授权按钮」。**修：生命守护页的开关点了没反应**（`SettingsPageShell.state` 只管引导卡，并不让页面跟随状态刷新）。**修：速度档编辑弹层的「保存」被三大金刚键压住** —— 底部现在同时让出键盘与系统导航栏，取值取 padding 与 viewPadding 的较大者（有些 ROM 只报后者）。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>新：生命守护增加「碰撞与摔倒检测」（测试）</b> —— 用手机加速度判断，检测到就弹提醒（我没事 / 拨打急救 / 向附近台站求助），通知栏也会提示。判据是<b>两段式</b>：加速度出现很陡的尖峰<b>且</b>之后连续 12 秒几乎没动。只报尖峰的话，过减速带、手机掉桌上都会响，一天几次就没人看了；代价是「轻微碰撞（人还能动）不提醒」——它管的是「人已经动不了了」。它会误报（过减速带+等红灯），所以第一个按钮就是「我没事」，页面上也写明这是启发式判断，不是工程级碰撞检测。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：步数一直显示「请授权」，但其实已授权</b>。读数为 -1 有三种原因：没有传感器 / 没有活动识别权限 / <b>还没收到第一个硬件事件</b>（没权限时系统只是不派发事件、不报错），之前混为一谈，于是「刚授权还没走过路」被显示成「请授权」。现在原生单独上报权限，四态（不支持/需授权/<b>等待数据</b>/正常）只留一个判定出口；顺带修掉「计步依赖传感器辅助开关」与「等待数据也显示授权按钮」。<b>修：生命守护页的开关点了没反应</b>（<code>SettingsPageShell.state</code> 只管引导卡，并不让页面跟随状态刷新）。<b>修：速度档编辑弹层的「保存」被三大金刚键压住</b> —— 底部现在同时让出键盘与系统导航栏，取值取 padding 与 viewPadding 的较大者（有些 ROM 只报后者）。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -656,9 +1650,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-28</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**新：运动步数与排行榜** —— 读手机硬件计步传感器，今日步数可随信标附带（`STEPS=`，默认关）。设置页荣誉墙上方新增**运动排行榜**：今日步数排行，点一行进台站详情。**自己不开上传就看不到榜单** —— 榜上每个数字都是别人主动发出来的，只收不发不该白拿别人的。页面上写明这只是「你听得到的邻居」而不是全网排行。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**新：「生命守护」页与更新包后台下载**。心率异常告警从「设备 → 心率」搬进独立的**生命守护**页，说清它是什么、开启条件、以及「向附近台站求助」的口径，并标注这是测试功能（判定只基于心率数值，无医学依据）。更新包下载现在**支持后台**：离开页面或切到后台继续下载，通知栏显示进度，可取消；先写 `.part` 再原子改名，断掉不会留下一个装不上的包。</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：心率告警的上/下限改不动** —— 输入框原来只在按回车时才保存，失焦不保存，改完随手点别处就等于没改。现在输入即保存，卡片里还会显示「当前生效 40 ~ 150 bpm」。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：运动步数与排行榜</b> —— 读手机硬件计步传感器，今日步数可随信标附带（<code>STEPS=</code>，默认关）。设置页荣誉墙上方新增<b>运动排行榜</b>：今日步数排行，点一行进台站详情。<b>自己不开上传就看不到榜单</b> —— 榜上每个数字都是别人主动发出来的，只收不发不该白拿别人的。页面上写明这只是「你听得到的邻居」而不是全网排行。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：「生命守护」页与更新包后台下载</b>。心率异常告警从「设备 → 心率」搬进独立的<b>生命守护</b>页，说清它是什么、开启条件、以及「向附近台站求助」的口径，并标注这是测试功能（判定只基于心率数值，无医学依据）。更新包下载现在<b>支持后台</b>：离开页面或切到后台继续下载，通知栏显示进度，可取消；先写 <code>.part</code> 再原子改名，断掉不会留下一个装不上的包。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：心率告警的上/下限改不动</b> —— 输入框原来只在按回车时才保存，失焦不保存，改完随手点别处就等于没改。现在输入即保存，卡片里还会显示「当前生效 40 ~ 150 bpm」。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -667,9 +1661,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-28</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：沉浸地图一拖就跳回北京**。跟随时用的视野偏移从来没有交给手动模式，拖动那一瞬间地图平移到了投影基准点；现在先从当前视野接手再切手动，并把地图旋转一并算进去（横屏航向朝上时位移要换算回画布方向）。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**新：上报状态栏可切「详细」** —— 多一行当前触发条件：哪一档、还有多少秒、距离打点还差多少米、转弯还差多少度（转弯那两个闸也如实摆出来）。**新：心率异常告警** —— 读数越界弹警告并进通知栏，可拨紧急电话或向 100 公里内最近的 5 个台站发一条求助；只提醒，不代替你行动。**新：外置 GPS 优先时手机 GPS 待机** —— 外置失效自动切回并明说是谁在供位。</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：公告更新后横幅重新出现；纯网络定位可单独选台站图标；2.0 未连接提示会说清缺什么；赞助入口挪到「关于」上方**。**更新页三处**：渠道文案跟着当前渠道、长日志默认折叠（可展开）、下载完成后按钮变成「安装」。**浮动面板与退出动画**：面板高度与底部胶囊改用系统 UI 内边距（某些 ROM 上以前算成 0），退出设置子页的「一片纯色然后消失」也修好了。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：沉浸地图一拖就跳回北京</b>。跟随时用的视野偏移从来没有交给手动模式，拖动那一瞬间地图平移到了投影基准点；现在先从当前视野接手再切手动，并把地图旋转一并算进去（横屏航向朝上时位移要换算回画布方向）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新：上报状态栏可切「详细」</b> —— 多一行当前触发条件：哪一档、还有多少秒、距离打点还差多少米、转弯还差多少度（转弯那两个闸也如实摆出来）。<b>新：心率异常告警</b> —— 读数越界弹警告并进通知栏，可拨紧急电话或向 100 公里内最近的 5 个台站发一条求助；只提醒，不代替你行动。<b>新：外置 GPS 优先时手机 GPS 待机</b> —— 外置失效自动切回并明说是谁在供位。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：公告更新后横幅重新出现；纯网络定位可单独选台站图标；2.0 未连接提示会说清缺什么；赞助入口挪到「关于」上方</b>。<b>更新页三处</b>：渠道文案跟着当前渠道、长日志默认折叠（可展开）、下载完成后按钮变成「安装」。<b>浮动面板与退出动画</b>：面板高度与底部胶囊改用系统 UI 内边距（某些 ROM 上以前算成 0），退出设置子页的「一片纯色然后消失」也修好了。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -678,9 +1672,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-28</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**历史轨迹新增心率记录与折线图**。轨迹点开始记心率（来源与信标里的 `HR=` 一致：蓝牙心率带或佳明 LiveTrack），历史轨迹详情页多了**心率 / 速度 / 里程**三条折线，可逐条开关、也可整块隐藏；播放时有竖起指示线对着当前位置，心率那一栏还显示当天的最低–最高。没有心率读数的时间段曲线会**断开**（不连成直线）。一天最多 4 万个点，曲线进页时一次性分桶到 240 个点，播放时不掉帧。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**Windows 可选音频设备与发射串口**。音频页现在能选**播放设备 / 采集设备**，不再只能用系统默认 —— 这直接决定接到电台的是哪一路信号；TNC 设备页可以选**发射串口**，默认仍与接收共用一个口，分成两个口可以避开 Windows 上同一 COM 口读写互相打架的问题。（Android / iOS 不显示音频设备选择器：那里音频路由由系统决定，摆一个假开关只会误导人。）</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**修一轮用户反馈（#12 / #13 / #15 / #16 / #18 / #19）**。① 电台身份卡片「更多附加」里的海拔 / 功率 / 天线高度 / 增益设过就删不掉 —— 留空的语义是「不发送」，但保存时只是跳过写入，旧值一直留在本地、重启又回来，现在留空会真的把它清掉；② 自定义状态会被 15 秒一次的心跳包顶掉，现在填了自定义状态就紧跟着补发一帧；③ Android 15 强制 edge-to-edge，三大金刚键压住页面底部按钮，现在滚动内容底部让出导航栏高度；④ 设置详情页面板展开 / 收起会闪一下或突然填充，现在高度与透明度一起动；⑤ 下载完成后「立即下载」按钮还在（拿文件名里的 `2.0.5` 去比 tag 的 `v2.0.5`，永远不相等），现在比较时忽略 `v` 前缀；⑥ 更新渠道默认改为 GitHub（更新页仍可一键切回镜像）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>历史轨迹新增心率记录与折线图</b>。轨迹点开始记心率（来源与信标里的 <code>HR=</code> 一致：蓝牙心率带或佳明 LiveTrack），历史轨迹详情页多了<b>心率 / 速度 / 里程</b>三条折线，可逐条开关、也可整块隐藏；播放时有竖起指示线对着当前位置，心率那一栏还显示当天的最低–最高。没有心率读数的时间段曲线会<b>断开</b>（不连成直线）。一天最多 4 万个点，曲线进页时一次性分桶到 240 个点，播放时不掉帧。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>Windows 可选音频设备与发射串口</b>。音频页现在能选<b>播放设备 / 采集设备</b>，不再只能用系统默认 —— 这直接决定接到电台的是哪一路信号；TNC 设备页可以选<b>发射串口</b>，默认仍与接收共用一个口，分成两个口可以避开 Windows 上同一 COM 口读写互相打架的问题。（Android / iOS 不显示音频设备选择器：那里音频路由由系统决定，摆一个假开关只会误导人。）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修一轮用户反馈（#12 / #13 / #15 / #16 / #18 / #19）</b>。① 电台身份卡片「更多附加」里的海拔 / 功率 / 天线高度 / 增益设过就删不掉 —— 留空的语义是「不发送」，但保存时只是跳过写入，旧值一直留在本地、重启又回来，现在留空会真的把它清掉；② 自定义状态会被 15 秒一次的心跳包顶掉，现在填了自定义状态就紧跟着补发一帧；③ Android 15 强制 edge-to-edge，三大金刚键压住页面底部按钮，现在滚动内容底部让出导航栏高度；④ 设置详情页面板展开 / 收起会闪一下或突然填充，现在高度与透明度一起动；⑤ 下载完成后「立即下载」按钮还在（拿文件名里的 <code>2.0.5</code> 去比 tag 的 <code>v2.0.5</code>，永远不相等），现在比较时忽略 <code>v</code> 前缀；⑥ 更新渠道默认改为 GitHub（更新页仍可一键切回镜像）。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -689,8 +1683,8 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-27</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：2.0.4 的 PHG 在第三方侧其实没生效**。2.0.4 发出的报文里，数据扩展被空格分隔（`000/000 PHG2130 /A=000033`），用参考实现 aprslib 解出来 `phg` **完全缺失**、`PHG2130` 被当成普通备注文字 —— 也就是说第三方地图上看不到覆盖范围，这个功能等于没做。根因是**两个独立的坑**：① APRS101 把 PHG / `/A=` / CsT 定义为**固定长度的数据扩展**，必须紧贴符号、彼此之间不用空格（真实台站都是 `…ErPHG1460/A=000071` 这样）；② CsT 与 PHG 争同一个「注释开头」，解析器先匹配 `^\d{3}/\d{3}`，一旦命中就**只再看 DF 测向报文，根本不再去找 PHG**，所以哪怕紧贴，只要 `000/000` 在前 PHG 也读不出来。</div>
-        <div class="cl-item"><span class="cl-dot up"></span>**修法**：扩展块**整块紧贴**，且**首位让给 PHG** —— 填了 PHG 时 CsT 不再随位置报文发送。修好后：`!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%`（空格只出现在扩展块与备注之间）。**一个取舍**：同时填了 PHG 的移动台，aprs.fi 上就没有速度/方位角了 —— 两者都要「注释开头」这一个位置，无法共存；没填 PHG 的台站一切照旧。另把信标报文的第三方兼容性测试纳入 CI，这类「编译过、analyze 绿、第三方读不出」的问题从此有测试兜底。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：2.0.4 的 PHG 在第三方侧其实没生效</b>。2.0.4 发出的报文里，数据扩展被空格分隔（<code>000/000 PHG2130 /A=000033</code>），用参考实现 aprslib 解出来 <code>phg</code> <b>完全缺失</b>、<code>PHG2130</code> 被当成普通备注文字 —— 也就是说第三方地图上看不到覆盖范围，这个功能等于没做。根因是<b>两个独立的坑</b>：① APRS101 把 PHG / <code>/A=</code> / CsT 定义为<b>固定长度的数据扩展</b>，必须紧贴符号、彼此之间不用空格（真实台站都是 <code>…ErPHG1460/A=000071</code> 这样）；② CsT 与 PHG 争同一个「注释开头」，解析器先匹配 <code>^\d{3}/\d{3}</code>，一旦命中就<b>只再看 DF 测向报文，根本不再去找 PHG</b>，所以哪怕紧贴，只要 <code>000/000</code> 在前 PHG 也读不出来。</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>修法</b>：扩展块<b>整块紧贴</b>，且<b>首位让给 PHG</b> —— 填了 PHG 时 CsT 不再随位置报文发送。修好后：<code>!2155.17N/11052.40EbPHG2130/A=000033 Bat:22%</code>（空格只出现在扩展块与备注之间）。<b>一个取舍</b>：同时填了 PHG 的移动台，aprs.fi 上就没有速度/方位角了 —— 两者都要「注释开头」这一个位置，无法共存；没填 PHG 的台站一切照旧。另把信标报文的第三方兼容性测试纳入 CI，这类「编译过、analyze 绿、第三方读不出」的问题从此有测试兜底。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -699,10 +1693,10 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-27</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**位置报文数据扩展（PHG · APRS101 第 9 章）**：电台设置的「台站备注」下多了「高级设置」，可填功率（瓦）/ 天线高度（英尺）/ 增益（dB）。填任一项就附上固定 7 字节的 `PHGphgd`，留空则完全不发。量化照规范做：功率只取**不超过实际值的最大档**（25 W 报 25、30 W 也只报 25 —— 报大了等于虚报覆盖范围），天线高度按 10×2ⁿ 英尺取档；设置页把**真正会被编进报文的结果**回显出来（量化过程用户看不见，不摆出来就无从知道到底发了什么）。报文里的位置也照规范来：`PHGphgd` **紧跟符号**（`!坐标/符号` 之后，排在 `/A=` 海拔与其它备注文字之前），与标准报文 `…:!2216.45N/11113.90ErPHG5950` 形状一致 —— 第三方解析器按「注释开头的数据扩展」识别 PHG，插在后面就读不出来。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**独立状态报文**：高级设置里可填状态文本，与位置报文共用一个「发射」按钮 —— 哪个有内容就发哪个，状态文本留空时发内置的 `APRSlocus CONNECT vX.Y.Z 平台` 在线帧。状态报文是**独立一帧**（`>` 开头、不含坐标、不会移动你在 aprs.fi 上的位置），所以没有定位也能发。发送时一律直接读输入框当前内容，不依赖输入事件的时序 —— 中文输入法组合输入时曾出现「明明填了，却发出默认帧」。此外新增手填海拔：留空跟随定位（默认行为不变），设置页显示当前将发出的 `/A=aaaaaa` 片段。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**台站详情与地图信息窗**：台站详情多出一行**独立状态报文**（紫色 + 播报图标），与「位置备注」分开显示 —— 两者来源不同（频点常写在位置备注里、设备来源常写在状态报文里），混成一行就分不出哪个是哪个；此前这类文本只进数据包页的原文，台站详情里彻底看不到。地图标记信息窗新增**高度**、**位置备注**、**状态文本**三行，且**按需出现**而不是常驻占位 —— 绝大多数台站没有这些字段，常驻只会给出两行 `--`，把「没有」和「没收到」显示成同一个样子。</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**本版修正**：①「发射」按钮会**先查链路**，未连接时直接说明「请先连接链路」，不再静默只做本地记录；②填了 PHG 却还没有定位时，如实回执「带 PHG 的位置报文没能发出」；③状态报文**改用自己的连接文案**（此前只发状态帧，界面却写着「位置已上报」）；④地图页「距下次上报」的秒数改为**每秒刷新**（此前没有台站刷新时会停住）；⑤设备页「链路自检」不再出现两遍标题与副标题；⑥手机电量开关**保持在信标页「信标上报内容」**，默认值不变。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>位置报文数据扩展（PHG · APRS101 第 9 章）</b>：电台设置的「台站备注」下多了「高级设置」，可填功率（瓦）/ 天线高度（英尺）/ 增益（dB）。填任一项就附上固定 7 字节的 <code>PHGphgd</code>，留空则完全不发。量化照规范做：功率只取<b>不超过实际值的最大档</b>（25 W 报 25、30 W 也只报 25 —— 报大了等于虚报覆盖范围），天线高度按 10×2ⁿ 英尺取档；设置页把<b>真正会被编进报文的结果</b>回显出来（量化过程用户看不见，不摆出来就无从知道到底发了什么）。报文里的位置也照规范来：<code>PHGphgd</code> <b>紧跟符号</b>（<code>!坐标/符号</code> 之后，排在 <code>/A=</code> 海拔与其它备注文字之前），与标准报文 <code>…:!2216.45N/11113.90ErPHG5950</code> 形状一致 —— 第三方解析器按「注释开头的数据扩展」识别 PHG，插在后面就读不出来。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>独立状态报文</b>：高级设置里可填状态文本，与位置报文共用一个「发射」按钮 —— 哪个有内容就发哪个，状态文本留空时发内置的 <code>APRSlocus CONNECT vX.Y.Z 平台</code> 在线帧。状态报文是<b>独立一帧</b>（<code>></code> 开头、不含坐标、不会移动你在 aprs.fi 上的位置），所以没有定位也能发。发送时一律直接读输入框当前内容，不依赖输入事件的时序 —— 中文输入法组合输入时曾出现「明明填了，却发出默认帧」。此外新增手填海拔：留空跟随定位（默认行为不变），设置页显示当前将发出的 <code>/A=aaaaaa</code> 片段。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>台站详情与地图信息窗</b>：台站详情多出一行<b>独立状态报文</b>（紫色 + 播报图标），与「位置备注」分开显示 —— 两者来源不同（频点常写在位置备注里、设备来源常写在状态报文里），混成一行就分不出哪个是哪个；此前这类文本只进数据包页的原文，台站详情里彻底看不到。地图标记信息窗新增<b>高度</b>、<b>位置备注</b>、<b>状态文本</b>三行，且<b>按需出现</b>而不是常驻占位 —— 绝大多数台站没有这些字段，常驻只会给出两行 <code>--</code>，把「没有」和「没收到」显示成同一个样子。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>本版修正</b>：①「发射」按钮会<b>先查链路</b>，未连接时直接说明「请先连接链路」，不再静默只做本地记录；②填了 PHG 却还没有定位时，如实回执「带 PHG 的位置报文没能发出」；③状态报文<b>改用自己的连接文案</b>（此前只发状态帧，界面却写着「位置已上报」）；④地图页「距下次上报」的秒数改为<b>每秒刷新</b>（此前没有台站刷新时会停住）；⑤设备页「链路自检」不再出现两遍标题与副标题；⑥手机电量开关<b>保持在信标页「信标上报内容」</b>，默认值不变。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -711,11 +1705,11 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-26</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**新增百度地图 / 百度卫星图源**：百度不是 Web Mercator（BD-09 坐标 + 自有投影、瓦片 y 轴朝北），为此把「按图源切换投影」做到全链路 —— 渲染、标记 / 轨迹、沉浸地图、跟踪、历史回放、离线下载共用同一套投影，标记与瓦片不再错开。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**新增「纯网络」定位模式**：只用基站 / Wi-Fi（不注册 GPS），适合没有 GPS 的设备，也用于极端省电；自动上报使用专用固定间隔（默认 300 秒、可调），不必再开强制开关，也不走智能信标（网络没有可靠速度）。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**公告支持内嵌视频**：应用内公告改为手写 Markdown（简中 / 繁中 / 英文），`@video` 标记可在应用内播放（Android / iOS / macOS；Windows / Linux / Web 回退为在浏览器打开）。旧版本读到那行只会当普通文字（仍是可点链接）。</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**启动检查新版本**：启动后检查一次，有新版时弹提醒（每版本只提醒一次、可稍后）。</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**修**：地图信息窗仍显示「点击查看」—— 2.0.1 只改了生成的 l10n 产物、漏改 ARB 源，构建时被覆盖，现已改到位（六语言）；Windows 构建移除与当前工具链不兼容的 webview_windows，改走外部浏览器。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增百度地图 / 百度卫星图源</b>：百度不是 Web Mercator（BD-09 坐标 + 自有投影、瓦片 y 轴朝北），为此把「按图源切换投影」做到全链路 —— 渲染、标记 / 轨迹、沉浸地图、跟踪、历史回放、离线下载共用同一套投影，标记与瓦片不再错开。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>新增「纯网络」定位模式</b>：只用基站 / Wi-Fi（不注册 GPS），适合没有 GPS 的设备，也用于极端省电；自动上报使用专用固定间隔（默认 300 秒、可调），不必再开强制开关，也不走智能信标（网络没有可靠速度）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>公告支持内嵌视频</b>：应用内公告改为手写 Markdown（简中 / 繁中 / 英文），<code>@video</code> 标记可在应用内播放（Android / iOS / macOS；Windows / Linux / Web 回退为在浏览器打开）。旧版本读到那行只会当普通文字（仍是可点链接）。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>启动检查新版本</b>：启动后检查一次，有新版时弹提醒（每版本只提醒一次、可稍后）。</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修</b>：地图信息窗仍显示「点击查看」—— 2.0.1 只改了生成的 l10n 产物、漏改 ARB 源，构建时被覆盖，现已改到位（六语言）；Windows 构建移除与当前工具链不兼容的 webview_windows，改走外部浏览器。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -724,7 +1718,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-25</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**TOUCH SKY · 2.0 正式版**：1.5.8 → 2.0 的 **322 次更新**在这一版合流 —— 全新 UI 2.0（地图基底 + 可拖拽面板、底部胶囊导航、横屏三端统一）、磨砂玻璃与云母材质、沉浸地图与多图源、离线地图与轨迹回放、官方设备库识别、群聊与 7 家翻译、蓝牙 TNC 与声卡 TNC、iGate 与 PKWDWPL、iOS / macOS 原生定位、按转弯与按距离的智能信标、天气与短波传播建议、Android 桌面小组件、ADIF 导出与数据包控制台、佳明分享与蓝牙心率带、6 种界面语言。</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>TOUCH SKY · 2.0 正式版</b>：1.5.8 → 2.0 的 <b>322 次更新</b>在这一版合流 —— 全新 UI 2.0（地图基底 + 可拖拽面板、底部胶囊导航、横屏三端统一）、磨砂玻璃与云母材质、沉浸地图与多图源、离线地图与轨迹回放、官方设备库识别、群聊与 7 家翻译、蓝牙 TNC 与声卡 TNC、iGate 与 PKWDWPL、iOS / macOS 原生定位、按转弯与按距离的智能信标、天气与短波传播建议、Android 桌面小组件、ADIF 导出与数据包控制台、佳明分享与蓝牙心率带、6 种界面语言。</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -733,7 +1727,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**佳明页补齐了「自动填充 / 确定按钮 / 状态显示」**（用户实测反馈）：① 链接框原来只在页面初始化时读一次，分享进来时页面已经开着就**不会自动填充** —— 现在跟随状态同步，并显示「已自动填入分享链接」；② 原来只有一个含义模糊的开关（标签写着「追踪中」是状态不是动作）—— 现在是明确的 **[开始追踪] / [停止追踪]** 按钮；③ 新增状态卡：未开启追踪 / 追踪中（含已转发点数与最后更新时间）/ 抓取失败（含原因），链接框下面还会实时显示「链接有效」。分享到达的提示也从 4 秒延长到 8 秒，不容易错过</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>佳明页补齐了「自动填充 / 确定按钮 / 状态显示」</b>（用户实测反馈）：① 链接框原来只在页面初始化时读一次，分享进来时页面已经开着就<b>不会自动填充</b> —— 现在跟随状态同步，并显示「已自动填入分享链接」；② 原来只有一个含义模糊的开关（标签写着「追踪中」是状态不是动作）—— 现在是明确的 <b>[开始追踪] / [停止追踪]</b> 按钮；③ 新增状态卡：未开启追踪 / 追踪中（含已转发点数与最后更新时间）/ 抓取失败（含原因），链接框下面还会实时显示「链接有效」。分享到达的提示也从 4 秒延长到 8 秒，不容易错过</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -742,7 +1736,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**关于页名片卡不再贴着下面板块**：原来名片卡下面**直接**就是「代码贡献」的节标题（间距 0），现在留 22（与其它节间距一致）。另外**位置来源「听谁的」说清楚了**：界面原来把来源拆成两半说（上报页「定位 / 模拟位置」、设备页「手机 GPS / 佳明」），看着像两件事。现在判断只有一处（`positionSourceNow`），两处都写明优先级：**模拟/手动位置 › 佳明（手表有实时数据时）› 手机 GPS**，上报页的选项也改名成「手机 GPS」（与设备页同名），并显示「当前使用：…」</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>关于页名片卡不再贴着下面板块</b>：原来名片卡下面<b>直接</b>就是「代码贡献」的节标题（间距 0），现在留 22（与其它节间距一致）。另外<b>位置来源「听谁的」说清楚了</b>：界面原来把来源拆成两半说（上报页「定位 / 模拟位置」、设备页「手机 GPS / 佳明」），看着像两件事。现在判断只有一处（<code>positionSourceNow</code>），两处都写明优先级：<b>模拟/手动位置 › 佳明（手表有实时数据时）› 手机 GPS</b>，上报页的选项也改名成「手机 GPS」（与设备页同名），并显示「当前使用：…」</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -751,7 +1745,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**佳明分享「有时候行有时候不行」修好了**：① 取分享文本只读 `EXTRA_TEXT`，而不少应用（部分佳明版本 / 浏览器）把文本放在 `clipData` 里 —— 读到 null 就整条静默，这正是「时好时坏」的机制；② 读不到文本时直接静默返回，用户既没提示也没日志；③ **冷启动竞态**：应用启动时那次分享可能在界面注册回调**之前**就到达，回调为 null 被丢掉（就是「跳转之后还是没有反馈」）—— 现在改成「有回调就调、没有就存起来」，界面起来后主动取一次。顺带把识别放宽：短链码长度不限 + 大小写不敏感</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>佳明分享「有时候行有时候不行」修好了</b>：① 取分享文本只读 <code>EXTRA_TEXT</code>，而不少应用（部分佳明版本 / 浏览器）把文本放在 <code>clipData</code> 里 —— 读到 null 就整条静默，这正是「时好时坏」的机制；② 读不到文本时直接静默返回，用户既没提示也没日志；③ <b>冷启动竞态</b>：应用启动时那次分享可能在界面注册回调<b>之前</b>就到达，回调为 null 被丢掉（就是「跳转之后还是没有反馈」）—— 现在改成「有回调就调、没有就存起来」，界面起来后主动取一次。顺带把识别放宽：短链码长度不限 + 大小写不敏感</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -760,7 +1754,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot up"></span>**心率会说明来源**（用户要求「如果链接了佳明就提示从佳明追踪获取」）：心率有两个来源（BLE 胸带 / 佳明点里的心率）。佳明在供数据时，心率卡与「数据来源」卡的心率行都会写明「心率来自佳明 LiveTrack（手表）· 128 bpm」——没插胸带也不会再显示成「未连接」，数字是哪来的摆在明面上。另外**关于页空隙**（用户反馈「一些组件空隙不够」）：节标题与卡片之间 8→12，致谢卡里「测试成员」标签到呼号胶囊 8→11、胶囊之间 8→10，`BA3RZL` 那组标签到胶囊 6→8</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>心率会说明来源</b>（用户要求「如果链接了佳明就提示从佳明追踪获取」）：心率有两个来源（BLE 胸带 / 佳明点里的心率）。佳明在供数据时，心率卡与「数据来源」卡的心率行都会写明「心率来自佳明 LiveTrack（手表）· 128 bpm」——没插胸带也不会再显示成「未连接」，数字是哪来的摆在明面上。另外<b>关于页空隙</b>（用户反馈「一些组件空隙不够」）：节标题与卡片之间 8→12，致谢卡里「测试成员」标签到呼号胶囊 8→11、胶囊之间 8→10，<code>BA3RZL</code> 那组标签到胶囊 6→8</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -769,7 +1763,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**1.0 布局下「佳明分享」依然毫无反应**：上一版把「分享里没有链接」也做成可见提示，但那个回调只注册在 2.0 外壳 —— 用 1.0 的用户分享完还是什么都看不到，和「没识别」一模一样。现在 1.0 两个回调都注册：收到链接给提示 +「去设置」，没找到链接也如实说一句（**失败也看得见**）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>1.0 布局下「佳明分享」依然毫无反应</b>：上一版把「分享里没有链接」也做成可见提示，但那个回调只注册在 2.0 外壳 —— 用 1.0 的用户分享完还是什么都看不到，和「没识别」一模一样。现在 1.0 两个回调都注册：收到链接给提示 +「去设置」，没找到链接也如实说一句（<b>失败也看得见</b>）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -778,7 +1772,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**「位置来源」改成如实的状态行，不再是二选一**（用户实测指出）：没启动追踪时，「手机 GPS」照样画着实心选中圆点（其实什么都没在跑），「佳明」那行也能被「选中」——只看开关、没看追踪有没有启动。而且佳明与手机 GPS 本来不是二选一：手表直播时优先用手表，超过 120s 没新点自动交回手机。现在按实际情况显示：「未追踪（未启动定位）」/「追踪中」/「追踪中（手机 GPS 已让位）」/「链接有效，但佳明没有新点」；心率那行也显示当前 bpm</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>「位置来源」改成如实的状态行，不再是二选一</b>（用户实测指出）：没启动追踪时，「手机 GPS」照样画着实心选中圆点（其实什么都没在跑），「佳明」那行也能被「选中」——只看开关、没看追踪有没有启动。而且佳明与手机 GPS 本来不是二选一：手表直播时优先用手表，超过 120s 没新点自动交回手机。现在按实际情况显示：「未追踪（未启动定位）」/「追踪中」/「追踪中（手机 GPS 已让位）」/「链接有效，但佳明没有新点」；心率那行也显示当前 bpm</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -787,7 +1781,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot up"></span>**佳明接管时的上报 UI 说清了来源**：位置来自手表时，上报横杠显示「佳明上报 · 45s · ❤128」（红色），而不是看不出差别的普通倒计时 —— 两者可能差几十公里。并且**挡住粗定位覆盖手表位置**：佳明断流后手机 GPS 会接回来，但基站/WiFi 粗点不行（它会拿偏几百米的质心替换手表位置，而横杠当时显示的是正常倒计时，用户完全看不出正在发错坐标）。另外**佳明/心率成为「数据来源」里的可选来源**（位置来源：手机 GPS / 佳明；心率来源：蓝牙心率带），与报文链路分开列；**手动上报的提示现在会列出实际附带的内容**（如「网格 FN20xx · 心率 128 bpm」）</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>佳明接管时的上报 UI 说清了来源</b>：位置来自手表时，上报横杠显示「佳明上报 · 45s · ❤128」（红色），而不是看不出差别的普通倒计时 —— 两者可能差几十公里。并且<b>挡住粗定位覆盖手表位置</b>：佳明断流后手机 GPS 会接回来，但基站/WiFi 粗点不行（它会拿偏几百米的质心替换手表位置，而横杠当时显示的是正常倒计时，用户完全看不出正在发错坐标）。另外<b>佳明/心率成为「数据来源」里的可选来源</b>（位置来源：手机 GPS / 佳明；心率来源：蓝牙心率带），与报文链路分开列；<b>手动上报的提示现在会列出实际附带的内容</b>（如「网格 FN20xx · 心率 128 bpm」）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -796,7 +1790,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**修：佳明 App 分享的短链（`gar.mn/…`）之前根本进不来**。佳明 App 的「分享」给的是短链，而应用只认长链（`livetrack.garmin.com/session/…/token/…`）、Android 分享入口也只放行那个域名 —— 于是「分享 → 选 APRSlocus」什么都没发生。现在两种链接都认（含只复制到 `gar.mn/xxx` 没有 `https://` 的情况），抓取时跟随 301 跳转；写日志前把 token 打码 —— 分享链接本身就是读取实时位置的凭据</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修：佳明 App 分享的短链（<code>gar.mn/…</code>）之前根本进不来</b>。佳明 App 的「分享」给的是短链，而应用只认长链（<code>livetrack.garmin.com/session/…/token/…</code>）、Android 分享入口也只放行那个域名 —— 于是「分享 → 选 APRSlocus」什么都没发生。现在两种链接都认（含只复制到 <code>gar.mn/xxx</code> 没有 <code>https://</code> 的情况），抓取时跟随 301 跳转；写日志前把 token 打码 —— 分享链接本身就是读取实时位置的凭据</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -805,9 +1799,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**蓝牙心率带**（BLE 标准心率服务 0x180D）：信标设置页可搜索/连接/看当前心率，新增「信标附带心率」开关（默认开）——位置包备注里加 `HR=nn`，没有读数时**什么都不发**（发 HR=0 会被读成「心率 0」）。**与 TNC 的蓝牙通道不冲突**：TNC 走经典蓝牙 SPP、心率走 BLE GATT，本来就并行；并且绝不做经典蓝牙发现（那会打断 TNC 的 SPP 连接），同一台设备被两条链路抢占时会直接拒绝并说明原因</div>
-        <div class="cl-item"><span class="cl-dot new"></span>**佳明 LiveTrack**：手表的活动位置可以直接接进来。两条路——① 在佳明 Connect App 里「分享」选 APRSlocus（已注册系统分享入口），链接自动填入并开始追踪；② 信标设置页的「佳明 LiveTrack」里手动粘贴链接（也可从剪贴板取）。抓公开分享页的 trackPoints，取经纬度/海拔/速度/心率；只接受 120 秒内的点、积压超 60 秒跳点、两次转发至少隔 10 秒；佳明在跑时手机 GPS 自动让位</div>
-        <div class="cl-item"><span class="cl-dot up"></span>**心率显示在主屏幕**（地图左上第一个胶囊，带 BLE / Garmin 来源标记，没有读数时整块不显示）；**佳明接管期间补齐两处**：① 航向——佳明的点没有航向字段，之前会沿用手机 GPS 的旧值（指南针停在旧方向），现用前后两点算出来；② 历史台账——之前没写而手机 GPS 又正让位，那段历史是空白，现已与 GPS 同一套落盘。另外设备页新增「其他数据来源」卡（心率带 + 佳明两个入口），与报文链路互不影响、可同时使用</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>蓝牙心率带</b>（BLE 标准心率服务 0x180D）：信标设置页可搜索/连接/看当前心率，新增「信标附带心率」开关（默认开）——位置包备注里加 <code>HR=nn</code>，没有读数时<b>什么都不发</b>（发 HR=0 会被读成「心率 0」）。<b>与 TNC 的蓝牙通道不冲突</b>：TNC 走经典蓝牙 SPP、心率走 BLE GATT，本来就并行；并且绝不做经典蓝牙发现（那会打断 TNC 的 SPP 连接），同一台设备被两条链路抢占时会直接拒绝并说明原因</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>佳明 LiveTrack</b>：手表的活动位置可以直接接进来。两条路——① 在佳明 Connect App 里「分享」选 APRSlocus（已注册系统分享入口），链接自动填入并开始追踪；② 信标设置页的「佳明 LiveTrack」里手动粘贴链接（也可从剪贴板取）。抓公开分享页的 trackPoints，取经纬度/海拔/速度/心率；只接受 120 秒内的点、积压超 60 秒跳点、两次转发至少隔 10 秒；佳明在跑时手机 GPS 自动让位</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>心率显示在主屏幕</b>（地图左上第一个胶囊，带 BLE / Garmin 来源标记，没有读数时整块不显示）；<b>佳明接管期间补齐两处</b>：① 航向——佳明的点没有航向字段，之前会沿用手机 GPS 的旧值（指南针停在旧方向），现用前后两点算出来；② 历史台账——之前没写而手机 GPS 又正让位，那段历史是空白，现已与 GPS 同一套落盘。另外设备页新增「其他数据来源」卡（心率带 + 佳明两个入口），与报文链路互不影响、可同时使用</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -816,7 +1810,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**修三处「挤 / 没填满 / 显示不全」**：① 关于页分享弹层的标题与副标题原来零间隙地贴在一起，现在留 3px，头部与选项之间 14→18、选项之间 8→10；② 关于页封面——原来「容器宽/卡高 > 1.62」就改走 `contain`（怕裁掉火山），但卡高有 300 上限、容器宽到 600，于是**任何 ≥600 宽的屏幕上都会走**：照片缩成中间一条、两侧各空 75px，横屏时 Logo 卡正坐在左边空白上（就是「logo 背景没填满」）；改成 cover + topCenter，铺满并保住雪顶；③ 消息页换栏原来按**朝向**判（只要横屏就走双栏），而 2.0 横屏把消息页装进≤560 的左面板（手机常 200~280），固定 280 的列表栏把会话区挤成负宽度 —— 现在只看可用宽度换栏、列表栏宽度跟着容器走，并新增窄容器行内降级（呼号可省略 / 群聊操作胶囊换行排，一个都不藏）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>修三处「挤 / 没填满 / 显示不全」</b>：① 关于页分享弹层的标题与副标题原来零间隙地贴在一起，现在留 3px，头部与选项之间 14→18、选项之间 8→10；② 关于页封面——原来「容器宽/卡高 > 1.62」就改走 <code>contain</code>（怕裁掉火山），但卡高有 300 上限、容器宽到 600，于是<b>任何 ≥600 宽的屏幕上都会走</b>：照片缩成中间一条、两侧各空 75px，横屏时 Logo 卡正坐在左边空白上（就是「logo 背景没填满」）；改成 cover + topCenter，铺满并保住雪顶；③ 消息页换栏原来按<b>朝向</b>判（只要横屏就走双栏），而 2.0 横屏把消息页装进≤560 的左面板（手机常 200~280），固定 280 的列表栏把会话区挤成负宽度 —— 现在只看可用宽度换栏、列表栏宽度跟着容器走，并新增窄容器行内降级（呼号可省略 / 群聊操作胶囊换行排，一个都不藏）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -825,9 +1819,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-24</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot up"></span>**网络定位整体降权：粗定位（基站/Wi-Fi）不再自动上报**。自动上报是「我在这里」的公开宣告，而粗点常年偏几百米、还会原地漂 —— 报出去就是个错坐标。地图上报横幅 / 沉浸地图 / 首页 / 设置页都会如实说明「网络定位中 · 暂不自动上报」，GPS 一回来立即恢复（手动「立即上报」不受影响）。三个门槛同时收紧：GPS 停更 120s→300s 才允许粗点兜底、粗点自身位移上限 8km→3km、粗点精度显示下限 150m→300m；粗点也不再推动 APRS-IS 过滤中心（过滤串按 0.01° 取整，一动就可能触发整条链路重连）</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**横屏在手机 / 平板 / 桌面三端的打磨**：① 面板内的宽度不再按屏幕宽度算 —— 消息气泡原来取「屏幕宽 × 0.55」，桌面 1920 会算成 1056px，超出面板的部分被默默裁掉，长消息读不全（现在按消息区实际宽度）；② 左上统计条在窄地图区自动降级为「在线 + 台站」（横屏面板展开时地图区常只剩 200 出头）；③「矮横屏」改按顶栏之下的可用高度判断（未连接 / 公告横幅会各占一行），不再漏判「工具列最下面的定位按钮被裁掉、点不到」；④ 桌面端自绘按钮统一给鼠标手型指针（包一层 ClickCursor —— GestureDetector 没有 mouseCursor 参数）</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>**关于页名片卡不再挤**：头部内边距加大、标题与副标题间距 2→4px、标题 13.5→14.5、分享行更宽松、官网图标 32→34 并加了悬停说明（桌面端）</div>
+        <div class="cl-item"><span class="cl-dot up"></span><b>网络定位整体降权：粗定位（基站/Wi-Fi）不再自动上报</b>。自动上报是「我在这里」的公开宣告，而粗点常年偏几百米、还会原地漂 —— 报出去就是个错坐标。地图上报横幅 / 沉浸地图 / 首页 / 设置页都会如实说明「网络定位中 · 暂不自动上报」，GPS 一回来立即恢复（手动「立即上报」不受影响）。三个门槛同时收紧：GPS 停更 120s→300s 才允许粗点兜底、粗点自身位移上限 8km→3km、粗点精度显示下限 150m→300m；粗点也不再推动 APRS-IS 过滤中心（过滤串按 0.01° 取整，一动就可能触发整条链路重连）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>横屏在手机 / 平板 / 桌面三端的打磨</b>：① 面板内的宽度不再按屏幕宽度算 —— 消息气泡原来取「屏幕宽 × 0.55」，桌面 1920 会算成 1056px，超出面板的部分被默默裁掉，长消息读不全（现在按消息区实际宽度）；② 左上统计条在窄地图区自动降级为「在线 + 台站」（横屏面板展开时地图区常只剩 200 出头）；③「矮横屏」改按顶栏之下的可用高度判断（未连接 / 公告横幅会各占一行），不再漏判「工具列最下面的定位按钮被裁掉、点不到」；④ 桌面端自绘按钮统一给鼠标手型指针（包一层 ClickCursor —— GestureDetector 没有 mouseCursor 参数）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>关于页名片卡不再挤</b>：头部内边距加大、标题与副标题间距 2→4px、标题 13.5→14.5、分享行更宽松、官网图标 32→34 并加了悬停说明（桌面端）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -836,8 +1830,8 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>**功能引导与地图浮层的重叠已修**：上一版引导卡硬写 `topBase+46`，正好糊住「沉浸地图」入口。先改成同一竖列顺序排布，但按真实几何量过发现它与右上图例**只差 1px 就相交**（靠「差一点」压住的布局换个语言/缩放必翻车）—— 最终**地图页与沉浸地图改用一次性底部弹层**：全屏地图四周都是浮层，浮卡片找不到一定不重叠的位置；弹层只在页面真的在前台时才弹</div>
-        <div class="cl-item"><span class="cl-dot up"></span>引导卡做小做安静：底色 8%→6%、描边 22%→16%、图标底托 30→28；右侧 × 改成**「知道了」文字按钮**；地图那条文案改短（卡片在地图左侧列里只有约 300px 宽，原句会折四行）。另外把 `check_landscape_layout.py` 的判据从「数 leftInset 出现次数」改成按结构判 —— 数实现细节会误伤重构（这次就报了个假失败）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span><b>功能引导与地图浮层的重叠已修</b>：上一版引导卡硬写 <code>topBase+46</code>，正好糊住「沉浸地图」入口。先改成同一竖列顺序排布，但按真实几何量过发现它与右上图例<b>只差 1px 就相交</b>（靠「差一点」压住的布局换个语言/缩放必翻车）—— 最终<b>地图页与沉浸地图改用一次性底部弹层</b>：全屏地图四周都是浮层，浮卡片找不到一定不重叠的位置；弹层只在页面真的在前台时才弹</div>
+        <div class="cl-item"><span class="cl-dot up"></span>引导卡做小做安静：底色 8%→6%、描边 22%→16%、图标底托 30→28；右侧 × 改成<b>「知道了」文字按钮</b>；地图那条文案改短（卡片在地图左侧列里只有约 300px 宽，原句会折四行）。另外把 <code>check_landscape_layout.py</code> 的判据从「数 leftInset 出现次数」改成按结构判 —— 数实现细节会误伤重构（这次就报了个假失败）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -846,8 +1840,8 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>**功能引导**：16 个功能页首次进入时，正文顶部会显示一张可关闭的小提示卡（一句话说明这页能干什么、从哪下手）；关掉即记为「已看」，之后不再出现、也不占位置。设置类子页顶栏另有「重看本页引导」按钮。覆盖地图、台站列表、沉浸地图、消息、数据包、设备、设置、离线地图、日志、备份、轨迹回放、主题、翻译、声卡 TNC、蓝牙 TNC、PKWDWPL</div>
-        <div class="cl-item"><span class="cl-dot up"></span>引导的「已看」记录存进设置并**纳入备份**（换机后不该把看过的提示卡再弹一遍）；设置里新增「重新查看功能引导」，确认后清空记录、各页提示卡重新出现。新增 `tool/check_guides.py` 静态检查：引导表 ↔ 6 语言文案 ↔ 生成产物 ↔ 页面接入点四处一一对应（漏任一处都不会编译失败，只会「引导永远不出现」）；该检查写完当次就抓出三处真问题</div>
+        <div class="cl-item"><span class="cl-dot new"></span><b>功能引导</b>：16 个功能页首次进入时，正文顶部会显示一张可关闭的小提示卡（一句话说明这页能干什么、从哪下手）；关掉即记为「已看」，之后不再出现、也不占位置。设置类子页顶栏另有「重看本页引导」按钮。覆盖地图、台站列表、沉浸地图、消息、数据包、设备、设置、离线地图、日志、备份、轨迹回放、主题、翻译、声卡 TNC、蓝牙 TNC、PKWDWPL</div>
+        <div class="cl-item"><span class="cl-dot up"></span>引导的「已看」记录存进设置并<b>纳入备份</b>（换机后不该把看过的提示卡再弹一遍）；设置里新增「重新查看功能引导」，确认后清空记录、各页提示卡重新出现。新增 <code>tool/check_guides.py</code> 静态检查：引导表 ↔ 6 语言文案 ↔ 生成产物 ↔ 页面接入点四处一一对应（漏任一处都不会编译失败，只会「引导永远不出现」）；该检查写完当次就抓出三处真问题</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -856,7 +1850,7 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>关于页名片卡不再**压住封面**：上一版让它上骑 14px 压住照片下缘，实机看照片底部被挡掉一条、圆角切在图上，像没对齐；现在退回封面下方、中间留 12px 间隙，封面是一张完整的照片</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>关于页名片卡不再<b>压住封面</b>：上一版让它上骑 14px 压住照片下缘，实机看照片底部被挡掉一条、圆角切在图上，像没对齐；现在退回封面下方、中间留 12px 间隙，封面是一张完整的照片</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -865,9 +1859,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>关于页重做：封面从 Logo 底图换成**泰德峰实景照片**，版本号收进右上角玻璃胶囊、Logo 与标题落到左下角压在渐变上；封面高度随窗口宽度走（`(宽 × 0.64)`，196~300），超宽屏改「整体装入」，不再把火山裁掉；桌面宽屏下封面与正文套**同一个限宽容器**（600）</div>
+        <div class="cl-item"><span class="cl-dot new"></span>关于页重做：封面从 Logo 底图换成<b>泰德峰实景照片</b>，版本号收进右上角玻璃胶囊、Logo 与标题落到左下角压在渐变上；封面高度随窗口宽度走（<code>(宽 × 0.64)</code>，196~300），超宽屏改「整体装入」，不再把火山裁掉；桌面宽屏下封面与正文套<b>同一个限宽容器</b>（600）</div>
         <div class="cl-item"><span class="cl-dot up"></span>关于页删掉「功能特性」一节（实时地图 / GPS / 信标 / 消息 / 自动连接 / 图层过滤 / FMO 七行 —— App 里已经看得见的功能不必再列一遍）；「分享」从描边小胶囊改成整行可点的入口，分节标题加淡色底托图标与右侧细横线，页脚加分割线并标出封面摄影署名</div>
-        <div class="cl-item"><span class="cl-dot up"></span>关于页版式改成**名片式**：封面下缘骑一张名片卡（呼号 · 名字 + 官网图标 + 整行分享入口），分节从 8 个并成 5 个 —— 「开源致谢 + 许可证声明」并为「开源与许可」（四个开源项排 2×2 网格），「测试成员 + AI 算力支持 + 赞助与鸣谢」并为「致谢名单」（呼号做成可折行的 chip）；**去掉作者个人站 theez.top 与「站长」字样**，官网按钮改指 App 官网（用户反馈里本来就有）</div>
+        <div class="cl-item"><span class="cl-dot up"></span>关于页版式改成<b>名片式</b>：封面下缘骑一张名片卡（呼号 · 名字 + 官网图标 + 整行分享入口），分节从 8 个并成 5 个 —— 「开源致谢 + 许可证声明」并为「开源与许可」（四个开源项排 2×2 网格），「测试成员 + AI 算力支持 + 赞助与鸣谢」并为「致谢名单」（呼号做成可折行的 chip）；<b>去掉作者个人站 theez.top 与「站长」字样</b>，官网按钮改指 App 官网（用户反馈里本来就有）</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -876,8 +1870,8 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot fix"></span>修「退出设置子页时公告横幅闪一下」：转场那份「底」原来用「值到 1 没有」判断转场结没结束 —— 而弹出时 `reverse()` 只改状态、**值要下一帧才动**，于是底下的页面整整透出一帧（开的材质或背景图时才看得见）</div>
-        <div class="cl-item"><span class="cl-dot up"></span>公告入口搬到**设置主页最底下**（备份之后、关于之前）；设置子页里不再放横幅、只留开关。入口**点它才联网**，所以开关关着也能用 —— 不妨碍「关了就不在后台联网」那个承诺</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>修「退出设置子页时公告横幅闪一下」：转场那份「底」原来用「值到 1 没有」判断转场结没结束 —— 而弹出时 <code>reverse()</code> 只改状态、<b>值要下一帧才动</b>，于是底下的页面整整透出一帧（开的材质或背景图时才看得见）</div>
+        <div class="cl-item"><span class="cl-dot up"></span>公告入口搬到<b>设置主页最底下</b>（备份之后、关于之前）；设置子页里不再放横幅、只留开关。入口<b>点它才联网</b>，所以开关关着也能用 —— 不妨碍「关了就不在后台联网」那个承诺</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -886,8 +1880,8 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>公告横幅挪到**主页**（地图上方，1.0/2.0 都有），设置页也各留一条；点开改成**底部弹层**（长文可滚、可拖动关闭），横幅自带**关闭按钮**（关掉后设置里再打开即可）</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>修「主界面底图选择面板弹不出来」：那颗按钮的回调**漏了括号**（只是返回函数本身、从不调用）—— v1.6.151 起一直如此，编译与 analyze 都不会报</div>
+        <div class="cl-item"><span class="cl-dot new"></span>公告横幅挪到<b>主页</b>（地图上方，1.0/2.0 都有），设置页也各留一条；点开改成<b>底部弹层</b>（长文可滚、可拖动关闭），横幅自带<b>关闭按钮</b>（关掉后设置里再打开即可）</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>修「主界面底图选择面板弹不出来」：那颗按钮的回调<b>漏了括号</b>（只是返回函数本身、从不调用）—— v1.6.151 起一直如此，编译与 analyze 都不会报</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -896,9 +1890,9 @@ html{overflow-x:hidden}
         <span class="cl-date">2026-09-23</span>
       </div>
       <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>新增**公告横幅**（设置 → 显示，默认开）：内容直接取自官网首页的公告区，改官网就能发通知、不用等新版；应用内渲染 Markdown（标题/列表/表格/图片）与超链接，断网时显示上次缓存的那份</div>
-        <div class="cl-item"><span class="cl-dot new"></span>智能信标新增**第三路判据：按转弯打点** —— 转过设定角度就补一个点，角度每档可自定义（10~180°，0 = 关闭）。盘山路上车速慢、距离门限很久才够，而连续发卡弯正是最该有轨迹的地方</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>「台站备注」现在看得出能输入了：那一行原来是**一片空白**（无边框、无占位提示），和静态的「标签 + 值」行长得一样。现在空值有占位提示、输入区有底色与描边、聚焦时描边变蓝 —— 全仓 42 处输入行一起受益</div>
+        <div class="cl-item"><span class="cl-dot new"></span>新增<b>公告横幅</b>（设置 → 显示，默认开）：内容直接取自官网首页的公告区，改官网就能发通知、不用等新版；应用内渲染 Markdown（标题/列表/表格/图片）与超链接，断网时显示上次缓存的那份</div>
+        <div class="cl-item"><span class="cl-dot new"></span>智能信标新增<b>第三路判据：按转弯打点</b> —— 转过设定角度就补一个点，角度每档可自定义（10~180°，0 = 关闭）。盘山路上车速慢、距离门限很久才够，而连续发卡弯正是最该有轨迹的地方</div>
+        <div class="cl-item"><span class="cl-dot fix"></span>「台站备注」现在看得出能输入了：那一行原来是<b>一片空白</b>（无边框、无占位提示），和静态的「标签 + 值」行长得一样。现在空值有占位提示、输入区有底色与描边、聚焦时描边变蓝 —— 全仓 42 处输入行一起受益</div>
       </div>
     </div>
     <div class="cl-version reveal">
@@ -1140,87 +2134,94 @@ html{overflow-x:hidden}
       </div>
     </div>
   <!-- /site-sync:changelog -->
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag beta">2.0 BETA</span>
-        <span class="cl-date">2026-09-15</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag beta">2.0 BETA</span>
+          <span class="cl-date">2026-09-15</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>TOUCH SKY：从纯网络走向射频，2.0 BETA 开发正式启程</div>
+          <div class="cl-item"><span class="cl-dot new"></span>感谢 APRS 社群、中继站、iGate、服务器维护者与所有开源项目</div>
+          <div class="cl-item"><span class="cl-dot up"></span>欢迎测试者、HAM 友与开发者加入 2.0 BETA</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>TOUCH SKY：从纯网络走向射频，2.0 BETA 开发正式启程</div>
-        <div class="cl-item"><span class="cl-dot new"></span>感谢 APRS 社群、中继站、iGate、服务器维护者与所有开源项目</div>
-        <div class="cl-item"><span class="cl-dot up"></span>欢迎测试者、HAM 友与开发者加入 2.0 BETA</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.18</span>
-        <span class="cl-date">2026-09-05</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.18</span>
+          <span class="cl-date">2026-09-05</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>详情页新增「QRZ 呼号 / aprs.fi 位置」在线查看</div>
+          <div class="cl-item"><span class="cl-dot new"></span>新增繁體中文界面（设置 / OOBE 可选，全量翻译）</div>
+          <div class="cl-item"><span class="cl-dot new"></span>接入官方 APRS 设备库识别台站设备（厂商型号 + 设备类别）</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>详情页新增「QRZ 呼号 / aprs.fi 位置」在线查看</div>
-        <div class="cl-item"><span class="cl-dot new"></span>新增繁體中文界面（设置 / OOBE 可选，全量翻译）</div>
-        <div class="cl-item"><span class="cl-dot new"></span>接入官方 APRS 设备库识别台站设备（厂商型号 + 设备类别）</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.17</span>
-        <span class="cl-date">2026-09-05</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.17</span>
+          <span class="cl-date">2026-09-05</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot up"></span>台站筛选重做为单行常驻 chips，即点即筛，去掉 FMO 筛选项</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot up"></span>台站筛选重做为单行常驻 chips，即点即筛，去掉 FMO 筛选项</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.16</span>
-        <span class="cl-date">2026-09-05</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.16</span>
+          <span class="cl-date">2026-09-05</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>台站筛选支持精确到具体设备型号（官方 tocalls 识别）</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>台站筛选支持精确到具体设备型号（官方 tocalls 识别）</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.5</span>
-        <span class="cl-date">2026-09-02</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.5</span>
+          <span class="cl-date">2026-09-02</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>更新页新增「全部更新日志」入口，一次看全所有版本说明</div>
+          <div class="cl-item"><span class="cl-dot new"></span>地图视野内无台站时，点击提示弹出「地图帮助」面板</div>
+          <div class="cl-item"><span class="cl-dot fix"></span>修复国际图源（Carto / OSM / Esri / OpenTopo）地图偏移，改用 WGS-84 投影</div>
+          <div class="cl-item"><span class="cl-dot up"></span>移除「显示全部台站」自适应，无台站提示改为打开帮助面板</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>更新页新增「全部更新日志」入口，一次看全所有版本说明</div>
-        <div class="cl-item"><span class="cl-dot new"></span>地图视野内无台站时，点击提示弹出「地图帮助」面板</div>
-        <div class="cl-item"><span class="cl-dot fix"></span>修复国际图源（Carto / OSM / Esri / OpenTopo）地图偏移，改用 WGS-84 投影</div>
-        <div class="cl-item"><span class="cl-dot up"></span>移除「显示全部台站」自适应，无台站提示改为打开帮助面板</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.4</span>
-        <span class="cl-date">2026-09-02</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.4</span>
+          <span class="cl-date">2026-09-02</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>台站详情新增速度 / 高度变化图表</div>
+          <div class="cl-item"><span class="cl-dot new"></span>图表时间范围可切换：10 分钟 / 30 分钟 / 1 小时 / 3 小时 / 全部</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>台站详情新增速度 / 高度变化图表</div>
-        <div class="cl-item"><span class="cl-dot new"></span>图表时间范围可切换：10 分钟 / 30 分钟 / 1 小时 / 3 小时 / 全部</div>
-      </div>
-    </div>
 
-    <div class="cl-version reveal">
-      <div class="cl-head">
-        <span class="cl-tag">v1.6.3</span>
-        <span class="cl-date">2026-09-02</span>
+      <div class="cl-version reveal">
+        <div class="cl-head">
+          <span class="cl-tag">v1.6.3</span>
+          <span class="cl-date">2026-09-02</span>
+        </div>
+        <div class="cl-body">
+          <div class="cl-item"><span class="cl-dot new"></span>关于页新增「分享 APRSlocus」（系统分享 / 复制文案 / 打开下载页）</div>
+          <div class="cl-item"><span class="cl-dot up"></span>模拟位置模式隐藏 GPS 专属设置，手动定位前置显示</div>
+          <div class="cl-item"><span class="cl-dot up"></span>瓦片地图最小缩放扩展至全球视野（z=3）</div>
+        </div>
       </div>
-      <div class="cl-body">
-        <div class="cl-item"><span class="cl-dot new"></span>关于页新增「分享 APRSlocus」（系统分享 / 复制文案 / 打开下载页）</div>
-        <div class="cl-item"><span class="cl-dot up"></span>模拟位置模式隐藏 GPS 专属设置，手动定位前置显示</div>
-        <div class="cl-item"><span class="cl-dot up"></span>瓦片地图最小缩放扩展至全球视野（z=3）</div>
-      </div>
-    </div>
 
-    <p class="cl-more reveal"><a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">查看完整更新记录 →</a></p>
+      <div class="changelog-more" data-limit="4">
+        <button type="button" aria-expanded="false"
+          data-label-more="展开全部 {n} 个历史版本 ▾"
+          data-label-less="收起历史版本 ▴"><span>展开全部历史版本 ▾</span></button>
+      </div>
+
+      <p class="cl-more reveal"><a href="https://github.com/dariondong/APRSLocus/releases" target="_blank" rel="noopener">查看完整更新记录 →</a></p>
+    </div>
   </div>
 </section>
 
@@ -1230,52 +2231,54 @@ html{overflow-x:hidden}
     <h2>常见问题</h2>
     <p>从 Passcode 到后台耗电，能想到的问题都写在这里了。还有 23 题按主题分组的完整版，见 <a href="faq.html">帮助中心</a>。</p>
   </div>
+  <div class="section-body">
 
-  <div class="faq-list">
-    <details class="faq reveal" open>
-      <summary>为什么收不到消息 / 无法收发消息？<span class="chev"></span></summary>
-      <p>绝大多数情况是 <b>Passcode 未验证</b>。密码填 <code>-1</code> 只能连接，不能正常收发消息。请到 <a href="https://aprs.cool/AprsPG" target="_blank" rel="noopener">APRS Passcode 查询</a> 生成自己的 Passcode 并填入「连接设置」。登录后若服务器返回 <code>unverified</code>，主页顶部会出现黄色警告横幅，点击「去设置」即可直达修改。</p>
-    </details>
+    <div class="faq-list">
+      <details class="faq reveal" open>
+        <summary>为什么收不到消息 / 无法收发消息？<span class="chev"></span></summary>
+        <p>绝大多数情况是 <b>Passcode 未验证</b>。密码填 <code>-1</code> 只能连接，不能正常收发消息。请到 <a href="https://aprs.cool/AprsPG" target="_blank" rel="noopener">APRS Passcode 查询</a> 生成自己的 Passcode 并填入「连接设置」。登录后若服务器返回 <code>unverified</code>，主页顶部会出现黄色警告横幅，点击「去设置」即可直达修改。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>Passcode 该怎么设置？<span class="chev"></span></summary>
-      <p>在引导第 6 步或「设置 → 连接」中，用你的<b>完整呼号（含 SSID 后缀，如 BG7LZQ-3）</b>查询生成 Passcode 后填入即可。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>Passcode 该怎么设置？<span class="chev"></span></summary>
+        <p>在引导第 6 步或「设置 → 连接」中，用你的<b>完整呼号（含 SSID 后缀，如 BG7LZQ-3）</b>查询生成 Passcode 后填入即可。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>连接失败 / 频繁掉线？<span class="chev"></span></summary>
-      <p>应用内置渐进式重连（8 → 16 → 32 → 60 秒）。若持续失败，请检查网络、确认服务器地址（默认 <code>rotate.aprs2.net:14580</code>）与端口是否被拦截，或在「连接设置」中更换服务器后点击「重新连接」。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>连接失败 / 频繁掉线？<span class="chev"></span></summary>
+        <p>应用内置渐进式重连（8 → 16 → 32 → 60 秒）。若持续失败，检查网络、服务器地址与端口是否被拦截，或在「连接设置」换一台服务器后点击「重新连接」。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>手机上收不到周边台站？<span class="chev"></span></summary>
-      <p>检查「接收筛选」是否勾选了目标国家 / 地区，并确认接收范围（经纬度 + 半径）覆盖你的位置。默认只接收中国（B 开头）台站。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>手机上收不到周边台站？<span class="chev"></span></summary>
+        <p>检查「接收筛选」是否勾选了目标国家 / 地区，并确认接收范围（经纬度 + 半径）覆盖你的位置。默认只接收中国（B 开头）台站。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>后台定位会一直耗电吗？<span class="chev"></span></summary>
-      <p>Android 端使用前台服务持续定位以保持 APRS 在线，可在「定位 / 信标」设置中调整上报间隔，或关闭信标上报、按需手动上报来降低耗电。通知栏可一键「退出」应用。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>后台定位会一直耗电吗？<span class="chev"></span></summary>
+        <p>Android 端使用前台服务持续定位以保持 APRS 在线，可在「定位 / 信标」设置中调整上报间隔，或关闭信标上报、按需手动上报来降低耗电。通知栏可一键「退出」应用。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>Windows 上地图显示异常？<span class="chev"></span></summary>
-      <p>建议在「显示 → 地图类型」中切换为<b>矢量地图</b>（无需 API Key，兼容性最好），或使用 Carto / OSM / Esri 等国际图源。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>Windows 上地图显示异常？<span class="chev"></span></summary>
+        <p>建议在「显示 → 地图类型」中切换为<b>矢量地图</b>（无需 API Key，兼容性最好），或使用 Carto / OSM / Esri 等国际图源。</p>
+      </details>
 
-    <details class="faq reveal">
-      <summary>覆盖安装提示签名冲突 / 版本降级？<span class="chev"></span></summary>
-      <p>自 1.5.2 起 Android 使用正式 release 签名，CI 与本地签名一致，直接覆盖安装即可。若从更老版本升级，请卸载后重装。</p>
-    </details>
+      <details class="faq reveal">
+        <summary>覆盖安装提示签名冲突 / 版本降级？<span class="chev"></span></summary>
+        <p>自 1.5.2 起 Android 使用正式 release 签名，CI 与本地签名一致，直接覆盖安装即可。若从更老版本升级，请卸载后重装。</p>
+      </details>
+    </div>
   </div>
 </section>
 
 <!-- ═══════════ 社区 ═══════════ -->
-<section class="section alt" id="community">
-  <div class="community-inner">
-    <div class="section-head reveal">
-      <h2>聊聊、反馈、一起开发</h2>
-      <p>Star、提 Issue、发 PR，或者直接进 QQ 群唠嗑，都欢迎。</p>
-    </div>
+<section class="section alt narrow" id="community">
+  <div class="section-head reveal">
+    <h2>聊聊、反馈、一起开发</h2>
+    <p>Star、提 Issue、发 PR，或者直接进 QQ 群 / Discord 唠嗑，都欢迎。</p>
+  </div>
+  <div class="section-body">
 
     <div class="community-links">
       <a class="clink reveal" href="https://github.com/dariondong/APRSLocus" target="_blank" rel="noopener">
@@ -1302,6 +2305,14 @@ html{overflow-x:hidden}
         <span class="cl-arrow">↗</span>
       </a>
 
+      <a class="clink reveal" href="https://discord.gg/CqUKYJUfU" target="_blank" rel="noopener">
+        <span class="cl-icon dc">
+          <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg>
+        </span>
+        <div><b>Discord 社群</b><span>discord.gg/CqUKYJUfU</span></div>
+        <span class="cl-arrow">↗</span>
+      </a>
+
       <a class="clink reveal" href="https://aprslocus.theez.top/" target="_blank" rel="noopener">
         <span class="cl-icon web2">
           <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm7.4 11h-3.3c-.3 3.3-1.6 6.1-3.4 7.9A8 8 0 0 1 19.4 13zM12 4c1.6 1.9 2.9 4.7 3.2 8H8.8c.3-3.3 1.6-6.1 3.2-8zm-1.7 16.9c-1.8-1.8-3.1-4.6-3.4-7.9H3.6a8 8 0 0 0 6.7 7.9z"/></svg>
@@ -1317,6 +2328,14 @@ html{overflow-x:hidden}
         <div><b>荣誉墙</b><span>成员徽章与成就</span></div>
         <span class="cl-arrow">↗</span>
       </a>
+
+      <a class="clink reveal" href="card.html" rel="noopener">
+        <span class="cl-icon hw">
+          <svg viewBox="0 0 24 24"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v10h16V7H4zm2 2h2v2H6V9zm0 4h2v2H6v-2zm4-4h7v2h-7V9zm0 4h7v2h-7v-2z"/></svg>
+        </span>
+        <div><b>名片</b><span>一键生成分享名片</span></div>
+        <span class="cl-arrow">↗</span>
+      </a>
     </div>
   </div>
 </section>
@@ -1324,12 +2343,12 @@ html{overflow-x:hidden}
 
 
 <!-- ═══════════ 贡献者 ═══════════ -->
-<section class="section" id="contributors">
-  <div class="contributors-inner">
-    <div class="section-head reveal">
-      <h2>贡献者</h2>
-      <p>感谢每一位让 APRSlocus 变得更好的人。</p>
-    </div>
+<section class="section narrow" id="contributors">
+  <div class="section-head reveal">
+    <h2>贡献者</h2>
+    <p>感谢每一位让 APRSlocus 变得更好的人。</p>
+  </div>
+  <div class="section-body">
 
     <div class="cgroup reveal">
       <div class="cgroup-title"><span class="cgroup-dot" style="background:#2563eb"></span>开发</div>
@@ -1362,6 +2381,10 @@ html{overflow-x:hidden}
     <div class="cgroup reveal">
       <div class="cgroup-title"><span class="cgroup-dot" style="background:#f97316"></span>代码贡献</div>
       <div class="contributors">
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#8a5cf0,#6d3ee0)">B</span>
+          <span><span class="c-name">BD3QID</span><span class="c-role">WLAN 电台直连</span></span>
+        </span>
         <span class="contributor">
           <span class="avatar" style="background:linear-gradient(135deg,#f97316,#ea580c)">零</span>
           <span><span class="c-name">清零 (BG2HCB)</span><span class="c-role">设置页代码优化</span></span>
@@ -1451,6 +2474,46 @@ html{overflow-x:hidden}
           <span><span class="c-name">BG2EFX</span><span class="c-role">赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音</span></span>
         </span>
         <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">W</span>
+          <span><span class="c-name">BG2WX</span><span class="c-role">赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">A</span>
+          <span><span class="c-name">BA8AZJ</span><span class="c-role">赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">L</span>
+          <span><span class="c-name">BG7LZQ</span><span class="c-role">赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">T</span>
+          <span><span class="c-name">BD4TYW</span><span class="c-role">赠我以琼琚 · 投我琼琚，报以长波</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">W</span>
+          <span><span class="c-name">BH2WIX</span><span class="c-role">赠我以琼琚 · 琼琚有价，清音无价</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">Q</span>
+          <span><span class="c-name">BG7QZC</span><span class="c-role">赠我以琼琚 · 琼琚虽微，长波可寄</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">H</span>
+          <span><span class="c-name">BH4HGA</span><span class="c-role">赠我以琼琚 · 琼琚在手，回响不息</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">G</span>
+          <span><span class="c-name">BG2GNI</span><span class="c-role">赠我以琼琚 · 琼琚一片，回声不散</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">A</span>
+          <span><span class="c-name">BG5AON</span><span class="c-role">赠我以琼琚 · 琼琚在手，长路有灯</span></span>
+        </span>
+        <span class="contributor">
+          <span class="avatar" style="background:linear-gradient(135deg,#c9a227,#8a6d1f)">W</span>
+          <span><span class="c-name">BG5WRY</span><span class="c-role">赠我以琼琚 · 琼琚在握，长波有应</span></span>
+        </span>
+        <span class="contributor">
           <span class="avatar" style="background:linear-gradient(135deg,#0891b2,#164e63)">N</span>
           <span><span class="c-name">BH7NOR</span><span class="c-role">协议接口支持</span></span>
         </span>
@@ -1469,6 +2532,41 @@ html{overflow-x:hidden}
     <p class="cta-line reveal">想加入列表？翻译、提 PR 或报 Bug 都可以 —— <a href="https://github.com/dariondong/APRSLocus/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">查看贡献指南 →</a></p>
   </div>
 </section>
+
+
+<!-- friends-sync -->
+<section class="section alt" id="friends">
+  <div class="section-head reveal">
+    <h2>友情链接</h2>
+    <p>与同行者的网站对望，感谢互相链接。</p>
+  </div>
+  <div class="section-body">
+    <div class="links-grid">
+      <a class="link-card reveal" href="https://www.BA4IZZ.cn" target="_blank" rel="noopener">
+        <img class="link-card-logo" src="https://www.BA4IZZ.cn/logo.png" alt="沂南业余无线电运动协会" loading="lazy" referrerpolicy="no-referrer">
+        <span class="link-card-text"><span class="flink-name">沂南业余无线电运动协会</span><span class="flink-desc">沂南业余无线电运动协会官方网站</span></span>
+      </a>
+      <a class="link-card reveal" href="https://aprs.tv" target="_blank" rel="noopener">
+        <img class="link-card-logo" src="https://aprs.tv/pwa-icons/apple-touch-icon.png" alt="APRS.TV" loading="lazy" referrerpolicy="no-referrer">
+        <span class="link-card-text"><span class="flink-name">APRS.TV</span><span class="flink-desc">APRS 实时地图</span></span>
+      </a>
+      <a class="link-card reveal" href="https://by2aa.org.cn" target="_blank" rel="noopener">
+        <img class="link-card-logo" src="https://by2aa.org.cn/assets/images/logo.png" alt="黑龙江省无线电运动协会" loading="lazy" referrerpolicy="no-referrer">
+        <span class="link-card-text"><span class="flink-name">黑龙江省无线电运动协会</span><span class="flink-desc">黑龙江省无线电运动协会官方网站</span></span>
+      </a>
+      <a class="link-card reveal" href="https://openrf.radiowo.com" target="_blank" rel="noopener">
+        <img class="link-card-logo" src="assets/openrf.png" alt="OpenRF 门户" loading="lazy" referrerpolicy="no-referrer">
+        <span class="link-card-text"><span class="flink-name">OpenRF 门户</span><span class="flink-desc">业余无线电社区平台</span></span>
+      </a>
+      <a class="link-card reveal" href="https://aprsnet.cn/" target="_blank" rel="noopener">
+        <img class="link-card-logo" src="assets/aprsnet.png?v=2" alt="APRSNET.CN" loading="lazy" referrerpolicy="no-referrer">
+        <span class="link-card-text"><span class="flink-name">APRSNET.CN</span><span class="flink-desc">中文 APRS 入口</span></span>
+      </a>
+    </div>
+  </div>
+</section>
+<!-- /friends-sync -->
+</main>
 
 
 <!-- ═══════════ 页脚 ═══════════ -->
@@ -1492,7 +2590,7 @@ html{overflow-x:hidden}
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© <span id="year">2026</span> BG7LZQ (Darion) · 开源协议 <a href="https://github.com/dariondong/APRSLocus/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a> · <a href="terms.html">用户协议</a></span>
+      <span>© <span id="year">2026</span> BG7LZQ (Darion) · 开源协议 <a href="https://github.com/dariondong/APRSLocus/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a> · <a href="terms.html">用户协议</a> · <a href="pia.html">隐私影响评估</a></span>
       <span class="disclaimer">本软件仅供业余无线电爱好者学习交流使用，请遵守当地无线电管理法规。</span>
     </div>
   </div>
@@ -1506,6 +2604,9 @@ html{overflow-x:hidden}
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="js/main.js"></script>
+<script src="js/main.js?v=8"></script>
+<script src="js/planet-3d.js?v=27"></script>
+<script src="js/motion.js?v=1"></script>
+<script src="js/nav.js?v=1"></script>
 </body>
 </html>

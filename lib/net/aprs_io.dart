@@ -1,28 +1,21 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:gbk_codec/gbk_codec.dart';
 import 'aprs_base.dart';
 import '../state.dart';
+import '../text_decode.dart';
 
 /// 桌面平台：dart:io Socket 直连 APRS-IS TCP 14580（标准协议）
 class AprsIo extends AprsConnector {
+  /// TCP 直连能自己拼登录行，所以支持 `auth <账号> <口令>`。
+  @override
+  bool get supportsAccountLogin => true;
+
   Socket? _sock;
   StreamSubscription<List<int>>? _sub;
   final List<int> _buf = [];
 
-  /// 按行解码：先按 UTF-8，失败回退 GBK（兼容中文 APRS 消息）
-  static String _decodeLine(List<int> bytes) {
-    try {
-      return utf8.decode(bytes);
-    } catch (_) {
-      try {
-        return gbk.decode(bytes);
-      } catch (_) {
-        return utf8.decode(bytes, allowMalformed: true);
-      }
-    }
-  }
+  /// 按行解码：自动识别 UTF-8 / GBK（兼容中文 APRS 备注与消息），见 [decodeAprsBytes]
+  static String _decodeLine(List<int> bytes) => decodeAprsBytes(bytes);
 
   @override
   Future<bool> connect() async {
@@ -49,7 +42,7 @@ class AprsIo extends AprsConnector {
       _sock = sock;
       sock.setOption(SocketOption.tcpNoDelay, true);
       sock.write('user $callsign pass $passcode vers APRSlocus ${AppState.appVersion}'
-          ' filter $filter\r\n');
+          '${authSegment} filter $filter\r\n');
       _sub = sock.listen(
         (data) {
           _buf.addAll(data);
@@ -77,10 +70,18 @@ class AprsIo extends AprsConnector {
   }
 
   @override
-  void send(String raw) {
+  bool send(String raw) {
+    final sock = _sock;
+    if (!connected || sock == null) return false;
     try {
-      _sock?.write('$raw\r\n');
-    } catch (_) {}
+      sock.write('$raw\r\n');
+      return true;
+    } catch (_) {
+      // 写到一半失败（socket 已半开/被重置）：连接已经不可用，主动收掉让上层
+      // 走重连；否则会一直「以为在发」而报文明明进不去。
+      _handleGone();
+      return false;
+    }
   }
 
   /// 静默收掉当前连接：清理资源但**不**触发 onDisconnected。

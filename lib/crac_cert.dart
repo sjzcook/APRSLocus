@@ -1,0 +1,353 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+/// ─── 操作证书查询（CRAC 公开查询接口）───
+///
+/// 用途：按「姓名 + 完整证书编号」查一次操作证书。查到的记录留在本机，
+/// 显示在电台页的「认证信息」那块。
+///
+/// 接口事实（照抄会踩的坑都记在这里）：
+///   * 地址只有构建时注入的那一条能用，前端的 `/a/` 前缀会 302 到登录页；
+///   * 请求体必须是**嵌套** JSON `{"req":{...}}`；网页里看到的 `req=<json串>`
+///     是它自己的前端拼法，照抄会被后端判 400/415；
+///   * `code: 10000` 成功，`10010` 查无此人，其余按失败处理；
+///   * 返回三张表：内地（prcList）/ 香港（hkList）/ 外国来访者临时（fgList），
+///     字段各不相同，这里统一成 [CracCertRecord]；
+///   * 内地表的证书类别在 `type` 里只是 `A`/`B`/`C` 一个字符，界面拼「类」。
+///
+/// 这是**开发人员自测**用的查询：它会把你填的姓名与证件号发到第三方接口，
+/// 页面里必须把这件事写出来。查询结果只留在本机偏好里，不上传。
+library;
+
+import 'dart:convert';
+
+import 'net/http_send.dart';
+
+/// 查询接口地址。
+///
+/// **源码里不留明文**：发行包由 CI 在构建时从仓库 Secrets 注入
+/// （`--dart-define=CRAC_ENDPOINT=...`，见 `.github/workflows/build-release.yml`）。
+/// 仓库是公开的，这类第三方接口的地址不该跟着源码走。没有注入时
+/// [cracCertConfigured] 为假，查询直接回「未配置」，不发任何请求。
+const String cracCertEndpoint = String.fromEnvironment('CRAC_ENDPOINT');
+
+/// 本次构建有没有注入查询地址。
+bool get cracCertConfigured => cracCertEndpoint.trim().isNotEmpty;
+
+/// 这个呼号能不能用操作证验证。
+///
+/// 用户 2026-10-22：「仅对中国用户中国呼号激活，其他地区的呼号不会显示」。
+/// CRAC 那边只收录内地、香港与外国来访者这三张表，而内地呼号才是 BAA–BZZ
+/// 这一段；台湾的 BV 不在 CRAC 里（那边用自己的系统），所以一并排掉。
+/// 不合格的呼号连入口都不出 —— 让一个 JA 台友点进去、填完名字再被告知
+/// 「没有查到」，比不给他看这个入口更伤人。
+bool cracCallSupported(String call) {
+  final c = call.trim().toUpperCase();
+  if (c.length < 3) return false;
+  if (!c.startsWith('B')) return false;
+  if (c.startsWith('BV')) return false;
+  return true;
+}
+
+/// 接口站点根（`scheme://host[:port]`）。Origin / Referer 由它拼出来，
+/// 不再各写一份地址。
+String get _cracCertOrigin {
+  final u = Uri.tryParse(cracCertEndpoint.trim());
+  if (u == null || !u.hasScheme || u.host.isEmpty) return '';
+  return '${u.scheme}://${u.authority}';
+}
+
+/// 一张表里的一条记录（三张表的字段已经摊平成同一形状，空值就是空串）。
+class CracCertRecord {
+  const CracCertRecord({
+    required this.table,
+    required this.name,
+    this.type = '',
+    this.certNo = '',
+    this.call = '',
+    this.passDate = '',
+    this.issueDate = '',
+    this.region = '',
+    this.validThrough = '',
+    this.idMasked = '',
+  });
+
+  /// 表名（内地操作证书 / 香港操作证书 / 外国来访者临时操作证书）。
+  final String table;
+  final String name;
+
+  /// 操作类别：内地表里是 `A`/`B`/`C`，香港与外国表里没有。
+  final String type;
+  final String certNo;
+
+  /// 证书记录里登记的呼号（内地表多数为空）。
+  final String call;
+  final String passDate;
+  final String issueDate;
+  final String region;
+
+  /// 有效期（香港 / 外国来访者表）。
+  final String validThrough;
+
+  /// 后端自己打过码的证件号，例如 `440******10`。
+  final String idMasked;
+
+  /// 证书类别的中文写法（`A 类`）；没有类别就是空串。
+  String get typeLabel => type.isEmpty ? '' : '$type 类';
+
+  Map<String, dynamic> toJson() => {
+        'table': table,
+        'name': name,
+        'type': type,
+        'certNo': certNo,
+        'call': call,
+        'passDate': passDate,
+        'issueDate': issueDate,
+        'region': region,
+        'validThrough': validThrough,
+        'idMasked': idMasked,
+      };
+
+  static CracCertRecord fromJson(Map<String, dynamic> json) => CracCertRecord(
+        table: json['table']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        type: json['type']?.toString() ?? '',
+        certNo: json['certNo']?.toString() ?? '',
+        call: json['call']?.toString() ?? '',
+        passDate: json['passDate']?.toString() ?? '',
+        issueDate: json['issueDate']?.toString() ?? '',
+        region: json['region']?.toString() ?? '',
+        validThrough: json['validThrough']?.toString() ?? '',
+        idMasked: json['idMasked']?.toString() ?? '',
+      );
+}
+
+/// 本机保存的验证结果：哪个呼号、查到的姓名、证书类别与编号、查的时间。
+///
+/// 一张证书只认一个呼号：呼号改了或换了人，徽章就不该再挂在那里，
+/// 所以呼号跟记录一起存，显示前先对一遍。
+class CracCertInfo {
+  const CracCertInfo({
+    required this.call,
+    required this.name,
+    this.type = '',
+    this.certNo = '',
+    this.at = '',
+  });
+
+  final String call;
+  final String name;
+
+  /// `A`/`B`/`C`；香港与外国表没有类别，存空串。
+  final String type;
+  final String certNo;
+
+  /// 查询时间（`yyyy-MM-dd HH:mm`）。
+  final String at;
+
+  String get typeLabel => type.isEmpty ? '' : '$type 类';
+
+  Map<String, dynamic> toJson() => {
+        'call': call,
+        'name': name,
+        'type': type,
+        'certNo': certNo,
+        'at': at,
+      };
+
+  String encode() => jsonEncode(toJson());
+
+  /// 解析失败（旧版本、手改坏了）一律当「没有验证过」，不抛异常。
+  static CracCertInfo? fromJson(String raw) {
+    if (raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final call = (decoded['call'] ?? '').toString().trim();
+      if (call.isEmpty) return null;
+      return CracCertInfo(
+        call: call.toUpperCase(),
+        name: (decoded['name'] ?? '').toString(),
+        type: (decoded['type'] ?? '').toString(),
+        certNo: (decoded['certNo'] ?? '').toString(),
+        at: (decoded['at'] ?? '').toString(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// 把姓名打码：留第一个字，其余每个字换成 `*`。
+///
+/// 设置页那一小块「已认证」要在别人看得见的地方出现（截图、给别人看屏幕），
+/// 姓名与证书编号都只留一点点，够认就行。
+String maskCracName(String name) {
+  final t = name.trim();
+  if (t.isEmpty) return '';
+  if (t.length == 1) return t;
+  return t[0] + '*' * (t.length - 1);
+}
+
+/// 把证书编号打码：只留开头几位，后面全打星号。
+String maskCracCertNo(String no) {
+  final t = no.trim();
+  if (t.isEmpty) return '';
+  final keep = t.length > 4 ? 4 : 1;
+  return t.substring(0, keep) + '*' * (t.length - keep);
+}
+
+/// 一次查询的结果。
+class CracCertResult {
+  const CracCertResult({
+    required this.status,
+    this.records = const [],
+    this.message = '',
+  });
+
+  final CracCertStatus status;
+  final List<CracCertRecord> records;
+
+  /// 失败时的后端原话（不翻译，只用来排查）。
+  final String message;
+
+  bool get ok => status == CracCertStatus.found;
+}
+
+enum CracCertStatus {
+  /// 查到记录。
+  found,
+
+  /// 后端明确回答查无此人（code 10010）。
+  notFound,
+
+  /// 网络不通 / 接口报错 / 返回体不是 JSON。
+  failed,
+}
+
+/// 发一次查询：只认「姓名 + 完整证书编号」这一种。
+///
+/// 后端还支持用身份证件号查，但**本应用不提供这条路**：证件号是比操作证
+/// 敏感得多的东西，为了给呼号挂一枚徽章去填它，不值得。`idCarNumber` 仍然
+/// 按接口形状发空串。
+Future<CracCertResult> queryCracCert({
+  required String name,
+  required String certNo,
+  Duration timeout = const Duration(seconds: 25),
+}) async {
+  if (!cracCertConfigured) {
+    return const CracCertResult(
+      status: CracCertStatus.failed,
+      message: '未配置查询地址',
+    );
+  }
+  final body = jsonEncode({
+    'req': {
+      'page_no': '1',
+      'page_size': '100',
+      'name': name.trim(),
+      'certificateNo': certNo.trim(),
+      'idCarNumber': '',
+    },
+  });
+
+  String text;
+  try {
+    text = await httpSend(
+      'POST',
+      Uri.parse(cracCertEndpoint),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        if (_cracCertOrigin.isNotEmpty) 'Origin': _cracCertOrigin,
+        if (_cracCertOrigin.isNotEmpty) 'Referer': '$_cracCertOrigin/',
+      },
+      body: body,
+      timeout: timeout,
+    );
+  } catch (error) {
+    return CracCertResult(
+      status: CracCertStatus.failed,
+      message: '$error',
+    );
+  }
+
+  Object? decoded;
+  try {
+    decoded = jsonDecode(text);
+  } catch (_) {
+    return CracCertResult(
+      status: CracCertStatus.failed,
+      message: '返回内容不是 JSON',
+    );
+  }
+  if (decoded is! Map) {
+    return const CracCertResult(
+      status: CracCertStatus.failed,
+      message: '返回内容格式不对',
+    );
+  }
+
+  final code = int.tryParse('${decoded['code']}') ?? 0;
+  if (code == 10010) {
+    return const CracCertResult(status: CracCertStatus.notFound);
+  }
+  if (code != 10000) {
+    return CracCertResult(
+      status: CracCertStatus.failed,
+      message: '${decoded['msg'] ?? '未知原因'}（code=$code）',
+    );
+  }
+
+  final records = parseCracRecords(decoded);
+  if (records.isEmpty) {
+    return const CracCertResult(status: CracCertStatus.notFound);
+  }
+  return CracCertResult(status: CracCertStatus.found, records: records);
+}
+
+/// 把三张表摊平成记录列表（顺序：内地 → 香港 → 外国来访者）。
+List<CracCertRecord> parseCracRecords(Map decoded) {
+  final res = decoded['res'];
+  if (res is! Map) return const [];
+  final out = <CracCertRecord>[];
+
+  String s(Map row, String key) => (row[key] ?? '').toString().trim();
+
+  for (final row in (res['prcList'] as List? ?? const [])) {
+    if (row is! Map) continue;
+    out.add(CracCertRecord(
+      table: '内地操作证书',
+      name: s(row, 'name'),
+      type: s(row, 'type'),
+      certNo: s(row, 'certificateNo'),
+      call: s(row, 'homeCall'),
+      passDate: s(row, 'passDate'),
+      issueDate: s(row, 'issueDate'),
+      region: s(row, 'passAddr'),
+      idMasked: s(row, 'idCarNumber'),
+    ));
+  }
+  for (final row in (res['hkList'] as List? ?? const [])) {
+    if (row is! Map) continue;
+    out.add(CracCertRecord(
+      table: '香港操作证书',
+      name: s(row, 'name'),
+      certNo: s(row, 'certNo'),
+      call: s(row, 'homeCall'),
+      issueDate: s(row, 'issueDate'),
+      validThrough: s(row, 'certValidityDate'),
+      idMasked: s(row, 'idCard'),
+    ));
+  }
+  for (final row in (res['fgList'] as List? ?? const [])) {
+    if (row is! Map) continue;
+    out.add(CracCertRecord(
+      table: '外国来访者临时操作证书',
+      name: s(row, 'name'),
+      certNo: s(row, 'certificateNo'),
+      call: s(row, 'homeCall'),
+      region: s(row, 'origin'),
+      validThrough: s(row, 'validThrough'),
+    ));
+  }
+  return out;
+}

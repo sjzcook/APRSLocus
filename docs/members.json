@@ -1,6 +1,6 @@
 {
-  "version": 55,
-  "updated": "2026-09-28",
+  "version": 71,
+  "updated": "2026-11-09",
   "developers": [
     {
       "call": "BG7LZQ",
@@ -52,7 +52,8 @@
         "kaishan",
         "developer",
         "earlyMember",
-        "sower"
+        "sower",
+        "jadeGift"
       ],
       "primary": "kaishan"
     },
@@ -102,7 +103,8 @@
       "honors": [
         "kaishan",
         "developer",
-        "earlyMember"
+        "earlyMember",
+        "sower"
       ],
       "primary": "kaishan"
     },
@@ -164,9 +166,9 @@
         "en": "BD3QID"
       },
       "role": {
-        "zh": "英文翻译 · 测试",
-        "zh-TW": "英文翻譯 · 測試",
-        "en": "English · Testing"
+        "zh": "英文翻译 · 测试 · 电台直连",
+        "zh-TW": "英文翻譯 · 測試 · 電台直連",
+        "en": "English · Testing · Radio link"
       },
       "brief": {
         "zh": "把 APRSlocus 讲给世界",
@@ -174,9 +176,9 @@
         "en": "Told APRSlocus' story to the world"
       },
       "contrib": {
-        "zh": "推进英文国际化与多轮真实测试，提交详细反馈，协助完善台站与消息流程。",
-        "zh-TW": "推進英文國際化與多輪真實測試，提交詳細回饋，協助完善台站與訊息流程。",
-        "en": "Drove English internationalization and rounds of hands-on testing, filing detailed feedback that shaped stations and messaging flows."
+        "zh": "推进英文国际化与多轮真实测试，提交详细反馈，协助完善台站与消息流程；并完成 WLAN 电台直连（Wi-Fi / 以太网连接）的移植、联调与实测。",
+        "zh-TW": "推進英文國際化與多輪真實測試，提交詳細回饋，協助完善台站與訊息流程；並完成 WLAN 電台直連（Wi-Fi / 乙太網路連線）的移植、聯調與實測。",
+        "en": "Drove English internationalization and rounds of hands-on testing, filing detailed feedback that shaped stations and messaging flows; also ported, integrated and field-tested the WLAN radio LAN direct link (Wi-Fi / Ethernet connection)."
       },
       "quote": {
         "zh": "让世界听见我们的信标。",
@@ -186,15 +188,18 @@
       "tags": {
         "zh": [
           "英文翻译",
-          "质量测试"
+          "质量测试",
+          "WLAN 电台直连"
         ],
         "zh-TW": [
           "英文翻譯",
-          "品質測試"
+          "品質測試",
+          "WLAN 電台直連"
         ],
         "en": [
           "English",
-          "QA"
+          "QA",
+          "WLAN radio link"
         ]
       },
       "c": "#8a5cf0",
@@ -644,7 +649,8 @@
         "en": "Kept watch in the faintest signals, growing with it from a whisper to a clear call."
       },
       "honors": [
-        "earlyMember"
+        "earlyMember",
+        "jadeGift"
       ],
       "primary": "earlyMember",
       "grp": "test",
@@ -1621,6 +1627,54 @@
       "c": "#0EA5B7"
     },
     {
+      "call": "BG2WX",
+      "who": {
+        "zh": "BG2WX",
+        "zh-TW": "BG2WX",
+        "en": "BG2WX"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，让这束电波行得更远。",
+        "zh-TW": "以瓊琚相贈，讓這束電波行得更遠。",
+        "en": "Gifted with jade, so this signal may reach farther."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for the ongoing development and operation of APRSlocus, keeping this beacon burning."
+      },
+      "quote": {
+        "zh": "赠我以琼琚，报之以电波。",
+        "zh-TW": "贈我以瓊琚，報之以電波。",
+        "en": "Gifted with jade, answered with radio waves."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
       "call": "BA7NFI",
       "who": {
         "zh": "BA7NFI",
@@ -1667,6 +1721,483 @@
         "sower"
       ],
       "primary": "sower"
+    },
+    {
+      "call": "BD4TYW",
+      "who": {
+        "zh": "BD4TYW",
+        "zh-TW": "BD4TYW",
+        "en": "BD4TYW"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，为这束电波添一分续航。",
+        "zh-TW": "以瓊琚相贈，為這束電波添一分續航。",
+        "en": "Gifted with jade, adding a little more range to this signal."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for the ongoing development and operation of APRSlocus, keeping this beacon burning."
+      },
+      "quote": {
+        "zh": "投我琼琚，报以长波。",
+        "zh-TW": "投我瓊琚，報以長波。",
+        "en": "You gave jade; I answer with the long wave."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BH2WIX",
+      "who": {
+        "zh": "BH2WIX",
+        "zh-TW": "BH2WIX",
+        "en": "BH2WIX"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚寄意，愿这束电波抵达更远的天际。",
+        "zh-TW": "以瓊琚寄意，願這束電波抵達更遠的天際。",
+        "en": "Sending jade with good will — may this signal reach farther horizons."
+      },
+      "contrib": {
+        "zh": "以一份馈赠支持 APRSlocus 的持续开发与运营 —— 让每一次信标都有回应，每一段电波都有回声。",
+        "zh-TW": "以一份饋贈支持 APRSlocus 的持續開發與營運 —— 讓每一次信標都有回應，每一段電波都有回聲。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation — so every beacon gets an answer and every signal an echo."
+      },
+      "quote": {
+        "zh": "琼琚有价，清音无价；愿以长波，报君雅意。",
+        "zh-TW": "瓊琚有價，清音無價；願以長波，報君雅意。",
+        "en": "Jade has a price; a clear tone does not. May the long wave answer your kindness."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BI8AQ",
+      "who": {
+        "zh": "前方无线电俱乐部",
+        "zh-TW": "前方無線電俱樂部",
+        "en": "Qianfang Radio Club"
+      },
+      "role": {
+        "zh": "分享传播",
+        "zh-TW": "分享傳播",
+        "en": "Community sharing"
+      },
+      "brief": {
+        "zh": "把 APRSlocus 讲给更多同好听，让种子自己发芽。",
+        "zh-TW": "把 APRSlocus 講給更多同好聽，讓種子自己發芽。",
+        "en": "Told more hams about APRSlocus, letting the seeds sprout on their own."
+      },
+      "contrib": {
+        "zh": "在社交媒体上分享 APRSlocus，写下自己的使用记录，也把它推荐给还没听说过的同好。",
+        "zh-TW": "在社群媒體上分享 APRSlocus，寫下自己的使用紀錄，也把它推薦給還沒聽說過的同好。",
+        "en": "Shares APRSlocus on social media, posting field notes and recommending it to hams who have not heard of it yet."
+      },
+      "quote": {
+        "zh": "撒出去的种子，总会在某个频点上长起来。",
+        "zh-TW": "撒出去的種子，總會在某個頻點上長起來。",
+        "en": "Seeds scattered will sprout on some frequency."
+      },
+      "tags": {
+        "zh": [
+          "社交分享",
+          "社区传播"
+        ],
+        "zh-TW": [
+          "社群分享",
+          "社群傳播"
+        ],
+        "en": [
+          "Social sharing",
+          "Community reach"
+        ]
+      },
+      "c": "#2E9E5B",
+      "grp": "support",
+      "honors": [
+        "sower"
+      ],
+      "primary": "sower"
+    },
+    {
+      "call": "BG7QZC",
+      "who": {
+        "zh": "BG7QZC",
+        "zh-TW": "BG7QZC",
+        "en": "BG7QZC"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚寄意，愿这束电波一直有人应答。",
+        "zh-TW": "以瓊琚寄意，願這束電波一直有人應答。",
+        "en": "Sending jade with good will — may this signal always find an answer."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation, keeping the beacon lit."
+      },
+      "quote": {
+        "zh": "琼琚虽微，长波可寄。",
+        "zh-TW": "瓊琚雖微，長波可寄。",
+        "en": "Small as the jade is, the long wave carries it far."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BH4HGA",
+      "who": {
+        "zh": "BH4HGA",
+        "zh-TW": "BH4HGA",
+        "en": "BH4HGA"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，愿这束电波有去有回。",
+        "zh-TW": "以瓊琚相贈，願這束電波有去有回。",
+        "en": "Gifted with jade, so this signal may go out and come back."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation, keeping the beacon lit."
+      },
+      "quote": {
+        "zh": "琼琚在手，回响不息。",
+        "zh-TW": "瓊琚在手，回響不息。",
+        "en": "Jade in hand — the echo goes on."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BA7JKT",
+      "who": {
+        "zh": "BA7JKT",
+        "zh-TW": "BA7JKT",
+        "en": "BA7JKT"
+      },
+      "role": {
+        "zh": "分享传播",
+        "zh-TW": "分享傳播",
+        "en": "Community sharing"
+      },
+      "brief": {
+        "zh": "把电波里的新鲜事讲出去，让路过的人也抬头听一会儿。",
+        "zh-TW": "把電波裡的新鮮事講出去，讓路過的人也抬頭聽一會兒。",
+        "en": "Took the fresh stories off the airwaves and told them out loud, so passers-by stopped to listen."
+      },
+      "contrib": {
+        "zh": "在社交媒体上分享 APRSlocus 的截图与用法，把门推开一条缝，让还没听说过的人自己走进来。",
+        "zh-TW": "在社群媒體上分享 APRSlocus 的截圖與用法，把門推開一條縫，讓還沒聽說過的人自己走進來。",
+        "en": "Shared screenshots and how-tos of APRSlocus on social media, leaving the door ajar for people who had never heard of it."
+      },
+      "quote": {
+        "zh": "种子不问落在哪块地，只管先落下去。",
+        "zh-TW": "種子不問落在哪塊地，只管先落下去。",
+        "en": "A seed does not ask which field it lands in; it simply falls."
+      },
+      "tags": {
+        "zh": [
+          "社交分享",
+          "社区传播"
+        ],
+        "zh-TW": [
+          "社群分享",
+          "社群傳播"
+        ],
+        "en": [
+          "Social sharing",
+          "Community reach"
+        ]
+      },
+      "c": "#2E9E5B",
+      "grp": "support",
+      "honors": [
+        "sower"
+      ],
+      "primary": "sower"
+    },
+    {
+      "call": "BG2GNI",
+      "who": {
+        "zh": "BG2GNI",
+        "zh-TW": "BG2GNI",
+        "en": "BG2GNI"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，愿这盏灯亮得久一些。",
+        "zh-TW": "以瓊琚相贈，願這盞燈亮得久一些。",
+        "en": "Gifted with jade, so this light may burn a while longer."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation, keeping the beacon lit."
+      },
+      "quote": {
+        "zh": "琼琚相赠，以声相报。",
+        "zh-TW": "瓊琚相贈，以聲相報。",
+        "en": "Jade given, answered in signal."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BG5AON",
+      "who": {
+        "zh": "BG5AON",
+        "zh-TW": "BG5AON",
+        "en": "BG5AON"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，愿这条电路一直通着。",
+        "zh-TW": "以瓊琚相贈，願這條電路一直通著。",
+        "en": "Gifted with jade, so this circuit may stay closed."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation, keeping the beacon lit."
+      },
+      "quote": {
+        "zh": "琼琚在手，长路有灯。",
+        "zh-TW": "瓊琚在手，長路有燈。",
+        "en": "Jade in hand, and a light along the road."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BG5WRY",
+      "who": {
+        "zh": "BG5WRY",
+        "zh-TW": "BG5WRY",
+        "en": "BG5WRY"
+      },
+      "role": {
+        "zh": "赞助支持",
+        "zh-TW": "贊助支持",
+        "en": "Sponsorship support"
+      },
+      "brief": {
+        "zh": "以琼琚相赠，愿这面天线一直朝着天空。",
+        "zh-TW": "以瓊琚相贈，願這面天線一直朝著天空。",
+        "en": "Gifted with jade, so this antenna may keep facing the sky."
+      },
+      "contrib": {
+        "zh": "馈赠支持 APRSlocus 的持续开发与运营，让这盏信标灯一直亮着。",
+        "zh-TW": "饋贈支持 APRSlocus 的持續開發與營運，讓這盞信標燈一直亮著。",
+        "en": "Gifted support for APRSlocus's ongoing development and operation, keeping the beacon lit."
+      },
+      "quote": {
+        "zh": "琼琚在握，长波有应。",
+        "zh-TW": "瓊琚在握，長波有應。",
+        "en": "Jade in hand, and the long wave answers."
+      },
+      "tags": {
+        "zh": [
+          "馈赠支持",
+          "赞助"
+        ],
+        "zh-TW": [
+          "饋贈支持",
+          "贊助"
+        ],
+        "en": [
+          "Gift support",
+          "Sponsorship"
+        ]
+      },
+      "c": "#0EA5B7",
+      "grp": "support",
+      "honors": [
+        "jadeGift"
+      ],
+      "primary": "jadeGift"
+    },
+    {
+      "call": "BI2RPW",
+      "who": {
+        "zh": "BI2RPW",
+        "zh-TW": "BI2RPW",
+        "en": "BI2RPW"
+      },
+      "role": {
+        "zh": "早期成员",
+        "zh-TW": "早期成員",
+        "en": "Early member"
+      },
+      "brief": {
+        "zh": "早期公测时就在频率上，一直陪着它走到现在。",
+        "zh-TW": "早期公測時就在頻率上，一直陪著它走到現在。",
+        "en": "Was on frequency from the early betas, and has stayed with it since."
+      },
+      "contrib": {
+        "zh": "参与早期公测，在真实电波里试过定位和报文收发。",
+        "zh-TW": "參與早期公測，在真實電波裡試過定位和報文收發。",
+        "en": "Took part in the early public beta, testing positioning and packet traffic over real radio."
+      },
+      "quote": {
+        "zh": "呼号在，回响就在。",
+        "zh-TW": "呼號在，迴響就在。",
+        "en": "The callsign stays, so the echo stays."
+      },
+      "tags": {
+        "zh": [
+          "早期公测"
+        ],
+        "zh-TW": [
+          "早期公測"
+        ],
+        "en": [
+          "Early beta"
+        ]
+      },
+      "honors": [
+        "earlyMember"
+      ],
+      "primary": "earlyMember",
+      "grp": "test",
+      "c": "#B08A34"
     }
   ],
   "groups": [

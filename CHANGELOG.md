@@ -1,5 +1,5543 @@
 # 更新日志
 
+## [2.2.8] - 2026-11-13
+
+### 修复
+
+- 联网校验不再只看当前渠道：镜像或 OSS 渠道没有摘要时，会去官方仓库查，不再一律说无法校验。
+- 发布说明里带上了每个安装包的 SHA-256，镜像渠道也能照着核对。
+- 摘要对不上时，那一行把本地与仓库两个摘要的前几位都写出来。
+- 读不出安装包时写明读不出这个安装包，不再说「读不出签名」。
+- 校验结果写进日志，卡在哪一步能自己看。
+
+## [2.2.8] - 2026-11-13 (English)
+
+### Fixed
+
+- The online check no longer looks only at the selected channel: when a mirror or OSS channel has
+  no digest, the official repository is asked, so it no longer always says it cannot verify.
+- Release notes now list the SHA-256 of every package, so mirror channels can be checked too.
+- On a digest mismatch the row shows the first characters of both digests.
+- When the package cannot be read at all, the row says so instead of blaming the signature.
+- The result is written to the log so you can see which step failed.
+
+## [2.2.7] - 2026-11-13
+
+### 调整
+
+- 强提醒的正文有了小标题与条目，证书指纹用等宽字排，能一个字符一个字符对着核。
+
+### 修复
+
+- 强提醒每次打开应用都重新去官网拉一次，内容改了下一次打开就生效（以前要等六小时）。
+- 同一条改了文字会重新弹一次，不会因为「弹过」就再也看不到新内容。
+
+## [2.2.7] - 2026-11-13 (English)
+
+### Changed
+
+- A strong notice body now has headings and list rows, and certificate fingerprints are set in a
+  monospaced block so they can be checked character by character.
+
+### Fixed
+
+- The notice is fetched again on every launch, so an edited file takes effect next time the app
+  opens instead of after six hours.
+- Editing the text of a notice makes it pop once more instead of being suppressed as seen.
+
+## [2.2.6] - 2026-11-13
+
+### 修复
+
+- 强提醒每次打开只弹一次，关掉以后不会再跳出来。
+- 从后台切回应用时也会补拉一次强提醒（以前只有冷启动才拉）。
+
+## [2.2.6] - 2026-11-13 (English)
+
+### Fixed
+
+- A strong notice shows once per app launch and no longer pops back right after you close it.
+- The notice is also fetched when the app returns from the background, not only on a cold start.
+
+## [2.2.5] - 2026-11-13
+
+### 新增
+
+- 打开应用时可能整页弹出一条强提醒，内容由官网下发，改一句话不用等新版。
+- 设置 → 服务器 的过滤范围多了一个按钮，点一下就把过滤中心设成你现在的位置。
+
+### 调整
+
+- 数据上限搬到 设置 → 数据 的最上面。
+- 装上新版的第一屏会列出这一版改了什么。
+- 欢迎与「安装包要不要留」分成两步问，各自只问一次。
+
+### 修复
+
+- 更新页会联网核对安装包：版本号、仓库里那份的摘要、签名，三道都对上才算通过。
+- 没联网时更新页写「没有联网，无法校验版本号是否一致」。
+- 这条渠道本来就没有摘要可查时，更新页说的是查不到，不再当成没联网。
+- 无法校验（没联网或查不到摘要）时，安装前要你再确认一次。
+
+## [2.2.5] - 2026-11-13 (English)
+
+### Added
+
+- A strong notice can fill the screen when you open the app; its text comes from the official
+  site, so a wording change needs no new version.
+- The receive range on Settings → Server has a button that puts the filter centre on where you
+  are now.
+
+### Changed
+
+- Data limits now sit at the top of Settings → Data.
+- The first screen after an update lists what changed in this version.
+- The welcome step and the "keep the installer?" question are separate, each asked once.
+
+### Fixed
+
+- The update page checks the package online: version, the digest published with the release, and
+  the signature — all three must match.
+- Offline, the update page says it cannot verify the version.
+- When the channel has no digest at all, the page says it cannot find it instead of blaming the
+  network.
+- When the package cannot be verified, installing asks you to confirm first.
+
+## [2.2.3] - 2026-11-12
+
+### 更新
+
+- 更新页会显示这个安装包的签名到底校没校：正在校验 / 已校验 / 与本机不一致。
+- 更新渠道的那份清单改由官网下发，渠道地址变了不用等新版。
+
+## [2.2.3] - 2026-11-12 (English)
+
+### Update
+
+- The update page says whether this package's signature was checked: checking, verified,
+  or not matching this device.
+- The list of update channels now comes from the official site, so an address change does
+  not wait for a new version.
+
+## [2.2.2] - 2026-11-12
+
+### 更新
+
+- 下载的安装包放在手机的「下载」文件夹里，文件管理器里能直接找到。
+- 下载完会核对安装包的签名，对不上的包不会留下来。
+- 装上新版第一次打开时问一句要不要删掉安装包，勾过「以后也这样」就不再问。
+
+## [2.2.2] - 2026-11-12 (English)
+
+### Update
+
+- The downloaded update package goes into the phone's Downloads folder, where the file
+  manager can find it.
+- The package signature is checked after the download; a package that does not match is
+  removed.
+- The first start after updating asks whether to delete the package. Tick "do this from
+  now on" and it stops asking.
+
+## [2.2.1] - 2026-11-12
+
+### 服务器
+
+- 「设置 → 服务器 → APRSNETCN」多了 HTTP 端口一格，默认 8899。
+- 24 小时台站与云同步按这一格连，服务器把 HTTP 开在别的端口上也能用。
+
+### 同步
+
+- 云端把历史轨迹全部留下，不再只留一年。
+- 换一台机器登录后，云端每一天的轨迹都会拉回来。
+- 本机有、云端缺的那几天，同步时补传上去。
+
+### 引导
+
+- 首次引导第 3 步的「从备份恢复」按钮点不动，现在能用了。
+
+## [2.2.1] - 2026-11-12 (English)
+
+### Server
+
+- Settings → Server → APRSNETCN has an HTTP port field, 8899 by default.
+- The 24-hour station list and cloud sync connect on that port, so a server that runs HTTP
+  somewhere else works too.
+
+### Sync
+
+- The cloud keeps every day of track history, not just the last year.
+- After signing in on another device, every cloud day of track history is pulled back.
+- Days the cloud is missing are uploaded on the next sync.
+
+### Setup
+
+- The "restore from backup" button on step 3 of the first-run guide was dead; it works now.
+
+## [2.2.0] - 2026-11-12
+
+### 安全
+
+- 供应链事件已审计完成：注入的构建流程一次也没有执行过，构建阶段注入的密钥没有被读取。
+- 已更换 Android 签名证书并重新构建，旧签名作废。
+- **签名换了，旧版本不能覆盖安装，需要先卸载再装这一版。** 卸载前请先导出备份。
+
+### 构建
+
+- 构建流程锁定 Flutter 3.47.9，不再跟随 stable 自动漂移（Flutter 3.50.0 要求 Gradle 插件 9.1.1，会直接构建失败）。
+
+## [2.2.0] - 2026-11-12 (English)
+
+### Security
+
+- The supply-chain incident has been fully audited: the injected build pipeline never executed, and
+  no build-time secret was ever read.
+- The Android signing certificate has been replaced and the app rebuilt; the old signature is
+  retired.
+- **Because the signing key changed, this build cannot be installed over an older one. Uninstall the
+  old version first - export a backup before you do.**
+
+### Build
+
+- The build pipeline is pinned to Flutter 3.47.9 instead of floating on the stable channel
+  (Flutter 3.50.0 requires Android Gradle Plugin 9.1.1 and fails the build outright).
+
+## [2.1.43] - 2026-11-06
+
+### 云同步
+
+- 云同步的地址跟着「APRSNETCN SERVER」那条链路走，地址填了才连。
+- 服务器地址空着时，同步卡那一行写「未填」，不再自己找一台服务器。
+- 没填地址就点同步，会提示先在上面填 APRSNETCN 服务器地址。
+- 别人发给你的、你发给别人的消息，服务器看到了都记一份。
+- 第一次同步把云端的消息整份拉回来，重装以后记录还在。
+
+## [2.1.43] - 2026-11-06 (English)
+
+### Cloud sync
+
+- Cloud sync uses the address of the APRSNETCN SERVER link and only calls it once an address is
+  filled in.
+- With the address blank, the sync card shows Empty in that row instead of falling back to a server
+  of its own.
+- Tapping sync without an address asks you to fill in the APRSNETCN server address above first.
+- Messages others send you and messages you send others are both kept on the server.
+- The first sync pulls the whole message history back, so it survives a reinstall.
+
+## [2.1.42] - 2026-11-06
+
+### 云同步
+
+- 云同步搬到「设置 → 服务器 → APRSNETCN SERVER」那一页，跟那条链路在一起配。
+- 「设置 → 功能」里多了一个云同步开关。关掉之后不再联网，两条链路照旧收发。
+- 同步内容可以分开选：消息、历史轨迹各一个开关。
+- 自动同步的间隔可以选五分钟、十五分钟或一小时。
+- 云端数据里多了云端备份的份数，「登录的设备」里能看到哪几台设备登录过，别的设备可以移出。
+
+## [2.1.42] - 2026-11-06 (English)
+
+### Cloud sync
+
+- Cloud sync moved to Settings -> Server -> APRSNETCN SERVER, so it is configured on the page of
+  the server that holds the data.
+- Settings -> Features gained a cloud sync switch. Turn it off and the app makes no cloud
+  requests; both links keep working.
+- What syncs is now a choice: messages and track history each have their own switch.
+- Auto sync can run every five minutes, fifteen minutes or an hour.
+- On the server figures gained the number of cloud backups, and Signed-in devices shows which
+  devices have logged in, with the others removable.
+
+## [2.1.41] - 2026-11-06
+
+### 云同步
+
+- 登录 APRSNETCN 名单账号之后，收发的消息一条条存到服务器上，历史轨迹按天存上去。
+- 换一台设备登录同一个呼号，消息和轨迹都拉回来。
+- 两台设备同一天都记了轨迹，相距五十米以内、相隔三秒以内的点算同一个点，地图上只有一条线。
+- 备份页可以把勾选的几组存到云端，也可以从云端取回。云端留最新三份，取回先出预览。
+- 云同步在「设置 → 服务器」里，跟两条互联网链路挨着。那里写着云端有多少条消息、多少天轨迹，
+  有「立即同步」和「清空云端数据」。
+- 服务器地址跟着 APRSNETCN 链路走，没有第二个地址要填。
+- 同步方式三档：关闭 / 手动 / 自动。自动是每五分钟一轮。
+- 连接是明文 HTTP，页面上写着这一句。
+- 没有登录的机器照旧只用本机数据。
+
+## [2.1.41] - 2026-11-06 (English)
+
+### Cloud sync
+
+- Sign in with an APRSNETCN account and messages are stored on the server one at a time, with
+  each day of track history uploaded on its own.
+- Sign in with the same callsign on another device and both come back.
+- When two devices record the same day, points within fifty metres and three seconds of each
+  other count as one, so the map shows a single line.
+- The backup page can upload the selected groups to the cloud and restore them from there. The
+  three newest are kept, and a restore shows a preview first.
+- Cloud sync lives in Settings -> Server, next to the two internet links. It shows how many
+  messages and track days the cloud holds, with Sync now and Clear cloud data.
+- The server address follows the APRSNETCN link. There is no second address to fill in.
+- Three modes: off / manual / auto. Auto runs every five minutes.
+- The connection is plain HTTP, and the page says so.
+- Without a sign-in the app keeps everything on the device as before.
+
+## [2.1.40] - 2026-11-05
+
+### 历史轨迹
+
+- **历史轨迹叠层**：历史轨迹页多了一个入口，把台账里每一天画在同一张底图上。一天一条线、
+  一个颜色，底部一排日期片点一下就能藏起或放回那一天，视野一次套到所有选中的点上。
+  导出一张 PNG：Android 存到下载目录或直接拉起分享面板，桌面写进下载目录。
+
+### 地图
+
+- **浮层不再互相压住**：工具列的底部预留改成「两道横幅都挂着时的顶部锚点」与「上报横杠
+  出现时的底部占用」两者取大，列数仍然只跟窗口尺寸走并封顶三列，真装不下时由贴底控件
+  让位。顶端那两条一次性提示（选点提示、搜索命中）并进左上那一列，宽度让开工具列，
+  不再糊在信息条上。
+
+### 省电
+
+- **省电模式**（设置 → 定位）：GPS 采样压到不低于 30 秒，自己选的那一档不被改掉，关掉
+  省电模式就回来；地图上移动台站的脉冲动画也停下，它是地图唯一的每帧重绘来源。
+- **低电量提醒**：20% / 10% / 5% 三档各提一次，充电中不提，已经开着省电模式也不提，
+  电量回到 25% 以上重新计数。提醒上带一个直接开启省电模式的按钮。
+
+### 更新
+
+- **更新渠道页去掉付费提示**：顶部那条「阿里云 OSS 由开发团队付费」整条删掉，两条阿里云
+  渠道的副标题换成它们真正的地址，与 GitCode 那一行同一个口径。
+
+---
+
+## [2.1.40] - 2026-11-05 (English)
+
+### Track history
+
+- **Track overlay**: the history page has a new entry that draws every day from the log on one
+  map. One line and one colour per day, a row of date chips at the bottom to hide or bring back
+  a single day, and one tap fits the view to everything still shown. It exports a PNG: on
+  Android it goes to the download folder or straight into the share sheet, on desktop into the
+  download folder.
+
+### Map
+
+- **Overlays no longer sit on top of each other**: the toolbar reserves the larger of the top
+  anchor with both banners up and the bottom space once the report bar appears, the column count
+  still follows the window size only and is capped at three, and the bottom controls step aside
+  when it really does not fit. The two one-off hints at the top (pick hint, search hit) are now
+  the first rows of the top-left column and stop at the toolbar's edge instead of covering the
+  info line.
+
+### Power
+
+- **Power saving** (Settings → Location): GPS sampling is clamped to at least 30 seconds without
+  overwriting your own choice, and your interval comes back as soon as the mode is off; the pulse
+  animation on moving stations stops too, which was the map's only per-frame repaint.
+- **Low battery reminder**: one reminder at 20% / 10% / 5%, skipped while charging or when power
+  saving is already on, and the count restarts once the battery is back above 25%. The reminder
+  carries a button that switches power saving on.
+
+### Update
+
+- **The update channel page drops the paid-usage note**: the "Aliyun OSS is paid for by the
+  developer team" line at the top is gone, and the two Aliyun channels show their real addresses
+  in the subtitle, the same way the GitCode row does.
+
+---
+
+## [2.1.39] - 2026-10-31
+
+### 音频与上报
+
+- **音频输出跟随耳机 / Type-C / 蓝牙**：本 App 的播放原来被标成「提示音」内容类型，部分
+  ROM 会把它当 UI 提示音直送扬声器 —— 于是别的 App 插上耳机就转耳机，只有本 App 还在外放。
+  现在按媒体内容处理，并按系统当前已连接的输出设备（有线 / USB / 蓝牙）显式绑定；没有外接
+  时仍走系统默认。
+- **「位置上报」按钮更可靠**：加大命中区，并由按钮自己吃掉手势 —— 地图底部横杠不再抢点击
+  （长按也不会误弹身份面板）。还没拿到本轮定位时不再是一个「点了完全没反应」的禁用态，
+  而是给出「等待定位」提示；未连接时会明确说没发出去，不再显示「已发送」。
+- **顶栏与上报条的按钮尺寸统一**：天气、连接状态、连接按钮、快捷按钮、上报动作组统一为
+  30px 高、同一圆角与字号 —— 并排时不再高低不齐。
+- **横屏地图操作控件不再被导航栏遮挡**：横屏时系统导航栏 / 挖孔在屏幕**右**侧，而地图
+  原来只让了底部安全区 —— 贴右的工具列、上报横杠、底部坐标条会被盖住。现在右侧安全区
+  一并计算，搜索提示与选点提示也相对可见地图区居中。
+
+---
+
+## [2.1.39] - 2026-10-31 (English)
+
+### Audio and reporting
+
+- **Audio output follows a plugged-in headset / Type-C / Bluetooth**: playback was tagged as
+  "sonification", and some ROMs send that straight to the speaker - other apps switch to the
+  headset but this one stayed on the loudspeaker. It is treated as media now and bound
+  explicitly to the currently connected output device (wired / USB / Bluetooth). With nothing
+  plugged in, the system default is kept.
+- **More reliable "report now" button**: bigger hit targets, and the button claims its own
+  gesture so the map's bottom bar no longer steals the tap (a long press no longer opens the
+  identity sheet by mistake). Before a current fix exists the button stays tappable and says
+  "waiting for a fix" instead of being silently disabled; when disconnected it says so instead
+  of claiming the position was sent.
+- **Top bar and report bar controls share one size**: weather, link status, connect, quick panel
+  and the report actions are all 30px high with the same corner radius and text size, so they no
+  longer sit at different heights.
+- **Landscape map controls are no longer hidden behind the navigation bar**: in landscape the
+  system bar / notch sits on the right, while the map only respected the bottom inset - the
+  right-hand toolbar, beacon bar and bottom coordinate bar were covered. The right inset is now
+  applied too, and the search/pick hints centre inside the visible map area.
+
+---
+
+## [2.1.38] - 2026-10-29
+
+### 地图
+
+- 右侧工具列的排列只跟窗口尺寸走。拉开内容面板不会再让它换列或换位置。
+
+### 数据来源
+
+- 启用一条通道，这条通道的位置发射也跟着打开。切到高级模式时勾选与通道开关一致。
+- 设备页去掉重复的小字：数据来源卡只留每条链路的名字和通没通，细节在各自的子页里。
+
+### 音频
+
+- 声卡在收报文时，地图的上报横条和精简模式的状态条底下多一条声压条。
+
+### 经纬度
+
+- 度分、度分秒的分与秒补到两位，读数位数不再跳。
+- 消息里的位置气泡、策略点的信息卡也按设置里的格式显示。
+
+### 首次引导
+
+- 加一步「要哪些功能」：天气和七个模块在这里就能选，关掉的不出现在设置里。
+- 向导里留着历史轨迹就一起打开记录。
+
+### 关于
+
+- 代码贡献里加上 BG7PFE 的中文编码兼容。
+
+---
+
+## [2.1.38] - 2026-10-29 (English)
+
+### Map
+
+- The right-hand toolbar lays itself out from the window size alone. Opening a content pane no longer re-columns or moves it.
+
+### Sources
+
+- Turning a channel on also turns on its position transmit. The advanced per-link ticks now match the channel switches.
+- The device page lost its repeated small print: the source card keeps each link's name and whether it is up, the rest lives on that link's own page.
+
+### Audio
+
+- While the sound card is receiving, the map's beacon bar and the lite status bar carry a level strip.
+
+### Coordinates
+
+- Minutes and seconds in the degree-minute and degree-minute-second formats are padded to two digits, so the readout stops changing width.
+- Position bubbles in messages and the strategy point card follow the format chosen in settings.
+
+### Onboarding
+
+- New "Which extras do you want" step: weather and the seven modules can be picked here, and a module you turn off leaves the settings page.
+- Keeping the track history module during onboarding also turns its recording on.
+
+### About
+
+- BG7PFE added to the code contributions for the Chinese text encoding.
+
+---
+
+## [2.1.37] - 2026-10-28
+
+### 链路
+
+- 位置报文同时发往射频和互联网时，两条链路各用各的报头。射频那份不再带 TCPIP*，中继路径保住了。互联网那份也不会带上 WIDE。
+- 消息按它自己那条链路算报头，与位置报文无关。
+
+### 设备面板
+
+- 新增「高级连接通道设置」，默认关。关着时位置与状态报文发给所有已连上的链路。
+- 消息照旧按上次勾的那条发，这个开关不影响它。
+- 打开开关就回到逐条挑：位置可以多选，消息单选。
+
+### 地图
+
+- 右侧那排按钮的分栏不再跟屏幕上的临时占位走。横幅出现、开始上报、拉开面板都不会让它重排。
+- 中心经纬度读数默认关。想看在右侧工具列点那颗准星，设置里那一行照旧能用。
+
+### 报文
+
+- 收到的报文自动识别 UTF-8 和 GBK，中文不再变成乱码。感谢 zhwb187。
+
+### 首次引导
+
+- 服务器那一步加了一个大按钮，可以直接跳过，稍后在设置里填。点它会清空已填的地址。
+
+---
+
+## [2.1.37] - 2026-10-28 (English)
+
+### Links
+
+- When a position packet goes out on radio and on the internet at once, each link uses its own header. The radio copy no longer carries TCPIP*, so its digipeater path survives. The internet copy no longer carries WIDE.
+- A message computes its header from the link it is sent on, independent of the position packet.
+
+### Device panel
+
+- New "Per-link sending" switch, off by default. While it is off, position and status packets go out on every connected link.
+- Messages keep going on the link you picked last. The switch does not touch them.
+- Turn it on to pick per link again: position can be several links, messages one.
+
+### Map
+
+- The button column on the right no longer re-flows with whatever is temporarily on screen. A banner appearing, reporting starting or the panel opening no longer rearranges it.
+- The centre coordinate readout is off by default now. Tap the crosshair in the tool column to see it; the settings row still works.
+
+### Packets
+
+- Incoming packets are detected as UTF-8 or GBK, so Chinese no longer turns into mojibake. Thanks to zhwb187.
+
+### First-run wizard
+
+- The server step has a large button to skip it and fill the address later in settings. Tapping it clears whatever was typed.
+
+---
+
+## [2.1.36] - 2026-10-27
+
+### 地图
+
+- 往一个方向一直拖，经度不再越滚越大，拖回来还是原地。
+- 屏幕正中多了一个中心标记和读数牌，写着这里的经纬度。手机没有悬停，靠它看地图中心落在哪。设置 → 显示 → 地图 可以关掉。
+- 右侧按钮按当帧剩下的高度分列，最下面那颗不再被上报条压住。窄屏横屏、分屏下都能点全。
+
+### 坐标格式
+
+- 经纬度可以按度分、度分秒显示。地图底部读数、我的位置、台站详情、选点的提示都跟着变。设置 → 显示 里选。
+- 只改显示。报文、存储和地图计算仍是十进制，换格式不影响发出去了什么。
+
+### 订阅
+
+- 订阅命中弹一条系统通知，标题是订阅值，正文是呼号和报文内容。同一条规则 30 秒内只计数，不刷屏。
+- 设置 → 订阅 顶部可以关掉通知，命中记录照记。
+
+### 设置
+
+- 打开设置页时，卡片逐条淡入上移。
+
+---
+
+## [2.1.36] - 2026-10-27 (English)
+
+### Map
+
+- Dragging one way no longer makes the longitude climb without end; drag back and you land where you started.
+- A centre mark and a coordinate readout now sit in the middle of the map. A phone has no hover, so this is where the centre is. Settings → Display → Map can hide it.
+- The buttons on the right split into columns by the height actually left on screen, so the bottom one is no longer buried under the report bar. Narrow landscape and split-screen get every button.
+
+### Coordinate format
+
+- Latitude and longitude can read as degrees-minutes or degrees-minutes-seconds. The map readout, my position, station details and the pick prompt follow it. Choose it in Settings → Display.
+- Display only. Packets, storage and map maths stay decimal, so what goes on air does not change.
+
+### Subscriptions
+
+- A match raises a system notification titled with the watched value, carrying the callsign and the packet text. The same rule counts once per 30 seconds instead of flooding.
+- Settings → Subscriptions can turn the notification off and still keep the match record.
+
+### Settings
+
+- Cards fade in and rise one by one when the settings page opens.
+
+---
+
+## [2.1.35] - 2026-10-26
+
+### 地图看得清楚了
+
+- 沉浸地图不再用青色圆点，改用台站自己的 APRS 符号。图标反向转回来，转地图时不会歪着头。离线台站去饱和。
+- 单击台站后那条小条重排：头行是呼号、状态和距离，第二行只写在的速度 / 高度 / 网格，备注最多两行，状态报文单独一行。
+- 小条按屏幕边缘夹紧，靠近底边时翻到标记上方。
+- 缩放时不再整片闪一下：瓦片进了一层内存缓存，磁盘都不用等。
+
+### 订阅
+
+- 设置 → 订阅：盯住一个台站、一个中继，或者报文里的一个词。命中记在一页里，可点开看原文。
+- 台站面板的菜单里也能直接订阅这一台。
+
+### 消息
+
+- 发给我其他 SSID 的消息也收下了，气泡上会标出来。输入栏上方多一条「发送 ID」，可以选用哪个 ID 回。
+- 设置 → 连接 可关掉这一档，只收发给本机 ID 的消息。
+
+### 快捷面板
+
+- 设备快捷面板多了一组「我的其他 SSID」，列出同呼号下的其他设备。
+- 装 APRSlocus 的那几台可以远程激活、发一次信标、停止上报。别的设备点开看信息。
+- 远程指令只认同一呼号发来的报文。
+
+### 轨迹与上报
+
+- 卫星弱又没开强制网络上报时，轨迹点放稀，精度差到没法用就不记，等下一次有效定位。
+- 电脑端可随位置报文带上 CPU 与内存占用率。设置 → 自动上报 里打开，默认关。
+
+---
+
+## [2.1.35] - 2026-10-26 (English)
+
+### The map reads better
+
+- The immersive map draws each station's own APRS symbol instead of a cyan dot. Icons counter-rotate so they stay upright while the map turns; offline stations are desaturated.
+- The chip that follows a tapped station was re-laid out: callsign, status and distance on the head line, speed, altitude and grid on the second, up to two lines of comment, and the status frame on its own line.
+- The chip is clamped to the screen and flips above the marker near the bottom edge.
+- Zooming no longer flashes the whole map: tiles now sit in a memory cache, so even the disk is not on the path.
+
+### Subscriptions
+
+- Settings → Subscriptions: watch a station, a digipeater, or a word inside a packet. Matches collect on one page with the raw line.
+- The station panel's menu can watch that station directly.
+
+### Messages
+
+- Messages addressed to another SSID of your callsign are accepted and marked in the bubble. A Send as row above the input lets you answer from either ID.
+- Settings → Connection can turn that off and keep only messages for this device's ID.
+
+### Quick panel
+
+- The device quick panel gained My other SSIDs, listing the other devices under your callsign.
+- The ones running APRSlocus can be woken, told to send one beacon, or told to stop reporting. Other devices open their info panel.
+- Remote commands are only accepted from the same callsign.
+
+### Track and reporting
+
+- With a weak satellite fix and no forced network reporting, track points thin out; a fix too poor to trust is skipped until the next valid one.
+- Desktop builds can carry CPU and memory load in the position packet. It is a switch under Settings → Auto reporting, off by default.
+
+---
+
+## [2.1.34] - 2026-10-24
+
+### 位置可以模糊
+
+- 设置 → 自动上报 新增「定位模糊」：关、约 200 米、约 2 公里、约 20 公里。默认关。
+- 走 APRS101 的位置模糊：只把最低位的几个数字换成空格，对方看到的是一片方格而不是一个点。
+- 只改发出去的那一包。本机地图、轨迹与网格仍按真实坐标算。
+
+### 首页的上报开关不再被挤掉
+
+- 连着但还没点「开始上报」时，首页那枚自动/单次开关以前整块让位给按钮，只剩一个「立即上报」。现在两枚并排，两个方向随时切。
+- 地图状态栏、我的面板、沉浸页与精简模式状态条一起改。
+
+---
+
+## [2.1.34] - 2026-10-24 (English)
+
+### Your position can be fuzzed
+
+- Settings → Auto reporting gained Location fuzz: off, about 200 m, 2 km, 20 km. Off by default.
+- It follows APRS101 position ambiguity: the lowest digits become spaces, so a receiver sees a square instead of a point.
+- Only the packet that goes out changes. The local map, the track and the grid still use the real coordinates.
+
+### The auto/single switch no longer gives way
+
+- While a link is up but reporting has not been confirmed yet, the auto/single switch used to give way to the start button, leaving only Send once. The two now sit side by side and switch both ways at any time.
+- The map bar, my panel, the immersive page and the lite status bar change together.
+
+---
+
+## [2.1.33] - 2026-10-23
+
+### 桌面上多了一枚托盘图标
+
+- **关闭窗口不再直接退出**。窗口收进系统托盘，报文照收，链路不断。
+- 托盘菜单有三条：显示主窗口、隐藏到托盘、退出 APRSLocus。左键点图标在显示与隐藏之间切换。
+- 设置 → 显示 里多了一档「关闭窗口时最小化到托盘」，默认开着。关掉它，关窗口就恢复成退出。
+- 托盘建不起来时不拦关闭。窗口关掉之后找不回来，比不做这个功能更糟。
+
+### 台站备注与详情面板不再截断
+
+- 台站备注以前在数据层就被砍到 60 字，多出来的换成省略号。现在整条保留，台站列表、详情面板、地图浮窗都是全文。
+- 台站详情面板里「最近报文」的每一行改为整条折行，长报文的尾巴不再被省略号吃掉。
+
+### 1.0 界面收拾了一遍
+
+- 侧栏 Logo 与导航图标对齐到同一条左基线。
+- 顶栏一排控件同高同间距，三项统计收成一只胶囊。
+- 窄屏底栏与侧栏共用同一套选中态，未读角标合并成一个。
+- 未连接与验证码两条横幅统一成同一个形状。
+
+---
+
+## [2.1.33] - 2026-10-23 (English)
+
+### A tray icon on the desktop
+
+- **Closing the window no longer quits.** The window goes to the system tray, packets keep arriving, and the links stay up.
+- The tray menu has three rows: show the window, hide to tray, quit APRSlocus. A left click on the icon toggles the window.
+- Settings → Display gained Minimize to tray on close, on by default. Turn it off and closing the window quits again.
+- When the tray cannot be created, closing is not intercepted. A window that vanishes with no way back is worse than not shipping this.
+
+### Station notes and the detail panel are no longer cut off
+
+- A station note used to be cut to 60 characters in the data layer, the rest replaced by an ellipsis. The whole note is kept now, and the station list, the detail panel and the map popup all show it in full.
+- Each row under Recent packets in the station detail panel now wraps in full, so the tail of a long packet is no longer swallowed by an ellipsis.
+
+### A pass over the 1.0 shell
+
+- The sidebar logo and the navigation icons now share one left baseline.
+- The top bar controls share one height and one gap, and the three counts collapse into a single capsule.
+- The narrow-screen bottom bar uses the same selected state as the sidebar, and the unread badges are one badge.
+- The disconnected banner and the passcode banner now share one shape.
+
+---
+
+## [2.1.32] - 2026-10-22
+
+### 新手引导重做
+
+- **引导现在是八步**：语言、用户协议、欢迎、呼号、符号、接收筛选、服务器、配置完成。每一步只问一件事。
+- 呼号按软件里同一套规则校验，形状不对就停在原地提示。把 `-SSID` 直接写在呼号框里也行，会自动拆到后缀，下面实时显示完整呼号。
+- 服务器的最后一步跟着地址走。地址留空时按钮只写「完成」，软件不会替你连到任何地方。
+- 新增的最后一页回读你的呼号、符号和服务器，再指出接下来三处地方：看台站、发位置、使用手册。
+- 欢迎页多了一个「从备份恢复」。换机或重装的人在这里整份导入备份，不用先走完七步再进设置，呼号、符号、筛选和服务器跟着一起回来。
+
+---
+
+## [2.1.32] - 2026-10-22 (English)
+
+### Setup wizard rework
+
+- **The wizard now has eight steps**: language, terms, welcome, callsign, symbol, receive filter, server, done. Each step asks one thing.
+- The callsign is checked with the same rules the app uses, and a wrong shape stops you there. You can also type `-SSID` straight into the callsign box; it is split into the suffix, and the full callsign shows below as you type.
+- The last step follows the address. With the address empty the button reads Finish only, and the app connects nowhere on your behalf.
+- A new final page reads back your callsign, symbol and server, then points at three places: stations, sending a position, the manual.
+- The welcome page gained Restore from a backup. On a new phone or after a reinstall you import the whole backup here instead of walking seven steps first, and the callsign, symbol, filter and server come back with it.
+
+---
+
+## [2.1.31] - 2026-10-22
+
+### 电台页可以验证操作证
+
+- **电台页多了一块「操作证验证」**：点进去是单独一页，先把说明读完、点「我同意」，才出现表单。
+- 填姓名和证书编号，程序向 CRAC 的验证接口查一次。没有人工审核，结果只回本机，只保留是否通过和证书类别。
+- 验证自愿，不验证也能照常用。只有内地的呼号显示这一块。
+
+---
+
+## [2.1.31] - 2026-10-22 (English)
+
+### Licence check on the station page
+
+- **The station page gained a licence check block**: tapping it opens a page of its own, and the form only appears after you read the notes and tap "I agree".
+- Type your name and licence number; the app asks the CRAC check endpoint once. No human review, the result comes back to this device only and keeps just the pass and the licence class.
+- Verification is voluntary, the app works the same without it, and only mainland China callsigns see the block.
+
+---
+
+## [2.1.30] - 2026-10-22
+
+### 历史轨迹默认不记录
+
+- **历史轨迹以前是一直在记的**：定位一动就往按天的文件里写，谁翻过账看得一清二楚。现在默认关，要记就在设置 → 历史轨迹页顶部把开关打开。
+- 关着时那一页会直接说记录没开。已经记下的那些天照旧能看、能删、能导出 GPX。
+
+### 精简模式补回上报状态条
+
+- **精简模式的页签下面多了一行**：左边是现在这一发是什么（未连接、距下次上报 42s、待确认上报这一类），右边是「自动 / 单次」与「立即上报」。
+- 以前在精简模式里想手动发一包，得绕到设置页去。这一行与地图页那条横杠用的是同一份文案。
+
+---
+
+## [2.1.30] - 2026-10-22 (English)
+
+### Track history is off by default
+
+- **Track history used to record all the time**: every fix went into that day's file. It is off by default now; turn it on at the top of the track history page.
+- While it is off, that page says so plainly. Days you already recorded stay viewable, deletable and exportable as GPX.
+
+### The reporting bar is back in lite mode
+
+- **Lite mode has one more row under the tabs**: what this beacon is on the left (not connected, 42s to the next beacon, waiting for confirmation), auto or single plus send now on the right.
+- A manual beacon in lite mode used to mean a trip to settings. The row shares its wording with the bar on the map page.
+
+---
+
+## [2.1.29] - 2026-10-22
+
+### GPS 模式下不再停在「已保存位置」
+
+- **GPS 模式下偶发不定位，界面一直停在「已保存位置」，切到模拟位置再切回来才恢复**：启动后自动起定位那一步只等 900 毫秒就判断加载完成，真机上配置加载更慢，这一步被跳过，之后再没有东西去起 GPS。
+- 现在等配置加载真的完成后才起定位。回到前台还会补一次检查，前台服务被系统掐掉就重起。
+
+### GPS 采样间隔可调
+
+- 设置 → 定位上报 → 定位模式里多一行「GPS 采样间隔」，1 / 2 / 3 / 5 / 10 / 30 秒六档，默认 1 秒。
+- 嫌耗电就往大调。只作用于 GPS，网络定位仍固定 10 秒；只在 Android 且不是纯网络模式时出现。
+
+---
+
+## [2.1.29] - 2026-10-22 (English)
+
+### No more sitting on a saved position in GPS mode
+
+- **In GPS mode the app sometimes stopped locating and stayed on "saved position"; switching to simulated location and back brought it round**: the start-up step that begins locating waited a fixed 900 ms for the settings to load, real devices load slower, that step was skipped, and nothing started GPS afterwards.
+- Locating now waits until the load has really finished. Coming back to the foreground checks once more and restarts the foreground service if the system killed it.
+
+### GPS sampling interval
+
+- Settings → Beaconing → Location mode gained a GPS sampling row: 1 / 2 / 3 / 5 / 10 / 30 seconds, 1 second by default.
+- Raise it to save battery. It affects GPS only, network locating stays at 10 seconds, and the row shows on Android outside network-only mode.
+
+---
+
+## [2.1.28] - 2026-10-21
+
+### 报尾不会再被切掉
+
+- **IC-705 走 WLAN 发射时，报文末尾常被切掉**：音频还在电台的缓冲里，PTT 已经松了，对方收到的是缺尾的帧，校验不过。
+- 现在音频发完后再按住 PTT 一段时间，默认 200 ms。IC-705 页新增「发射后置延迟」，0 到 2000 都能填。
+- 手动按住 PTT 把整条报文发完就通的那种情况，这条设置就是它。
+
+### iPhone 上的灵动岛
+
+- **灵动岛和锁屏上能看当前状态**：呼号、正在发生的事、距下次上报的倒计时。
+- 与 Android 16 的状态栏胶囊读同一份内容，显示什么在「通知显示样式 → 实时更新」里选。
+- 需要 iOS 16.2 及以上。
+
+---
+
+## [2.1.28] - 2026-10-21 (English)
+
+### The tail is no longer cut off
+
+- **Sending over WLAN on an IC-705 often lost the end of a packet**: audio was still sitting in the radio buffer while PTT had already dropped, so the far end got a frame with no tail and failed the check.
+- The app now holds PTT for a while after the audio ends. The default is 200 ms; the IC-705 page has a new post-TX delay field that takes 0 to 2000.
+- This is the same thing you did by holding PTT by hand until the whole packet went out.
+
+### Dynamic Island on iPhone
+
+- **The Dynamic Island and the lock screen show the current state**: callsign, what is happening, and the countdown to the next beacon.
+- It reads the same content as the Android 16 status bar pill. Pick what it shows under Notification style, live updates.
+- Needs iOS 16.2 or later.
+
+---
+
+## [2.1.27] - 2026-10-20
+
+### 自选模块
+
+- **设置里新增「功能」页**，把排行榜、荣誉墙、赞助、生命守护、翻译、轨迹、ADIF、天气分成一个个开关。
+- 关掉只是收起入口。数据与偏好原样留着，重新打开就回来。
+- 默认全部打开，第一次装上这一版的人什么都不用做。
+
+### 精简模式
+
+- **精简模式把外壳换成极简布局**：上面一行状态，下面四个页签，台站、消息、报文、设置。
+- 精简模式下模块全部关着，但不会改写你自己关过的那几个。关掉精简模式，原来的选择原样回来。
+
+### 使用手册
+
+- **设置里新增「使用手册」**，在应用内直接打开官网手册，跟着系统语言走。
+- 内嵌页面打不开时，交给浏览器。
+
+### 后缀可以填字母
+
+- **呼号后缀支持自定义输入**，1-2 位数字或字母都行，留空就是不填后缀。
+- 字母后缀只有自家的 APRSNETCN 服务器收，公共 APRS-IS 可能拒绝登录。
+
+### 小字少了一些
+
+- 设置页去掉了大半解释性小字，只留会让人做错的那几条。
+
+---
+
+## [2.1.27] - 2026-10-20 (English)
+
+### Modules you pick
+
+- **Settings gained a "Features" page** that turns the leaderboard, honours, sponsors, life guard, translation, tracks, ADIF and weather into separate switches.
+- Turning one off only hides its entry. Data and preferences stay where they are, and come back when you switch it on.
+- Everything starts on, so a first install needs nothing.
+
+### Lite mode
+
+- **Lite mode swaps the shell for a minimal layout**: one status line, then four tabs: stations, messages, packets, settings.
+- In lite mode every module is off, but the ones you switched off yourself are left alone. Leave lite mode and your choices return unchanged.
+
+### Manual
+
+- **Settings gained "Manual"**, opening the official manual inside the app, following the system language.
+- If the embedded page will not open, the browser takes over.
+
+### Letters in the SSID
+
+- **The SSID field takes custom input**: one or two digits or letters, empty for no suffix.
+- Only our own APRSNETCN server accepts a letter suffix; a public APRS-IS server may refuse the login.
+
+### Fewer hints
+
+- Settings dropped most of the small print that explained what a switch does, keeping only the lines that keep you from doing something wrong.
+
+---
+
+## [2.1.26] - 2026-10-20
+
+### 版本太旧时先更新
+
+- **低于官网要求的最低版本时，软件只显示更新页**，返回键直接退出应用。
+- 最低版本从 aprslocus.theez.top 读取。拉不到、文件坏了、下限没填，一律放行。
+- 更新到下限以上之后，闸门自己消失，不用再点任何按钮。
+
+---
+
+## [2.1.26] - 2026-10-20 (English)
+
+### Update first when this build is too old
+
+- **When your version is below the minimum the official site asks for, the app shows only the
+  update page**; the back key quits the app.
+- The minimum is read from aprslocus.theez.top. Failing to fetch it, a broken file, or an empty
+  floor all let you through.
+- Once you are on the floor or above, the gate disappears on its own; there is nothing to tap.
+
+---
+
+## [2.1.25] - 2026-10-20
+
+### 地图双击放大
+
+- **在瓦片地图上双击就放大一级**，围绕你点的那一点，动画与右下角的「+」同一档。
+- 没有用系统的双击识别：那会让每次单击都要等一个判断窗口，点台站会变慢。
+
+### 打开软件时
+
+- **上报设置里新增「打开软件时」三档**：不做操作、自动连接服务器、直接进入上报。
+- 默认不做操作。换到后两档之前先弹确认框，把后果写清楚。
+- 自动连接只连接，上报仍要你自己点。直接进入上报也会先过上传发射的单独同意。
+
+### 待确认上报只发一次
+
+- **自动上报没有开启时，点「待确认上报」只发报一次**，不再顺手把自动上报打开。
+- 那枚按钮在总开关没开时写的就是「立即上报」。
+
+---
+
+## [2.1.25] - 2026-10-20 (English)
+
+### Double-tap to zoom the map
+
+- **Double-tapping a tile map zooms in one level** around the point you tapped, with the same
+  animation as the "+" button.
+- The system double-tap detector is not used: it makes every single tap wait for a decision
+  window, which slowed down tapping a station.
+
+### When the app opens
+
+- **Beacon settings gained a "When I open the app" row with three choices**: do nothing, connect
+  to the server, or go straight into reporting.
+- The default is do nothing. Choosing either of the other two asks for confirmation first and
+  says what will happen.
+- Auto connect only connects; reporting still waits for your tap. Going straight into reporting
+  still asks for the separate upload/transmit consent first.
+
+### One beacon when auto-report is off
+
+- **With auto-report off, tapping the pending-confirmation button now sends one beacon** instead
+  of turning auto-report on along the way.
+- That button reads "Send now" while the master switch is off.
+
+---
+
+## [2.1.24] - 2026-10-20
+
+### 用户协议升到 V2.0
+
+- **三语正文整体换成 V2.0，条款从 46 条到 59 条。** 新增第五章「信标上传与发射：
+  须经单独同意」和附件一「上传/发射信标单独同意书」。
+- 位置信标与它形成的连续轨迹，按《个人信息保护法》写清了「敏感个人信息」的
+  性质、处理目的与必要性。
+- 「关于」页与首次启动显示的版本号一并改成 V2.0。
+
+### 第一次上传或发射前要单独签一次
+
+- **新增一页单独同意书**：三项告知逐条写清，下面是三个功能项，按项勾选
+  （APRS-IS 信标上传 / 射频信标发射 / iGate 转发），默认全不勾。
+- 五个入口都会先弹这一页：自动上报开关、开始上报、一键开射频信标、网关开关、
+  设置里的单独同意卡。签完回到原处，把你点的那个开关真的打开。
+- 故意漏勾的那一项不会被打开。
+
+### 撤回与同意日志
+
+- **设置 → 信标上报下面新增「单独同意」卡**，三个功能项各一个开关，关掉就是
+  撤回。撤回即时停止发送，并把这次连接的上报确认一起作废，界面退回「待确认
+  上报」。
+- 日志记下同意时间、所同意的功能项与告知文本的版本。可以单独清除日志，清日志
+  不影响已经作出的同意。
+- 同意只存在本机，不进备份，恢复出厂时一起清掉。
+- 智能体的「立即上报」与「开关自动上报」也检查这一项，没签就如实报错。
+
+---
+
+## [2.1.24] - 2026-10-20 (English)
+
+### Terms of Use raised to V2.0
+
+- **The three-language text is replaced with V2.0, going from 46 clauses to 59.** Chapter 5
+  (separate consent for beacon upload and transmission) and Appendix 1 (the consent form
+  itself) are new.
+- Position beacons and the continuous track they form are now described as sensitive
+  personal information under the Personal Information Protection Law, with the purpose and
+  the necessity stated in the document.
+- The version shown on the About page and in the first-run guide follows to V2.0.
+
+### A separate consent before the first upload or transmit
+
+- **A new consent page**: the three points are spelled out, followed by three features you
+  tick one by one (APRS-IS beacon upload, RF beacon transmit, iGate forwarding), all
+  unticked by default.
+- Five entry points open it first: the auto-report switch, Start reporting, the one-tap RF
+  beacon, the iGate switch, and the consent card in settings. After signing, the switch you
+  tapped actually turns on.
+- A feature you deliberately left unticked is not turned on.
+
+### Withdrawal and the consent log
+
+- **A new "Separate consent" card under beaconing in settings**: one switch per feature, and
+  turning one off is a withdrawal. Withdrawal stops sending at once and voids this
+  connection's reporting confirmation, so the bar goes back to "waiting for confirmation".
+- The log records the time of consent, the features consented to, and the version of the
+  notice text. You can clear the log on its own; clearing it does not affect consents
+  already given.
+- Consent stays on this device only, is not part of a backup, and is cleared by a factory
+  reset.
+- The agent's "report now" and "toggle auto-report" check it too, and report an error
+  instead of claiming success.
+
+---
+
+## [2.1.23] - 2026-10-19
+
+### 设备快捷面板两个入口
+
+- **顶栏点一下就能换链路**：新版外壳（2.0）右上角原来那颗「定位」换成设备快捷面板，
+  1.0 顶栏也加了一颗同样的入口。面板里就是数据来源那一张，APRS-IS、APRSNETCN SERVER、
+  TNC、音频、PKWDWPL 一屏切换，每一行还能点进它自己的设置页。
+- 定位没丢，地图页右侧工具列那颗还在。
+
+### 聊天气泡出现动画
+
+- **来一条消息气泡淡入，往上挪一点点，从 96% 放大回原尺寸**，220 毫秒。
+- 同一条消息只播一次，往回翻记录不会重播。
+
+### 长按上报状态条改电台身份
+
+- **地图页那条「距下次上报」横杠，长按弹出电台身份面板**：呼号、SSID、默认徽章、
+  台站备注，改完即存，不用离开地图。
+- 面板和设置里的电台身份是同一张卡，高级设置与发射按钮留在设置页里。
+
+---
+
+## [2.1.23] - 2026-10-19 (English)
+
+### Two new entries to the device quick panel
+
+- **One tap in the top bar switches links.** The 2.0 shell's last top-bar button is now the
+  device quick panel instead of locate, and the 1.0 top bar gained the same button. The panel is
+  the data-source card: APRS-IS, APRSNETCN SERVER, TNC, audio and PKWDWPL on one sheet, and each
+  row still opens its own settings page.
+- Locate is untouched: the map page's right toolbar keeps it.
+
+### Chat bubbles animate in
+
+- **A new bubble fades in, rises a little and scales from 96% to full size** in 220 ms.
+- Each message animates once; scrolling back through the history does not replay it.
+
+### Long-press the beacon bar to edit your identity
+
+- **Long-press the "next beacon" bar on the map page to get the station identity panel**:
+  callsign, SSID, default badge and station note, saved as you type, without leaving the map.
+- It is the same card as in the settings page; the advanced fields and the transmit button stay
+  in settings.
+
+---
+
+## [2.1.22] - 2026-10-18
+
+### 通知图标
+
+- **通知栏里的小图标与大图标都用 APP 的 logo**，实时更新的胶囊里也是它 ——
+  以前那里是系统那个定位图钉，连接前后还会换成两个样子。
+- 消息通知与生命守护告警一并换掉，不再各用各的系统图标。
+
+### 服务器地址能存住了
+
+- APRS-IS 那页的地址、端口、passcode、WebSocket 地址，改完就落盘（防抖 400ms）。
+  以前只改了内存里那份配置，退出页面再进来又变回空。
+
+### 去掉小米焦点通知那一档
+
+- 「通知显示样式」回到两档：普通常驻通知、实时更新。小米焦点通知要厂商白名单，
+  没有授权时那串参数只会被系统忽略，留着反而让人以为能用。
+
+---
+
+## [2.1.22] - 2026-10-18 (English)
+
+### Notification icon
+
+- **Both the notification's small and large icon are the app's logo now**, including the
+  live-update pill. It used to be the system location pin, and changed shape once the
+  link connected.
+- Message notifications and the life-safety alarm use the same icon now.
+
+### The server address is saved
+
+- Address, port, passcode and WebSocket URL on the APRS-IS page are written to preferences
+  as you edit them (400 ms debounce). Before this, only the in-memory config changed, so
+  they came back empty after leaving the page.
+
+### The Xiaomi focus option is gone
+
+- Notification style is back to two options: a normal ongoing notification, or live
+  updates. Xiaomi focus notifications need a vendor whitelist; without it the system just
+  ignores the parameters, and offering it only misleads.
+
+---
+
+
+## [2.1.21] - 2026-10-18
+
+### 实时更新真的接上了
+
+- 2.1.20 里那两个方法还是走反射调的，release 包经过 R8 时把没人引用的库方法裁掉了，
+  所以运行时候找不到。现在改成直接调用，R8 会把它当成真实用到的方法留下。
+- 顺带把只给反射用的那几个小函数删了。
+
+---
+
+## [2.1.21] - 2026-10-18 (English)
+
+### Live updates actually hooked up
+
+- In 2.1.20 the two methods were still called through reflection, and R8 strips library
+  members nothing references, so they were gone at runtime. They are called directly now,
+  which keeps them.
+- The little reflection helpers only used for that are gone.
+
+---
+
+
+## [2.1.20] - 2026-10-18
+
+### 实时更新修好了
+
+- 「实时更新」一直没反应的原因找到了：申请提升的两个方法是 androidx 兼容层
+  （NotificationCompat，1.17.0 起）上的，平台的 Notification.Builder 上没有。
+  现在先问兼容层，兼容层没有才算这台设备不支持。
+- 「通知诊断」多两行：兼容层的 setRequestPromotedOngoing / setShortCriticalText
+  有没有。
+
+---
+
+## [2.1.20] - 2026-10-18 (English)
+
+### Live updates fixed
+
+- Why live updates never took effect: the two request methods live on the androidx
+  compatibility layer (NotificationCompat, since 1.17.0), not on the platform
+  Notification.Builder. The app now asks the compatibility layer first.
+- The notification check lists two more lines: whether the compatibility layer has
+  setRequestPromotedOngoing and setShortCriticalText.
+
+---
+
+
+## [2.1.19] - 2026-10-18
+
+### 通知
+
+- **通知显示样式多一档「小米焦点通知」**：小米、Redmi、POCO 上试焦点通知
+  （超级岛）；没有厂商许可时照样退回实时更新或普通通知。
+- **显示页多一个「通知诊断」**：把本机的系统版本、机型、实时更新与焦点通知
+  相关的那几个系统方法有没有、允不允许，一次列出来，可以复制。
+- 实时更新不再被「能力查询」一票否决：以前那个查询方法本身也可能不存在，
+  缺它就把所有设备都挡住了。现在只要求设置提升的方法存在，提不提由系统决定。
+
+---
+
+## [2.1.19] - 2026-10-18 (English)
+
+### Notifications
+
+- **A third notification style, the Xiaomi focus notification**, tries the super island on
+  Xiaomi, Redmi and POCO, falling back to live updates or a normal notification when the
+  vendor has not granted permission.
+- **The display page has a notification check**: it lists the system version, the model,
+  and which of the live-update and focus-notification system methods exist and are
+  allowed. The result can be copied.
+- Live updates no longer depend on the capability query, which itself may be missing and
+  used to block every device. Only the request call has to exist; the system decides.
+
+---
+
+
+## [2.1.18] - 2026-10-18
+
+### 通知显示样式
+
+- **显示页里能选常驻通知的样式**：普通常驻通知，或者申请 Android 16 的实时更新。
+- 选了实时更新，状态栏那一小条里会显示距下次上报的倒计时；提不上去（系统
+  低于 16、系统没允许、通知不满足条件）就自动退回普通通知，不会少一条通知。
+- 小米、Redmi、POCO 上顺带注入焦点通知参数，系统不认就是普通通知。
+
+---
+
+## [2.1.18] - 2026-10-18 (English)
+
+### Notification style
+
+- **The display page now picks the style of the ongoing notification**: a normal
+  ongoing notification, or Android 16 live updates.
+- With live updates the status bar pill shows the countdown to the next beacon. Where
+  the system lacks it, the app is not allowed, or the notification does not qualify, it
+  falls back to the normal ongoing notification. One notification either way.
+- On Xiaomi, Redmi and POCO devices the focus-notification parameters are also injected;
+  if the system ignores them, it is a normal notification.
+
+---
+
+
+## [2.1.17] - 2026-10-18
+
+### 发射来源分两类
+
+- **位置与状态报文一条链路，消息另一条**。常见用法是位置走射频、消息走网络，
+  现在可以分开选；两条选同一条也照样工作。
+- 快捷面板每行两颗圆点，一颗定位图标是位置与状态报文，一颗气泡图标是消息。
+  链路自己的设置页上是两行带文字的勾选。
+- **位置与状态报文可以勾好多条链路同时发**，射频与网络各一份；最后一条取消不了。
+  消息仍是一条。
+- 消息按**自己那条**链路的通断判断发没发出去，另一条在线也不顶替。
+
+### 过滤规则共用
+
+- **APRSNETCN 不再有自己的半径与呼号**，两条链路用「服务器」页上同一套过滤
+  规则；改完过滤，两条在线的链路都会用新规则重连。
+- 群呼号改用 `b/` 前缀，APRS-IS 与 APRSNETCN SERVER 都认。
+
+### 台站面板
+
+- **台站备注与状态报文**从呼号下面挪出来，单独一张卡，一种报文一行。
+
+### 快捷面板
+
+- APRS-IS 那一行点进去就是它自己的设置页，与 APRSNETCN 同一口径。
+
+---
+
+## [2.1.17] - 2026-10-18 (English)
+
+### Two transmit sources
+
+- **Position and status packets pick one link, messages pick another.** The usual
+  setup is position over radio, messages over the network; picking the same link for
+  both still works.
+- Each row in the quick panel carries two dots: the pin icon is position and status,
+  the bubble icon is messages. A link's own settings page has the same two choices as
+  labelled rows.
+- **Position and status packets can tick several links and go out on all of them**, radio
+  and network at once; the last one cannot be unticked. Messages stay on one link.
+- A message is judged sent by **its own** link; the other link being online never takes
+  over.
+
+### One set of filters
+
+- **APRSNETCN no longer has its own radius and callsigns.** Both links follow the filter
+  on the Servers page, and both reconnect with the new rule once it changes.
+- Group callsigns now use the `b/` prefix, which both APRS-IS and the APRSNETCN SERVER
+  accept.
+
+### Station panel
+
+- **Station comment and status packet** moved out of the line under the callsign into
+  their own card, one packet kind per row.
+
+### Quick panel
+
+- Tapping the APRS-IS row opens its own settings page, the same as APRSNETCN.
+
+---
+
+## [2.1.16] - 2026-10-18
+
+### 服务器页
+
+- **设置里的「连接设置」叫「服务器」**。一级列出两条互联网链路：APRS-IS 与 APRSNETCN
+  SERVER，各有自己的开关、连接状态与发射圆点，点进去才填地址和端口。
+- 过滤范围仍在一级。电台链路（TNC、WLAN 电台、声卡）留在设备页，一行一条。
+
+### 地址不预填
+
+- **任何服务器地址都不预填**。两条链路的地址框一开始都是空的，恢复出厂也清空。
+- 地址空着时不会去试一台默认服务器，24 小时台站同步直接跳过。
+- 首次运行的向导里两条链路都空着，重新跑向导才回填你自己存过的值。
+
+### 向导
+
+- 服务器那一步可以先选 APRS-IS 或 APRSNETCN SERVER，不再放 passcode 查询的引导。
+
+---
+
+## [2.1.16] - 2026-10-18 (English)
+
+### Server page
+
+- **Settings now calls the page “Servers”** instead of connection settings. It lists the
+  two internet links, APRS-IS and APRSNETCN SERVER, each with its own switch, status and
+  transmit dot. The address and port live on that link's own page.
+- The filter range stays on the same level. Radio links (TNC, WLAN radio, sound card)
+  stay on the device page, one row each.
+
+### No prefilled addresses
+
+- **No server address is prefilled.** Both links start empty, and a factory reset clears
+  them again.
+- With an empty address the app does not try a default server, and the 24 hour station
+  sync is skipped.
+- The first-run wizard leaves both links empty. Re-running it fills in the values you
+  saved yourself.
+
+### Wizard
+
+- The server step now lets you pick APRS-IS or APRSNETCN SERVER first. The passcode
+  lookup guide is gone.
+
+---
+
+## [2.1.15] - 2026-10-18
+
+### 两条互联网链路摆平
+
+- **APRSNETCN 和 APRS-IS 是两条并列的链路**。可以只连它，不连 APRS-IS；也可以选它
+  作为发送链路。选中它发送时不会改从 APRS-IS 发。
+- **发送来源改成每张链路卡上的一个圆点**，原来那张「发送渠道」卡删掉了。
+- **这条链路有自己的 passcode**。留空就沿用 APRS-IS 那一格。
+- 设备页的链路行、系统面板、数据包页都把它列出来，设备页显示它自己收了多少条。
+
+### 台站详情
+
+- **状态报文单独一块**，写明「状态报文」。台站备注仍在呼号那一列。位置包里的备注
+  和 DTI `>` 的状态报文是两种报文，不再混在一起。
+
+---
+
+## [2.1.15] - 2026-10-18 (English)
+
+### The two internet links now sit level
+
+- **APRSNETCN and APRS-IS are two links of equal standing.** You can connect only
+  APRSNETCN, without APRS-IS, and you can make it the send link. Packets picked for it
+  never go out over APRS-IS instead.
+- **The send source is a dot on each link card.** The old send channel card is gone.
+- **This link has its own passcode.** Leave it empty to use the APRS-IS one.
+- The device page, the system panel and the packet page list it. The device page shows
+  how many packets this link has received.
+
+### Station detail
+
+- **The status packet gets a block of its own**, labelled as such. The station note stays
+  beside the callsign. A note inside a position packet and a `>` status packet are two
+  different packets, so they no longer share a spot.
+
+---
+
+## [2.1.14] - 2026-10-18
+
+### 三处按实测反馈改回来
+
+- **状态报文回到呼号右侧**。上一版把备注与状态报文挪到发送消息下面，滚屏才看得到。
+  现在与备注同一列，位置和 2.1.12 一样。
+- **设备页的 APRSNETCN 勾选放回去**。那张数据来源卡里两条互联网链路并排，一眼
+  看到各自在不在线。
+- **连接设置页两条链路各一张卡**。APRSNETCN 不再是「互联网链路」卡里的一行：
+  它和「APRS-IS 连接」一样有自己的卡，地址、端口、账号、口令、筛选都在卡里。
+  发送渠道单独一张卡，报文只从选中的那条发。
+
+---
+
+## [2.1.14] - 2026-10-18 (English)
+
+### Three things put back after trying the build
+
+- **The status packet is back beside the callsign** on the station detail page. The
+  previous build put the note and the status in a card under the message box, where it
+  scrolled out of sight.
+- **The APRSNETCN switch is back on the device page.** Both internet links sit in that
+  data source card again, so you can see at a glance which of them is online.
+- **Each link has its own card on the connection settings page.** APRSNETCN is no longer
+  a row inside an "internet links" card: it has a card shaped like the APRS-IS one, with
+  its address, port, account, password and filter inside. The send channel is its own
+  card, and packets leave on the link picked there.
+
+---
+
+## [2.1.13] - 2026-10-18
+
+### 两条互联网链路摆在一起，发报文只走一条
+
+- **连接设置页同时显示两条互联网链路**。APRS-IS 与 APRSNETCN SERVER 各一行开关、
+  连接状态和登录结果，地址与账号在各自的子页里填。设备页那一格删了，这两条都是
+  服务器链接。
+- **发送渠道只选一条**。下拉里选 APRS-IS 或 APRSNETCN SERVER，报文只从选中的那条
+  走。选中的副链路没在线时退回主链路，日志说一次。
+- **APRSNETCN 有自己的筛选**。半径默认一千公里，可以另外加呼号，不再沿用主链路
+  那套范围与群呼号。
+- **翻译接口多了 B 站 Index-Translate**。免密钥，免费，自动模式里排第一站。地址与
+  模型两格都能改，自己部署也能用。
+- **APRSNETCN 的台站同步翻页拉完**，不再只拿前两千台。
+- **台站详情的备注与状态报文**挪到呼号下面，各占一整行；来源标签跟着台站一起存。
+
+---
+
+## [2.1.13] - 2026-10-18 (English)
+
+### Two internet links side by side, and packets leave on one of them
+
+- **The connection settings page lists both internet links.** APRS-IS and APRSNETCN
+  SERVER each get a switch, their state and the login result; address and account stay
+  on their own pages. The tile on the device page is gone, both of these are servers.
+- **The send channel is a single choice.** Pick APRS-IS or APRSNETCN SERVER from the
+  dropdown and packets leave on that one link. When the picked secondary link is not
+  online they fall back to the main link, said once in the log.
+- **APRSNETCN has its own filter.** A radius of one thousand kilometres by default, plus
+  any callsigns you add; it no longer reuses the main link's range and group calls.
+- **A new translation provider: Bilibili Index-Translate.** No key, no cost, and it sits
+  first in auto mode. Both the endpoint and the model are editable, so a self-hosted
+  deployment works too.
+- **APRSNETCN station sync pages through the whole list** instead of the first two
+  thousand stations.
+- **The station detail page** puts the note and the status packet under the callsign, one
+  full row each; the source badge is saved with the station.
+
+---
+
+## [2.1.12] - 2026-10-18
+
+### 两台服务器各发一份，台站标出走的是哪条
+
+- **APRSNETCN SERVER 就是另一台 APRS-IS 服务器**。那一页的说明改成直说：基于
+  APRSNETCN SERVER 协议的服务器，地址填进连接设置，收发都走它；在这一页打开，
+  是让它与主链路同时在线，各收各的。
+- **第二条链路也发报文**。两条链路都在线时，发出去的每一帧两台服务器各收一份；
+  主链路指的就是同一台机器时只发一次。
+- **台站详情页标出来源**。呼号旁边一枚标签：APRS-IS、APRSNETCN、TNC、声卡、
+  PKWDWPL，服务器 24 小时台站接口补进来的也标 APRSNETCN。看的是最后一条报文
+  从哪条链路进来，跟着台站一起存，重启还在。
+
+---
+
+## [2.1.12] - 2026-10-18 (English)
+
+### Two servers, one copy each, and every station says which link it came from
+
+- **APRSNETCN SERVER is simply another APRS-IS server.** Its page now says so straight:
+  a server built on the APRSNETCN SERVER protocol, put its address in the connection
+  settings and it carries traffic both ways; switched on there, it runs alongside the main
+  link and each keeps its own feed.
+- **The second link sends too.** With both links online, every packet goes out once per
+  server; when the main link already points at the same machine it goes out once.
+- **The station detail page says where the station came from.** A badge next to the
+  callsign: APRS-IS, APRSNETCN, TNC, sound card, PKWDWPL, and APRSNETCN for stations the
+  24-hour station API brought in. It follows the last packet heard and is saved with the
+  station, so it survives a restart.
+
+---
+
+## [2.1.11] - 2026-10-17
+
+### 副链路自己一页，服务器地址可以自己填
+
+- **APRSNETCN SERVER 从连接设置里搬出来，单独一页**。地址、端口、账号口令、登录结果、
+  重新连接，排法与 APRS-IS 那一页一致。原来它挤在主连接卡下面，两件事混成一件看。
+- **服务器地址和端口不再写死在代码里**。默认还是预置的那一台，换机器、走反代、
+  自己搭一台试，都只改这两格，填完给一个「重新连接」。地址留空就不连。
+- **数据来源卡分了两组**。「互联网链接」里 APRS-IS 与 APRSNETCN SERVER 并排，
+  TNC、WLAN 电台、声卡归到「电台链路」。
+- **24 小时台站改成只有按下「立即同步」才拉**。连上链路不再自己发那次 HTTP 请求，
+  也就不会再悄悄送一遍账号口令。说明写在按钮左边，上次结果在按钮下面。
+
+---
+
+## [2.1.11] - 2026-10-17 (English)
+
+### The secondary link gets its own page, and its address is yours to fill
+
+- **APRSNETCN SERVER moved out of the connection settings into a page of its own.**
+  Address, port, account and password, login result, reconnect: the same arrangement the
+  APRS-IS page uses. It used to sit under the main connection card and read as one thing.
+- **The server address and port are no longer hard-coded.** The preset machine is still the
+  default; swapping machines, going through a proxy or trying one you run yourself is a matter
+  of editing those two fields and tapping reconnect. An empty address does not connect.
+- **The data source card is split into groups.** APRS-IS and APRSNETCN SERVER sit side by side
+  under "Internet links"; TNC, WLAN radio and the sound card fall under "Radio links".
+- **The 24-hour station list is pulled only when you tap "Sync now".** Connecting no longer
+  fires that HTTP request, so the account and password are not sent behind your back either.
+  The hint sits left of the button, the last result below it.
+
+---
+
+## [2.1.10] - 2026-10-17
+
+### 多开一条只听的链路，网络那头也能跟着收
+
+- **连接设置里多了「APRSNETCN 副链路」**。打开之后它和主链路同时在线，只收不发：
+  发出去的报文永远还是走主链路那一台服务器，两条链路各收各的台站，互不顶替。
+- **名单账号和口令填在副链路自己那一格里**。有些服务器给白名单呼号发了账号，
+  登录时带上才认；这两个值只写进副链路的登录行，主链路的登录一个词都不多。
+  口令填错时链路照样显示已连接，卡片里会多一行说清原因。
+- **服务器那 24 小时里的台站可以拉一份进来**。点「立即同步」，服务器替我们听到的
+  那一大片就并进列表，只补空，已经收到的呼号一个都不动。来源会标成服务器。
+  这件事只有你按下按钮才做，连上链路不会自己去请求。
+- **两条链路收到同一帧只记一次**。同一句报文从两边都进来时，列表里不会出现两个
+  一样的行。
+
+---
+
+## [2.1.10] - 2026-10-17 (English)
+
+### A second link that only listens
+
+- **The connection settings have their own APRSNETCN section now.** Switch it on and it runs
+  alongside the main link, receive only: every packet you send still goes out through the main
+  server, and the two links collect their stations independently.
+- **The account and password live in that section.** Some servers issue an account to whitelisted
+  callsigns and only accept a login that carries it. Those two values go into the secondary
+  link's login line only; the main link's login gains no extra word. A wrong password still
+  leaves the link looking connected, so the card adds a line that says why.
+- **The stations the server heard in the last 24 hours can be pulled in.** Tap "Sync now" and its
+  wide list is merged into yours: it only fills the gaps, a callsign you already have is left
+  alone, and the rows are marked as coming from the server. This happens only when you tap the
+  button, never on connect.
+- **The same frame arriving on both links is recorded once.** A packet that comes in twice no
+  longer shows up as two identical rows.
+
+---
+
+## [2.1.9] - 2026-10-17
+
+### 常用的输入留下来，公告里的视频铺满了
+
+- **数据包页的搜索框有了「最近搜过的」**。搜过几次之后，搜索框右边会多一个小历史按钮，
+  点开挑一条就填回去，挑错的也能当场删掉。最多留八条，刚用过的排最前。
+- **连接设置里的服务器地址也记**。`rotate.aprs2.net` 这种地址敲起来不轻松，连过的几台
+  都留在面板里，点一下换回来。
+- **公告里的内嵌视频按屏幕宽度铺开**。以前高度写死，手机竖着看时 16:9 的画面被撑出一道
+  黑边；网易云那种横条又会在公告里留下一大片空白。现在它跟着宽度等比缩放，横屏和平板上
+  也不会变成一块巨幕。
+
+---
+
+## [2.1.9] - 2026-10-17 (English)
+
+### The values you reuse are kept, and embeds fill the width
+
+- **The packet page's search box now remembers recent searches.** After a few searches a small
+  history button appears on the right of the field: pick an entry to fill it back in, or delete
+  the ones you got wrong. Eight entries at most, most recent first.
+- **The server address in the connection settings is remembered the same way.**
+  `rotate.aprs2.net` is not pleasant to type; the servers you have used stay in a small panel and
+  come back with one tap.
+- **Inline videos in the announcement fill the screen width.** The height used to be fixed, so a
+  16:9 player carried a black bar on a portrait phone, while a 330×86 audio strip left a large
+  empty gap. Both now scale with the width, and on a tablet or in landscape they stop growing at
+  a sensible size.
+
+---
+
+## [2.1.8] - 2026-10-17
+
+### 外接 GPS 走了之后，定位和上报都能自己回来
+
+- **模块供位时，手机定位只是待机**。以前它会把后台服务一起停掉，应用退到后台就被系统冻住：
+  连接悄悄断掉、信标定时器停摆，界面上却还写着已连接。现在后台服务一直在，只是不开 GPS。
+- **模块断流或被拔掉，手机定位会自己接回来**。接回失败隔十秒再试一次，不会一次失败就再也
+  没有位置。
+- **模块只是开着、其实没在供位时，网络定位不再被它挡住**。室内或者只用网络定位的时候也能
+  重新拿到位置，上报闸跟着打开，手动发送不再只剩一帧状态报文。
+
+---
+
+## [2.1.8] - 2026-10-17 (English)
+
+### Position and reporting recover on their own once the external GPS is gone
+
+- **While the module supplies fixes, the phone GPS only stands by.** It used to stop the
+  background service as well, so once the app was sent to the background the system froze it:
+  the connection died silently, the beacon timer stopped, and the screen still said connected.
+  The service now stays up, only the GPS sampling is off.
+- **When the module goes quiet or is unplugged, the phone GPS comes back by itself.** If that
+  hand-over fails, it retries ten seconds later instead of leaving the app without a position.
+- **A module that is only switched on no longer blocks network fixes.** Indoors, or in a
+  network-only setup, the app can pick a position again, which reopens the reporting gate, and a
+  manual send no longer carries just a status frame.
+
+---
+
+## [2.1.7] - 2026-10-17
+
+### 选过的东西留到下次
+
+- **台站页的筛选会记住**：状态、类型、同款软件、设备、只看收藏，退出应用再打开还是上次那一套。
+  以前每次进来都得在几个筛选按钮之间重新点一遍。
+- **地图的图层筛选也会记住**：图层面板里关掉的台站类型，以及那颗「套用台站面板筛选」开关，
+  重启后照样生效。
+- **锁定地图中心记住上次选的那一档**：关、锁定中心·正北朝上、锁定中心·航向朝上，启动就按
+  上次那一档。拖地图或者点台站聚焦过去，锁定仍会自动解开。
+- 这三项都跟着备份走，换机导入后照旧。
+
+---
+
+## [2.1.7] - 2026-10-17 (English)
+
+### What you picked stays picked
+
+- **The stations page remembers its filter**: status, type, same app, device and favourites-only
+  are still in place the next time the app opens. Before, every visit meant tapping the filter
+  chips again.
+- **The map's layer filter is remembered too**: the station types switched off in the layer panel,
+  and the "apply the station filter to the map" switch, both come back the same way after a
+  restart.
+- **The map centre lock remembers its last state**: off, locked with north up, or locked with
+  heading up starts where you left it. Dragging the map or focusing a station still releases the
+  lock.
+- All three travel with the backup, so a restore on a new phone keeps them.
+
+---
+
+## [2.1.6] - 2026-10-16
+
+### 轨迹能导出，跟随有三态，横屏不再缺东西
+
+- **历史轨迹可以导出成 GPX**：今天、最近 7 天、30 天、1 年，或者自己挑一段起止时间。导出的
+  文件落在系统的「下载」目录里，导完可以直接分享出去，用别的软件打开就是一条条带时间的
+  轨迹点。挑的那段时间里没有轨迹的天会整条跳过，不写进文件。
+- **地图右侧的「跟随」改成三态**：关、锁定中心·正北朝上、锁定中心·航向朝上。要正北还是跟着
+  车头转，点一下就能换，不用进设置。
+- 台站页横屏下，**排序入口不再跟着统计行一起消失**。按哪个字段排也会记住，下次打开还是上次
+  选的那个，跟着备份一起走。
+- 自动上报那条横条开「详细档」时，**最左边会显示这一发真正要发出去的信标符号**。智能档按
+  速度换符号、纯网络定位单独指定的那一枚，都会跟着变，看到的就是地图上会出现的那个图标。
+- 启动时体检一次权限，**只说「本来有、现在被关掉」的那几项**，不去念一遍你从来没给过的权限。
+  定位权限被系统关掉时，前台服务声明失败也不会再把进程带走。
+- 横屏下地图画的那几层（轨迹、信标点、精度圈、热力图）**不再画到左侧卡片和底部横条底下**。
+  以前它们铺满整屏，卡片是磨砂的，蓝线就从卡片里透出来，看着像轨迹压住了卡片。
+
+---
+
+## [2.1.6] - 2026-10-16 (English)
+
+### Export the track, pick how the map follows, and landscape stops missing pieces
+
+- **History can be exported as GPX**: today, the last 7 days, 30 days, a year, or a range you
+  pick. The file lands in the system Downloads folder and can be shared straight away; any other
+  app that opens it gets the track as timestamped points. Days with no track inside the chosen
+  range are skipped whole.
+- **The map's follow button has three states**: off, locked centre with north up, and locked
+  centre with heading up. One tap switches between north and heading, no trip to settings.
+- On the stations page the sort entry no longer disappears with the statistics row in landscape,
+  and **the sort field is remembered** across launches, travelling with the backup.
+- With the reporting bar in detailed mode, **the leftmost item is the APRS symbol this beacon will
+  actually send**. Smart tiers change the symbol by speed and a network-only fix can have its own,
+  so what you see is the icon that shows up on the map.
+- **Permissions are checked once at startup**, naming only the ones that were there before and are
+  now off, never reciting permissions you never granted. A location permission switched off by the
+  system no longer takes the process down when the foreground service fails to start.
+- **In landscape the drawn layers** (track, beacon marks, accuracy ring, heat map) no longer paint
+  under the left card or the bottom bar. They used to fill the whole screen, and since the cards
+  are frosted the blue line showed through them, looking like the track was on top of the card.
+
+---
+
+## [2.1.5] - 2026-10-15
+
+### 地图跟着你走，连不上会告诉你为什么
+
+- 地图右侧多了一颗「锁定地图中心」。点开以后你走动时地图一直把你的位置摆在中间，不用每次
+  手动回中。缩放还是你自己掌握，锁定只管位置。开始拖地图，或者点了某个台站要聚焦过去，
+  锁定就自动解开，不会把人拽回去。
+- 关于页新增「伙伴」一节，收录 APRSNET.CN。
+- 服务器地址没填时点「连接」，不再只是转圈等超时。设置页的服务器一栏会标出「未配置」并写明
+  原因，点连接则弹一句提示，附一个直达连接设置的入口。
+
+---
+
+## [2.1.5] - 2026-10-15 (English)
+
+### The map follows you, and a link that cannot work says so
+
+- A new "lock map centre" button on the map toolbar. While it is on, the map keeps your position
+  in the middle as you move, so there is no need to recentre by hand. Zoom stays yours; the lock
+  only holds the position. Dragging the map, or focusing a station, releases it instead of pulling
+  the view back.
+- The About page gained a "Partners" section listing APRSNET.CN.
+- With no server address set, tapping Connect no longer just spins until it times out: the server
+  field carries an "unset" badge with the reason, and Connect pops a note with a one-tap way into
+  the connection settings.
+
+---
+
+## [2.1.4] - 2026-10-14
+
+### 「待确认上报」不再反复弹
+
+- 常驻通知以前可能一秒重发一次：定位、台站、电量、倒计时……任何一点变化都会把通知文字
+  重设一遍，系统于是当成新通知再弹一回。现在**这句话没变就不去碰系统**，只在真的换了一句时
+  才更新；通知本身也标成「只提醒一次」，不再震动或抬头。
+- 更要紧的是根上那一处：链路抖一下（掉线后自动重连、被服务器踢、换发射来源），本次连接里
+  你已经点过的「开始上报」会被抹掉 —— 上报停住，界面与通知又跳回「待确认上报」，看起来
+  就是反复要你确认。现在只有**你自己点的**连接 / 断开 / 恢复出厂才作废这次确认；计划外
+  掉线、自己又连回来的，确认留着，接着上报，不用再点一遍。
+- 打开 App 仍然是未确认：这次确认不写盘，重开应用（或重装）一样要先点一次「开始上报」。
+  确认入口还是那颗实心按钮，不是弹窗。
+
+---
+
+## [2.1.4] - 2026-10-14 (English)
+
+### The "waiting for confirmation" prompt no longer keeps popping up
+
+- The persistent notification could be re-sent once a second: a fix, a station, the battery, the
+  countdown -- any change reset the notification text, and the system treated every rewrite as a
+  new notification and popped it again. It now **stays quiet while the text is unchanged**, and
+  the notification is flagged as alert-once, so it no longer buzzes or pops up.
+- More importantly, the root of it: a jitter in the link (an automatic reconnect after a drop, a
+  server-side disconnect, a switch of transmit source) used to wipe the "start reporting" tap you
+  had already made for the current connection -- reporting stopped and the UI and the notification
+  jumped back to "waiting for confirmation", which looked like the app asking over and over.
+  Now only **your own** connect / disconnect / factory reset voids that confirmation; a link that
+  dropped on its own and came back keeps it and carries on reporting, with no second tap.
+- Opening the app still counts as unconfirmed: the confirmation is not written to disk, so
+  restarting the app (or reinstalling it) asks for that one tap again. It is still a real button,
+  not a dialog.
+
+---
+
+## [2.1.3] - 2026-10-14
+
+### 修好「安卓取不到卫星数」
+
+- 有人的安卓手机上，信标设置页的「当前卫星数」一直是一个「—」，于是 `SAT=nn` 也永远发不出去
+  —— 不是应用坏了，是**取数这条路只铺了一半**：新机型普遍不再往定位结果里塞卫星数；作为退路的
+  系统 GNSS 状态里，「哪几颗参与了定轨」这一位又并非所有 ROM 都填（有些机型上它恒为否）。
+  现在按三级取数：定位自带的数 → 参与定轨的颗数 → **在视颗数**（也就是「现在看到几颗星」），
+  能拿到哪一级就用哪一级。宁可给出「看到几颗」，也不假装平台什么都没说。
+- 另一处静默的坑：卫星监听注册失败（权限比服务晚一步授予、GPS 引擎刚启动、个别 ROM 拒绝）
+  之后**不会再试一次**，卫星数就永远停在「不知道」。现在只要拿到实时 GPS 定位，就会按
+  30 秒退避重新注册，让它自己长回来。
+- 设置页那个「—」也终于有了说法：直接写清「当前来源未提供卫星数 —— 网络定位没有卫星，
+  部分机型 / 系统也不返回该数据」，不再是一个没人解释的破折号。
+
+---
+
+## [2.1.3] - 2026-10-14 (English)
+
+### "Android cannot get the satellite count", fixed
+
+- On some Android phones the beacon settings page kept showing a dash for "Satellites now",
+  so `SAT=nn` was never sent either. The app was not broken so much as **only half the road
+  was paved**: newer devices no longer put a satellite count into the location object, and in
+  the GNSS status used as the fallback, the "used in fix" flag is not filled in by every ROM
+  (on some it is always false). The count is now taken in three steps: the number attached to
+  the fix -> the satellites used in the fix -> **satellites in view** (i.e. how many are being
+  seen right now), using whichever level is available. Better to report how many are visible
+  than to pretend the platform said nothing.
+- A second silent trap: once the GNSS listener failed to register (permission granted a beat
+  after the service started, the GPS engine just coming up, the odd ROM refusing), **it was
+  never tried again**, so the count stayed at "unknown" forever. It is now re-registered with a
+  30-second backoff whenever a live GPS fix arrives, so it heals itself.
+- The dash on the settings page finally has a caption: it says plainly that the current source
+  does not provide a satellite count -- network positioning has no satellites, and some devices
+  or ROMs do not report the data -- instead of leaving an unexplained dash.
+
+---
+
+## [2.1.2] - 2026-10-14
+
+- 信标备注可选带上卫星数（`SAT=nn`）：来源为手机 GPS（Android 读 GNSS 状态里参与定位的颗数）或外接 GPS 模组的 `GGA` 语句；默认关，来源不提供这个值时不发
+- 外接 GPS 设备页新增「当前定位」卡：坐标 / 海拔 / 速度 / 航向 / 卫星数 / 精度（含 HDOP）/ 定位类型（`GSA` 的 2D · 3D）/ 模组时间（UTC）/ 触发语句与最近一条原始语句，龄期每秒刷新
+- 外接 GPS 与 PKWDWPL 设备页不再沿用 TNC 的「连接 TNC」文案，改为按设备说话（扫描设备 / 连接设备 / 已绑定设备…）
+
+---
+
+## [2.1.2] - 2026-10-14 (English)
+
+- The beacon comment can optionally carry the satellite count (`SAT=nn`): the source is phone GPS (Android reads the satellites used in the fix from the GNSS status) or the external GPS module (the `GGA` sentence); off by default, and nothing is sent when the source does not provide it
+- A new "Current fix" card on the external GPS device page: position / altitude / speed / course / satellites / accuracy (with HDOP) / fix type (`GSA` 2D · 3D) / module time (UTC) / trigger sentence and the latest raw sentence, with the age refreshed every second
+- The external GPS and PKWDWPL device pages no longer borrow the TNC wording ("Connect TNC") and now speak in terms of the device (Scan devices / Connect device / Bound device …)
+
+---
+
+## [2.1.1] - 2026-10-14
+
+- 新增外接 GPS 定位来源：蓝牙 SPP 或 USB 串口接入 NMEA 0183 模组（`RMC` / `GGA` / `GLL` / `ZDA` / `GSA` / `VTG`），作为本机位置，只收不发
+- 位置优先级：模拟位置 ＞ 外接模块 ＞ 佳明手表 ＞ 手机 GPS；模组断流 30 秒自动交回手机 GPS
+- 数据来源卡：「位置来源」列出手机 GPS / 外接模块 / 佳明，并写明上述优先级
+- 新增设备页「外接 GPS」子页：扫描 / 绑定 / 连接 / 断开 / 重启，以及定位接收统计（定位条数、待定位、校验不符、忽略的语句）
+- 信标横杠显示位置来源，如「外接 GPS 上报 · 45s」
+- 自动重连与严格校验和（默认开启，可针对模组关闭）
+
+---
+
+## [2.1.1] - 2026-10-14 (English)
+
+- New external GPS position source: an NMEA 0183 module (`RMC` / `GGA` / `GLL` / `ZDA` / `GSA` / `VTG`) over Bluetooth SPP or a USB serial port, used for this device's own position and receive-only
+- Position priority: simulated > external module > Garmin watch > phone GPS; the phone takes over 30 s after the module stops sending
+- Data source card: the position-source section lists phone GPS / external module / Garmin with that priority
+- New "External GPS" device sub-page: scan / bind / connect / disconnect / restart, plus reception stats (fixes, waiting for a fix, checksum failures, ignored sentences)
+- Beacon bar shows the position source, e.g. "External GPS · 45s"
+- Auto-reconnect and strict checksums (on by default, can be turned off per module)
+
+---
+
+## [2.1.0] - 2026-10-14
+
+### 封面彩蛋：不再等那五秒 —— 点一下，它就带你去看那一页故事
+
+- 关于页封面那颗蛋，以前是「点一下，抖一下，然后对着一张不动的封面等五秒」。
+  那五秒里谁也分不清这是彩蛋还是卡住了 —— **现在点下去就是一次激活**：抖动、
+  翻面、粒子一起发生，翻牌动画刚走完，那一页故事就递到眼前。反悔随时可以：
+  再点一下，它翻回正面，故事也不再打开。
+- 故事在哪儿打开：**能内嵌的平台（Android / iOS / macOS）直接在应用内整屏翻开**
+  —— 那一页本来就是给一块屏幕看的；Windows / Linux / Web 没有可用的内嵌后端，
+  才交给系统浏览器。应用内那一页右上角另留了「在浏览器打开」。
+- 这一页自带背景音乐，所以退出时得把声音收干净：**返回或切到后台，音乐跟着停**。
+  Android 的 WebView 拆掉之后，页面里的 `<audio>` 并不会自己安静 —— 人回到关于页，
+  音乐还在。现在退出前先让页面按停、退场动画里再把整页腾空；切到后台也按停
+  （回来时音乐不会自动续上，页面上那个 BGM 开关可以重新点）。
+
+---
+
+## [2.1.0] - 2026-10-14 (English)
+
+### The cover easter egg no longer counts to five — one tap, and it takes you to that page
+
+- The egg on the About cover used to be "tap, shudder, then watch a motionless cover
+  for five seconds". Nobody can tell an easter egg from a freeze in five seconds.
+  **A tap is the activation now**: the shudder, the flip and the particles happen
+  together, and the moment the flip lands, the story is handed over. Changed your mind?
+  One more tap turns the cover back, and the story stays closed.
+- Where it opens: **platforms with an embedder (Android / iOS / macOS) open it
+  full-screen inside the app** — that page was written for a screen; only Windows /
+  Linux / Web, which have no embedder available, hand it to the system browser. The
+  in-app copy keeps an "open in browser" action in its top bar.
+- That page plays its own background music, so leaving it now takes the sound with it:
+  **going back or switching the app away stops the music**. An Android WebView does not
+  silence the `<audio>` inside it when it is torn down — you went back to About and the
+  music stayed. The page is now silenced before the route pops and unloaded during the
+  exit animation, and switching the app away silences it too (the music does not resume
+  by itself; the page's own BGM switch starts it again).
+
+---
+
+## [2.0.68] - 2026-10-13
+
+### 修复：智能体「回复过慢」的根子 —— 流式请求漏了 `stream:true`
+
+- 2.0.67 的「逐字回复」名义上走流式，实际请求体里**没有 `stream:true`**：后端按
+  普通请求回一整段 JSON，流里一个 `data:` 分片都没有，应用只能判定「没拿到流」，
+  **于是把一模一样的请求再发第二遍**。每轮白等一倍时间、白花一倍 token，而屏幕上
+  的「逐字」其实只是打字机兜底补的那层动画。现在流式请求真的带 `stream:true`：
+  一次请求、边收边显示；后端不认这个字段时照旧自动退回整段式，不会少一句回复。
+
+### 修复：智能体「调用下工具就断掉了」
+
+- **单个工具出错不再带走整轮对话。** 以前工具里抛的异常（参数畸形、偶发 bug）会
+  一路冒到最外层，用户看到的就是「调完工具突然没了下文」。现在异常变成**这次
+  调用的结果**（`ERROR: …`）回给模型：既保住 `tool_calls` ↔ `tool` 消息的配对，
+  也让模型有机会解释或换个做法。
+- **轮次用尽不再干停在最后一个工具气泡上。** 一轮对话最多 6 次工具往返，以前用完
+  就直接结束（看起来就是「断了」）。现在会补一次**不带工具、只准说话**的收尾请求，
+  把结论说出来；连这次都没有内容，才补一句提示：「已达到本轮的连续操作次数上限…
+  再发一句『继续』让它接着做。」（6 语言）
+- 模型偶尔回空正文时，不再往对话里塞一个空气泡，交由收尾请求补齐。
+
+### 优化：台站备注独立成行、完整不截断，并识别网址
+
+- 台站备注从「符号名 · 备注」挤在同一行、`maxLines: 1` 的写法里拆出来：**单独
+  一行、可换行、默认不限行数**，长备注不再被省略号吃掉。
+- 备注里的 `https://…` 与裸 `www.…` 自动识别成**可点链接**（尾部的中英文标点先
+  剔除，不会被一起带走），台站列表 / 台站详情 / 地图信息浮窗三处一致。
+
+### 优化：智能体更快 —— 系统提示与工具说明瘦身
+
+- 默认系统提示从 5.3KB 砍到 2KB（-62%）：里面原本把 57 个工具挨个复述了一遍，
+  而每个工具的用法本来就写在它的 schema 里、随请求一起发。现在系统提示只留
+  行为规则（回复语言 / 主动调工具 / 改设置先读状态 / 副作用要确认 / 权限 /
+  后台任务 / 记忆）。
+- 57 个工具的说明文字整体精简（**名字、参数、取值都不变**，只把描述写短）。
+  系统提示 + 工具 schema 是**每一轮请求都要重发**的固定开销，两者合计小了约
+  四分之一，回复更快。
+
+### 优化：台站状态报文更省 —— 保活只发一帧，不再来回闪
+
+- APRS-IS 保活以前每 15 秒**先发一帧** `>APRSlocus CONNECT …` 身份帧、紧跟一帧
+  用户自定义状态：等于白占一帧，还会让 aprs.fi 上的「台站状态」在 CONNECT 与
+  自定义文本之间反复闪。现在**谁有内容发谁、保活只发一帧**：填了自定义就发
+  自定义，没填才发内置默认帧。CONNECT 身份帧只在**连上那一瞬间**发一次。
+- 自定义帧写失败（socket 抖动）时仍会记下来，下个周期无视发报门槛立刻补发，
+  直到写成功 —— 不会再出现「设了状态却被 CONNECT 顶掉」。
+
+---
+
+## [2.0.68] - 2026-10-13 (English)
+
+### Fixed: why agent replies felt slow — the streaming request was missing `stream:true`
+
+- The "stream replies" feature of 2.0.67 claimed to use streaming, but the request
+  body **never contained `stream:true`**: the backend answered with one plain JSON
+  blob, the stream parser saw not a single `data:` fragment, decided there was no
+  stream, and **sent the very same request a second time**. Every round waited
+  twice as long and paid twice the tokens, while the character-by-character effect
+  on screen was only the typewriter fallback. The streaming request now really
+  sends `stream:true`: one request, shown as it arrives. If a backend does not
+  accept the flag, the app still falls back to the whole-answer request — you never
+  lose a reply.
+
+### Fixed: the agent "stopping right after a tool call"
+
+- **One failing tool no longer takes down the whole turn.** An exception thrown
+  inside a tool (malformed arguments, an occasional bug) used to bubble all the way
+  out, which looks like "it called a tool and then went silent". It is now turned
+  into **the result of that call** (`ERROR: …`) and handed back to the model: the
+  `tool_calls` ↔ `tool` message pairing stays valid, and the model gets a chance to
+  explain or try another way.
+- **Running out of rounds no longer stops dead on the last tool bubble.** A turn
+  allows up to 6 tool round-trips; when they ran out, the turn simply ended (which
+  looks like "it broke"). The app now makes one more request with **no tools at
+  all**, so the model has to put its conclusion into words; only if that request
+  returns nothing either does it add a notice: "Reached the per-turn limit for tool
+  actions… Send 'continue' to let it carry on." (6 languages)
+- An occasional empty assistant message is no longer added as an empty bubble; the
+  closing request fills it in.
+
+### Improved: station comments on their own line, never truncated, with tappable URLs
+
+- Station comments are no longer squeezed into the same line as "symbol name ·
+  comment" with `maxLines: 1`: they get **their own line, wrap, and default to
+  unlimited lines**, so long comments are no longer eaten by an ellipsis.
+- `https://…` and bare `www.…` inside a comment are recognised as **tappable
+  links** (trailing Chinese/English punctuation is trimmed off first), consistently
+  in the station list, the station detail page, and the map info window.
+
+### Improved: a faster agent — slimmer prompt and tool descriptions
+
+- The default system prompt went from 5.3KB to 2KB (-62%): it used to restate all
+  57 tools one by one, even though each tool's usage already lives in its own
+  schema, sent with every request. It now keeps only the behavioural rules (reply
+  language, be proactive with tools, read state before changing it, confirm side
+  effects, permissions, background tasks, memory).
+- The 57 tool descriptions were shortened as well (**names, parameters and value
+  ranges unchanged**, only the prose is terser). The prompt plus the tool schemas
+  are re-sent on every request, and the two together are now roughly a quarter
+  smaller, so replies come faster.
+
+### Improved: leaner status reports — the keep-alive sends a single frame
+
+- The APRS-IS keep-alive used to send an `>APRSlocus CONNECT …` identity frame
+  **every 15 seconds** and then a second frame with the user's custom status: a
+  wasted frame that also made the "station status" on aprs.fi flip back and forth
+  between the CONNECT text and the custom one. Now **one frame is sent, whichever
+  has content**: the custom text if set, otherwise the built-in default. The
+  CONNECT identity frame is sent once, at the moment of connecting.
+- A custom frame that fails to write (a flaky socket) is still remembered and
+  re-sent as soon as the send threshold allows, until it goes through — a status
+  you set is no longer overwritten by CONNECT.
+
+---
+
+## [2.0.67] - 2026-10-13
+
+### 新功能：智能体「逐字回复」（流式优先，打字机兜底）
+
+- 智能体回复不再是「转半天 → 整段蹦出来」，而是**边生成边逐字显示**，长回答
+  尤其明显。设置页「接口」折里新增「逐字回复」开关，默认开，旧配置按开兜底。
+- 真流式优先：请求带 `stream:true`，后端按 SSE 增量推 token 就即时上屏；
+  `tool_calls` 是**分片**下发的（id / name 在首片、arguments 是逐段拼的 JSON
+  片段），按 `index` 归并，重复带 name 的后端不会拼成 `xxx_xxx`。
+- 后端不支持时不会少一句回复：忽略了 `stream:true`（回一整段普通 JSON）、或
+  平台不支持流式（Web）时，自动退回整段式请求，再用打字机效果补上逐字观感
+  （总时长压在 ~1.2 秒内，不按字符线性累加）。
+- 流式期间隐藏「思考中」转圈、列表直接跳到最新（原来的平滑滚动动画会被每
+  60ms 的新内容不断打断重启，长回答会「在屏幕外写」）；正在生成、尚未定稿的
+  文字用独立气泡显示，**不并入对话历史** —— 免得模型读到自己的半截话。
+- 新增单测 `test/agent_stream_test.dart`（并挂进 CI）：分片拼装、交错 index、
+  心跳 / 空行 / `[DONE]`、流内 error、非 SSE 响应识别为空流。
+
+### 新功能：智能体「工具操作历史」+ 工作状态冒泡
+
+- 聊天框标题栏新增「工具操作历史」按钮：记下智能体**每一次**工具调用 ——
+  工具、参数摘要、结果摘要、时间、成功 / 被拒 / 失败，最新在前、可一键清空，
+  按钮上带数字角标，一眼看出它这一轮动过多少次手。
+- 有活儿时按钮旁边冒一个**状态气泡**：「正在操作：xxx」（当前正在跑的工具）
+  或「思考中…」。不用盯着对话猜它在干嘛。
+- 记录随对话落盘，与「任务执行历史」同类 —— 可再生的诊断日志，**不随备份**
+  搬走（换机后带上旧记录只会误导）。
+
+### 优化：台站详情 PHG 显示更明显更清晰
+
+- PHG（功率 / 天线高度 / 增益 / 方向）从原来的一行灰字（`4W · 6.1m · 2dB · omni`）
+  改成一张橙色小卡片，四项各自带标签与单位，一眼可读。
+- 方位为全向时显示「全向」，不再露出 `360°` 这种半英半数的写法。
+
+### 优化：数据包查看页更清晰
+
+- 每条的「呼号 → 目标」**单独成行** —— 原来和类型 / 来源徽标、时间挤在同一行，
+  窄屏上会被省略号截掉，反而看不清「谁发给谁」。
+- 「原始模式」不再把报文截到两行加省略号：**完整显示**、可换行、长按复制。
+  报文的尾巴（中继路径 / 数据扩展 / 备注）正是排障要看的地方，不能被吃掉。
+
+---
+
+## [2.0.67] - 2026-10-13 (English)
+
+### New: the agent now replies character-by-character (streaming first, typewriter fallback)
+
+- Agent replies are no longer "wait, then the whole block appears" but are shown
+  **as the model writes them**, which matters most for long answers. A new
+  "Stream replies" switch lives in the Settings → Interface section (on by
+  default; older configs fall back to on).
+- Real streaming first: the request sends `stream:true`, and SSE tokens are put on
+  screen as they arrive. `tool_calls` come down **in fragments** (id / name in the
+  first piece, arguments as concatenated JSON fragments) and are merged by
+  `index`, so backends that repeat the name do not produce `xxx_xxx`.
+- When the backend cannot stream, you still never lose a reply: if it ignores
+  `stream:true` (returns one plain JSON blob) or the platform has no streaming
+  (Web), the app falls back to the whole-answer request and adds a typewriter
+  effect for the same character-by-character feel (capped at ~1.2s total, not
+  linear in length).
+- While streaming, the "thinking" spinner is hidden and the list jumps straight
+  to the newest line (the old smooth-scroll animation kept being restarted by the
+  60ms updates, so long answers "wrote off-screen"); the in-progress, not-yet-final
+  text shows in its own bubble and is **kept out of the conversation history**, so
+  the model never reads its own half-finished sentence.
+- New unit test `test/agent_stream_test.dart` (wired into CI): fragment assembly,
+  interleaved indexes, heartbeat / blank lines / `[DONE]`, in-stream errors, and
+  non-SSE responses recognised as an empty stream.
+
+### New: agent "tool activity" history + a live working bubble
+
+- A new "Tool activity" button in the chat header records **every** tool call the
+  agent makes — tool, argument summary, result summary, time, and whether it
+  succeeded, was denied, or failed — newest first and clearable with one tap. A
+  numeric badge on the button shows how many actions it has taken.
+- While it works, a status bubble appears next to the button: "Working: xxx" (the
+  tool currently running) or "Thinking…", so you never have to guess what it is
+  doing.
+- The history is persisted with the conversation and, like the task-run history,
+  is a regenerable diagnostic log that is **kept out of backups** (restoring old
+  records on a new device would only mislead).
+
+### Improved: clearer PHG display in station details
+
+- PHG (power / antenna height / gain / direction) was one grey line
+  (`4W · 6.1m · 2dB · omni`); it is now an orange card with each of the four
+  values labelled and unit-tagged, readable at a glance.
+- An omnidirectional pattern now reads "Omni" instead of the half-English `360°`.
+
+### Improved: clearer packet-viewer page
+
+- Each row's "call → target" now sits **on its own line** — it used to be crammed
+  in with the type/source badges and the time, so on narrow screens it was
+  ellipsised away and you could not tell who sent to whom.
+- "Raw mode" no longer clips the packet to two lines with an ellipsis: it shows
+  the **full** frame, wraps, and copies on long-press. The tail mattering most
+  for debugging (digipeater path / data extensions / comment) is no longer cut.
+
+---
+
+## [2.0.66] - 2026-10-13
+
+### 新功能：智能体可操作「策略地图」（与队友共享标点 / 划线 / 圈 / 集合点）
+
+- 新增 9 个工具：`list_strategy` 列出某群的图层元素；`strategy_add_point` /
+  `strategy_add_rally` / `strategy_add_circle` / `strategy_add_line` 各添加一个
+  元素并广播给群；`strategy_update` / `strategy_delete` 按 id 改 / 删；
+  `strategy_clear` 清空整群图层；`strategy_request_snapshot` 请成员重播自己的
+  元素（新入群补齐图层用）。
+- 读写分离：`list_strategy` 只读、免确认；其余会往群里发 APRS 帧，受「允许
+  发送 / 允许修改设置」权限与聊天框内逐次确认约束（与 `send_group_message`
+  同一套闸门）。
+- 参数校验：经纬度范围、圈半径上限、颜色下标 0..5、划线点数上限都会拦；
+  线路径接受 `"lat,lng;lat,lng"` 字符串或坐标数组，越界即整条拒绝，不会静默
+  落一半、也不会把超长元素硬塞进帧。
+- 群一律接受**群呼号或群名**；元素用短 id 引用，先 `list_strategy` 拿 id 再改删。
+- 附带修复：智能体代用户操作期间不再往「日志页」灌普通运行日志（只保留警告 /
+  错误），避免确认条与工具结果之外再刷一遍「发送到群…」，把真正的链路日志淹掉。
+
+---
+
+## [2.0.66] - 2026-10-13 (English)
+
+### New: the agent can now drive the shared strategy map (markers, lines, circles, rally points)
+
+- 9 new tools: `list_strategy` lists a group's elements; `strategy_add_point` /
+  `strategy_add_rally` / `strategy_add_circle` / `strategy_add_line` each add an
+  element and broadcast it to the group; `strategy_update` / `strategy_delete`
+  edit or remove one by id; `strategy_clear` wipes the layer; and
+  `strategy_request_snapshot` asks the members to re-send their elements (use it
+  after joining a group to fill in the layer).
+- Read/write split: `list_strategy` is read-only and needs no confirmation; the
+  rest send APRS frames and are gated by the "allow sending"/"allow settings"
+  permissions plus a per-action confirmation in the chat (the same gate as
+  `send_group_message`).
+- Validation: latitude/longitude range, circle radius cap, colour index 0..5 and
+  a line point cap are all enforced; a line path is given as a
+  `"lat,lng;lat,lng"` string or an array of coordinates — an out-of-range point
+  rejects the whole line rather than silently keeping half, and oversized
+  elements are never forced into a frame.
+- A group is addressed by **call or name**; elements are referred to by a short
+  id — call `list_strategy` first to get it.
+- Also fixed: while the agent acts on the user's behalf, ordinary run logs no
+  longer flood the Log page (only warnings/errors are kept), so the "sending to
+  group…" lines no longer drown the link logs the user actually debugs with.
+
+---
+
+## [2.0.65] - 2026-10-12
+
+### 修复：WLAN 电台直连无法更改射频中继路径（#35）
+
+- 现象：「WLAN 电台直连」（IC-705 / IC-9700 / IC-7610 / IC-905）子页里没有
+  「射频中继路径」入口，用户想改中继（如 `WIDE1-1,WIDE2-1`）无处可填，
+  反馈「wlan 链接无法更改射频路线」。
+- 原因：WLAN 直连走的就是音频来源那条射频通道（`audio.config.path`），
+  但此前只有 TNC 页 / 音频页暴露了这个输入框，WLAN 页漏了。
+- 修法：在 WLAN 电台页的「CI-V 控制与发射设置」里补上「射频中继路径」输入框，
+  与 TNC / 音频页同一个键、同一个语义（留空 = 不指定中继）；改完立即生效。
+- 说明书「WLAN 电台直连」一节同步补上该设置项与说明（简 / 繁 / 英）。
+
+---
+
+## [2.0.65] - 2026-10-12 (English)
+
+### Fix: the WLAN radio link could not change its RF digipeater path (#35)
+
+- Symptom: the “WLAN radio direct” sub-page (IC-705 / IC-9700 / IC-7610 / IC-905)
+  had no “RF digipeater path” field, so users had nowhere to set the relay path
+  (e.g. `WIDE1-1,WIDE2-1`) — reported as “the WLAN link cannot change its RF route”.
+- Cause: the WLAN link uses the same RF channel as the audio source
+  (`audio.config.path`), but only the TNC and audio pages exposed that field;
+  the WLAN page was missing it.
+- Fix: added the “RF digipeater path” input to the WLAN page's CI-V control section,
+  sharing the same key and semantics as the TNC/audio pages (empty = no digipeater);
+  changes take effect immediately.
+- The manual's “WLAN radio direct” section now documents this setting too (zh/zh-TW/en).
+
+---
+
+## [2.0.64] - 2026-10-11
+
+### 修复：连接电台热点后移动数据被「抢走」、APRS-IS 断线（#35）
+
+- 现象：手机连上 IC-705 等电台发出的 Wi-Fi 热点后，系统把这条**没有外网的**
+  Wi-Fi 当成默认上网通道，于是暂停移动数据 —— 可电台热点上不了 APRS-IS，
+  表现为「一连电台，APRS-IS 就掉线」。
+- 修法：Android 10+ 改为向系统申请一条**不含 INTERNET 能力**的本地 Wi-Fi 网络
+  （`WifiNetworkRequest` 思路），系统便不再为它让出默认路由，移动数据仍是上网
+  通道；同时把电台的 UDP 套接字**按这条 Wi-Fi 的 IPv4 绑定**，电台流量走 Wi-Fi、
+  APRS-IS 走移动数据，两条路各走各的。个别机型仍抢默认时，兜底把本进程绑到
+  有外网的网络上，保证 APRS-IS 可用。
+- 低版本（Android 7–9）没有这套语义，退回「从已连接网络里挑 Wi-Fi」，套接字绑定
+  仍然生效；电台设置页新增一条路由说明提示。
+
+---
+
+## [2.0.64] - 2026-10-11 (English)
+
+### Fix: mobile data hijacked after joining the radio hotspot, APRS-IS drops (#35)
+
+- Symptom: after the phone joins the Wi-Fi hotspot hosted by an IC-705 (or similar),
+  the system treats this **internet-less** Wi-Fi as the default route and pauses
+  mobile data — but the hotspot has no APRS-IS, so "connect the radio, APRS-IS drops".
+- Fix: on Android 10+ we now request a **non-INTERNET local Wi-Fi network** (the
+  `WifiNetworkRequest` idea), so the system no longer hands over the default route
+  and mobile data stays the internet path; the radio's UDP sockets are then **bound
+  to that Wi-Fi's IPv4**, sending radio traffic over Wi-Fi and APRS-IS over mobile
+  data. If a particular device still steals the default, we bind the process to an
+  internet-capable network as a fallback so APRS-IS keeps working.
+- Older Android (7–9) lacks this mechanism and falls back to picking the connected
+  Wi-Fi; socket binding still applies. The radio settings page now shows a routing hint.
+
+---
+
+## [2.0.63] - 2026-10-11
+
+### 新增：智能体改为「需授权」才能使用
+
+- 智能体不再对普通用户开放：签署「智能体使用告知」后，还需本机呼号在官网
+  **授权名单**（`assets/agent_allow.json`）内才能启用 —— 与远程封禁名单同一套
+  架构（从官网拉取、本地缓存、6 小时节流），方向相反：封禁名单「命中就拦」，
+  授权名单「命中才放」。
+- 未授权时会弹出授权页：下载并填写**承诺书**，发送到 mc081208@163.com，
+  审核通过后点「重新检查授权」即可启用；名单里的呼号可在呼号粒度上授权
+  （写裸呼号 = 授权该呼号及其所有 SSID）。
+- 授权名单拉不到时按「未授权」处理（与封禁名单的「失败放行」方向相反）：
+  锁没拿到钥匙就不开；但只要**曾经**拉到过名单，离线仍按缓存判定，授权用户
+  断网也能用。已随备份/旧版本开启的智能体，一旦确认未授权会被强制关闭。
+- 初始授权名单已加入 `BG7LZQ`。
+
+---
+
+## [2.0.63] - 2026-10-11 (English)
+
+### New: the Agent now requires authorization
+
+- The Agent is no longer open to ordinary users: after signing the agent notice,
+  this device's call sign must be on the official **authorization list**
+  (`assets/agent_allow.json`) to enable it — the same architecture as the remote
+  blocklist (pulled from the official site, cached locally, 6-hour throttle), but
+  reversed: the blocklist blocks on a hit, the allowlist allows only on a hit.
+- When unauthorized, an authorization page opens: download and fill in the
+  **letter of commitment**, send it to mc081208@163.com, and once approved tap
+  "Check authorization again". Entries grant at call-sign granularity (a bare
+  call sign covers it and all its SSIDs).
+- If the list cannot be fetched it counts as **unauthorized** (the opposite of the
+  blocklist's fail-open): no key, no unlock. But once a list has ever been fetched,
+  offline is judged from the cache, so authorized users keep working offline. An
+  Agent enabled via a backup or an older version is force-disabled once confirmed
+  unauthorized.
+- The initial authorization list includes `BG7LZQ`.
+
+---
+
+## [2.0.62] - 2026-10-11
+
+### 新增：智能体长期记忆与对话压缩
+
+- **长期记忆**：智能体会记住你的呼号、偏好、常用地点等持久信息，跨对话保留；
+  可用 `save_memory` / `list_memories` / `forget_memory` 增删，设置页新增「记忆」
+  标签页可查看与清空。换机备份会一并带上（不会「失忆」）。
+- **对话压缩**：历史变长时自动把旧对话折叠成摘要，长对话不再撑爆上下文；
+  设置页可手动压缩、可开关。
+
+### 新增：智能体联网能力（实验，默认关闭）
+
+- 新增 `http_request` 工具，可发起任意方法（GET / POST / PUT / PATCH / DELETE / HEAD）
+  的 HTTP 请求，用于「帮我调一下这个接口」这类需求。
+- 属**单独权限**，默认关闭；开启后每次请求仍会先弹确认，双重把关。
+
+### 修复：消息触发型任务不再静默失效
+
+- 此前「收到新消息时触发」的任务被错误地挂在**自动回复**开关上，默认关闭的
+  用户会遇到任务永不触发（`last_run` 一直为空）。现已解耦：消息任务只要智能体
+  开启且配置就绪即可运行，自动回复仍走各自开关。
+- 顺带修复冷启动竞态：消息比本地配置更早到达时，先等配置/任务读完再判断，
+  不再因「读到空列表」而漏跑。
+- 消息任务的 `last_run` 现在会正常更新，执行记录也会记下失败原因，便于排查。
+- 另修一处更隐蔽的失效：顶部气泡通知与消息任务**共用同一个回调槽**，外壳
+  重建（换布局/主题/语言）时会把消息任务的回调顶掉。现改为多监听者，两者
+  互不干扰。
+
+### 变更：封面彩蛋改为「点一下抖一下」
+
+- 关于页封面彩蛋由长按触发改为点击触发，每点一次抖动一次；连点 5 秒后翻面。
+
+### 其它
+
+- 智能体最小化气泡支持拖动，位置会记住（吸附到屏幕边缘）。
+- 天气开始变凉了 记得加点被子
+
+---
+
+## [2.0.62] - 2026-10-11 (English)
+
+### New: agent long-term memory & conversation compression
+
+- **Long-term memory**: the agent remembers durable facts (callsign, preferences,
+  favourite places) across conversations, managed via `save_memory` /
+  `list_memories` / `forget_memory` and a new Memory tab in settings. Carried over
+  in backups so it doesn't "lose its memory" on a new device.
+- **Conversation compression**: long histories are folded into a summary
+  automatically, with manual compress and on/off toggles in settings.
+
+### New: agent network access (experimental, off by default)
+
+- New `http_request` tool for any method (GET / POST / PUT / PATCH / DELETE / HEAD).
+- A separate permission, off by default; every request still asks for confirmation.
+
+### Fix: message-triggered tasks no longer fail silently
+
+- Message-triggered tasks were mistakenly gated behind the auto-reply switch, so
+  users with auto-reply off saw them never fire (`last_run` stayed null). Now
+  decoupled; auto-reply keeps its own gates.
+- Fixed a cold-start race where a message arriving before local config was loaded
+  caused tasks to be skipped.
+- `last_run` now updates for message tasks, and run history records failures.
+- Also fixed a subtler failure: the top message-bubble handler and the
+  message-task handler shared a single callback slot, so a shell rebuild
+  (layout/theme/locale) clobbered the task handler. Now multiple listeners
+  coexist.
+
+### Change: hero easter egg now tap instead of long-press
+
+- Tap the About hero to shake once per tap; repeated taps still flip it after 5s.
+
+### Other
+
+- The agent's minimized bubble is now draggable and remembers its position.
+- The weather is turning cold — remember to add a blanket.
+
+---
+
+## [2.0.61] - 2026-10-11
+
+### 其它
+
+- 优化了一些功能。
+
+---
+
+## [2.0.61] - 2026-10-11 (English)
+
+### Other
+
+- Optimized some features.
+
+---
+
+## [2.0.60] - 2026-10-11
+
+### 新增：智能体工具路线图补全（工具 25 → 44）
+
+按能力审计路线图把缺口一次性补上，智能体现在能读、能改的更多了：
+
+- **群运维**：`list_groups` 带出成员（呼号、状态、是否被屏蔽）；
+  `update_group`（改名 / 加人 / 踢人）、`join_group`、`leave_group`、
+  `dismiss_group`；
+- **消息**：`read_messages` 支持关键词与时间段过滤（`query` / `since` /
+  `until`），并如实报告是否标记已读；新增 `broadcast_message`，一次发给多个呼号；
+- **任务**：`update_task`（改内容 / 触发方式 / 间隔 / 绝对时刻 `run_at`）、
+  `list_task_runs`、`clear_task_runs`，任务执行记录落盘；
+- **台站与数据**：`list_contacts`、`set_favorite`、`set_station_ignored`、
+  `get_station_packets`（原始帧 + 转发路径）、`get_track`、
+  `export_track_gpx`、`distance_between`；
+- **传感器**：`get_sensors`（心率 / 步数 / 电量 / 速度 / 航向 / 里程，
+  并带「多久前」）；`set_my_position` / `clear_my_position`（模拟定位）、
+  `set_status_text`。
+
+### 变更：读消息不再「顺手」清未读
+
+`read_messages` 只在**完整读完某个会话**时才顺带标记已读；带关键词或时间过滤时
+只返回结果，不再误清未读小红点。
+
+### 其他
+
+- `broadcast_message` 纳入「允许发送」权限闸门。
+- 系统提示补全新工具的说明与权限边界。
+- 版本号提升至 2.0.60。
+
+---
+
+## [2.0.60] - 2026-10-11 (English)
+
+### New: the agent tooling roadmap is filled in (25 → 44 tools)
+
+The capability-audit gaps are closed in one pass — the agent can now read and
+change much more:
+
+- **Group ops**: `list_groups` now returns members (call sign, status, whether
+  blocked); `update_group` (rename / add / remove), `join_group`, `leave_group`,
+  `dismiss_group`;
+- **Messages**: `read_messages` supports keyword and time filters (`query` /
+  `since` / `until`) and honestly reports whether it marked read; new
+  `broadcast_message` sends one message to several call signs;
+- **Tasks**: `update_task` (prompt / trigger / interval / absolute `run_at`),
+  `list_task_runs`, `clear_task_runs`, with run history persisted;
+- **Stations & data**: `list_contacts`, `set_favorite`, `set_station_ignored`,
+  `get_station_packets` (raw frames + digipeater path), `get_track`,
+  `export_track_gpx`, `distance_between`;
+- **Sensors**: `get_sensors` (heart rate / steps / battery / speed / course /
+  mileage, with "how long ago"); `set_my_position` / `clear_my_position`
+  (simulated position), `set_status_text`.
+
+### Changed: reading messages no longer clears unread by accident
+
+`read_messages` only marks a conversation read when the **whole conversation** is
+read; with a keyword or time filter it just returns results and no longer clears
+the unread badge.
+
+### Other
+
+- `broadcast_message` is now gated by the "allow sending" permission.
+- The system prompt documents the new tools and their permission boundaries.
+- Version bumped to 2.0.60.
+
+---
+
+## [2.0.59] - 2026-10-11
+
+### 新增：智能体可自行建群、群发与回复
+
+- `create_group`：按名称与成员呼号建群（群主自动加入，其余待确认）；
+- `send_group_message`：向指定群发消息；
+- `reply_message`：回复某会话的最后一位发信人；
+- `nearby_stations`：按当前位置列出附近台站；
+- `set_task_enabled`：暂停 / 恢复定时任务。
+
+除只读的 `nearby_stations` 外，以上都属敏感操作：需「允许改设置 / 允许发送」
+权限，并在聊天框内联确认；工具名一律经本地化标签显示，不再出现下划线标识符。
+
+### 变更：取消「允许定时任务」总开关
+
+- 移除定时任务权限开关及其文案。任务只是「到点自动跑一句指令」，真正能不能
+  做仍由发送 / 改设置权限与确认决定，没有理由再单独设一道卡。
+- `create_task` 间隔校验放宽：循环任务最短 1 分钟（原为 5 分钟）。
+- 修正安全隐患：`reply_message` 此前绕过了「允许发送」闸门，现与 `send_*`
+  一并受其约束。
+
+### 优化：触发点与提示词
+
+- 系统提示词补充建群 / 群发 / 回复 / 附近台站等新能力与用法。
+- 收到新消息触发自动回复时，允许智能体调用只读工具查证事实，再输出**单条**
+  回复（不会在后台执行发送或改动设置的写操作）。
+
+### 其他
+
+- 版本号提升至 2.0.59。
+
+---
+
+## [2.0.59] - 2026-10-11 (English)
+
+### New: the agent can create groups, send to groups and reply
+
+- `create_group`: create a group from a name and member call signs (the owner
+  joins automatically, the rest are pending);
+- `send_group_message`: send a message to a specific group;
+- `reply_message`: reply to the sender of the last message in a conversation;
+- `nearby_stations`: list stations near the current position;
+- `set_task_enabled`: pause / resume a scheduled task.
+
+Except for the read-only `nearby_stations`, these are sensitive: they require the
+"allow settings" / "allow sending" permission and an inline confirmation in the
+chat box, and their names are shown through localized labels — no raw underscore
+identifiers.
+
+### Changed: the "allow scheduled tasks" master switch is gone
+
+- Removed the scheduled-task permission switch and its strings. A task is just
+  "run one instruction later"; whether it is allowed still follows the
+  sending / settings permissions and confirmation, so a separate gate was
+  pointless.
+- `create_task` interval validation relaxed: repeating tasks may be as short as
+  1 minute (was 5).
+- Security fix: `reply_message` used to bypass the "allow sending" gate; it is now
+  gated together with `send_*`.
+
+### Improved: triggers and prompt
+
+- The system prompt now documents the new group / reply / nearby-station abilities.
+- When an incoming message triggers an auto reply, the agent may call read-only
+  tools for facts, then output a **single** reply (no background writes).
+
+### Other
+
+- Version bumped to 2.0.59.
+
+---
+
+## [2.0.58] - 2026-10-11
+
+### 新增：智能体可以自己连接服务器 / 建立电台连接
+
+智能体新增一组连接工具：`set_connection_server`（改 APRS-IS 服务器地址与端口）、
+`set_connection_source`（启用/停用某条链路：APRS-IS / TNC / 音频 / PKWDWPL）、
+`connect`（按当前启用来源拉起连接）与 `disconnect`（断开）。现在可以直接对智能体说
+「连上服务器」「断开电台」，它会先读状态、按需改配置，再发起连接。为安全起见：
+
+- 这些操作和其他改设置的工具有副作用的操作一样，执行前会在聊天框内联弹出确认条；
+- 未签署「数据与网络使用告知」时 `connect` 会被拒绝，并提示你先在应用里手动同意；
+- 服务器地址只使用你明确给出的值，智能体不会自行编造或推荐任何服务器。
+
+`get_app_state` 也新增了 `connections` 字段（连接状态、当前服务器、各来源开关、
+是否已签署告知），方便智能体判断。
+
+### 修复：智能体页面聊天消息下方的「下划线」
+
+聊天里的工具气泡、确认条与「始终允许」列表此前直接显示 `send_beacon_now` 这类
+**带下划线的原始标识符**；同时在窄屏或长译文下，确认条/清空条那一排按钮会横向溢出，
+画出 Flutter 的**黄黑条纹溢出报错标志**（就是那堆「下划线」）。现在：
+
+- 工具名统一走本地化标签（6 种语言），不再把下划线标识符怼到用户脸上；
+- 确认条 / 清空条的按钮改为 `Wrap` 自动换行，杜绝溢出条纹。
+
+### 其他
+
+- 版本号提升至 2.0.58。
+
+---
+
+## [2.0.58] - 2026-10-11 (English)
+
+### New: the agent can connect to the server / establish a radio connection itself
+
+The agent gained a set of connection tools: `set_connection_server` (change the
+APRS-IS server host/port), `set_connection_source` (enable/disable a link:
+APRS-IS / TNC / audio / PKWDWPL), `connect` (bring up the currently enabled
+sources) and `disconnect` (tear the link down). You can now just tell the agent
+"connect to the server" or "disconnect the radio" and it will read state, adjust
+config as needed, then connect. For safety:
+
+- Like other mutating tools, these require an inline confirmation in the chat
+  box before they run;
+- `connect` is refused if the data & network usage notice has not been accepted,
+  and the agent will ask you to accept it in the app first;
+- The agent only uses a server address you explicitly gave it -- it will not
+  invent or recommend any server.
+
+`get_app_state` also gained a `connections` field (link status, current server,
+per-source switches, whether the notice is accepted) to help the agent decide.
+
+### Fix: the "underlines" under agent chat messages
+
+Tool bubbles, the confirmation bar and the "always allow" list displayed raw
+**underscore identifiers** such as `send_beacon_now`; and on narrow screens or
+with long translations the confirm/clear button rows overflowed horizontally,
+painting Flutter's **yellow-black striped overflow error marker** (the "piles of
+underlines"). Now:
+
+- Tool names go through localized labels (six languages) instead of raw
+  underscore identifiers;
+- The confirm / clear button rows use `Wrap` so they wrap instead of overflowing.
+
+### Other
+
+- Version bumped to 2.0.58.
+
+---
+
+## [2.0.57] - 2026-10-10
+
+### 新增实验功能：内置智能体（自带 OpenAI 兼容 API Key）
+
+「设置 → 实验功能」新增**智能体模式**。开启后屏幕上出现一个悬浮聊天框，填入自己的
+OpenAI 兼容 API Key（支持 OpenAI / DeepSeek / Moonshot / 智谱 GLM / 通义千问 /
+Ollama / LM Studio 等预设，也可手填 baseUrl 与模型名），即可用自然语言让智能体
+**读取并修改你的设置**、查台站、切页签等。带副作用的操作执行前会在聊天框内联弹出
+确认条，由你决定是否执行；可分别限制「允许发信」与「允许改设置」。
+
+### 修复：WLAN 电台页面部分文案未国际化
+
+IC-705 / IC-9700 / IC-7610 / IC-905 局域网直连页面里，**链路阶段**（连接中 /
+接收中 / 重连中……）、**型号描述**、CI-V 与配网指引等文案此前是写死的中文，
+切到英 / 日 / 西 / 印尼语时仍是中文。现已全部接入本地化（6 种语言齐备）。
+
+### 修复：更新页顶栏在暗色模式下仍是白条
+
+`check_update` 页顶栏用了 `surfaceTint(Colors.white)` —— 材质关闭时它原样返回
+白色常量，暗色下顶栏始终是一条白板。改为走主题 token `C.surfaceFillStrong`，
+随深浅色模式切换。同时给 `tool/check_dark_mode.py` 增加两条判据（写死的常量底色、
+`surfaceTint(常量)`），钉住这条不变量。
+
+---
+
+## [2.0.57] - 2026-10-10 (English)
+
+### New experimental feature: built-in agent (bring your own OpenAI-compatible API key)
+
+"Settings → Experimental Features" now has an **Agent mode**. Turn it on and a
+floating chat box appears on screen. Enter your own OpenAI-compatible API key
+(presets for OpenAI / DeepSeek / Moonshot / Zhipu GLM / Qwen / Ollama / LM Studio,
+or type a custom baseUrl and model) and you can ask the agent in natural language
+to **read and change your settings**, look up stations, switch tabs, and more.
+Any action with side effects shows an inline confirmation bar in the chat box
+before it runs; "allow sending" and "allow settings changes" can be limited
+separately.
+
+### Fix: some WLAN radio page text was not localized
+
+On the IC-705 / IC-9700 / IC-7610 / IC-905 LAN direct page, the **link phase**
+(connecting / receiving / reconnecting...), the **model descriptions**, the CI-V
+section and the setup guide were hard-coded Chinese, so they stayed Chinese even
+when the UI was switched to English / Japanese / Spanish / Indonesian. All of
+them are now localized (six languages).
+
+### Fix: the update page's app bar stayed a white bar in dark mode
+
+The `check_update` page app bar used `surfaceTint(Colors.white)` -- when the
+material is disabled `surfaceTint` returns the constant as-is, so the bar stayed
+a white slab in dark mode. It now uses the theme token `C.surfaceFillStrong` and
+follows light/dark mode. Two new invariants were added to
+`tool/check_dark_mode.py` (hard-coded literal fills, `surfaceTint(constant)`) to
+pin this down.
+
+---
+
+## [2.0.56] - 2026-10-10
+
+### 修复暗色模式：更新页与聊天 / 台站等页面的「白板」弹窗
+
+**问题**：切到暗色模式后，更新页的下载 / 安装确认弹窗、安装权限弹窗、
+「全部更新日志」底部面板，以及聊天的「新建会话 / 新建群组 / 群管理 / 邀请成员 /
+退出群组」等弹窗、荣誉墙与早期成员卡片，还是一块**刺眼的白板**。
+
+**根因**：这些表面用的是写死的 `Colors.white`（Flutter 编译期常量），而本应用的
+暗色模式是**运行时换调色板** —— 只有走 `C.white` 的地方才会跟着变深色。
+当初几处图省事写了 `Colors.white`，浅色模式下完全正常，所以一直没被发现。
+
+**修复**：把这些弹窗 / 底部面板 / 卡片的表面色统一改回 `C.white`，随主题走
+（即随深浅色模式自动切换）。同时新增一条静态检查（`tool/check_dark_mode.py`）钉住
+这条不变量，防止以后再顺手写回 `Colors.white` —— 这类问题本机跑 analyze 查不出来，
+只有切到深色模式肉眼才能发现。
+
+---
+
+## [2.0.56] - 2026-10-10 (English)
+
+### Dark-mode fix: "white slab" dialogs on the update page and chat / station pages
+
+**Problem**: after switching to dark mode, the update page's download / install
+confirmation dialog, the install-permission dialog, the "all changelogs" bottom
+sheet, plus chat dialogs (new conversation / new group / group management /
+invite members / leave group), the honor wall and early-member cards still showed
+as a **glaring white slab**.
+
+**Root cause**: these surfaces used a hard-coded `Colors.white` (a Flutter
+compile-time constant), while this app's dark mode works by **swapping the palette
+at runtime** -- only surfaces using `C.white` follow the theme. A few places took
+the shortcut of `Colors.white`; they look perfect in light mode, so the bug went
+unnoticed.
+
+**Fix**: these dialog / bottom-sheet / card surface colors now all use `C.white`,
+so they follow the theme (and thus switch automatically with light/dark mode). A
+new static check (`tool/check_dark_mode.py`) pins this invariant down so nobody
+writes `Colors.white` back by habit -- analyze cannot catch this locally; only
+switching to dark mode reveals it to the eye.
+
+---
+
+## [2.0.55] - 2026-10-10
+
+### 新增香港节点：阿里云 OSS（香港）更新通道
+
+**新增一条更新渠道**：更新页多出「Aliyun OSS（香港）」，与「Aliyun OSS（广州）」
+并列。两者都是团队承担的 CDN 分发节点，区别只是**所在的阿里云区域**：广州节点
+国内可达性好，香港节点在**跨境 / 境外网络**下通常更稳。两条渠道费用都由开发团队
+承担，因此都会显示「请少量使用 🙏」的提示，按你所在网络挑一条即可。
+
+**发版流水线现在同时推两个节点**：每个版本的安装包与更新索引会**同时**上传到
+广州（`aprslocus`）与香港（`aprslocushk`）两个 bucket，任一边读取不到都会让发布
+失败并告警。香港节点走自定义域 `aprslocushk.oss.theez.top`（公开 CA，无需证书
+钉扎），客户端读取的就是这个地址。
+
+---
+
+## [2.0.55] - 2026-10-10 (English)
+
+### New Hong Kong node: "Aliyun OSS (Hong Kong)" update channel
+
+**A new update channel** appears on the update page: "Aliyun OSS (Hong Kong)",
+alongside "Aliyun OSS (Guangzhou)". Both are team-funded CDN distribution nodes;
+the only difference is the **Aliyun region** -- Guangzhou is fast inside mainland
+China, while Hong Kong tends to be more reliable over **cross-border / overseas**
+networks. Both are paid for by the dev team, so both show the "please use
+sparingly 🙏" hint -- just pick whichever suits your network.
+
+**The release pipeline now publishes to both nodes**: every version's installers
+and update index are uploaded to both the Guangzhou (`aprslocus`) and Hong Kong
+(`aprslocushk`) buckets, and the release fails loudly if either node cannot be
+read back. The Hong Kong node is served over the custom domain
+`aprslocushk.oss.theez.top` (public CA, no certificate pinning needed), which is
+exactly what the client reads.
+
+---
+
+## [2.0.54] - 2026-10-10
+
+### 地图交互与卫星底图可读性
+
+**改地图交互**：单击台站标记不再把地图动画平移到该台站并放大（fly-to），
+而是**选中标记、显示呼号标签 / 信息窗** —— 想连着看几个相邻台站时，地图
+不再跳来跳去。台站详情仍可**双击标记**或点信息窗进入；长按仍呼出快速消息面板。
+
+**提升卫星影像上的可读性**：卫星底图偏暗、纹理杂，普通彩绘符号和白底小标签
+容易「糊」进背景。现在：
+
+- **符号加可读性光晕**：给台站图标描一圈柔和深色边，压在明亮航拍纹理上也能分辨；
+- **呼号标签反色**：卫星图上，主地图与策略地图的呼号小标签一律改为「深底白字」，
+  街道图保持「白底 + 台站色字」不变。
+
+---
+
+## [2.0.54] - 2026-10-10 (English)
+
+### Map interaction & satellite-basemap readability
+
+**Reworked map interaction**: tapping a station marker no longer animates the map
+to fly to that station and zoom in -- it now **selects the marker and shows its
+label / info popup**, so the map stays put while you inspect several nearby
+stations in a row. Station details remain on **double-tap** (or the info popup);
+long-press still opens the quick-message panel.
+
+**Better readability on satellite imagery**: satellite basemaps are darker and
+busier, so plain colored symbols and white-on-light labels used to blur into the
+background. Now:
+
+- **Symbol halo**: station icons get a soft dark outline so they stay legible over
+  bright aerial textures;
+- **Inverted callsign chips**: on satellite basemaps, the callsign chips on both
+  the main map and the strategy map switch to **dark background with white text**;
+  street basemaps keep the white-on-station-color chips unchanged.
+
+---
+
+## [2.0.53] - 2026-10-10
+
+### 修复：阿里云 OSS 渠道下载 `.apk` / `.ipa` 返回 400
+
+**现象**：切到「阿里云 OSS」渠道，更新页能查到新版本，点「下载」却失败（HTTP 400）。
+
+**原因**：阿里云 OSS 对**默认域名**（`*.aliyuncs.com`）下的 `.apk` / `.ipa`
+下载一律返回 `400 ApkDownloadForbidden`（防盗版 / 防滥用策略）。`.exe` 不受影响；
+官方建议改用 CNAME 自定义域名，但那要备案 + 证书。
+
+**修复**：上传时给 `.apk` / `.ipa` 对象加一个**不被拦的后缀**（`.bin`），索引里的
+下载地址指向 `xxx.apk.bin`，而资产名 `name` 仍是 `xxx.apk`。因为客户端靠 `name`
+认架构、显示文件名（`lib/update_packages.dart`），靠 url 下载，两者互不影响 ——
+所以**客户端无需改动**。上传目标名与索引 url 由 `tool/oss_index.py` 的同一套规则
+给出（新增 `--delivery-name`）。发版流水线新增「真去下每一个资产」的自检：再遇到
+这类 400 会**当场失败**，而不是留给用户。
+
+---
+
+## [2.0.53] - 2026-10-10 (English)
+
+### Fixed: Aliyun OSS channel returned 400 when downloading `.apk` / `.ipa`
+
+**Symptom**: on the "Aliyun OSS" channel, the update page finds a new version but
+"Download" fails with HTTP 400.
+
+**Cause**: Aliyun OSS rejects public downloads of `.apk` / `.ipa` on the **default
+endpoint** (`*.aliyuncs.com`) with `400 ApkDownloadForbidden` (anti-piracy / anti-abuse).
+`.exe` is unaffected; the documented remedy is a CNAME custom domain, which needs ICP
+filing and a certificate.
+
+**Fix**: upload `.apk` / `.ipa` objects under a **non-blocked suffix** (`.bin`) and point
+the index's download URL at `xxx.apk.bin`, while the asset `name` stays `xxx.apk`. Since
+the client selects by `name` and downloads by URL (`lib/update_packages.dart`), it needs
+**no change**. The upload key and the index URL are produced by the same rule in
+`tool/oss_index.py` (new `--delivery-name`). The release pipeline now really downloads
+every asset in a self-check, so this class of 400 fails the build instead of reaching users.
+
+---
+
+## [2.0.52] - 2026-10-10
+
+### 新增：阿里云 OSS 更新通道（可选）
+
+**背景**
+
+国内直连 GitHub 取更新包常失败。在原有 GitHub / GitCode / Qingling 之外，
+新增第四条更新渠道 **Aliyun OSS**：安装包放在阿里云对象存储（OSS），客户端从
+`aprslocus.oss-cn-guangzhou.aliyuncs.com` 走**阿里云 CDN** 取包，国内可达性好。
+该通道**默认不启用**，需在更新页手动切换。
+
+**费用提示**
+
+该通道的流量费由**开发团队**承担，所以切到该渠道时，更新页顶部会常驻一条
+提示，请用户**少量使用** 🙏。其它渠道不受影响。
+
+**改动**
+
+- 渠道登记：`AppState.updateChannelBases` / `updateChannelLabels` 增加
+  `aliyun`（`https://aprslocus.oss-cn-guangzhou.aliyuncs.com`）；
+- 更新页的渠道选择器、渠道图标、加载状态文案一并支持（`connectingAliyun`）；
+- 该渠道用公开 CA 证书，**无需证书钉扎**（区别于 Qingling 的自签证书）；
+- 发版流水线新增 `publish-oss` job：把 `.exe` / `.apk` / `.ipa` 与一份
+  **GitHub 同格式的 releases 索引**一起传到 OSS（索引由 `tool/oss_index.py`
+  生成，会合并线上旧索引以保留历史版本，否则旧版用户会找不到升级路径）；
+- 凭据只从 GitHub Secrets 读取（`OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`），
+  **绝不写进仓库**；新增 `tool/check_oss_channel.py` 在 CI 里钉住接线，并守卫
+  「访问密钥明文不得进仓库」。
+
+**启用说明（维护者）**
+
+1. 仓库 Settings → Secrets and variables → Actions 添加上述两个 Secret；
+2. 把 OSS bucket 的读权限设为**公共读**（否则客户端与流水线自检都会 403）。
+未配置 Secret 时 `publish-oss` 会告警并跳过（该渠道为可选）；它失败**不影响**
+GitHub 的正式 Release。
+
+---
+
+## [2.0.52] - 2026-10-10 (English)
+
+### Added: Aliyun OSS update channel (optional)
+
+**Background**
+
+Fetching updates straight from GitHub often fails from mainland China. Alongside the
+existing GitHub / GitCode / Qingling channels, a fourth one -- **Aliyun OSS** -- serves
+the installers from Alibaba Cloud OSS through the **Aliyun CDN**
+(`aprslocus.oss-cn-guangzhou.aliyuncs.com`). It is **off by default** and must be picked
+manually on the update page.
+
+**Cost notice**
+
+Traffic on this channel is **paid for by the development team**, so a persistent banner
+on the update page asks users to use it **sparingly** 🙏. Other channels are unaffected.
+
+**Changes**
+
+- Registered the channel in `AppState.updateChannelBases` / `updateChannelLabels`
+  (`aliyun`);
+- The update page supports it in the channel picker, the channel icon and the loading
+  label (`connectingAliyun`);
+- It uses a public CA, so **no certificate pinning** is needed (unlike Qingling);
+- A new `publish-oss` job in the release workflow uploads the `.exe` / `.apk` / `.ipa`
+  plus a **GitHub-format releases index** to OSS (the index is built by
+  `tool/oss_index.py`, which merges the live index to keep older versions reachable);
+- Credentials come only from GitHub Secrets (`OSS_ACCESS_KEY_ID` /
+  `OSS_ACCESS_KEY_SECRET`) and are **never committed**; `tool/check_oss_channel.py`
+  pins the wiring in CI and guards against plaintext keys entering the repo.
+
+**Enabling it (maintainers)**
+
+1. Add the two Secrets under Settings -> Secrets and variables -> Actions;
+2. Make the OSS bucket public-read (otherwise clients and the pipeline self-check get 403).
+If the Secrets are absent, `publish-oss` warns and skips (the channel is optional) and
+never blocks the official GitHub Release.
+
+---
+
+## [2.0.51] - 2026-10-10
+
+### 新增：Qingling（清零）更新通道（可选，默认仍为 GitHub）
+
+**背景**
+
+国内直连 GitHub 取更新包常失败。新增第四条更新渠道 **Qingling**，指向自建
+镜像服务：由镜像服务器先取回发行版，再以与 GitHub **同格式**的接口提供，
+客户端**不直连 GitHub**。
+
+**改动**
+
+- 渠道地址集中到 `AppState.updateChannelBases` / `updateBaseFor()`：原先
+  「更新页」与「启动提示」各写一份相同的三元表达式，新增渠道时漏改一处不会
+  编译失败，只会表现成「更新页能查到、启动提示查不到」——现在共用一份；
+- 切换 UI 增加 Qingling 选项，图标与加载文案按渠道映射；
+- 清零通道走 **HTTPS 并内置自签证书（证书钉扎）**，且**只对交付服务器那一个
+  主机钉扎**（`SecurityContext(withTrustedRoots: false)`）：其余渠道仍是默认
+  信任链，否则 GitHub / GitCode 会全部握手失败。这样传输加密、中间人无法篡改，
+  同时不需要域名 / 备案 / 购买证书；证书有效期 10 年（换证书须同步发新版）；
+- 新增 l10n 键 `updateChannelQinglingHint`（6 语言）。
+
+### 修复：CI 测试流水线产物
+
+- **Windows**：测试版原先只打 Flutter 启动器（约 123 KB，缺
+  `flutter_windows.dll` 与 `data/`，下载后双击无反应）→ 改为与正式发版一致的
+  Inno Setup 单文件安装器，并加 `if-no-files-found: error` 防止静默空产物；
+- **iOS**：测试版产物名会丢掉 fork 标识 → 保留版本后缀，避免与上游正式版
+  文件名完全相同、无法区分。
+
+### 关于版本号
+
+v2.0.50（本提交的基线）**已经发布**，而这次带了新功能。按
+[`AGENT.md`](AGENT.md) 第一节「同一版本号不得改内容」与第三节「版本号由维护者
+在发版时递增」，此处将版本提到 **2.0.51**（贡献者原提交沿用 2.0.50、未递增，
+发版前补齐）。
+
+**测试**
+
+- `tool/check_*.py` 全部通过；`flutter analyze` / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.51] - 2026-10-10 (English)
+
+### Added: Qingling update channel (optional; GitHub remains the default)
+
+**Why**
+
+Fetching updates straight from GitHub often fails from mainland China. A fourth
+channel, **Qingling**, points at a self-hosted mirror that first pulls the
+release and then serves it through a **GitHub-format** API, so the client
+**never talks to GitHub directly**.
+
+**Changes**
+
+- Channel bases are now centralized in `AppState.updateChannelBases` /
+  `updateBaseFor()`: the update page and the launch prompt used to each carry
+  their own copy of the same ternary, and a missed edit would not fail to
+  compile -- it would only show up as "found on the update page, not on the
+  launch prompt". Both now share one source;
+- The switcher UI gains a Qingling option, with per-channel icons and loading
+  copy;
+- The Qingling channel uses **HTTPS with a bundled self-signed certificate
+  (pin)** and pins **only that one host** (`SecurityContext(withTrustedRoots:
+  false)`); every other channel keeps the default trust chain, otherwise GitHub
+  and GitCode would fail every handshake. Traffic is encrypted and
+  tamper-proof, with no domain, filing or purchased certificate needed; the
+  certificate is valid for 10 years (rotating it requires an app release);
+- New l10n key `updateChannelQinglingHint` (6 languages).
+
+### Fixed: CI test-pipeline artifacts
+
+- **Windows**: the test build shipped only the Flutter launcher (~123 KB,
+  missing `flutter_windows.dll` and `data/`, so it did nothing when opened) ->
+  now a single Inno Setup installer matching the release pipeline, plus
+  `if-no-files-found: error` so a silent empty artifact cannot pass;
+- **iOS**: the test artifact name dropped the fork suffix -> the suffix is kept
+  so it no longer collides with an upstream stable filename.
+
+### On the version number
+
+v2.0.50 (this commit's base) is **already released**, and this change adds a
+feature. Per `AGENT.md` section 1 ("the same version number must not carry
+different content") and section 3 ("the maintainer bumps the version at release
+time"), the version is raised to **2.0.51** (the contributor kept it at 2.0.50
+without bumping, which this fills in before release).
+
+**Testing**
+
+- `tool/check_*.py` all pass; `flutter analyze` / `flutter test` are re-verified
+  by CI.
+
+---
+
+## [2.0.50] - 2026-10-09
+
+### 修复：音频参数改了不保存（失焦即丢）
+
+**现象**
+
+在「音频设置」里改采样率 / 波特率 / 音调 / TX 前导延时 / **输出幅度**，
+改完若**直接点别处**（没按键盘的回车），返回再看，值又回到了旧的 ——
+像是「改了根本没保存」。IC-705 页的电台 IP / 端口 / 用户名 / 密码 /
+CI-V 地址 / TX 前导延时也是同样的问题。
+
+**原因**
+
+这一批输入框只挂了 `onEditingComplete`，而 Flutter 的 `onEditingComplete`
+**只在按键盘「完成/回车」时触发，失焦不触发** —— 偏偏「填完随手点一下别处」
+才是最常见的操作。这是本仓库在心率告警（issue #22-1）里已经修过的同一类
+缺陷，当时只修了心率那一处；音频设置页、IC-705 页、TNC 页的串口线速都还
+带着它，这次一并收拾干净。
+
+**改动**（`lib/audio_page.dart`、`lib/ic705_device_page.dart`、`lib/tnc_device_page.dart`）
+
+- 音频设置页的参数框全部改挂 **FocusNode 失焦提交**：整组输入框都不再持有
+  焦点时才落定一次（组内互相切换焦点不算，避免打断输入），回车仍可立即确认；
+- 输出幅度是纯发射参数，落定时**只重建调制器、不重启链路**，不打断正在
+  进行的接收；
+- IC-705 页的 6 个输入框、TNC 页的「串口线速」同样补上失焦提交；
+- 新增「只有值真的变了才 `applyParams()`」的判断，免得看一眼没改也把好好的
+  接收链路断开重连。
+
+**测试**
+
+- `tool/check_*.py` 全部通过；`flutter analyze` / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.50] - 2026-10-09 (English)
+
+### Fixed: audio settings not saved (lost on blur)
+
+**Symptom**
+
+In Audio settings, after changing the sample rate / baud / tones / TX delay /
+**output amplitude**, if you **tapped elsewhere** (instead of pressing Enter)
+the old value was still there when you came back — as if the change was never
+saved. The IC-705 page (radio IP / port / user / password / CI-V address /
+TX delay) had the same problem.
+
+**Cause**
+
+These fields only wired `onEditingComplete`, which Flutter fires **only on the
+keyboard's done/enter key, not on focus loss** — yet "fill it in, then tap
+somewhere else" is the most common interaction. The repo already fixed this same
+defect class for the heart-rate alarms (issue #22-1), but only there; the audio,
+IC-705 and TNC serial-baud fields still carried it. This release cleans them up.
+
+**Changes** (`lib/audio_page.dart`, `lib/ic705_device_page.dart`, `lib/tnc_device_page.dart`)
+
+- Audio-settings fields now commit via a **FocusNode blur** handler: they settle
+  once the whole group loses focus (moving focus within the group does not commit,
+  so typing is not interrupted); Enter still confirms immediately;
+- Output amplitude is TX-only, so its commit **rebuilds only the modulator
+  without restarting the link**, keeping receive uninterrupted;
+- The six IC-705 fields and the TNC serial-baud field got the same blur commit;
+- Added a "only apply when a value actually changed" check so merely viewing a
+  field no longer tears down a healthy receive link.
+
+**Testing**
+
+- `tool/check_*.py` all pass; `flutter analyze` / `flutter test` are re-verified by CI.
+
+---
+
+## [2.0.49] - 2026-10-09
+
+### 修复：声卡（音频）能收不能发 —— 找不到「输出幅度」这个旋钮
+
+**现象**
+
+用声卡 AFSK 接电台时**只能收、发出去对方解不出**（或电台根本不发射），
+而界面看起来一切正常。
+
+**排查（先排除协议层）**
+
+用仓库里那份**独立的 Python 参考实现**（非本应用代码）交叉验证：
+
+- 采样率无关：8000 / 22050 / 44100 / 48000 Hz 全部 2/2 帧解出；
+- 频偏鲁棒：±50 / ±100 / ±200 / ±300 Hz 全部 2/2 帧解出。
+
+即**波形与 AX.25 协议本身没有问题**，缺陷在「音频怎么送出去」这一段。
+顺着发送链路查，找到两个真实缺陷加一个接线前提：
+
+**缺陷 1：`output amplitude` 在界面上根本改不了**
+
+`AfskParams.amplitude`（默认 0.6）是决定**是否削顶**的增益，但音频设置页
+**没有任何输入框**能改它 —— 而两条告警（`audioTxLevelClip` /
+`audioTxLevelLow`）都写着「请调**输出幅度**」。用户被明确告知去调一个
+**不存在的旋钮**：削顶（谐波毁掉 FSK 频谱）或电平偏低（对端信噪比不够）
+时，现象正是「自检全过、对端解不出」，却无从下手。
+
+**改动**：发射卡新增「输出幅度（0.05~1.0）」输入框，改完立刻重建**调制器**
+（新增 `AudioLink.applyTxParams()`，只重建调制器、不重启链路，不打断正在
+进行的接收）。
+
+**缺陷 2：音频已连上、但不是发射来源**
+
+三条链路（APRS-IS / TNC / 音频）可**同时接收**，但**发射来源只有一个**；
+音频页此前没有任何地方体现「我这条是不是发射来源」，于是「连上了、在收包、
+一按发射没反应」时页面看着全是正常，实际消息全从别的链路走了。
+
+**改动**：采集卡新增「发射来源」一行；音频已连但非发射来源时，用橙色告警
+写明「当前会从「{来源}」发出，去设置 → 设备改成音频」。
+
+**前提 3：软件不会按电台的 PTT**
+
+音频链路只是「往声卡播一段 AFSK 音频」，**没有任何 CAT/串口 PTT 实现**。
+电台没配 **VOX 声控发射**、接线又不从数据口键控 PTT 时，电台**根本不会发射**。
+已在发射卡加显式提示。
+
+### 新增：数据包页标明来源
+
+`Packet` 增加 `source` 字段（`aprsis` / `tnc` / `audio` / `pkwdwpl` /
+`local`），数据包页的列表与原始视图都给每条报文加**来源徽标**。
+此前同一台站既可能来自 APRS-IS 也可能来自射频，排查「射频通不通 / 网关有
+没有转」时看不出这条到底从哪进来 —— 少了最关键的一条线索。
+
+### 荣誉：BG2HCB「清零」授予「播种」（sower）
+
+`docs/members.json` v61 往 `honors` 追加 `sower`（按惯例保留原主展示
+`kaishan`）；`lib/early_member.dart` 的离线兜底名单同步（`_primariesCache`
+无需改）。
+
+**测试**
+
+- 本地仅跑 `tool/check_*.py`，全部通过（含 l10n 同步 2417 键 × 6 语言、
+  官网 `check_site.py`、内嵌 JS）；
+- `flutter analyze` / `flutter test` / 双端构建由 CI 复核。
+
+> ⚠️ 说明：缺陷 1 / 2 由代码路径与静态检查推出，未在真实声卡硬件上复现
+> （开发环境无音频设备）。
+
+---
+
+## [2.0.49] - 2026-10-09 (English)
+
+### Fixed: sound-card (audio) RX works but TX is not decoded — the missing "output amplitude" knob
+
+**Symptom**
+
+With a sound-card AFSK link to a radio, you could **receive but not
+transmit** (the far end could not decode, or the radio never keyed at all),
+while the UI looked perfectly fine.
+
+**Investigation (ruling out the protocol layer first)**
+
+Cross-checked with the repo's **independent Python reference implementation**
+(not this app's code):
+
+- Sample-rate independent: 8000 / 22050 / 44100 / 48000 Hz all decode 2/2 frames;
+- Offset-tolerant: ±50 / ±100 / ±200 / ±300 Hz all decode 2/2 frames.
+
+So the **waveform and AX.25 protocol are sound**; the defect is in how the audio
+reaches the far end. Following the TX path turned up two real defects plus one
+wiring precondition:
+
+**Defect 1: `output amplitude` was not editable in the UI**
+
+`AfskParams.amplitude` (default 0.6) is the gain that decides clipping, yet the
+audio settings page had **no input** for it — while both warnings
+(`audioTxLevelClip` / `audioTxLevelLow`) tell you to adjust the **output
+amplitude**. Users were told to turn a knob that **did not exist**: whether the
+waveform clipped (harmonics destroying the FSK spectrum) or sat too low (not
+enough SNR at the far end), the symptom was exactly "self-test passes, peer can't
+decode", with no way to fix it.
+
+**Change**: the TX card gains an "Output amplitude (0.05–1.0)" field that takes
+effect immediately by rebuilding only the **modulator** (new
+`AudioLink.applyTxParams()` — no link restart, so an in-progress receive is not
+interrupted).
+
+**Defect 2: audio connected, but not the TX source**
+
+The three links (APRS-IS / TNC / audio) can **receive simultaneously**, but there
+is only **one TX source**; the audio page never showed whether it was the TX
+source, so "connected, receiving, but transmit does nothing" looked all-green
+while messages actually went out over another link.
+
+**Change**: the capture card gains a "TX source" row; when audio is up but is
+not the TX source, an orange warning states that traffic will go out over
+"{source}" and points to Settings → Devices.
+
+**Precondition 3: the app never keys the radio's PTT**
+
+The audio link only **plays AFSK audio** — there is **no CAT/serial PTT** at all.
+Unless the radio is set to **VOX**, or the cable keys PTT from the data port, the
+radio never transmits. An explicit hint was added to the TX card.
+
+### Added: packet source labels on the packets page
+
+`Packet` gained a `source` field (`aprsis` / `tnc` / `audio` / `pkwdwpl` /
+`local`), and the packets page now badges every frame (both list and raw views).
+Previously the same station could arrive via APRS-IS or via RF, and you could not
+tell which when checking "is RF working / did the gateway relay it?" — the single
+most valuable clue was missing.
+
+### Honor: "Sower" (播种) granted to BG2HCB "清零"
+
+`docs/members.json` v61 appends `sower` to `honors` (keeping the existing primary
+`kaishan`, per convention); the offline fallback list in `lib/early_member.dart`
+is synced (`_primariesCache` needs no change).
+
+**Testing**
+
+- Locally only `tool/check_*.py` were run and all pass (including l10n sync with
+  2417 keys × 6 locales, the site `check_site.py`, and embedded JS);
+- `flutter analyze` / `flutter test` and both platform builds are re-verified by CI.
+
+> ⚠️ Note: defects 1 / 2 were derived from the code path and static checks, not
+> reproduced on real sound-card hardware (the dev environment has no audio device).
+
+---
+
+## [2.0.48] - 2026-10-09
+
+### 修复：设置页箭头没贴右
+
+**现象**
+
+设置页各项右侧的箭头没有对齐到右边缘 —— 标题越短，箭头越往左飘；
+说明文字（如「用户反馈」的说明）也跟着没顶到箭头前。
+
+**原因**
+
+`SettingsEntryTile`（以及旧的 `_noticeEntry` / 分类卡 `_catCard`）里，标题用的是
+**松份额** `Flexible`：松份额只在需要时占用宽度，文字较短时**会留下剩余空间**，
+箭头于是不再贴右。这与「标题:说明 = 2:3」的份额设计无关 —— 是松 / 紧份额的问题。
+
+**改动**（`lib/settings_widgets.dart`、`lib/settings_page.dart`）
+
+- `SettingsEntryTile` 与 `_noticeEntry` 的标题改为**紧份额** `Expanded`
+  （说明列本就是 `Expanded`）。两列都把剩余宽度吃干净 → 箭头**恒定贴右**，
+  且说明列起点固定，纵向看成一列。
+- 分类卡 `_catCard` 说明本就 `Expanded`，箭头贴右，无需改动。
+
+**测试**
+
+- `tool/check_*.py` 全部通过；`flutter analyze` / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.48] - 2026-10-09 (English)
+
+### Fixed: settings chevrons not pinned to the right
+
+**Symptom**
+
+The chevron on each settings row was not aligned to the right edge — the shorter
+the title, the further left the chevron drifted.
+
+**Cause**
+
+In `SettingsEntryTile` (and the old `_noticeEntry` / category card), the title
+used a **loose** `Flexible`: a loose fit only takes the width it needs and leaves
+free space when the text is short, so the chevron no longer sat at the right edge.
+It was a loose-vs-tight fit issue, not the 2:3 share.
+
+**Changes** (`lib/settings_widgets.dart`, `lib/settings_page.dart`)
+
+- The title in `SettingsEntryTile` and `_noticeEntry` is now a **tight** `Expanded`
+  (the description column already was). Both columns consume all remaining width,
+  so the chevron is **pinned to the right** and the description column starts at a
+  fixed x. The category card already used `Expanded`.
+
+**Testing**
+
+- `tool/check_*.py` all pass; `flutter analyze` / `flutter test` are re-verified by CI.
+
+---
+
+## [2.0.47] - 2026-10-09
+
+### 改进：点空白收起键盘 / 设置页整理对齐 / 反馈入口
+
+**需求**
+
+- 点了输入框后**取消不了聚焦**；应当**点聊天框以外**就取消聚焦（收起键盘）。
+- 设置页有点乱，**图标等没对齐**，请整理。
+- 设置页**加一个反馈链接**，路由到仓库的 **ISSUE**。
+
+**改动**
+
+- **点空白取消聚焦**（`lib/messages_page.dart`）：消息页根节点套一层
+  `GestureDetector`（`HitTestBehavior.opaque`），点输入框以外任意处即
+  `_inputFocus.unfocus()`；落在按钮/链接/可点气泡上的点击仍由子控件先消费。
+  失焦同时把主操作键从「发送」切回「＋」。
+- **设置页对齐整理**（`lib/settings_page.dart`、`lib/settings_widgets.dart`）：
+  主页十个入口原先各写各的，图标底座 32/40、图标 17/20、箭头 18/20、
+  标题/说明排布两种（`Text+Expanded` 与 `Flexible(2)+Expanded(3)`）混用 ——
+  正是「没对齐」的来源。抽出统一的 `SettingsEntryTile`：**底座 32、图标 17、
+  箭头 18**，标题/说明按 **2:3** 固定份额，所有入口说明左端对齐；分类卡
+  `_catCard` 一并归一（40→32、20→17、圆角 12→8）；`SettingsNavRow` 图标底座
+  30→32、图标 16→17，子页入口同grid对齐。
+- **反馈入口**（`lib/settings_page.dart`）：设置页「关于」下方新增「**用户反馈**」
+  入口，点击用系统浏览器打开 `github.com/dariondong/APRSLocus/issues`；
+  新增 l10n 键 `feedbackEntryDesc` / `openLinkFailed`（六语言）。
+
+**测试**
+
+- `tool/check_*.py`（23 项）与 `check_l10n_sync.py` 全部通过；`flutter analyze`
+  / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.47] - 2026-10-09 (English)
+
+### Improved: tap-outside to dismiss keyboard / tidier, aligned settings / feedback entry
+
+**Request**
+
+- Tapping into the compose box left it stuck focused; tapping **anywhere outside**
+  it should clear focus (and dismiss the keyboard).
+- The settings page looked cluttered — **icons and rows were not aligned**.
+- Add a **feedback link** in settings that routes to the repo **issues**.
+
+**Changes**
+
+- **Tap-outside to unfocus** (`lib/messages_page.dart`): the page root now wraps
+  its content in a `GestureDetector` (`HitTestBehavior.opaque`) so a tap anywhere
+  outside the field calls `_inputFocus.unfocus()`; taps on buttons/links/tappable
+  bubbles are still consumed by the child first. Losing focus also returns the main
+  key from "send" back to "+".
+- **Settings alignment pass** (`lib/settings_page.dart`, `lib/settings_widgets.dart`):
+  the ~10 home entries each hand-rolled their row with icon tiles at 32/40, icons at
+  17/20, chevrons at 18/20, and two different title/description layouts
+  (`Text+Expanded` vs `Flexible(2)+Expanded(3)`) — the source of the "misaligned"
+  look. Extracted a shared `SettingsEntryTile`: **tile 32, icon 17, chevron 18**,
+  title/description at a fixed **2:3** share so every row's description starts at
+  the same x. The category card `_catCard` is normalized to the same metrics
+  (40→32, 20→17, radius 12→8), and `SettingsNavRow` icons go 30→32 / 16→17.
+- **Feedback entry** (`lib/settings_page.dart`): a "**Feedback**" entry below
+  "About" opens `github.com/dariondong/APRSLocus/issues` in the system browser;
+  new l10n keys `feedbackEntryDesc` / `openLinkFailed` (six languages).
+
+**Testing**
+
+- `tool/check_*.py` (23 checks) and `check_l10n_sync.py` all pass; `flutter analyze`
+  / `flutter test` are re-verified by CI.
+
+---
+
+## [2.0.46] - 2026-10-09
+
+### 改进：位置点小面板 / 输入键随输入切换 / 译发移到外面
+
+**需求**
+
+- **自由选点**点按后，先弹一个小面板，让用户选「**在地图上查看**」或「**导航**」。
+- 消息输入框默认显示「**＋**」，**输入框激活（聚焦）时**变成「**发送**」符号。
+- **翻译按钮**不要收在「＋」里面，**提到外面**，方便一键按到。
+
+**改动**
+
+- **位置点小面板**（`lib/messages_page.dart`）：自由选点气泡点按后弹出底部面板，
+  显示坐标与两个动作：**在地图上查看**（复用 [AppState.focusOnMap]）与
+  **导航**（`geo:` → 浏览器 OSM 兜底）。分享台站仍是直接打开台站面板。
+- **输入栏主操作键**：默认是「**＋**」（打开位置点菜单）；输入框**聚焦**或有
+  文字时变为蓝色「**发送**」键。发送后输入清空且保持焦点，继续输入。
+- **「译发」前置**：从「＋」浮出菜单移到输入栏右侧**常驻**（单聊可见，
+  群聊不显示）；「＋」菜单只保留「发送位置点」。
+
+**测试**
+
+- `tool/check_*.py`（23 项）与 `check_l10n_sync.py` 全部通过；`flutter analyze`
+  / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.46] - 2026-10-09 (English)
+
+### Improved: location action sheet / input key follows the field / translate moved out
+
+**Request**
+
+- Tapping a **free-picked** point should first open a small sheet to choose
+  "**view on map**" or "**navigate**".
+- The compose box should show "**+**" by default and switch to a "**send**" icon
+  when the field is **active (focused)**.
+- The **translate button** should not live inside "+" — surface it for one-tap use.
+
+**Changes**
+
+- **Location action sheet** (`lib/messages_page.dart`): a free-picked location
+  bubble now opens a bottom sheet showing the coordinates and two actions —
+  **view on map** (`AppState.focusOnMap`) and **navigate** (`geo:` → browser OSM
+  fallback). Shared stations still open the station panel directly.
+- **Compose main key**: shows "**+**" (opens the location menu) by default and
+  becomes a blue "**send**" key when the field is **focused** or has text. After
+  sending, the field clears and keeps focus.
+- **"Translate" promoted**: moved out of the "+" sheet to a **permanent button**
+  beside the field (private chats only); the "+" sheet now only holds "send
+  location".
+
+**Testing**
+
+- `tool/check_*.py` (23 checks) and `check_l10n_sync.py` all pass; `flutter analyze`
+  / `flutter test` are re-verified by CI.
+
+---
+
+## [2.0.45] - 2026-10-09
+
+### 改进：位置点自由选 / 台站可搜索选择 / 呼号识别修正
+
+**需求**
+
+- 分享的**位置点要能自由选点**（地图上任意一点），并且**套用台站面板样式**，
+  方便直接**呼出导航**等操作。
+- 「+」菜单里要能**选择 / 分享台站**；台站很多，必须能**搜索**、能**翻页**。
+- 台站详情的「**更多**」里要能**把该台站分享到其它会话**。
+- 对话里的**呼号识别不到位**，明明写着呼号却**点不动**。
+
+**改动**
+
+- **选点浮层**（`lib/location_picker_page.dart`）改为两条互不干扰的路径：
+  **自由选点**（在地图上点 / 拖任取坐标，默认行为）与**选择台站**。
+  「选择台站」进入**可搜索、可分页**的独立面板：每页 20 条，底部有
+  「上一页 / 第 n / m 页 / 下一页」**带文字的按钮**（不再把翻页藏成角落里的小箭头），
+  有定位时按**近 → 远**排序，行尾可先看台站详情。
+- **分享的位置点套用台站面板**：位置点 / 台站卡片气泡点按后，如果是台站则
+  复用 [StationDetail]（可直接**导航**、看轨迹等），自由选点仍跳主地图聚焦。
+- **台站详情「更多」新增「分享台站」**：选一个会话，把该台站的**坐标 + 呼号**
+  作为一条位置消息发给对方（走与私聊「发送位置点」同一套 `Q` 协议）。
+- **呼号识别修正**（`lib/messages_page.dart`）：形如业余呼号、左右边界正确的词
+  即可点击（**不再要求先收到过该台站的信标**）；已在台站列表的用**实线**下划线，
+  暂未收到的用**虚线**下划线，点开都会显示台站面板（未收到的显示「未收到报文」）。
+- l10n：六语言新增 `locationPickStations` / `locationSearchHint` /
+  `locationNoStation` / `locationPrevPage` / `locationNextPage` /
+  `locationPageInfo` / `shareStation` / `shareStationPick` / `shareStationSent`。
+
+**测试**
+
+- `tool/check_*.py`（23 项）与 `check_l10n_sync.py` 全部通过；`flutter analyze`
+  / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.45] - 2026-10-09 (English)
+
+### Improved: free-pick a location / searchable station picker / callsign fixes
+
+**Request**
+
+- A shared **location point must be free-picked** (any point on the map) and should
+  **reuse the station panel style**, so **navigation** is one tap away.
+- The "+" menu must support **choosing / sharing a station**; with many stations it
+  needs **search** and **paging**.
+- A station's "**More**" menu must let you **share that station to other chats**.
+- **Callsign recognition** in messages was incomplete — a callsign in the text was
+  **not tappable**.
+
+**Changes**
+
+- **Picker overlay** (`lib/location_picker_page.dart`) now has two independent
+  paths: **free pick** (tap/drag any point on the map, the default) and
+  **pick a station**. "Pick a station" opens a **searchable, paged** panel:
+  20 rows per page, with a bottom bar of **labelled "Prev / Page n / m / Next"
+  buttons** (no more tiny arrows hidden in a corner), sorted **near → far** when a
+  position is known, and a per-row shortcut to view station details first.
+- **Shared location reuses the station panel**: tapping a station card or a
+  location bubble reuses [StationDetail] (so **navigation**, tracks, etc. are one
+  tap away); a free-picked point still jumps to the main map.
+- **Station "More" → "Share station"**: pick a conversation and the station's
+  **coordinates + callsign** are sent as a location message (same `Q` protocol as
+  the private "send location").
+- **Callsign fix** (`lib/messages_page.dart`): any word that looks like an amateur
+  callsign with correct boundaries is now clickable (**no longer requires a
+  beacon to have been heard first**); known stations get a **solid** underline,
+  not-yet-heard ones a **dotted** underline, and both open the station panel
+  (unheard ones show "no packet received").
+- l10n: nine new keys across six languages.
+
+**Testing**
+
+- `tool/check_*.py` (23 checks) and `check_l10n_sync.py` all pass; `flutter analyze`
+  / `flutter test` are re-verified by CI.
+
+---
+
+## [2.0.44] - 2026-10-09
+
+### 新增：私聊发送位置点 / 分享台站 / 消息内呼号可点击
+
+**需求**
+
+- 在一对一（私聊）会话中，能够向对方**发送一个位置点**。
+- 支持**分享其他台站**；点击台站即可**呼出对方的台站面板**。
+- 对话消息中**自动识别台站呼号**，像超链接一样可点击，打开台站详情。
+- 输入栏聚合为左侧一个「**+**」（微信风格），主操作区只保留输入框与发送键。
+
+**改动**
+
+- **私聊位置点（协议）**（`lib/strategy_map.dart`）：新增策略操作码 `Q`
+  （`$M1 Q <ID> <lat>,<lng> [标签]`），仅用于**一对一**投递；标签采用保留
+  `:` 与 `-` 的专用规范化，支持 `S:<呼号>` 台站标记。位置点**不进入策略图层**，
+  不会污染群共享图层。
+- **发送 / 接收**（`lib/state.dart`）：新增 `AppState.sendLocation()`，与普通
+  私信共用同一投递路径（带 ack 单播、射频限长、离线仅本地入库）；收到私聊 `Q`
+  帧入 `type='location'` 消息，`S:<呼号>` 标签按台站卡片呈现。
+- **选点浮层**（`lib/location_picker_page.dart`，新增）：私聊「+」进入后拖动 /
+  点按地图任取坐标；右侧台站列表点整行**呼出台站面板**、点行尾图标把该台站
+  坐标设为待发；底部为「我的位置 / 发送给 XX」。
+- **台站卡片消息**（`lib/messages_page.dart`）：位置点消息渲染为专用气泡 ——
+  自由选点为蓝色「位置点」（点按跳主地图聚焦），分享台站为青色台站卡片
+  （点按打开台站详情）。新增消息字段 `stationCall` 并随本地存储持久化。
+- **呼号超链接**（`lib/messages_page.dart`）：文本气泡中形如业余呼号、且**确实
+  在台站列表内**的词自动变为可点击链接（绿色下划线），点击打开台站详情；与网址
+  识别共存，URL 优先，且不切进单词或带 SSID 呼号的中间。
+- **输入栏「+」**（`lib/messages_page.dart`）：输入栏原「译发」按钮收进「+」
+  浮出菜单（微信风格），与「位置点」并列。
+- l10n：六语言新增 `sendLocation` / `needFixToSendLocation` / `msgLocation` /
+  `locationTapToView` / `locationPickTitle` / `locationPickHint` /
+  `locationMyPos` / `locationSendTo` / `chatMore` / `stationTapToView`。
+
+**测试**
+
+- `tool/check_*.py`（23 项）与 `check_l10n_sync.py` 全部通过；`flutter analyze`
+  / `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.44] - 2026-10-09 (English)
+
+### New: send a location in a private chat / share a station / clickable callsigns in messages
+
+**Request**
+
+- In a one-to-one (private) conversation, be able to **send a location point**.
+- Support **sharing another station**; tapping a station opens **its station panel**.
+- **Recognize station callsigns** in chat messages and make them clickable like
+  hyperlinks, opening station details.
+- Collapse the compose bar into a **single "+"** (WeChat style), leaving only the
+  text field and send button in the main action area.
+
+**Changes**
+
+- **Private location (protocol)** (`lib/strategy_map.dart`): new strategy op `Q`
+  (`$M1 Q <ID> <lat>,<lng> [label]`), used for **one-to-one** delivery only; a
+  dedicated label normalization keeps `:` and `-` so `S:<CALL>` can mark a shared
+  station. Location points **never enter the strategy layer**, so they cannot
+  pollute the group's shared layer.
+- **Send / receive** (`lib/state.dart`): new `AppState.sendLocation()`, sharing
+  the private-message delivery path (acked unicast, RF length limit, local-only
+  when offline); an inbound private `Q` frame is stored as a `type='location'`
+  message, and an `S:<CALL>` label renders as a station card.
+- **Picker overlay** (`lib/location_picker_page.dart`, new): drag/tap any point on
+  the map to choose coordinates; tap a row in the station list to **open the
+  station panel**, or its trailing icon to use that station's coordinates; the
+  footer offers "My position / Send to XX".
+- **Station card message** (`lib/messages_page.dart`): location messages render
+  with a dedicated bubble — a free pick is a blue "Location" (tap to focus it on
+  the main map), a shared station is a teal station card (tap to open station
+  details). New message field `stationCall`, persisted with local storage.
+- **Callsign hyperlinks** (`lib/messages_page.dart`): a token that looks like an
+  amateur callsign **and is actually present in the station list** becomes a
+  clickable link (green underline) opening station details; it coexists with URL
+  detection, URLs win, and it never cuts into a word or the middle of an SSID.
+- **Compose "+"** (`lib/messages_page.dart`): the "translate" button moves into a
+  "+" pop-up menu (WeChat style), side by side with "Location".
+- l10n: six languages add `sendLocation` / `needFixToSendLocation` / `msgLocation`
+  / `locationTapToView` / `locationPickTitle` / `locationPickHint` /
+  `locationMyPos` / `locationSendTo` / `chatMore` / `stationTapToView`.
+
+**Tests**
+
+- All `tool/check_*.py` (23) and `check_l10n_sync.py` pass; `flutter analyze` /
+  `flutter test` are verified by CI.
+
+---
+
+## [2.0.43] - 2026-10-09
+
+### 新增：策略地图外部导航 / 自身位置 / 点队友看详情；群聊提示策略变动
+
+**需求**
+
+- 策略地图上**点队友标点**要能打开**台站详细面板**。
+- **划线 / 改动的策略元素**也要在群聊留提示；**删除**同样要提示。
+- **群聊发送**不再弹「确定 / 取消」确认，直接发。
+- 策略点「导航」交给手机地图应用（与台站详情一致）；地图上能看见**自己**。
+
+**改动**
+
+- **点队友 / 自己 → 台站详情**（`lib/strategy_map_page.dart`）：平移模式下先做
+  队友与自己的命中测试（26px 容差），命中即呼出 `StationDetail` 底部面板，
+  与主地图点台站同一入口；点「我」用 `myStation`。
+- **群聊提示补全**（`lib/state.dart`）：新增 / 改动策略元素在群聊留提示
+  （动词区分「共享 / 更新」，内容没变不刷）；**删除**单个元素（本地 + 收到
+  队友 `D`）与**清空图层**（本地 + 收到队友 `X`）均在群聊留提示；空图层收到
+  `X` 不重复提示。快照重播（`S`）用内容比对挡掉，不刷屏。
+- **策略地图外部导航**（`lib/strategy_map_page.dart`）：策略点「导航」改为与
+  台站详情同一套做法（高德 → 系统地图 → 浏览器 OSM 逐级回退）；原 App 内聚焦
+  保留为「在地图查看」。
+- **自身位置标记**（`lib/strategy_map_page.dart`）：地图上新增「我」的蓝点 +
+  「我·呼号」+ 方位角角标，右侧「定位到我」一键回位；未定位时提示条直说，
+  不再让人以为坏了。
+- **发送前连接自检**（`lib/messages_page.dart` / `lib/tracker_page.dart`）：
+  群聊发送、长按快捷面板发送前，未连接服务器则拦下并明确提示。
+- **群聊发送去掉确认**（`lib/messages_page.dart` / `lib/tracker_page.dart`）：
+  不再弹「确定 / 取消」，直接发；连接自检与超长确认保留。
+- l10n：六语言新增 `chatNeedConnect` / `strategyUpdatedItem` /
+  `strategyDeletedItem` / `strategyClearedMsg`。
+
+**测试**
+
+- `tool/check_*.py` 与 `check_l10n_sync.py` 全部通过；`flutter analyze` /
+  `flutter test` 由 CI 复核。
+
+---
+
+## [2.0.43] - 2026-10-09 (English)
+
+### New: strategy map external navigation / self location / tap teammate for details; chat notices for strategy changes
+
+**Request**
+
+- Tapping a **teammate marker** on the strategy map opens the **station detail panel**.
+- **Line edits / changes** to strategy elements must leave a **group-chat notice**;
+  **deletions** must too.
+- **Group send** no longer asks for a confirm/cancel — it just sends.
+- Strategy-point "navigate" hands off to the phone's map app (like station detail);
+  the map shows **yourself**.
+
+**Changes**
+
+- **Tap teammate/self → station detail** (`lib/strategy_map_page.dart`): in pan mode
+  teammate and self hit-testing runs first (26px tolerance); a hit opens the
+  `StationDetail` bottom sheet — the same entry point as tapping a station on the
+  main map. Tapping "me" uses `myStation`.
+- **Notice completeness** (`lib/state.dart`): new/edited strategy elements leave a
+  group-chat notice (verb differs for shared/updated; no notice when content is
+  unchanged); **deleting** a single element (locally and on a peer's `D`) and
+  **clearing** the layer (locally and on a peer's `X`) both leave a notice; an
+  empty layer receiving `X` no longer double-notifies. Snapshot replays (`S`) are
+  filtered by content comparison so they don't spam.
+- **External navigation** (`lib/strategy_map_page.dart`): strategy-point
+  "navigate" now uses the same ladder as station detail (AMap → system maps →
+  browser OSM); the in-app focus is kept as "view on map".
+- **Self-location marker** (`lib/strategy_map_page.dart`): a blue "me" dot +
+  "me·call" + bearing badge, with a "locate me" button on the right; when there is
+  no fix the hint bar says so instead of silently drawing nothing.
+- **Pre-send connection check** (`lib/messages_page.dart` / `lib/tracker_page.dart`):
+  group send and the long-press quick panel stop and warn when the server is not
+  connected.
+- **Group send confirm removed** (`lib/messages_page.dart` / `lib/tracker_page.dart`):
+  no more confirm/cancel dialog; the connection check and over-length confirm stay.
+- l10n: `chatNeedConnect` / `strategyUpdatedItem` / `strategyDeletedItem` /
+  `strategyClearedMsg` added across six languages.
+
+**Testing**
+
+- All `tool/check_*.py` and `check_l10n_sync.py` pass; `flutter analyze` /
+  `flutter test` are verified by CI.
+
+---
+
+## [2.0.42] - 2026-10-09
+
+### 新增：策略地图支持队友方位 / 可选颜色 / 群聊跳转，并适配射频
+
+**需求**
+
+- 地图上显示**队友位置 + 方位角小角标**。
+- **线 / 圈可选择颜色**。
+- 画点等**策略消息在群聊留提示**，队友可点击跳转策略地图。
+- **射频**（TNC / 音频）下也能用群聊与策略地图。
+- 修复策略点「跳转导航」不可用。
+
+**改动**
+
+- **队友位置 + 方位角**（`lib/state.dart` / `lib/strategy_map_page.dart`）：
+  `strategyTeammates` 按**去 SSID 的基呼号**把群成员匹配到台站，地图上画
+  青点 + 呼号 + 沿航向的方位角小三角（静止 / 无航向则不画角标）；队友位置
+  来自普通 APRS 信标，不需额外协议。
+- **线 / 圈可选颜色**（`lib/strategy_map.dart` / `lib/strategy_map_page.dart`）：
+  新增全网一致的六色调色板（顺序即协议，只可往后追加）；帧里只传**下标**
+  （`StrategyProto.colorIndex`，-1 为默认色）。取色放在模型层，编码与绘制
+  同源，避免「我选红、对面见蓝」；分片线只在首段带一次颜色。
+- **策略消息进群聊**（`lib/state.dart` / `lib/messages_page.dart`）：新增可点击
+  系统消息（`type='strategy'`），点一下经 `openStrategyMap` 跳进对应群的策略
+  地图；收发新元素都留提示（快照重播 / 编辑不重复提示）。跳转沿用
+  「页面 → 外壳 → 地图」的序号请求机制，避免在半截面板里 push 全屏页。
+- **射频适配**（`lib/state.dart`）：`groupChatAllowed` 放开为**始终可用**
+  （射频队友都在守听群呼号）；`sendGroupMessage` 去掉射频拦截。策略帧射频下
+  改用带 ack 格式，借**队友标准自动 ack** 判断送达（APRS-IS 仍走 no-ack 广播），
+  90s 未确认视为「不确认」（队友可能关了自动 ack），可在策略地图页手动重发
+  （`retryStrategy` / `strategyAckPending`）。消息页建群面板在射频下补一条说明。
+- **跳转导航修复**（`lib/map_page.dart`）：策略点不在台站表里，补画一枚焦点
+  标记 `_focusMarker`；跳转改为**瞬时落位**（不走过渡动画），避免页面被覆盖 /
+  冻结后停在「飞了一半」的中间态。
+- l10n：六语言补齐新增文案（`strategyTeammates` / `strategyColor` /
+  `strategySharedItem` / `strategyAck*` / `groupRfNotice` 等）。
+- **测试**：`test/strategy_map_test.dart` 新增「线 / 圈颜色往返一致」用例。
+
+**测试**
+
+- `tool/check_*.py`、`check_l10n_sync.py` 全部通过；`flutter analyze`
+  除已知的 `vector_map.dart` 误报外无新增错误；`flutter test` 由 CI 复核。
+
+---
+
+## [2.0.42] - 2026-10-09 (English)
+
+### New: strategy map teammates/bearing, selectable colors, chat jump; RF support
+
+**Request**
+
+- Show **teammate positions with a bearing badge** on the map.
+- **Selectable colors** for lines/circles.
+- Strategy messages (points etc.) leave a **clickable notice in group chat**
+  that jumps to the strategy map.
+- **RF** (TNC / audio) supports group chat and the strategy map too.
+- Fix the broken "jump to navigation" on strategy points.
+
+**Changes**
+
+- **Teammates + bearing** (`lib/state.dart` / `lib/strategy_map_page.dart`):
+  `strategyTeammates` matches group members to stations by **SSID-stripped base
+  callsign**; the map paints a cyan dot + callsign + a small triangle along the
+  heading (no badge when stationary/unknown). Positions come from ordinary APRS
+  beacons — no extra protocol needed.
+- **Selectable line/circle colors** (`lib/strategy_map.dart` /
+  `lib/strategy_map_page.dart`): a network-wide six-color palette (order is the
+  protocol; append-only); frames carry only the **index**
+  (`StrategyProto.colorIndex`, -1 = default). Color resolution lives in the
+  model so encode and paint can't drift; chunked lines carry the color once.
+- **Strategy notices in group chat** (`lib/state.dart` /
+  `lib/messages_page.dart`): a clickable system message (`type='strategy'`) that
+  jumps into the group's strategy map via `openStrategyMap`; both sent and
+  received new elements leave a notice (snapshot replay / edits don't duplicate).
+  The jump reuses the "page → shell → map" sequence-request mechanism so a
+  full-screen page is never pushed from a clipped panel.
+- **RF adaptation** (`lib/state.dart`): `groupChatAllowed` is now **always on**
+  (RF teammates do listen on the group callsign) and `sendGroupMessage` drops the
+  RF guard. Strategy frames on RF use ack-requesting format and rely on
+  receivers' **standard auto-ack** for delivery (APRS-IS still broadcasts with
+  no-ack); unacked after 90s counts as "unconfirmed" (the peer may have auto-ack
+  off) and can be manually resent (`retryStrategy` / `strategyAckPending`). The
+  new-group sheet adds an RF note.
+- **Navigation fix** (`lib/map_page.dart`): strategy points aren't in the
+  station list, so a focus marker `_focusMarker` is painted; the jump now snaps
+  instantly (no animation) instead of stalling mid-flight when the page is
+  covered/frozen.
+- l10n: added strings across six languages (`strategyTeammates` /
+  `strategyColor` / `strategySharedItem` / `strategyAck*` / `groupRfNotice` …).
+- **Tests**: `test/strategy_map_test.dart` gains a line/circle color round-trip.
+
+**Testing**
+
+- All `tool/check_*.py` and `check_l10n_sync.py` pass; `flutter analyze` shows
+  no new errors besides the known `vector_map.dart` false positive; `flutter
+  test` is verified by CI.
+
+---
+
+## [2.0.41] - 2026-10-03
+
+### 新增：群内「策略地图」+ 台站长按快捷消息；移除 OOBE Passcode 提示
+
+**需求**
+
+- 移除 OOBE（首次启动引导）里的「获取 Passcode」提示。
+- 地图上长按 beacon / 台站，弹出快捷消息面板。
+- 设计并实现**策略地图**：与队友 / 群组共享**标点、线、圈、集合点**，
+  复用现有群组，数据经 APRS 消息传输。
+- 画出的点支持**跳转导航**，并可编辑附带信息；UI 协调、实用。
+- 地图上显示**队友位置 + 方位角小角标**；线 / 圈可**选择颜色**；
+  策略消息在**群聊**留可点击提示，点一下跳进策略地图。
+- **射频**（TNC / 音频）下同样能用群聊与策略地图。
+- 发版。
+
+**改动**
+
+- **OOBE**（`lib/oobe_page.dart`）：去掉 Passcode 获取提示。
+- **长按快捷消息**（`lib/map_page.dart`）：台站 / 信标标记加入长按入口，
+  新增 `_showQuickMessage(Station s)`，复用现有发送与 l10n 链路；
+  顺带修掉 `FocusNode` 的 dispose 风险（改 `autofocus`）。
+- **策略地图**：
+  - `lib/strategy_map.dart`（新增）：`StrategyKind` / `StrategyItem` 模型与
+    `StrategyProto` 编解码。帧前缀 `$M`（如 `$M1 P YW3 39.1,116.1 救援`），
+    与群协议零冲突；任何输入都保证帧 ≤ 67 字符，超长的线**自动分片**
+    （`L <ID> <i>/<n> …`，收齐才落图）。
+  - `lib/strategy_map_page.dart`（新增）：策略地图页 —— 地图 + 元素图层 +
+    底部工具条（标点 / 划线 / 圈 / 集合点 / 平移）。单击放点或选中元素、
+    双击元素跳转导航；选中后可「导航 / 编辑信息 / 删除」；「清空图层」同步全群。
+  - `lib/state.dart`：策略元素的持久化（`strategyItems`）、收信分发
+    （`$M` 帧**不进聊天列表**）、发送 / 更新 / 删除 / 快照 API；
+    元素 owner 统一取**去 SSID 的基呼号**。
+  - `lib/map_page.dart`：右侧工具列新增「策略地图」入口（无群提示先建群，
+    多群弹选择）。
+  - `lib/backup.dart`：`strategyItems` 归入群聊备份分组，换机不丢图层。
+  - **队友位置 + 方位角**（`lib/state.dart` / `lib/strategy_map_page.dart`）：
+    新增 `strategyTeammates`，按**去 SSID 的基呼号**把群成员匹配到台站；
+    地图上画青点 + 呼号 + 沿航向的方位角小三角（无航向就不画角标）。
+  - **线 / 圈可选颜色**（`lib/strategy_map.dart` / `lib/strategy_map_page.dart`）：
+    新增全网一致的六色调色板，帧里只传**下标**（`StrategyProto.palette` /
+    `colorIndex`）；模型层取色与绘制同源，避免「我选红、对面见蓝」。
+  - **策略消息进群聊**（`lib/state.dart` / `lib/messages_page.dart`）：新增
+    可点击系统消息（`type='strategy'`），点一下经 `openStrategyMap` 跳进对应群
+    的策略地图；收发新元素都会留提示（重播快照不重复提示）。
+  - **射频适配**（`lib/state.dart`）：`groupChatAllowed` 放开为始终可用；
+    策略帧射频下改用带 ack 格式，借**队友标准自动 ack** 判断送达，超过 90s
+    未确认可在策略地图页手动重发（`retryStrategy` / `strategyAckPending`）；
+    APRS-IS 仍走 no-ack 广播。
+  - **跳转导航修复**（`lib/map_page.dart`）：策略点不在台站表里，补画一枚
+    焦点标记 `_focusMarker`；跳转改为**瞬时落位**（不做动画），避免被覆盖 /
+    冻结后停在半路。
+  - l10n：六语言补齐策略地图文案；并修正划线提示为「点『完成』结束」。
+- **测试**：`test/strategy_map_test.dart`（编解码往返、67 上限、分片、
+  畸形帧拒绝、ID 生成、线 / 圈颜色往返一致）。
+- 设计文档：`STRATEGY-MAP.md`（含设计稿与实现现状的差异说明）。
+
+**测试**
+
+- `tool/check_*.py`、`check_l10n_sync.py` 全部通过；`flutter analyze/test`
+  由 CI 复核。
+
+---
+
+## [2.0.41] - 2026-10-03 (English)
+
+### New: in-group "Strategy Map" + long-press quick message; remove OOBE passcode hint
+
+**Request**
+
+- Remove the "get Passcode" hint from OOBE (first-run guide).
+- Long-press a beacon/station on the map to open a quick-message sheet.
+- Design and ship a **Strategy Map**: share **points, lines, circles and rally
+  points** with teammates/groups, reusing existing groups, transported over
+  APRS messages.
+- Elements support **jump-to-navigation** and editing attached info; UI must be
+  coherent and practical.
+- Show **teammate positions with a bearing badge** on the map; lines/circles
+  get **selectable colors**; strategy messages leave a **clickable notice in
+  group chat** that jumps into the strategy map.
+- **RF** (TNC / audio) supports group chat and the strategy map too.
+- Cut a release.
+
+**Changes**
+
+- **OOBE** (`lib/oobe_page.dart`): removed the passcode hint.
+- **Quick message** (`lib/map_page.dart`): station/beacon markers gain a
+  long-press action via `_showQuickMessage(Station s)`, reusing the existing
+  send and l10n path; also fixed a `FocusNode` dispose hazard (use `autofocus`).
+- **Strategy Map**:
+  - `lib/strategy_map.dart` (new): `StrategyKind` / `StrategyItem` model and
+    `StrategyProto` codec. Frame prefix `$M` (e.g. `$M1 P YW3 39.1,116.1 救援`),
+    no clash with the group protocol; every frame is guaranteed ≤ 67 chars and
+    long lines are **auto-chunked** (`L <ID> <i>/<n> …`, assembled once complete).
+  - `lib/strategy_map_page.dart` (new): the strategy map page — map + element
+    layer + bottom toolbar (point / line / circle / rally / pan). Tap to place
+    or select, double-tap an element to jump to navigation; a selected element
+    supports "Navigate / Edit info / Delete"; "Clear layer" syncs to the group.
+  - `lib/state.dart`: persistence (`strategyItems`), inbound dispatch (`$M`
+    frames **never enter the chat list**), send/update/delete/snapshot APIs;
+    element owner is normalized to the **SSID-stripped base callsign**.
+  - `lib/map_page.dart`: "Strategy Map" entry on the right toolbar (prompts to
+    create a group when none, shows a picker when several).
+  - `lib/backup.dart`: `strategyItems` added to the chats backup group.
+  - **Teammates + bearing** (`lib/state.dart` / `lib/strategy_map_page.dart`):
+    `strategyTeammates` matches group members to stations by **SSID-stripped
+    base callsign**; the map paints a cyan dot + callsign + a small triangle
+    along the heading (no badge when heading is unknown).
+  - **Selectable line/circle colors** (`lib/strategy_map.dart` /
+    `lib/strategy_map_page.dart`): a network-wide six-color palette, with only
+    the **index** sent in frames (`StrategyProto.palette` / `colorIndex`); the
+    model resolves the color so encode and paint can't drift.
+  - **Strategy notices in group chat** (`lib/state.dart` /
+    `lib/messages_page.dart`): a clickable system message (`type='strategy'`)
+    that jumps into the group's strategy map via `openStrategyMap`; both sent
+    and received new elements leave a notice (snapshot replays don't duplicate).
+  - **RF adaptation** (`lib/state.dart`): `groupChatAllowed` is now always on;
+    strategy frames on RF use ack-requesting format and rely on receivers'
+    **standard auto-ack** for delivery, with a manual resend
+    (`retryStrategy` / `strategyAckPending`) after 90s; APRS-IS still broadcasts
+    with no-ack.
+  - **Navigation fix** (`lib/map_page.dart`): strategy points aren't in the
+    station list, so a focus marker `_focusMarker` is painted; the jump now
+    snaps instantly (no animation) instead of stalling mid-flight.
+  - l10n: strategy map strings added across six languages; line hint corrected
+    to "tap Done to finish".
+- **Tests**: `test/strategy_map_test.dart` (codec round-trip, 67-char cap,
+  chunking, malformed-frame rejection, ID generation, line/circle color
+  round-trip).
+- Design doc: `STRATEGY-MAP.md` (with a design-vs-implementation section).
+
+**Testing**
+
+- All `tool/check_*.py` and `check_l10n_sync.py` pass; `flutter analyze/test`
+  is verified by CI.
+
+---
+
+## [2.0.40] - 2026-10-08
+
+### 新增：消息页标题右侧「发射位置信标」按钮
+
+**需求**
+
+- 用户要求：在消息页的消息大标题右侧，添加一个「发射位置信标」的按钮。
+
+**改动**
+
+- 消息页标题行改为「标题 + 右侧按钮」：`lib/messages_page.dart` 把原来的标题
+  `Text` 换成 `Row`，标题用 `Expanded` 吃掉剩余宽度，右侧放「发射位置信标」按钮。
+  点击调用 `AppState.sendBeacon()`（与地图页「立即上报」同一动作），手动发射一次
+  位置信标，不改动自动上报开关。
+- **不在按钮里 `Navigator.pop`**：消息页不是弹层路由（地图页那个上报按钮在弹层内），
+  照搬 map_page 的 `Navigator.pop` 会把整个页面/外壳弹掉。改用 `SnackBar` 反馈，
+  与地图页同样按 `myPositionReportable` 区分「已发射（含网格与附带项）」与
+  「等待定位」。
+- **窄容器降级**：2.0 横屏把消息页装进 ≤560 的左侧面板时，标题已占满宽度，按钮
+  降级成纯图标 + `Tooltip`（`_compactPane` 判据），避免标题被压没。
+- l10n：六语言新增 `sendPositionBeacon`
+  （发射位置信标 / 發射位置信標 / Transmit position beacon /
+  位置ビーコンを送信 / Transmitir baliza de posición / Pancarkan beacon posisi）。
+
+**测试**
+
+- 纯 UI 改动，无新增逻辑分支；静态检查（`tool/check_*.py`、`check_l10n_sync.py`）
+  全部通过，`flutter analyze` 由 CI 复核。
+
+---
+
+## [2.0.40] - 2026-10-08 (English)
+
+### New: "Transmit position beacon" button beside the Messages title
+
+**Request**
+
+- The user asked for a "Transmit position beacon" button to the right of the
+  Messages page's large title.
+
+**Changes**
+
+- The Messages title row is now "title + button": `lib/messages_page.dart`
+  replaces the plain title `Text` with a `Row` where the title is `Expanded`
+  and the button sits on the right. Tapping it calls `AppState.sendBeacon()`
+  (the same action as the map page's "Beacon now"), firing one position beacon
+  without touching the automatic-report toggle.
+- **No `Navigator.pop` in the button**: the Messages page is not a sheet route
+  (the map button lives inside one), so copying map_page's `Navigator.pop`
+  would pop the whole page/shell. It reports via `SnackBar` instead, branching
+  on `myPositionReportable` just like the map page, between "beacon transmitted
+  (grid + attachments)" and "waiting for a fix".
+- **Narrow-container fallback**: when 2.0 landscape puts the Messages page in a
+  ≤560 left panel the title already fills the width, so the button degrades to
+  an icon + `Tooltip` (via the `_compactPane` check) rather than crushing the
+  title.
+- l10n: a new `sendPositionBeacon` key across all six locales.
+
+**Tests**
+
+- UI-only change with no new logic branches; static checks
+  (`tool/check_*.py`, `check_l10n_sync.py`) all pass and `flutter analyze`
+  is re-verified in CI.
+
+---
+
+## [2.0.39] - 2026-10-08
+
+### 新增：备份包含历史轨迹 / 关于页文案去掉「本机」
+
+**需求**
+
+- 用户要求：导出备份时要**包含历史轨迹**，否则换机后历史轨迹全丢。
+- 用户要求：关于页副标题不要「本机」，直接写「APRS 客户端」。
+
+**改动**
+
+- **备份包含历史轨迹**：历史轨迹原本只按天落在文件里
+  （`tracklog/YYYY-MM-DD.json`），不进「只认偏好键」的备份。现在把轨迹
+  **拼入「设置配置」分组** —— 勾了设置，导出的 JSON 里就多一份 `__tracks`
+  载荷（按天**原样搬运**，不做解码再编码，避免丢字段），导入时按**天**合并
+  写回（备份里没有的天保持本地不动），并在导入预览与完成提示里如实报告天数。
+  - 备份 schema 升到 **2**：v2 能读 v1（只增不减），遇到更高 schema 仍拒绝。
+  - `__tracks` 是不带类型标签的非偏好载荷，**不会**落进偏好白名单；
+    导入时按 `YYYY-MM-DD` 形状校验并做点数裁剪。
+  - Web 端不落盘轨迹，该载荷为空：导出照常、导入忽略。
+- **关于页副标题**去掉「本机 / 本機 / Local / lokal」限定词，六语言统一为
+  「APRS 客户端 · 定位与地图」（en: `APRS client · tracking & map`）。
+
+**测试**
+
+- `test/backup_test.dart` 增补：轨迹只在勾选设置时携带、只带轨迹的
+  `settings` 组仍成立、解析时轨迹被单独取出而不进白名单、显示条目数含轨迹。
+
+---
+
+## [2.0.39] - 2026-10-08 (English)
+
+### Backup now includes track history / About subtitle wording
+
+**Requests**
+
+- The user asked that **exported backups include track history**, otherwise the
+  history is lost when moving to a new device.
+- The About subtitle should drop "Local" and read "APRS client".
+
+**Changes**
+
+- **Backup includes track history.** Track history was stored only as per-day
+  files (`tracklog/YYYY-MM-DD.json`) and never entered the prefs-only backup.
+  It is now **folded into the "Settings" group**: with Settings selected, the
+  exported JSON carries an extra `__tracks` payload (moved **verbatim**, day by
+  day, with no decode-then-encode that could drop fields). On import the days are
+  **merged** back (days absent from the backup are left untouched), and the import
+  preview / done dialog reports the day count.
+  - Backup schema bumped to **2**: v2 reads v1 (additive only); a higher schema
+    is still rejected.
+  - `__tracks` is an untyped, non-preference payload and **never** reaches the
+    preference whitelist; on import it is validated by `YYYY-MM-DD` shape and the
+    per-day point cap.
+  - On Web there is no on-disk track log, so the payload is empty: export works
+    as usual, import ignores it.
+- **About subtitle** drops the "Local / 本机 / 本機 / lokal" qualifier in all six
+  locales, now "APRS client · tracking & map" (zh: APRS 客户端 · 定位与地图).
+
+**Tests**
+
+- Extended `test/backup_test.dart`: tracks are carried only when Settings is
+  selected, a tracks-only `settings` group still counts, parsing lifts tracks out
+  of the preference whitelist, and the displayed count includes track days.
+
+---
+
+## [2.0.38] - 2026-10-07
+
+### 新增：天地图图层（矢量 / 影像 / 地形）
+
+**需求**
+
+- 用户要求：在既有地形图之外**再加天地图**，而且「什么图都添加」——把天地图能用
+  的图层类型都补上。
+
+**改动**
+
+- 底图新增 **「天地图」分组**，共三张（国家地理信息公共服务平台，WMTS 瓦片）：
+  - `天地图 矢量`（`vec`）：路网 + 建筑轮廓的矢量底图；
+  - `天地图 影像`（`img`）：卫星影像底图；
+  - `天地图 地形`（`ter`）：地形晕渲底图，看山势起伏。
+- **每张底图都叠一层注记**：天地图的 `vec`/`img`/`ter` **自身不含地名**，文字单独
+  放在透明底的注记层（`cva`/`cia`/`cta`）。实现上把底图与注记**分两张瓦片**分别
+  缓存（来源键 `xxx` 与 `xxx_ann`，否则同格互相顶掉），渲染时叠在一起；离线下载也
+  把注记一并下下来 —— 否则离线后只剩一张没有地名的图。
+- 天地图经实测为 **WGS-84**（与 Esri/OSM 影像做相位相关，偏移 0px；若是 GCJ-02
+  同一位置会偏出 50~70px），因此**不做纠偏**，与 OSM 互为兜底、可离线下载。
+  瓦片实测支持到 **z18**（z19 已无数据），子域名轮询 `t0..t7`。
+- **Key 走构建期注入**：`const String.fromEnvironment('TIANDITU_KEY')`，与和风
+  天气 key 同款；CI 从仓库 Secret `TIANDITU_KEY` 读取后以 `--dart-define` 注入
+  （Windows / Android / iOS / macOS 四个构建都加）。源码不落 key。
+- **没有配置 Key 时**：天地图瓦片 URL 返回空串，候选链自动退到 OSM（同为 WGS-84），
+  地图照常可用 —— 不出现白屏或错位。
+
+**测试**
+
+- 新增 `test/tianditu_layers_test.dart`：钉住「分组 / WGS-84 / 可离线 / 注记层映射
+  （vec→cva、img→cia、ter→cta）/ 底图与注记的缓存键必须分开 / 非天地图图源不得有
+  注记层」，并挂进 CI（`.github/workflows/ci-test.yml`）。
+
+---
+---
+
+## [2.0.38] - 2026-10-07 (English)
+
+### New: Tianditu map layers (vector / imagery / terrain)
+
+**Request**
+
+- Asked to add **Tianditu (天地图)** on top of the existing terrain layers, and to
+  add "every layer type" it offers.
+
+**Changes**
+
+- Added a **"Tianditu" group** with three basemaps (National Platform for Common
+  Geospatial Information Services, WMTS tiles):
+  - `Tianditu Vector` (`vec`): road network + building footprints;
+  - `Tianditu Imagery` (`img`): satellite imagery;
+  - `Tianditu Terrain` (`ter`): shaded terrain relief.
+- **Each basemap is composited with an annotation overlay**: Tianditu's
+  `vec`/`img`/`ter` tiles carry **no place labels** — text lives in separate
+  transparent annotation layers (`cva`/`cia`/`cta`). The base and the annotation
+  are cached as **two tiles** (source keys `xxx` and `xxx_ann`, otherwise they
+  overwrite each other for the same cell) and drawn stacked; the offline
+  downloader fetches the annotation too, so offline maps don't lose all place
+  names.
+- Measured as **WGS-84** (phase correlation against Esri/OSM imagery: 0px offset;
+  a GCJ-02 source would be off by 50–70px), so **no GCJ shift** — falls back to
+  OSM and downloads offline. Tiles verified up to **z18** (z19 has no data);
+  subdomains round-robin `t0..t7`.
+- **Key injected at build time**: `const String.fromEnvironment('TIANDITU_KEY')`,
+  same pattern as the QWeather key; CI reads the repo Secret `TIANDITU_KEY` and
+  passes it via `--dart-define` for all four builds (Windows / Android / iOS /
+  macOS). No key is committed to source.
+- **When the key is absent**: the Tianditu URL builder returns an empty string and
+  the candidate chain falls back to OSM (same WGS-84 datum) — the map stays usable,
+  with no blank tiles or offsets.
+
+**Tests**
+
+- Added `test/tianditu_layers_test.dart` pinning the group, WGS-84 datum, offline
+  capability, the label-layer mapping (`vec`→`cva`, `img`→`cia`, `ter`→`cta`),
+  the separate cache keys for base vs annotation, and that non-Tianditu sources
+  have no annotation layer; wired into CI (`.github/workflows/ci-test.yml`).
+
+---
+---
+
+## [2.0.37] - 2026-10-07
+
+### 新增：地形 / 等高线图图层
+
+**需求**
+
+- 用户反馈：希望地图能加一些**等高线图 / 地形图**图层，看山势、沟壑与海拔起伏。
+
+**改动**
+
+- 底图新增 **「地形」分组**（原来 OpenTopo 混在「其他」里，与街道/卫星并列，
+  不好找），组内共四张：
+  - `OpenTopo 地形`：既有图源，带等高线的地形图（移入本组）；
+  - `Esri 地形(等高线)`：路网 + 地名 + 等高线，最接近「纸质等高线地形图」；
+  - `Esri 地形浮雕`：纯地形浮雕，无标注，看整体地形最干净；
+  - `Esri 山体阴影`：只画山体阴影，看沟壑走向最清楚。
+- 四张都是**免 Key 的 256px 国际瓦片**（WGS-84），与 OSM 互为兜底、可离线下载；
+  但都**不做 GCJ 纠偏** —— 它们本就是 WGS-84，纠偏反而会整体偏出数百米。
+- 底层复用既有瓦片管线（在线 / 离线 / 祖先放大 / 占位四级降级），未引入新依赖。
+
+**测试**
+
+- 新增 `test/terrain_layers_test.dart`：钉住「分组 / WGS-84 / 可离线 / Esri 的
+  z/y/x 坐标顺序」——这些写错了编译能过、analyze 也全绿，只会取到另一张图或
+  整体偏位，所以挂进 CI（`.github/workflows/ci-test.yml`）。
+
+---
+---
+
+## [2.0.37] - 2026-10-07 (English)
+
+### New: terrain / contour map layers
+
+**Request**
+
+- Reported: wanted **contour / terrain** layers on the map to read ridgelines,
+  valleys and elevation.
+
+**Changes**
+
+- Added a **"Terrain" group** to the basemaps (OpenTopo used to sit among
+  "Others" next to streets/satellite and was hard to find), with four layers:
+  - `OpenTopo Terrain`: existing source, terrain map with contours (moved here);
+  - `Esri Topo (contours)`: roads + labels + contours, closest to a paper
+    contour topo map;
+  - `Esri Shaded Relief`: pure relief, no labels — cleanest for overall terrain;
+  - `Esri Hillshade`: hillshade only — clearest for valley direction.
+- All four are **key-free 256px international tiles** (WGS-84), fall back to OSM
+  and can be downloaded offline. They are **not** GCJ-shifted — they are already
+  WGS-84, and shifting them would offset everything by hundreds of metres.
+- Reuses the existing tile pipeline (online / offline / ancestor upscale /
+  placeholder), no new dependencies.
+
+**Tests**
+
+- Added `test/terrain_layers_test.dart` pinning the group, WGS-84 datum,
+  offline capability and Esri's z/y/x tile order — all of which compile and pass
+  analyze while silently fetching the wrong tile or shifting the map, so it is
+  wired into CI (`.github/workflows/ci-test.yml`).
+
+---
+---
+
+## [2.0.36] - 2026-10-03
+
+### 优化：连接后由用户手动确认「开始上报」
+
+**背景**
+
+- 用户反馈：无论用哪种方式定位，连上服务器后**不应该自动上报位置**，要由用户
+  手动确定、确认坐标有效之后才开始上报。
+
+**原因**
+
+- 此前连上服务器、信标开关开着、又已拿到本轮定位时，定时器会**立刻**开始自动
+  上报 —— 用户还没看清当前坐标是否正确，位置就已经发到全网。
+
+**改进**
+
+- 新增「本次连接是否已确认开始上报」的闸（`beaconArmed`）：连上服务器后它**默认
+  关着**，`canAutoBeacon` 不成立，因此**任何定位方式都不会自动上报**。
+- 连接状态下，主界面上报动作组会显示一枚醒目的正式**「开始上报」**按钮（不用弹窗、
+  不打扰）：拿到本轮有效定位前按钮置灰显示「等待定位」，确认坐标有效后再点一下即
+  开始按间隔自动上报，并立刻补发一次让用户在地图上看到自己。
+- 断开 / 重连 / 重开 App 都会**复位**这个确认（不持久化）—— 绝不回到「连上就自动
+  上报」，与用户要求的「每次都要手动确认」一致。
+- 顺带去掉连接成功后自动弹出的「是否自动上报」询问弹窗：改为上面那枚正式按钮
+  （用户明确表示不用提示、只要按钮）。
+- `tool/check_pos_quality.py` 增加回归守卫；新增 `test/report_confirm_test.dart`。
+
+---
+---
+
+## [2.0.36] - 2026-10-03 (English)
+
+### Improvement: manual "start reporting" confirmation after connecting
+
+**Context**
+
+- Reported: whatever positioning method is used, the app **should not auto-report the
+  position after connecting** to the server — the user must confirm the coordinates are
+  valid and start reporting manually.
+
+**Cause**
+
+- Previously, once connected (beacon switch on, fresh fix available) the timer started
+  auto-reporting **immediately** — the position went out to the network before the user
+  could even check whether the current coordinate was correct.
+
+**Changes**
+
+- New per-connection gate `beaconArmed`: it is **off by default on each new connection**,
+  so `canAutoBeacon` is false and **no positioning method auto-reports**.
+- While connected, the report action group shows a prominent formal **"Start reporting"**
+  button (no popup, non-intrusive): it stays disabled showing "Waiting for fix" until a
+  valid fix for this round arrives, then one tap starts interval reporting and sends an
+  immediate beacon so the user can see themselves on the map.
+- Disconnect / reconnect / app restart all **reset** this confirmation (not persisted) —
+  never falling back to "auto-report on connect", matching the requested per-connection
+  manual confirmation.
+- Also removed the post-connect "auto-report?" popup in favor of that button (the user
+  explicitly asked for no prompt, just a button).
+- Added a regression guard in `tool/check_pos_quality.py` and `test/report_confirm_test.dart`.
+
+---
+---
+
+## [2.0.35] - 2026-10-06
+
+### 修复：模拟位置（手动定位）重启后不自动生效
+
+**背景**
+
+- 用户反馈：开启「模拟位置」并选择「手动定位」，保存好坐标后重启 App，
+  不会自动应用已保存的坐标 —— 界面一直显示「等待定位」，必须再手动点一次
+  「应用坐标」才能定位、上报。
+
+**原因**
+
+- 启动时 `_loadPrefs` 把保存的 `myLat/myLng` **一律**当成「上一次的实时定位」，
+  关掉上报闸（`_pendingSavedPos = true`、状态「已保存位置」）。对 GPS 模式这是
+  对的 —— 防止定位还没开启就把旧坐标当「我在哪」发出去。
+- 但「模拟位置」模式下保存的坐标**就是**用户显式选定的位置；而 GPS 的自动定位
+  路径（构造器里延时 `startTracking`）又被 `useSimLocation` 挡掉，于是这个闸
+  永远打不开 —— 坐标装回来了，却永远停在「等待定位」。
+
+**改进**
+
+- 载入坐标后，若 `useSimLocation` 为真，则**放行**：清掉「上次保存的位置」标记、
+  状态置「模拟位置」，并同步过滤中心（`filterFollow` 时）——启动即恢复可上报。
+- 顺带把模拟位置的**保活前台服务**也在启动时拉起（与 GPS 模式对称）：此前它只在
+  「应用坐标」时才启动，重启后切后台连接会被冻结、信标定时器停摆。
+
+---
+---
+
+## [2.0.35] - 2026-10-06 (English)
+
+### Fix: simulated location (manual fix) not applied after restart
+
+**Context**
+
+- Users reported: with "simulated location" on and "manual fix" selected, after saving
+  coordinates and restarting the app the saved coordinates were not applied automatically —
+  the UI kept showing "waiting for location", and you had to tap "Apply coordinates" again to
+  get a fix and report.
+
+**Cause**
+
+- At startup `_loadPrefs` treated the saved `myLat/myLng` **unconditionally** as "last round's
+  live fix" and closed the reporting gate (`_pendingSavedPos = true`, status "saved position").
+  For GPS mode that is correct — it prevents reporting a stale coordinate as "where I am"
+  before location is even on.
+- But in simulated mode the saved coordinates **are** the position the user explicitly chose;
+  and the GPS auto-locate path (the delayed `startTracking` in the constructor) is skipped when
+  `useSimLocation` is set — so the gate could never open: the coordinates were restored yet the
+  UI stayed at "waiting for location".
+
+**Changes**
+
+- After loading the coordinates, if `useSimLocation` is true they are **accepted**: clear the
+  "saved position" flag, set the status to "simulated location", and sync the filter center
+  (when `filterFollow` is on) — so it is reportable again right at startup.
+- Also start the simulated-mode **keep-alive foreground service** at boot (symmetric with GPS
+  mode): previously it only started on "Apply coordinates", so after a restart the connection
+  could be frozen in the background and the beacon timer stalled.
+
+---
+---
+
+## [2.0.34] - 2026-10-03
+
+### 修复：非整数缩放级别下地图发糊
+
+**背景**
+
+- 用户反馈「瓦片还是糊」。实测各图源返回的像素后发现，除了高德街道（wprd 主机
+  + `scl=2`）给 512px，Carto / OSM / Esri / 腾讯 / 高德卫星**都只有 256px** ——
+  图源本身不是主因。
+- 真正的问题在选层级：地图用 `zoom.floor()` 取瓦片级，于是整档 `[z, z+1)` 都取
+  z 级瓦片，越接近 `z+1` 源图被拉得越大（z=12.9 时 **1.93×**），再乘屏幕像素
+  密度 2~3 倍，物理上放大 4~6 倍，必然糊。用户常在 11.5、12.4 这类非整数级看
+  地图，正好落在这半档里。
+
+**改进**
+
+- 选层级改用 `zoom.round()`：放大封顶在 √2≈1.41×，后半档转为缩小（0.71~1×）。
+  对**所有图源**生效，不只高德。
+- 配合上一版的 2× 高清瓦片，缩放接近整数且用高德街道时进一步贴近物理 1:1。
+
+---
+---
+
+## [2.0.34] - 2026-10-03 (English)
+
+### Fix: blurry map at fractional zoom levels
+
+**Context**
+
+- Reported as "tiles are still blurry". Measuring the actual pixel size each source
+  returns showed that apart from Gaode street (wprd host + `scl=2`, 512px), Carto / OSM /
+  Esri / Tencent / Gaode satellite **only serve 256px** — the source was not the cause.
+- The real issue was level selection: the map picked the tile level with `zoom.floor()`,
+  so the whole `[z, z+1)` band used level-`z` tiles, stretching the source up to **1.93×**
+  at z=12.9 and then 2–3× more by screen pixel density — a 4–6× physical upscale, hence
+  blur. Users often view the map at fractional zooms like 11.5 or 12.4, right in that half.
+
+**Changes**
+
+- Level selection now uses `zoom.round()`: the upscale is capped at √2≈1.41×, and the
+  upper half of the band downscales (0.71–1×). Applies to **all sources**, not just Gaode.
+- Combined with the previous release's 2× tiles, near-integer zoom on Gaode street gets
+  close to a physical 1:1 mapping.
+
+## [2.0.33] - 2026-10-03
+
+### 上报界面合并：一处开关，两处按钮
+
+**背景**
+
+- 用户反馈上报的开关「很乱」：地图状态栏、我的位置面板、沉浸页各写了一套
+  「立即上报」，文案与行为慢慢长歪；「开通自动上报」又散落在设置页、面板里，
+  同一个开关（`beaconEnabled`）在设置页叫「启用位置信标」、在别处叫别的名字。
+- 地图状态栏的「立即上报」在没拿到本轮定位时按下去会被上报闸拦下，却仍弹
+  「已发送」，是一条**假成功**提示。
+
+**改进**
+
+- 新增共用组件 `widgets.ReportActions`：**切换自动上报** + **立即上报** 两个
+  按钮并排，地图状态栏、我的位置面板、沉浸页三处**同一份**。左侧胶囊显示当前
+  模式（绿=自动 / 灰=单次），点一下切换；右侧「立即上报」任何模式下都立刻发一次。
+- 设置页「启用位置信标」统一改名为「自动上报」，节标题同名为「自动上报」，
+  并加一行说明指向主界面的一键入口 —— 从此只有一个名字、一个位置。
+- 一键切换在打开自动上报时，若卡在射频信标，**顺手一并打开并如实提示**，
+  杜绝「点了没反应」；有本轮定位时立刻补发一次。
+- 「立即上报」统一为：没拿到本轮定位时**如实提示「等待定位」**，不再弹假的已发送。
+
+---
+---
+
+## [2.0.33] - 2026-10-03 (English)
+
+### Report UI consolidated: one switch, two buttons
+
+**Context**
+
+- Users reported the reporting controls are "messy": the map status bar, the My-position
+  panel and the immersive page each had their own "report now", and the auto-report switch was
+  scattered across settings and panels — the same `beaconEnabled` field was called
+  "Enable beaconing" in settings and something else elsewhere.
+- The map status bar's "report now" still showed a "sent" toast when pressed with no fresh
+  fix, even though the send gate blocked it — a **false success**.
+
+**Changes**
+
+- New shared widget `widgets.ReportActions`: a **toggle auto-report** button and a
+  **report now** button side by side, used by all three surfaces (map status bar, My-position
+  panel, immersive page). The left pill shows the current mode (green = auto, grey = single);
+  tap it to switch. The right button sends one report immediately in either mode.
+- Settings' "Enable beaconing" renamed to "Auto-report", section title likewise, plus a hint
+  pointing at the main-screen control — one name, one place.
+- Toggling auto-report on now also enables the RF beacon if that was the blocker, and says so;
+  it sends one report right away when a fresh fix exists.
+- "Report now" now honestly shows "waiting for fix" instead of a false "sent" toast.
+
+## [2.0.32] - 2026-10-03
+
+### 改进：数据维护页重排 + 恢复出厂
+
+**背景**
+
+- 「清理过时台账」原本把**保留天数**放在「连接设置 → 存储上限」里，而清理按钮在
+  「数据维护」页 —— 参数和它控制的功能分在两页，用户很难找到，也不理解它俩的关系。
+- 手动清理**复用**了自动清理的「保留天数」，于是「点一下会清掉多少」取决于另一个
+  设置，用户反馈「很混乱」。
+- 想「从头再来」时，只有「清空全部数据」，它**保留呼号与所有设置**，无法真正重置。
+
+**改进**
+
+- **保留天数移入「数据维护」页**，与清理按钮同页、同一张卡，改成下拉选择
+  （关闭 / 3 / 7 / 14 / 30 / 60 / 90 / 180 / 365 天）；「连接设置」页不再有这一项。
+- 手动清理新增**独立的天数选择器**（默认「请先选择天数」，不落盘），与自动清理的
+  保留天数**互不影响**；按钮上按所选天数预览「将清理 N 个」。
+- 新增**「清除所有数据并重新初始化」（恢复出厂）**：清除台站、消息、日志、轨迹等
+  全部数据，**并连呼号、服务器、信标、界面等全部设置一起清除**，同时复位主题、
+  成就、翻译等本地状态与各类缓存文件，随后**重新运行首次引导（OOBE）**。
+  与「清空全部数据」并列展示，并在两者文案里讲明差别。
+
+**测试**
+
+- 新增 `tool/sim_factory_reset.py`：1:1 描述清理判据，断言「保留天数已在数据维护页、
+  手动清理用独立天数且不再复用自动保留天数、恢复出厂清空偏好/复位单例/重跑 OOBE」，
+  接进 CI。
+
+---
+---
+
+## [2.0.32] - 2026-10-03 (English)
+
+### Improvement: data-maintenance page rework + factory reset
+
+**Context**
+
+- "Clean up stale stations" kept its **retention days** in *Connection → Storage limits*,
+  while the prune button lives on the *Data maintenance* page — the parameter and the feature
+  it controls were on two different pages, so users could not find it.
+- Manual pruning **reused** the auto-prune retention days, so "how much does one tap remove?"
+  depended on another setting. Reported as "messy".
+- To truly start over there was only "Clear all data", which **keeps the callsign and all
+  settings** — not a real reset.
+
+**Changes**
+
+- **Retention days moved to the Data maintenance page**, on the same card as the prune button,
+  now a dropdown (off / 3 / 7 / 14 / 30 / 60 / 90 / 180 / 365 days); the Connection page no
+  longer has this field.
+- Manual pruning gets its **own day selector** (defaults to "choose a number of days first",
+  not persisted), **independent** of the auto-prune retention; the button previews
+  "will prune N" for the chosen days.
+- New **"Erase all data and start over" (factory reset)**: clears all data (stations, messages,
+  logs, tracks) **and all settings including callsign, server, beacon and UI**, resets local
+  state (themes, achievements, translations) and cache files, then **re-runs the first-run
+  wizard (OOBE)**. Shown next to "Clear all data", with copy that spells out the difference.
+
+**Tests**
+
+- New `tool/sim_factory_reset.py`: a 1:1 description of the pruning rule, asserting that
+  retention now lives on the data-maintenance page, manual pruning uses its own days (no longer
+  reusing the auto retention), and factory reset clears prefs / resets singletons / re-runs OOBE.
+  Wired into CI.
+
+---
+---
+
+## [2.0.31] - 2026-10-03
+
+### 修复：自定义状态「有时还显示 CONNECT」（状态帧自愈）
+
+**问题**
+
+- 独立状态报文是**一对**：先发内置身份帧 `>APRSlocus CONNECT vX.Y.Z 平台`，紧接着补一帧
+  用户自定义状态。两帧写的是 aprs.fi 上**同一个「台站状态」栏**，谁后到谁覆盖。
+- 补发那一帧是「发射即忘」：socket 抖动 / 半开时 `write` 可能失败而被静默吞掉，于是
+  aprs.fi 就**停在 CONNECT 文本上**。更糟的是每轮保活又先发一帧 CONNECT，等于每 30 秒
+  把错误文本再续一次 —— 用户看到的现象就是「明明填了状态，有时还显示 CONNECT」。
+
+**修复**
+
+- 连接器的 `send` 现在**回传成败**（写异常时返回 `false`，并主动收掉已半开的连接让上层重连）。
+- 保活记住「上次自定义状态帧没写进去」，**下一拍无视发报门槛立刻补发自定义帧本身**
+  （不重复发 CONNECT），直到写成功为止；自定义文本被清空时清除标记、不发（不空转）。
+- 连接成功那条路径同样记录失败标记，交给保活自愈。
+
+**测试**
+
+- 新增 `tool/sim_status_selfheal.py`：1:1 移植保活里与自愈相关的分支 + 回归断言
+  （`--check`），断言「丢帧后下一拍补的是自定义帧且不再发 CONNECT、连败重试到成功、
+  空文本清标记、链路正常不误报」，接进 CI。
+
+---
+---
+
+## [2.0.31] - 2026-10-03 (English)
+
+### Fix: custom status "sometimes shows CONNECT" (status-frame self-heal)
+
+**Problem**
+
+- An independent status report is a **pair**: the built-in identity frame
+  `>APRSlocus CONNECT vX.Y.Z <platform>`, immediately followed by the user's custom status.
+  Both write the **same "station status" field** on aprs.fi — last one wins.
+- The compensating frame was fire-and-forget: a socket hiccup / half-open link could make the
+  `write` fail silently, leaving aprs.fi **stuck on the CONNECT text**. Worse, every keep-alive
+  sends a CONNECT frame first, re-writing the wrong text about every 30 s — exactly the user's
+  "I set a status, yet it sometimes still shows CONNECT".
+
+**Fix**
+
+- The connector's `send` now **reports success** (returns `false` on write failure and tears down a
+  half-open link so the upper layer can reconnect).
+- Keep-alive remembers "the last custom status frame did not make it" and, on the **next tick,
+  ignores the send gate and re-sends the custom frame itself** (no extra CONNECT) until it writes
+  successfully; if the custom text was cleared, the flag is dropped and nothing is sent (no busy loop).
+- The connect-success path records the same failure flag, handing it to keep-alive self-heal.
+
+**Tests**
+
+- Added `tool/sim_status_selfheal.py`: a 1:1 port of the keep-alive self-heal branch plus regression
+  assertions (`--check`) covering "the tick after a loss re-sends the custom frame and no CONNECT,
+  retries until success, clears on empty text, never false-positives on a healthy link", wired into CI.
+
+---
+
+## [2.0.30] - 2026-10-03
+
+### 数据维护：按天数清理过时的台站数据（issue #33）
+
+**新增**
+
+- **台站保留天数**（设置 → 连接 → 存储上限）：超过这个天数**没再听到**的台站，会在启动时
+  自动清理一次，避免历史台站无限堆积。默认 `0` = 关闭自动清理。
+- **「清理过时台站」入口**（设置 → 数据维护）：手动按天数清一次，并**先显示将清理多少个**，
+  确认后才执行；保留天数为 0 时提示可手动清理或先去设置天数。
+
+**取什么、留什么**
+
+- **只清普通台站**；**收藏 / 手动添加 / 你自己的台站永不被清理** —— 用户明确标记过的目标
+  不该因为「这几天没听到」就被自动删掉（与「台站数量上限」是同一套保留规则）。
+- 恰好卡在阈值上的台站**保留**（判据是「严格早于」才清）。
+- 「台站数据」在这里指的就是台站条目本身及其轨迹 / 遥测记忆（收包列表只在内存、重启即空、
+  不进磁盘）；清理**不可恢复**，所以只在用户显式触发或已开启的自动清理时发生，绝不静默全清。
+- 保留天数纳入备份，换机后不会静默变回「关闭」。
+
+**测试**
+
+- 新增 `tool/sim_prune.py`：1:1 移植清理判据的算法级仿真 + 回归断言（`--check`），
+  校验 Dart 判据与仿真一致，并断言「收藏/手动/自己永不被清、恰好卡阈值保留、
+  保留天数 0 时不清、只清更旧的普通台站」，接进 CI。
+
+## [2.0.30] - 2026-10-03 (English)
+
+### Data maintenance: prune stale stations by age (issue #33)
+
+**Added**
+
+- **Station retention (days)** (Settings → Connection → Storage limits): stations **not heard from**
+  for longer than this are pruned automatically at startup, so old stations do not pile up forever.
+  Default `0` = auto-prune off.
+- **"Prune stale stations"** (Settings → Data maintenance): prune manually by age, showing **how many
+  will be removed** first and confirming before acting; when retention is 0 it suggests pruning
+  manually or setting a number of days first.
+
+**What is kept**
+
+- **Only ordinary stations are pruned**; **favorites, manual contacts and your own station are never
+  pruned** — targets you explicitly marked should not be deleted just because they have not been
+  heard from for a few days (the same keep-rule as the station count limit).
+- A station exactly at the threshold is **kept** (the rule prunes only strictly older entries).
+- "Station data" here means the station entries themselves plus their track / telemetry memory
+  (the RX packet list is memory-only, empty after a restart, never written to disk). Pruning is
+  **irreversible**, so it only happens when you trigger it or when auto-prune is enabled — never a
+  silent full wipe.
+- The retention setting is included in backups, so it does not silently revert to "off" on a new device.
+
+**Tests**
+
+- Added `tool/sim_prune.py`: an algorithm-level simulation of the prune rule with regression
+  assertions (`--check`) that verify the Dart rule matches the simulation and assert
+  "favorites/manual/self are never pruned, at-threshold is kept, retention 0 prunes nothing,
+  only strictly older ordinary stations are removed", wired into CI.
+
+---
+
+## [2.0.29] - 2026-10-03
+
+### 修好生命守护「放手机就触发」的误报（issue #32 后续）
+
+**修复**
+
+- **稍微使劲把手机放在桌上就会触发碰撞提醒**：旧判据是「一个冲击尖峰 + 之后 12 秒不动」，
+  而**放手机**恰好同时满足这两条 —— 一个 3~8g 的尖峰，机器接着就一动不动。阈值调高也救不了
+  （放手机的尖峰本来就可能高过任何还算合理的撞击阈值），这是判据本身的问题，不是数值问题。
+  现在把两种事件的要求**分开**：
+  - **摔倒**：先有一段**自由落体**（失重，总加速度接近 0）再落地冲击 —— 放手机绝不会失重，
+    所以这条不误伤；
+  - **碰撞**：没有失重可依据，就要求那次冲击**明显更狠**（约为灵敏度阈值的两倍）—— 真实车祸
+    的峰值动辄 20g 以上，翻倍照样抓得到，而轻放手机的 3~8g 被挡掉。
+  两类都仍然要求「冲击之后约 12 秒没有明显运动」。
+- **修一个自由落体判据的 bug**：此前判「失重」用的是**去掉重力**的线性加速度，而它在静止时
+  恒为 0 —— 于是「放着不动」被当成了「一直在自由落体」，每次冲击都被判成「摔倒」，失重闸门
+  也一直开着。现在判失重改用**含重力的总加速度**（正常静止≈1g，只有真失重才趋近 0）。
+- 失重后的观察窗口从 4 秒收窄到 2 秒（让「摔倒」的判定更贴合真实的落地时序）。
+
+**说明**
+
+- 这是**启发式的收紧**，不是变得更灵敏：代价仍是**轻微碰撞（人还能动）不会提醒** ——
+  这个功能的定位是「人已经动不了了」，不是「发生过撞击」。判断依据与取舍在设置页的
+  说明卡里如实写明了（含「为什么放手机不再触发」）。
+
+---
+
+## [2.0.29] - 2026-10-03 (English)
+
+### Fix the life-guard false alarm that fired when setting the phone down
+
+**Fixed**
+
+- **Setting the phone down a bit firmly triggered a crash alert**: the old rule was "an impact
+  spike + then 12 s of stillness", and **setting the phone down** satisfies both at once — a 3–8 g
+  spike, after which the device is perfectly still. Raising the threshold cannot fix this (a
+  set-down spike can exceed any still-reasonable crash threshold); it is a flaw in the rule itself,
+  not in a number. The two events now have **separate** requirements:
+  - **Fall**: a **free fall** first (weightlessness — total acceleration near 0) followed by the
+    landing impact — setting the phone down never goes weightless, so this does not false-alarm;
+  - **Crash**: with no weightlessness to rely on, the impact must be **much harder** (about twice
+    the sensitivity threshold) — a real vehicle crash peaks at 20 g or more, so it still triggers,
+    while a 3–8 g set-down is rejected.
+  Both still require "no clear movement for about 12 s after the impact".
+- **Fixed a free-fall detection bug**: weightlessness used to be judged from the **gravity-removed**
+  linear acceleration, which is always 0 at rest — so "sitting still" was mistaken for "in free
+  fall", every impact was labelled a fall, and the weightlessness gate stayed open. It is now judged
+  from the **gravity-included total acceleration** (~1 g at rest; only true weightlessness tends to 0).
+- The post-weightlessness watch window was narrowed from 4 s to 2 s (so "fall" tracks the real
+  landing timing more closely).
+
+**Note**
+
+- This is a heuristic **tightening**, not added sensitivity: the cost remains that **a light
+  collision (person still moving) does not alert** — the feature targets "the person can no longer
+  move", not "an impact happened". The criteria and trade-offs are stated honestly on the settings
+  page's explainer card (including "why setting the phone down no longer triggers").
+
+---
+
+## [2.0.28] - 2026-10-03
+
+### 强化生命守护：告警强提醒 + 检测算法优化（issue #32）
+
+**新增**
+
+- **生命守护「强提醒」**：碰撞 / 摔倒、心率异常触发时，除了应用内弹窗，还会发一条
+  **高优先级系统通知**（响铃 + 震动 + 锁屏/抬头横幅）。此前告警只会挂到那条
+  `IMPORTANCE_LOW` 的常驻通知上 —— 系统不为它震动、也不弹横幅，手机放在兜里
+  （摔倒、开车时最常见的状态）根本察觉不到，等于「提醒不发声」。强提醒走**单独**的
+  高优先级通道，与常驻通知分开；Android 需要 `VIBRATE` 权限（已加）。设置页「开启条件」
+  里写明了这一点，并提示用户确认通知权限、不要把该渠道设成免打扰。
+- **碰撞 / 摔倒检测灵敏度三档**：设置 → 生命守护新增「灵敏 / 标准 / 抗颠簸」。
+  原来阈值写死，适配不了不同携带方式 —— 手机放裤兜里骑车，正常颠簸就能越过阈值；
+  固定在车把上又一路误报。灵敏度只影响**检测**（哪个撞击算数），不影响告警动作；
+  随备份一起走。
+- **iOS 补齐**：此前 iOS 侧没有任何通知实现，App 在后台时告警只能靠 Android。
+  现在补充本地通知（响铃 / 震动 / 横幅），并在 `MotionPlugin.swift` 里补齐与 Android
+  一致的碰撞/摔倒检测与灵敏度接口。
+
+**优化**
+
+- **碰撞 / 摔倒检测算法**：在原有「冲击 + 随后约 12 秒静止」之外，再看冲击前有没有
+  **自由落体**（加速度模 ≤ 0.35 g 持续 ≥ 80 毫秒）—— 摔倒几乎总是先自由落体再落地冲击，
+  车祸撞击则没有那一段。据此把告警区分为**摔倒**与**碰撞**，标题、图标与说明文字随之变化
+  （对摔倒的人说「疑似碰撞」是不准确的）。两类告警的**处理方式完全一样**，这只是把判断
+  说得更准。仍然是启发式，弹窗里照旧写明「不是工程级检测」。
+
+---
+
+## [2.0.28] - 2026-10-03 (English)
+
+### Stronger life guard: loud alarms and a better detection algorithm (issue #32)
+
+**New**
+
+- **Life-guard "strong reminder"**: when a crash/fall or an abnormal heart rate fires, besides
+  the in-app dialog the app now posts a **high-priority system notification** (sound + vibration
+  + lock-screen/heads-up banner). Previously alarms only went to the `IMPORTANCE_LOW` persistent
+  notification — the system neither vibrates nor shows a banner for it, so with the phone in a
+  pocket (the usual state during a fall or while driving) it was simply not noticed: a reminder
+  that makes no sound. The strong reminder uses its **own** high-priority channel, separate from
+  the persistent one; Android needs the `VIBRATE` permission (added). The "conditions" section of
+  the settings page spells this out and tells the user to allow notifications and keep the channel
+  out of Do Not Disturb.
+- **Three sensitivity levels for crash/fall detection**: Settings → Life Guard now offers
+  Sensitive / Standard / Firm. The threshold used to be hard-coded, which cannot fit every way of
+  carrying the phone — in a cycling pocket an ordinary bump crosses it, while a bar-mounted phone
+  then false-alarms the whole ride. Sensitivity only affects **detection** (which impact counts),
+  not what the alarm does; it travels with backups.
+- **iOS parity**: the iOS side previously had **no** notification implementation, so in the
+  background alarms relied on Android alone. It now posts local notifications (sound / vibration /
+  banner) and `MotionPlugin.swift` gained the same crash/fall detection and sensitivity channel as
+  Android.
+
+**Improved**
+
+- **Crash/fall detection algorithm**: on top of the existing "impact + then ~12 s of stillness",
+  it now also looks for a **free fall** just before the impact (acceleration magnitude ≤ 0.35 g for
+  ≥ 80 ms) — a fall almost always starts with a free fall before the landing impact, whereas a
+  vehicle crash does not. Alarms are therefore split into **fall** and **crash**, changing the
+  title, icon and explanatory text (telling someone who fell that it was "a suspected crash" is
+  inaccurate). Both kinds are **handled exactly the same**; this only makes the wording more
+  accurate. It is still a heuristic, and the dialog still says so ("not engineering-grade
+  detection").
+
+---
+
+## [2.0.27] - 2026-10-05
+
+### 连接成功后补发自定义状态包（issue #31）
+
+**修复**
+
+- **连接成功时用户自定义状态包被内置身份帧顶掉**（issue #31）：连上 APRS-IS 时会先发一帧
+  身份状态帧（`>APRSlocus CONNECT vX.Y.Z`，用于宣告在线 / 客户端标识），它会把 aprs.fi 上
+  「台站状态」那一栏改成内置文本。此前只有 15 秒保活帧会紧随其后补一帧自定义状态
+  （issue #18 的修复），而连接成功这条路径**漏了**，于是每次重连都会把用户设的状态顶掉一次。
+  现在两处都补发，且共用同一个组帧方法，避免再次漂移。
+
+---
+
+## [2.0.27] - 2026-10-05 (English)
+
+### Re-send the custom status packet after connecting (issue #31)
+
+**Fixed**
+
+- **The user's custom status packet was overwritten by the built-in identity frame on connect** (issue #31): when the app connects to APRS-IS it first sends an identity status frame (`>APRSlocus CONNECT vX.Y.Z`, to announce presence and the client id), which rewrites the "station status" field on aprs.fi with the built-in text. Only the 15-second keep-alive frame used to append a compensating custom-status frame (the issue #18 fix); the connect-success path **missed it**, so every reconnect wiped the user's status once. Both paths now re-send it, sharing a single frame builder so they cannot drift apart again.
+
+---
+
+## [2.0.26] - 2026-10-04
+
+### 我的位置标记显示方位角「小角角」+ 修地图页「每 Ns」显示旧值
+
+**新增**
+
+- **地图「我的位置」标记显示方位角**：圆环上多出一个朝航向的三角箭头
+  （蓝底白边，与圆点同一套视觉语言），一眼就能看出自己朝哪边走。
+  纯网络定位 / 静止未取得航向时不画，不拿猜的方向误导。
+
+**修复**
+
+- **左下角「我的位置」面板显示的上报间隔与倒计时不一致**：面板那行「自动上报中 ·
+  每 Ns」读的是**固定间隔**字段，而右边的倒计时读的是**当前生效间隔**。纯网络模式下
+  两者不同（生效值 = 网络间隔，默认 300 秒），于是间隔卡在 GPS 模式留下的旧值不动。
+  现在两处都改用生效间隔。
+
+---
+
+## [2.0.26] - 2026-10-04 (English)
+
+### A heading "corner" on the my-location marker + fix for a stale interval shown on the map
+
+**New**
+
+- **The map's my-location marker now shows heading**: a triangular arrow
+  (blue fill, white outline, matching the dot's visual language) points along
+  your course so you can tell at a glance which way you are facing. It is not
+  drawn for network-only fixes or when no course is known, rather than guessing a direction.
+
+**Fixed**
+
+- **The interval shown in the bottom-left my-location panel disagreed with the
+  countdown next to it**: the panel's "auto-reporting · every Ns" line read the
+  *fixed* interval field while the countdown read the *effective* one. In network-only
+  mode the two differ (effective = the network interval, 300 s by default), so the
+  label sat on a stale value left over from GPS mode. Both now use the effective interval.
+
+---
+
+## [2.0.25] - 2026-10-04
+
+### 群发 / 邀请前各加一次确认 + 修复升级后步数归零
+
+**新增**
+
+- **群发前提示一次确认**：无论从消息页选中群聊发送，还是从群跟踪页的快捷聊天面板
+  发给整个群，发送前都会弹一次「确认发送到 <群呼号>？」。群发是一键发给全体成员，
+  发出去收不回来，值得先问一句。
+- **邀请前提示一次确认**：单成员邀请（手动输入呼号或点成员旁的对勾）与建群时的
+  批量邀请，都会先弹一次确认（建群那句会写明「将邀请 N 位成员」）。
+
+**修复**
+
+- **升级 / 更改文件重装后「今日步数」归零**（issue #22-2）：今日步数此前只存在内存里、
+  从不落盘，任何一次冷启动、覆盖安装或改文件重编译都会先回到 0，若一直没等到传感器
+  读数就永远停在 0。现在**每次步数变化即落盘**，启动时把今日步数接回来；跨天照常按
+  日期归零，同一天内设备重启则把重启前已累计的部分接续上，不再凭空少一截。
+
+---
+
+## [2.0.25] - 2026-10-04 (English)
+
+### A confirmation before mass-send / invite + fix for steps resetting on upgrade
+
+**New**
+
+- **Confirm once before a group mass-send**: whether you send from the messages page with a
+  group selected, or from the tracker's quick-chat panel to the whole group, a single
+  "Send to <group call>?" prompt appears first. A mass-send goes out to every member at once
+  and cannot be recalled, so it is worth one confirmation.
+- **Confirm once before inviting**: single-member invites (typing a call or tapping the check
+  next to a member) and the batch invites fired when creating a group both ask once first
+  (the create-group prompt states how many members will be invited).
+
+**Fixed**
+
+- **"Steps today" resetting to zero after an upgrade / reinstall** (issue #22-2): the count
+  only ever lived in memory and was never written to disk, so any cold start, in-place upgrade
+  or rebuild began at 0 and stayed there until a sensor reading arrived. The count is now
+  **written on every change**, restored on launch; it still resets across a date change, and a
+  same-day device reboot resumes the pre-reboot accumulation instead of losing it.
+
+---
+
+## [2.0.24] - 2026-10-04
+
+### 荣誉庆祝改为「本地无记录即全部展示」+ 开发者选项可清除已阅读荣誉
+
+**修复**
+
+- **荣誉庆祝动画只有"被新授予"才弹，自己本来已有的荣誉从来不弹**：此前判定按
+  「新用户 / 老用户升级 / 全新安装」三种情形分别"建基线"，还会等在线名单，结果
+  只有刚好在运行中途被追加的称号才弹得出来。现在去掉了新老区分：判定就是一次
+  差集 `当前拥有 − 已阅读`。**本地没有记录**（全新安装、老版本升级、或记录被清除）
+  ⇒ 已阅读视为空集 ⇒ **当前已拥有的全部荣誉都会依次弹一遍**；只要用户看过一次，
+  记录即落盘，之后启动不再重复（除该账号新获荣誉）。想重新预览，见下面的开发者项。
+- **步数排行榜点「我」那一行，弹出的黑色提示条里一个字都看不清**：提示文字用了
+  `ts(12)`，其默认取色是深色 `C.ink`，却压在同样是深色的 SnackBar 底上 —— 深字
+  叠深底，整条就是"黑乎乎一片"。改为显式白字（`settings_pages` 里同类的一处一并修）。
+
+**新增**
+
+- **开发者选项新增「清除已阅读荣誉」**（设置 → 实验室与开发者工具）：清掉本机
+  「已阅读」记录，下次判定会把当前已拥有的荣誉重新展示一遍，方便预览与自测。
+
+---
+
+## [2.0.24] - 2026-10-04 (English)
+
+### Honor celebration now shows everything when there is no local record + a developer option to clear read honors
+
+**Fixed**
+
+- **The honor-celebration animation only fired for freshly granted honors, never for
+  honors you already had**: the check used to build a "baseline" differently for new
+  users, upgraded users, and fresh installs, and also waited for the online list - so only
+  a title granted while the app happened to be running could ever show. The new/old-user
+  distinction is gone: the check is now a single set difference `owned - read`.
+  **With no local record** (fresh install, an upgrade from an older version, or a cleared
+  record) "read" is treated as empty, so **every honor you currently own is shown in turn**;
+  once you have seen them, the record is written and later launches stay quiet (unless the
+  account is granted a new honor). See the developer item below to replay it.
+- **Tapping your own row in the steps leaderboard showed a black-on-black toast**: the
+  notice text used `ts(12)`, whose default color is the dark `C.ink`, on top of an equally
+  dark SnackBar background - dark on dark, i.e. the "all black" you saw. It is now explicit
+  white text (and one more instance of the same bug in `settings_pages` is fixed too).
+
+**New**
+
+- **Developer option "Clear read honors"** (Settings → Lab & developer tools): wipes the
+  local "read" record so the next check replays every honor you currently own - handy for
+  previewing and for self-testing.
+
+---
+
+## [2.0.23] - 2026-10-04
+
+### 新增「始终显示地图标签」+ 修复拦截页长按解封
+
+**新增**
+
+- **显示设置新增「始终显示地图标签」**：打开后，无论台站多密、缩得多小，地图上都会
+  显示每个台站的呼号标签（栅格与矢量两套地图都生效）。默认关，沿用原取舍（台站
+  ≤ 60 个，或缩放到 13 级以上才显示）—— 打开会明显变密，标签也可能互相重叠，且更
+  费渲染。该偏好会随备份一起走。
+
+**修复**
+
+- **拦截页「长按解封」按不出来**：远程限制名单里**软封**的隐藏解封入口（长按本机安装
+  标识）此前被两处手势抢走 —— 标识用的是 `SelectableText`，长按会弹出系统选区工具栏；
+  旁边的复制图标又因 `tooltip` 同样在长按时弹提示。于是长按永远不是「解封」，用户看到
+  的就是「变成复制/选择工具栏」。现在标识行是**单一手势区**：点一下 = 复制、长按 = 解封
+  （软封有效；硬封仍按设计**静默无反应**）。
+- **配套**：手册「设置参考」页已重新生成，补上新开关并同步此前滞后的若干设置项。
+
+## [2.0.23] - 2026-10-04 (English)
+
+### New "always show map labels" + intercept-page long-press fix
+
+**New**
+
+- **Display settings: "Always show map labels"**: when on, every station's callsign label is
+  drawn on the map regardless of station count or zoom (both the raster and vector maps). Off
+  by default, keeping the original trade-off (labels only when ≤ 60 stations or zoom ≥ 13) -
+  turning it on gets crowded, labels may overlap, and it costs more to render. The preference
+  travels with backups.
+
+**Fixed**
+
+- **The intercept page's "unblock on long-press" never fired**: the soft-ban hidden unblock
+  (long-press the install ID) was swallowed by two other gestures on the same row - the ID used
+  `SelectableText`, so a long-press raised the system selection toolbar, and the copy icon's
+  `tooltip` also triggers on long-press. The long-press was therefore never the unblock. The ID
+  row is now a **single gesture area**: tap = copy, long-press = unblock (works for soft bans;
+  hard bans stay silent by design).
+- **Also**: the manual's "Settings reference" page was regenerated to include the new switch
+  and to sync several previously missing settings.
+
+## [2.0.22] - 2026-10-04
+
+### 修复「老用户看不到荣誉庆祝」+ 首次运行不再预填连接参数
+
+**修复**
+
+- **老用户升级后看不到「恭喜获得」动画**：上一版加入了新荣誉庆祝，但**已见过荣誉**的
+  快照只有在你关闭过动画之后才会记录 —— 老版本没有这个功能，因此升级后磁盘上只有
+  荣誉表、没有「已见」记录。旧逻辑把这种情况一律当成全新安装，去「等第一份在线名单」
+  再建基线，而那份名单**已经包含刚授予的称号**，于是新荣誉被算进了基线、**永远不弹**。
+  现在会按「本地是否已有荣誉表」区分：老用户升级时立刻用本地缓存建立基线，本窗口内
+  到达的在线新授予即可正常弹出；全新安装仍等在线名单，不会把本来就有荣誉狂弹一遍；
+- **一次授予多枚荣誉只弹一枚**：旧逻辑只把展示顺序最靠前的那一枚作为主角，其余在
+  「标记已见」时被一并吞掉。现在按顺序**逐枚弹出**，关闭一枚自动补下一枚。
+
+**变更**
+
+- **首次运行的设置向导不再预填连接参数**：服务器、端口与 Passcode 一律留空（仅以灰色
+  提示常值），不再默认填好 `rotate.aprs2.net` / `14580` / `-1` —— 软件不预置、也不推荐
+  任何服务器地址。重新运行向导时仍会回填你保存过的值，现有配置不会丢。
+
+## [2.0.22] - 2026-10-04 (English)
+
+### Fix: existing users never saw the honor celebration + no prefilled connection
+
+**Fixed**
+
+- **Existing users never saw the "Congratulations" animation**: the previous release added
+  the new-honor celebration, but the *seen* snapshot is only written after you dismiss the
+  animation - and older versions had no such feature, so after upgrading the device held a
+  roster but no seen-record. The old logic treated that as a fresh install and waited for the
+  first online roster to build the baseline - but that roster **already contained the newly
+  granted honor**, so it was folded into the baseline and **never celebrated**. It now tells
+  existing users from fresh installs by whether a local roster is stored: on upgrade the
+  baseline is built immediately from the local cache, so a genuinely new online grant in the
+  same session still pops; a fresh install still waits for the online roster and never replays
+  honors you already had;
+- **Several honors granted at once only celebrated one**: the old logic picked just the
+  front-most honor and swallowed the rest when marking them seen. It now queues **every** new
+  honor and shows them one after another.
+
+**Changed**
+
+- **The first-run wizard no longer prefills connection fields**: server, port and Passcode are
+  left empty (common values only appear as grey hints) instead of defaulting to
+  `rotate.aprs2.net` / `14580` / `-1` - the app presets and recommends no server. Re-running
+  the wizard still restores your saved values, so nothing is lost.
+
+## [2.0.21] - 2026-10-04
+
+### 新获荣誉时弹「恭喜获得」庆祝动画
+
+**新增**
+
+- **获得新荣誉时弹出庆祝动画**：打开软件后，若检测到你的账号**被新授予**荣誉（成员称号或
+  FIRST FIX），会弹出一屏「恭喜获得」：半透明遮罩上金箔粒子四散，中央白底卡片里徽章带
+  光环 / 射线浮现，随后荣誉名、描述与主按钮依次淡入。造型沿用全 App 的浅色卡片语言，
+  徽章配色与荣誉墙一致；点按任意处或按钮即可关闭，**同一枚荣誉只弹一次**；
+- 判定只在**在线名单**到达后进行：全新安装不会把「本来就有」的荣誉误当成新授予弹一遍；
+  老用户此后获得的新授予同样会弹。已见记录随备份一起保存。
+
+## [2.0.21] - 2026-10-04 (English)
+
+### A "Congratulations" celebration when you earn a new honor
+
+**Added**
+
+- **A celebration animation for a newly granted honor**: after the app starts, if your account
+  has been **newly granted** an honor (a member title or FIRST FIX), a "Congratulations" screen
+  pops up: gold-foil particles scatter over a dimmed backdrop while a badge emerges with rings
+  and rays inside a white card, then the honor name, description and the primary button fade in.
+  It follows the app's light card language, and the badge color matches the honor wall. Tap
+  anywhere or the button to dismiss; **each honor is celebrated only once**;
+- Detection waits for the **online roster**: a fresh install never replays honors you already
+  had as if they were new, while a genuinely new grant to an existing user still shows. The
+  seen record is stored alongside backups.
+
+## [2.0.20] - 2026-10-03
+
+### 修复地图手势与矢量热力图 + 热力图档位
+
+**修复**
+
+- **手指正好落在台站上时，地图无法缩放/拖动**：台站标记的手势用了 `HitTestBehavior.opaque`，
+  会把**它身后**的地图手势挡掉，而地图的手势处理正在标记层之后。改成 `translucent`：标记与
+  地图都收到这个指针，由手势竞技场裁决（点 = 选中台站，拖动/捏合 = 地图）。栅格与矢量两套
+  地图都改了；
+- **矢量地图的热力图完全失效**：`_showHeatmap` 的第一行就是 `!_usePluginMap` —— 矢量地图被
+  直接排除在外。现在矢量地图也画热力图（用 flutter_map 自己的相机投影，尺寸与平移和瓦片一致），
+  并去掉了那行排除；
+- **「从收藏台站开始」新建会话会黑屏**：这个入口会**先关掉**「新建会话」对话框、再弹收藏面板，
+  而选完人以后又走了一遍"关对话框" —— 这一次没有对话框可关，`Navigator.pop` 弹掉的是**整个
+  消息页**，于是黑屏。现在选人与手打走同一条开会话的路，只有对话框还开着时才关它；
+- **手动选点（模拟位置）没有系统通知**：手动设坐标那条路会先停掉前台服务，却没再把「保活」
+  起回来 —— 而模拟位置模式正是靠这个前台服务在后台撑着 APRS-IS 连接、信标定时器，常驻通知
+  也来自它。现在停定位后会把保活起回来（幂等，不会来回重启服务）。
+
+**新增**
+
+- **热力图档位（设置 → 显示 → 地图）**：弱 / 中 / 强，调整热力光斑的大小与浓度，栅格与矢量
+  两套地图共用同一个值（开关仍在地图工具栏上）；
+- **台站详情：PHG 重新加回**（功率 / 天线高度 / 增益 / 方向）。这次放成**独立一行**，不再硬塞
+  进三列指标、也不在列表里孤立地报一个功率 —— 报文里带了 `PHG` 才出现。
+
+## [2.0.20] - 2026-10-03 (English)
+
+### Map gestures & vector heatmap fixes + heatmap level
+
+**Fixed**
+
+- **The map can't be zoomed/panned when a finger lands on a station**: the station marker used
+  `HitTestBehavior.opaque`, which swallowed the map's gestures *behind* it - and the map's
+  gesture handling sits after the marker layer. Switched to `translucent`: both the marker and
+  the map receive the pointer and the gesture arena decides (tap = select station, drag/pinch =
+  map). Applied to both the raster and the vector map;
+- **The heatmap never worked on the vector map**: the first line of `_showHeatmap` was
+  `!_usePluginMap`, excluding the vector map outright. The vector map now draws the heatmap too
+  (projected with flutter_map's own camera, so size and panning match the tiles), and that
+  exclusion is gone;
+- **"Start from a favourite station" opened a black screen**: that entry closes the New
+  conversation dialog before opening the favourites sheet, and the shared "start conversation"
+  path then closed a dialog again - but none was left, so `Navigator.pop` removed the **whole
+  messages page**. Picking a favourite now takes the same path as typing a callsign, closing the
+  dialog only when one is actually open;
+- **No system notification when the simulated location is set by picking a point**: setting the
+  position manually stopped the foreground service but never restarted keep-alive - and that
+  service is what holds the APRS-IS connection, the beacon timer and the persistent notification
+  alive in the background. It is now restarted after stopping location (idempotent, no service
+  churn).
+
+**Added**
+
+- **Heatmap level (Settings -> Display -> Map)**: Light / Medium / Strong, scaling the heat
+  blobs' size and density; shared by both the raster and the vector map (the on/off toggle
+  stays in the map toolbar);
+- **Station detail: PHG is back** (power / antenna height / gain / direction). This time it sits
+  on its **own line** instead of being crammed into the three metrics or a lone power figure in
+  the list - it only appears when the packet carries `PHG`.
+
+## [2.0.19] - 2026-10-03
+
+### 地图不再卡（三处根因）+ 收藏筛选与排行榜等一批改进
+
+**性能**
+
+- **台站多就卡（矢量地图）**：那套地图**完全没有视口裁剪** —— 把全世界台站都塞进
+  `MarkerLayer`，而台站版本号**每个报文都 +1**，于是**每个报文都重建几千个 Marker**。
+  现在只建视口内的（含约 20% 留白），并把相机中心纳入缓存判断（否则加了裁剪后拖动会僵住）；
+- **两边地图的标记都没有 `key`**：Flutter 只能按列表位置复用元素 —— 列表一变（哪怕只多一个
+  台站）后面全部重建。加上 `ValueKey(呼号)`，改成按**身份**复用；
+- **呼号标签**：文字排版是每个标记最贵的一步。台站密（> 60）或缩得很小（zoom < 13）时不画，
+  与"近了才显示呼号"一致；
+- **瓦片地图拖动不丝滑**：拖动的每一帧都会触发重建，滚进来的新瓦片**在拖动过程中**就发起
+  下载与解码，跟手指抢带宽和解码器。现在**手势期间压住加载**，只用已有瓦片顶着（矢量底图
+  一直可见，看不出缺图），手停 120ms 后一次性补上；
+- **数据包页**：每一行都在跑淡入动画，时长还是 `220 + i*15`（第 1000 行要 15 秒），
+  `ListView` 每次重建/回收都会重播 —— 一屏行逐帧重绘。改成"每个元素只淡入一次"，
+  交错时长按行号取模封顶。
+
+**新增**
+
+- **设置主页的连接状态面板点一下** → 弹出「链路方式」浮动面板：数据来源的快捷切换。
+  面板里用的是**同一张** `DataSourceCard`，所以与「连接 → 设备」页永远不会说两套话；
+- **「新建会话」下面加「从收藏台站开始」**：不想手打呼号时，直接从收藏里挑一个开会话
+  （没有收藏时不留空按钮，直接给"怎么收藏"的引导）；
+- **台站列表加「收藏」筛选**：与该页其它筛选条件并列生效；**在收藏视图下，每行右侧一颗
+  星标，点一下即取消收藏**（就地管理，不用进详情、也不用找另一个入口）；
+- **运动排行榜：自己排进列表**（原来只在榜单上面挂一张卡）。榜上每个数字都来自别人上报的
+  `STEPS`，而自己的步数是本机计步传感器给的 —— 所以以前从来不在榜里。
+
+**修复**
+
+- **佳明 LiveTrack 链接断开时的卡顿/闪退风险**：轮询间隔 5 秒、取数超时 15/20 秒，而定时器
+  **不等**上一轮结束 —— 链接一断，死链路上会同时挂三四个请求，越堆越多。现在上一轮没回来
+  就跳过这一轮，抓取途中被停止也立刻返回；
+- **盒子不再自称 TNC**：「盒子连接」页的按钮原来写「连接 TNC」、提示"先在蓝牙设置里配对
+  TNC" —— 盒子不是 TNC，补了三条属于它自己的文案；
+- **盒子链路模式文案**：`wifi (no BT)` → `wifi + APRS-IS`（与盒子自身定义一致）；
+- **设置主页**：删掉过时的「电台设备 · 待开放」（那页早已做好：数据来源 / 网关 / 链路状态），
+  页头副标题补全为「电台、定位、链路与数据」；
+- **地图页去掉「在线 / 移动 / 静止 / 离线」图例**；
+- **项目描述与三语 README 顺过一遍**：官网 meta / og / twitter / 首屏、解说页、README 三语、
+  `pubspec`、关于页副标题，统一成"本机工具、不预置服务器地址"的口径；README 三语结构对齐
+  （各 439 行 / 44 个标题），版本徽章也接进 `sync_version.py`（以后发版自动跟随）。
+
+## [2.0.19] - 2026-10-03 (English)
+
+### The map no longer stutters (three root causes) + favourites, leaderboard and more
+
+**Performance**
+
+- **Lag with many stations (vector map)**: that map had **no viewport culling at all** - every
+  station in the world went into a `MarkerLayer`, and the station version bumps on **every
+  packet**, so **every packet rebuilt thousands of Marker widgets**. Now only stations inside
+  the viewport are built (with ~20% margin) and the camera centre participates in the cache
+  check (otherwise panning would freeze the culled set);
+- **Markers had no `key`**: Flutter could only reuse elements by list position, so any list
+  change (even one new station) rebuilt everything after it. They now carry
+  `ValueKey(callsign)` and are reused by **identity**;
+- **Callsign labels**: text layout is the most expensive part of a marker. They are skipped
+  when stations are dense (> 60) or zoomed out (zoom < 13);
+- **Tiles were not smooth to drag**: every frame triggered a rebuild, and tiles scrolling into
+  view started downloading and decoding **during the drag**, competing with your finger.
+  Loading is now held back for the duration of the gesture (the vector backdrop stays visible,
+  so nothing looks missing) and resumed 120 ms after you stop;
+- **Packet page**: every row ran a fade-in whose duration was `220 + i*15` (row 1000 waited 15
+  seconds) and which restarted on every rebuild/recycle. It now fades in **once per element**
+  with a capped stagger.
+
+**New**
+
+- **Tap the connection banner on the settings home page** to open a floating "link method"
+  panel for quickly switching data sources. It uses the **same** `DataSourceCard`, so it can
+  never disagree with the Connection -> Device page;
+- **"Start from a favourite station"** under New session: pick one of your favourites instead
+  of typing a callsign (with guidance instead of an empty button when you have none);
+- **A "Favourites" filter in the station list**, combinable with the other filters - and in
+  that view each row gets a star on the right that **un-favourites in place**;
+- **Activity leaderboard: you are now ranked in the list** (you used to be a card above it).
+  Every number there comes from someone's `STEPS`, while your own steps come from the phone's
+  step sensor - which is why you were never in it.
+
+**Fixes**
+
+- **Stutter/crash risk when the Garmin LiveTrack link drops**: the poll interval is 5 s while
+  fetching times out at 15/20 s, and the timer did **not** wait for the previous round - so a
+  dead link accumulated three or four in-flight requests. A round is now skipped while one is
+  still running, and a stop mid-fetch returns immediately;
+- **The box no longer calls itself a TNC**: the box page's button said "Connect TNC" and told
+  you to pair a TNC; the box is not a TNC, and now has its own wording;
+- **Box link-mode text**: `wifi (no BT)` -> `wifi + APRS-IS` (matching the box's own definition);
+- **Settings home page**: the stale "Radio gear - coming soon" is gone (that page has long been
+  done: sources / iGate / link status), and the subtitle now reads "Station, location, links
+  and data";
+- **The map legend (online / moving / stationary / offline) was removed**;
+- **Project description and the three READMEs** were swept: site meta/og/twitter/hero, the
+  guide page, all three READMEs, `pubspec` and the About subtitle now consistently describe a
+  local tool that bundles no server address; the READMEs are structurally aligned (439 lines /
+  44 headings each) and their version badge is now maintained by `sync_version.py`.
+
+## [2.0.18] - 2026-10-02
+
+### 新增：Icom 电台 Wi-Fi / 以太网直连（IC-705 / IC-9700 / IC-7610 / IC-905）
+
+手机与电台处在**同一个局域网**里，就能直接收发 APRS 音频 —— 不用声卡，也不用 TNC：
+
+- **支持机型**：IC-705、IC-9700、IC-7610、IC-905（Icom 的 LAN 遥控协议）；
+- **不占用音频口**：PTT 与频率/模式控制走 CI-V、音频走网络，所以手机还能同时连着蓝牙
+  耳机或手台，互不打架；
+- **一级入口**：新增独立的「IC-705 电台」设备页，并在数据来源卡片里与 APRS-IS、TNC、
+  音频、PKWDWPL 并列成为一条链路；
+- **可靠性**：语音包重排与丢包策略、PTT 状态机、断线重连调度、会话计时策略各自独立实现，
+  并带 **19 个新测试文件**；
+- **安卓侧**：新增平台网络选择器（可指定走 Wi-Fi，不需要外部 AP 路由），不含第三方依赖。
+
+使用前请在电台的 WLAN 设置里开启遥控并设置 Network User 与密码，手机与电台保持同一网段。
+
+> 本功能由社区贡献者 **nimenhagg** 实现（PR #29）。合并前只调整了本地化生成文件的排版
+> （把整份重新生成改成仓库惯用的外科式补键，`+36343/-25096` → `+10729/-130`），
+> 功能代码未作改动。
+
+## [2.0.18] - 2026-10-02 (English)
+
+### New: direct Icom radio connection over Wi-Fi / Ethernet (IC-705, IC-9700, IC-7610, IC-905)
+
+With your phone and radio on the **same LAN**, you can send and receive APRS audio directly -
+no sound card and no TNC:
+
+- **Supported models**: IC-705, IC-9700, IC-7610, IC-905 (Icom's LAN remote-control protocol);
+- **No audio port used**: PTT and frequency/mode control go over CI-V while audio goes over the
+  network, so the phone can stay paired to a Bluetooth headset or handheld at the same time;
+- **First-class entry**: a dedicated "IC-705 radio" device page, and a data source that sits
+  alongside APRS-IS, TNC, audio and PKWDWPL;
+- **Reliability**: audio packet reordering and loss policy, a PTT state machine, a reconnect
+  scheduler, and session timing policy each have their own implementation and tests -
+  **19 new test files** in this release;
+- **Android**: a platform network selector (you can pin the connection to Wi-Fi without an
+  external AP route), with no third-party dependencies.
+
+Before use, enable remote control in the radio's WLAN settings and set a Network User and
+password; keep the phone and the radio on the same subnet.
+
+> Contributed by **nimenhagg** (PR #29). Before merging, only the layout of the generated
+> localisation files was corrected (whole-file regeneration replaced by the repository's
+> surgical key insertion: `+36343/-25096` -> `+10729/-130`); the feature code is unchanged.
+
+## [2.0.17] - 2026-10-02
+
+### 用户协议 V1.2：不提供服务器地址与互联网服务 + 首次引导默认不连接
+
+- **协议 V1.2**（三语，41 → 47 条）：新增 2.4 / 2.5（不提供、不运营、也不推荐任何 APRS
+  服务器地址；不提供 APRS-IS、iGate、数据上传、中转或存储等互联网服务；**软件不预置任何
+  服务器地址或端口，首次启动与默认配置下不连接任何 APRS-IS、iGate 或其他网络服务器**；
+  与任何第三方服务器无隶属、代理或合作关系，自行配置者自担数据出境、个人信息处理、无线电
+  管理等责任）、3.8（遵守《数据安全法》《个人信息保护法》，禁止非法追踪、骚扰、干扰）、
+  4.8（勿发送国家秘密、商业秘密、个人隐私或敏感位置信息）、7.8（自行配置服务器、自行上传
+  数据造成的损失不担责）；新增 5.4（启动时只请求"公告、远程配置名单、设备标识库、成员名单"这几样静态内容，只下载、不上传）；并删掉 5.1 与 4.2 里点名的第三方服务。
+- **首次引导：不再预填公共服务器、也不再自动连接**。服务器留空 = 不连接任何服务器，软件只在
+  本地工作；要联网由用户自行填写服务器与端口。原文案"可保持默认配置直接使用"一并改掉
+  （那等于在推荐）。
+- **移除 QQ 群入口**：应用内的 QQ 群横幅、「关于」页的 QQ 群链接、用户协议第十节里的 QQ 群
+  联系方式，以及公告里"本群"的说法，全部去掉。
+
+## [2.0.17] - 2026-10-02 (English)
+
+### Terms V1.2: no server address, no Internet service + first run connects to nothing
+
+- **Terms V1.2** (all three languages, 41 -> 47 clauses): adds 2.4 / 2.5 (we neither provide,
+  operate, nor recommend any APRS server address, and provide no Internet service such as
+  APRS-IS, iGate, upload, relay, or storage; **the software ships with no server address or
+  port and, on first launch and under default settings, connects to no APRS-IS, iGate, or other
+  network server**; we have no affiliation, agency, or cooperation with any third-party server,
+  and users who configure one bear the responsibility for cross-border transfer, personal-data
+  processing, and radio regulation), 3.8 (comply with data-protection and personal-information
+  laws; no unlawful tracking, harassment, or interference), 4.8 (do not send state secrets,
+  trade secrets, personal data, or sensitive location information), and 7.8 (no liability for
+  losses caused by servers you configure or data you upload); and removes the server addresses
+  named in clause 5.1.
+- **First run: no pre-filled public server and no automatic connection.** An empty server field
+  means no connection at all, with the app running locally only; to go online the user enters a
+  server and port. The old wording "the default settings work as-is" is gone (it amounted to a
+  recommendation).
+- **QQ group removed**: the in-app QQ banner, the QQ link on the About page, the QQ contact
+  in section 10 of the Terms, and the "group" wording in the notice are all gone.
+
+## [2.0.16] - 2026-10-02
+
+### 修复
+
+- **启动时的远程检查更及时**：原来只在"距上次成功检查超过 6 小时"时才检查，现在
+  **每次启动（新会话）都检查一次**，6 小时节流只用来挡同一会话内的重复检查。
+
+## [2.0.16] - 2026-10-02 (English)
+
+### Fix
+
+- **Remote checks are now timely at launch**: they used to run only when more than 6 hours had
+  passed since the last success; the app now checks on **every launch** (each new session),
+  with the 6-hour throttle only limiting repeat checks within a session.
+
+## [2.0.15] - 2026-10-01
+
+### 📄 用户协议更新到 V1.1（含赞赏声明）+ 三处修复
+
+**协议 V1.1**（三语同步，34 → 41 条）把"软件实际会做的事"补齐了 —— 以前有几件事代码里
+做了、协议里却没写：
+
+- **3.5 网关转发责任**：把 APRS-IS 的报文转到射频发射等于**代表他人在业余频段上发射**，
+  呼号/频率/功率/工作方式都需合法合规；
+- **3.6 未成年人**：应在监护人同意与指导下使用，后果由监护人承担；不得在无相应资格时发射；
+- **3.7 发出内容的正确性、合法性与各国文化差异**：APRS 是公开跨国网络，内容须真实、
+  准确、合法，并尊重各国法律、宗教与文化习俗；
+- **5.3 与哪些第三方通信**：天气发送位置、翻译发送待翻译文本、更新向 GitHub 请求版本、
+  佳明 LiveTrack 访问你填的链接、地图瓦片来自多源 —— **不使用该功能就不会发生**；
+- **7.6 "生命守护"等不是医疗设备**：碰撞/摔倒检测与心率告警只是辅助提醒，可能漏报误报
+  或延迟，**不是紧急救援服务**；紧急情况请直接拨打急救电话；
+- **7.7 数据可能传入第三方软件服务的免责声明**；
+- **9.4 关于赞赏**：赞赏完全自愿，不换取任何功能、优先支持或服务承诺，且不予退还；
+  未成年人需先取得监护人同意（赞赏页在二维码之前也写了同一口径的声明）。
+
+### 修复
+
+- **蓝牙连不上就闪退**：`BluetoothSocket.connect()` 是阻塞调用却跑在**主线程**上
+  （方法通道回调），连不上要等十几秒 → 系统判定"应用无响应"并杀掉它。现在连接在
+  工作线程进行、结果回主线程，失败时把半开的 socket 关掉；"连上后重算前台服务类型"
+  也改成连接成功的回调触发（否则 Android 14+ 后台会限制蓝牙）；
+- **手机电量同步不及时**：电量原来只在**定位回调**里刷新（手机放着不动、系统停发定位点
+  时就冻住），盒子上的电量会是几小时前的 → 改成按时间自节流刷新（30 秒，挂在已有的
+  1 秒 tick 上），与定位解耦；
+- **运动排行榜**：每行的副标题/尾标原来是占位文字（"今日 · …"、"未带步数"）、没有名次
+  数字、卡片副标题与页头重复、"我"卡片复述长说明；点台站只有它用整页 push（改成全应用
+  统一的底部面板）；**自己在榜上并标出来**；今日榜**只统计今天**听到的（三天前的步数
+  不再排在今天前面）。
+
+## [2.0.15] - 2026-10-01 (English)
+
+### ?? Terms of Use updated to V1.1 (with a donation clause) + three fixes
+
+**Terms V1.1** (all three languages, 34 -> 41 clauses) now documents what the software
+actually does:
+
+- **3.5 Gateway responsibility**: forwarding APRS-IS packets onto RF means you **transmit on
+  amateur bands on behalf of others** - callsign, frequency, power and mode must be lawful;
+- **3.6 Minors**: use with a guardian\'s consent and guidance, who bears the consequences; do
+  not transmit without the required qualifications;
+- **3.7 Accuracy, legality and cultural differences of what you send**: APRS is a public,
+  international network; content must be truthful, accurate and lawful and must respect local
+  laws, religions and customs;
+- **5.3 Which third parties see what**: weather sends a location, translation sends the text,
+  update checks query GitHub, Garmin LiveTrack opens the link you add, map tiles come from
+  several providers - **none of it happens unless you use that feature**;
+- **7.6 Life Guard etc. are not medical devices**: crash/fall detection and heart-rate alarms
+  are auxiliary reminders that may miss, misfire or lag - **not an emergency service**;
+- **7.7 Disclaimer: data may be passed to third-party software services**;
+- **9.4 About tips and donations**: entirely voluntary, they buy no feature, priority support
+  or service commitment, and are non-refundable; minors need a guardian\'s consent (the
+  sponsor page states the same before the QR codes).
+
+### Fixes
+
+- **Crash when Bluetooth fails to connect**: the blocking `BluetoothSocket.connect()` ran on
+  the **main thread** (method-channel callback) and could block for tens of seconds, so the
+  system declared the app unresponsive and killed it. Connecting now runs on a worker thread
+  with the result posted back; half-open sockets are closed on failure, and refreshing the
+  foreground-service type is triggered by the connected callback (otherwise Android 14+ would
+  restrict Bluetooth in the background);
+- **Stale phone battery**: it was only refreshed inside the location callback (a stationary
+  phone stops receiving fixes, freezing the value). It is now refreshed on a 30 s self-throttled
+  timer, independent of location;
+- **Sport ranking**: rows showed placeholder text ("Today - ...", "No steps"), had no rank
+  number, and the card subtitle duplicated the page header; tapping a station used a full-page
+  push instead of the app-wide bottom sheet; you are now on the board (and marked), and the
+  board counts **today only**.
+
+## [2.0.14] - 2026-10-01
+
+### 📊 新：盒子上的「APRSLOCUS」实时仪表盘（手机状态一眼可见）
+
+接着 2.0.13 的盒子支持，这一版把**手机那侧的实时状态**也推了过去：盒子上多了一页
+**APRSLOCUS** —— 心率、速度、方位、**自动上报倒计时**、里程（本次/累计）、电量、步数、
+定位精度、APRS-IS 与未读。跑步骑车时手机在包里，这些**不用掏手机就能看到**。
+
+- **心率当主角**：测到心率就放大显示（与应用里那颗红心同源）；没测到就自动换成
+  速度当主角，不留空白；
+- **上报倒计时 + 进度条**：与应用主页那根"上报横杠"**同一个判据**（`canAutoBeacon`），
+  一眼看出"还有多久发下一帧"；
+- **里程 / 电量 / 步数 / 精度**：来自应用的本次里程、累计里程、电量、步数、定位精度
+  （电量 ≤20% 会变橙色提醒）；
+- **附近台站**另拆一页 **NEARBY**（整屏 8 行：呼号 · 距离 · 方位 · 年龄 + 选中台备注）；
+- **协议改用 `TEL k=v …`**（不再堆位置参数）：应用以后加字段**不用动固件** ——
+  盒子对不认识的键静默跳过；值为空的键干脆不发，盒子写 `--`，绝不显示一个假的 0；
+- **时效照旧不骗人**：没推过写 `none`、超过 120 秒写 `stale`。
+
+盒子固件那边同时修了两处真 bug：README/HELP 承诺却**没实现**的 `CFG?`，
+以及 `NEAR 0`（清空附近台站列表）。
+
+### 📡 修：`IS rx-only` 说清楚 + 实时性（倒计时本地走）
+
+- **`IS rx-only` 不是故障**：`pass` 为 `-1`（默认"只收不发"）或 passcode 不对时，
+  APRS-IS 只认**通过验证**的登录，服务器回一句 `unverified` —— 以前这句话只存在
+  盒子内存里，界面只写 `RX-only`，让人以为坏了。现在三处都写清楚：首页卡片直接给
+  **`set pass`**；**SYS 页**补 `is RUN rxonly` 与**服务器的原话**
+  （`passcode invalid: RX only`）；这条状态变化还会作为 `EVT ERR …` 进应用的盒子事件
+  日志。**修法**：`pass` 填**基础呼号**（不含 `-SSID`）的 passcode，改完自动重连；
+- **实时性改成"盒子自己走"**：自动上报 / 自动信标的倒计时由**盒子本地每秒递减**
+  （应用只推"当下的事实"，盒子记住收到时刻自己减），这两页 **1 Hz 重绘** ——
+  屏幕每秒都在动，而不是等下一次推送；
+- **推送节奏收紧**：状态 **5 秒**、附近台站 **15 秒**、喂位置 **15 秒**。
+
+## [2.0.14] - 2026-10-01 (English)
+
+### 📊 New: the box now shows an "APRSLOCUS" live dashboard
+
+Building on the box support in 2.0.13, this release also pushes the phone live status
+to the box: a new **APRSLOCUS** page shows heart rate, speed, course, the **auto-report
+countdown**, mileage (trip / total), battery, steps, GPS accuracy, APRS-IS state and
+unread messages - all visible without taking the phone out of the bag.
+
+- **Heart rate takes the lead when available** (same source as the red heart in the
+  app); when there is none, speed takes that slot instead of leaving a blank;
+- **Countdown + progress bar** share the same rule as the app home bar
+  (`canAutoBeacon`), so "when does the next frame go out" is one glance;
+- **Mileage / battery / steps / accuracy** come from the app (battery turns orange at
+  20% or below);
+- **Nearby stations moved to their own NEARBY page** (8 rows: callsign, distance,
+  bearing, age, plus the selected station comment);
+- **The protocol now uses `TEL k=v …`** instead of positional fields: the app can add
+  a key without touching the firmware - the box silently skips keys it does not know,
+  and keys with no value are simply not sent (the box shows `--`, never a fake 0);
+- **Freshness still never lies**: `none` if nothing was pushed, `stale` past 120 s.
+
+The box firmware also fixes two real bugs: `CFG?`, which the README and HELP promised
+but the code never implemented, and `NEAR 0` (clearing the nearby list).
+
+### 📡 Fix: `IS rx-only` explained + real-time (local countdown)
+
+- **`IS rx-only` is not a fault**: when `pass` is `-1` (the default, receive-only) or the
+  passcode is wrong, APRS-IS only accepts a **verified** login and answers `unverified`.
+  That sentence used to live only in the box memory while the UI just said `RX-only`, so it
+  looked broken. Three places now spell it out: the home card shows **`set pass`**, the
+  **SYS page** gained `is RUN rxonly` plus the **server own words**
+  (`passcode invalid: RX only`), and a change of that state is pushed as `EVT ERR …` into
+  the app box log. **Fix**: set `pass` to the passcode of the **base callsign**
+  (without the -SSID); the box reconnects automatically;
+- **Real-time now comes from the box itself**: the auto-report / auto-beacon countdown
+  ticks **locally every second** (the app only pushes current facts; the box remembers when
+  it received them) and those two pages redraw at 1 Hz;
+- **Push cadence tightened**: status every **5 s**, nearby stations every **15 s**,
+  position feed every **15 s**.
+
+## [2.0.13] - 2026-10-01
+
+### 📦 新：APRSlocusBOX（APRS 小盒子）—— 用手机管你那台小盒子
+
+「设备」页多了一条 **APRSlocusBOX**：连上盒子之后，手机上就能把它管起来 ——
+读配置、改配置、把手机的位置喂给它、催它发一帧信标、看它到底在干什么。
+
+- **连接**：蓝牙 SPP 与 USB 串口都可以（按绑定设备自动选路，线速默认 115200）。
+  它走**独立通道** —— 管盒子不会打断正在收发的 TNC；
+- **盒子状态**：读回来的呼号/SSID、链路模式、自动信标间隔、APRS-IS 服务器、
+  GPS 波特率，以及 TX / BEACON / RXMSG / ACK / ERR 计数与最近一条事件；
+- **盒子配置**：全部 23 个键（键名与盒子文档逐字一致），点一项就地改，发 `CFG 键=值`；
+  改完自动回读 —— 显示的是**盒子里的真值**，不是你刚输入的值；
+- **把位置喂给盒子**：`POS lat lon [alt] [spd] [crs]`，可开「自动喂位置」（30 秒一次）——
+  盒子没有 GPS 时，出门带手机就能用；
+- **手机状态给盒子**：把**手机这侧看到的东西**推过去 —— 自己的速度/方位/海拔/
+  有没有定位/APRS-IS 通不通/未读消息，以及**附近台站列表**（按距离，最多 8 条）。
+  盒子的 **PHONE 页**显示这些：盒子只跑蓝牙（自己不上 APRS-IS）时，
+  「旁边有谁」在它上面本来是空的，现在这份数据能顶上去；
+- **盒子动作**：立即信标 / 状态报文 / 重连 APRS-IS / 清空台站 / 格式自检 / 重启盒子；
+- **盒子事件**：盒子推回来的 `EVT …` 与命令回执原文，可一键复制（排查时的唯一证据）。
+
+两条刻意的规矩：
+
+- 盒子**不是**「数据来源」：它自己就上 APRS-IS、自己组报文，本应用再收一遍只会重复，
+  所以它只作为「一台要管的设备」出现在设备页，不进数据来源多选；
+- **绝不自动发射**：信标与状态报文必须人点（与「射频发射永远要显式」同一条规矩）；
+  自动的只有本地的位置喂养与状态推送 —— 它们只写盒子的位置与屏幕，不上射频。
+
+顺带：备份里补上了盒子的配置与绑定设备，换机不用重新配一遍。
+
+> 盒子固件是配套的另一份工程（本版应用把协议与界面这一半做完了；固件那半需要有盒子的人
+> 自行烧录）。盒子侧同步新增了 **PHONE 页**与一次界面重做。
+
+## [2.0.13] - 2026-10-01 (English)
+
+### 📦 New: APRSlocusBOX — manage your little APRS box from the phone
+
+The Device page has a new entry, **APRSlocusBOX**: once connected you can manage the
+box from the phone — read its config, change it, feed it your position, trigger a
+beacon, and see what it is actually doing.
+
+- **Connection**: Bluetooth SPP or USB serial (picked automatically from the bound
+  device; baud defaults to 115200). It uses its **own channel**, so managing the box
+  never interrupts a TNC that is receiving or transmitting;
+- **Box status**: callsign/SSID, link mode, beacon interval, APRS-IS server, GPS baud,
+  plus TX / BEACON / RXMSG / ACK / ERR counters and the latest event;
+- **Box config**: all 23 keys (names match the box documentation), tap one to change it;
+  the app sends `CFG key=value` and then re-reads — so what you see is the **real value
+  in the box**, not the value you typed;
+- **Feed a position to the box**: `POS lat lon [alt] [spd] [crs]`, with an optional
+  "feed automatically" (every 30 s) — handy when the box has no GPS of its own;
+- **Phone status to the box**: pushes what the **phone** sees — speed, course, altitude,
+  fix, APRS-IS up/down, unread messages, and the **nearby station list** (by distance,
+  up to 8). The box shows them on its new **PHONE** page: in Bluetooth-only mode the box
+  has no APRS-IS of its own, so this is the only way it can show "who is nearby";
+- **Box actions**: beacon now / status packet / reconnect APRS-IS / clear stations /
+  format self-test / reboot the box;
+- **Box events**: the `EVT …` lines and command replies the box sends back, with
+  one-tap copy — the only evidence when something is wrong.
+
+Two deliberate rules:
+
+- the box is **not** a "data source": it talks to APRS-IS by itself, so receiving its
+  packets again here would only duplicate them — it appears as a managed device only;
+- **nothing is transmitted automatically**: beacons and status packets must be tapped
+  (same rule as "RF transmission is always explicit"); only position feeding and status
+  pushing are automatic, and they never go on air.
+
+Also: the box config and bound device are now included in backups.
+
+> The box firmware is a separate companion project; the app half (protocol + UI) is
+> done in this release. The firmware gained a **PHONE** page and a UI refresh.
+
+## [2.0.12] - 2026-10-01
+
+### 🧭 修：更新页不再让你自己选包，也不再跳浏览器
+
+2.0.11 里我把三个包的名单摆出来、点一行去浏览器下载 —— **这是错的**：
+绝大多数人只知道「我要更新」，让他去理解 `armeabi-v7a` 是什么、该选哪一个，
+等于把应用该做的事推给用户；而且下载本来就该在应用里完成。
+
+现在更新页**按本机 CPU 自动挑好对应的包**（`dart:ffi` 的 `Abi.current()`，
+不需要任何原生通道），**直接在应用内下载**，只把「这次下的是哪个包」如实写出来
+（文件名 · 架构 · 大小）：
+
+- **32 位老机型自动拿到 `_armeabi-v7a`**、模拟器自动拿到 `_x86_64`、
+  64 位手机照旧拿 `APRSLocus_<版本>.apk` —— 不会再出现「下完提示与设备不兼容」；
+- 认不出架构（桌面端 / Web / 没见过的 ABI）时回退到**分架构之前的行为**
+  （列表里第一个 `.apk`），所以认不出来也不会变成「挑不到包」；
+- 跟随的是**运行态** ABI：64 位手机若装的是 32 位包，就继续给它 32 位包
+  （同架构才能覆盖安装）。
+
+配套：挑包规则抽进 `lib/update_packages.dart`（纯函数），单测 8 条
+（其中一条专门钉「32 位机器绝不能拿到 64 位包」）；`tool/check_release_assets.py`
+扩到 9 条判据（含「本机架构标签必须与产物标签逐字一致」「更新页不许出现跳浏览器的入口」），
+负向自测 9/9 报红。
+
+## [2.0.12] - 2026-10-01 (English)
+
+### 🧭 Fix: the update page no longer asks you to choose a package, and never opens a browser
+
+In 2.0.11 I laid out the three packages as a list and had a tap open the browser download — **that was wrong**. Almost everyone only knows "I want to update"; making them work out what `armeabi-v7a` means and which row to pick pushes the app's job onto the user. And a download belongs inside the app anyway.
+
+The update page now **picks the package matching this device's CPU by itself** (`Abi.current()` from `dart:ffi` — no platform channel needed) and **downloads it in-app**, simply stating which file it is fetching (name · architecture · size):
+
+- a **32-bit device automatically gets `_armeabi-v7a`**, an emulator gets `_x86_64`, and a 64-bit phone keeps getting `APRSLocus_<version>.apk` — no more "downloaded, but Android says it is incompatible";
+- when the architecture cannot be determined (desktop / web / an ABI we have not seen) it falls back to the **pre-split behaviour** (the first `.apk` in the list), so an unknown device never ends up with "no package to download";
+- it follows the **running** ABI: a 64-bit phone that installed the 32-bit build keeps getting 32-bit packages, which is what an in-place update needs.
+
+Alongside: the picking rules moved into `lib/update_packages.dart` (pure functions) with 8 unit tests, one of which pins "a 32-bit device must never receive the 64-bit package"; `tool/check_release_assets.py` grew to 9 assertions (including "the local architecture labels must match the release labels character for character" and "the update page must not contain an external-browser entry point"), and its negative self-test goes red 9/9.
+
+## [2.0.11] - 2026-10-01
+
+### 📦 安卓安装包按 CPU 架构分包：81.6 MB → 约 30 MB
+
+实测 v2.0.10 的包（81.6 MB）里，**76.6 MB（94%）是三套原生库** —— 每套包含
+应用代码编译出的机器码（`libapp.so` 14~17 MB）与 Flutter 引擎（`libflutter.so`
+8~12 MB），分别对应 arm64-v8a / armeabi-v7a / x86_64。**而一台手机只会用得上其中一套**，
+另外两套是白带的。
+
+现在改成 `--split-per-abi`：Release 里有**三个各约 30 MB** 的包 ——
+**64 位**（沿用原来的文件名 `APRSLocus_2.0.11.apk`，**应用内更新默认下这个，
+逻辑一行没改**）、**32 位**（`_armeabi-v7a`）、**x86_64**（`_x86_64`，模拟器 / Chromebook）。
+
+「64 位沿用原名」不是随手定的：应用内更新取的是资产列表里**第一个 `.apk`**，
+而 GitHub 按**名字升序**返回 —— `.`（0x2E）比 `_`（0x5F）小，所以 64 位永远排第一。
+这条不变量由 `tool/check_release_assets.py` 钉住（8 条判据 + 负向自测 8/8 报红），
+破坏它**不会有任何东西失败**，只会有人默默下到装不上的包。
+
+### 🧭 更新页新增「选择安装包」
+
+安卓上若该版本有多个包，「检查更新」页会列出一行一个包（**文件名 · 架构 · 大小**），
+第一个标「推荐」= 应用内更新会挑的那个；**点一行在浏览器打开该包的下载地址**，
+方便只支持 32 位的老机型直接取 `_armeabi-v7a`。只在 ≥2 个包时出现，单包页面不变。
+
+- 顺带修：下载中以前英雄卡与下方卡片**各画一条进度条**（同一个下载看起来像两个任务），现在只留一条。
+- 挑包 / 命名 / 列表顺序这三条跨处约定抽成 `lib/update_packages.dart`（纯函数，页面要 AppState + 网络测不动），新增 6 条单测；其中一条专门钉住「**标推荐的那个 == 应用内更新会挑的那个**」。
+
+### 📣 公告
+
+公告整条改为说明这次「包小了、以及三个包怎么选」（简中 / 繁中 / 英文，官网同源）。
+
+## [2.0.11] - 2026-10-01 (English)
+
+### 📦 Android packages split per CPU architecture: 81.6 MB → about 30 MB
+
+In the v2.0.10 package (81.6 MB), **76.6 MB — 94% — was three sets of native libraries**, each holding the machine code compiled from the app (14–17 MB `libapp.so`) plus the Flutter engine (8–12 MB `libflutter.so`) for arm64-v8a / armeabi-v7a / x86_64. **A phone only ever uses one of them**; the other two were dead weight.
+
+The build now uses `--split-per-abi`, so a release carries **three packages of about 30 MB each**: **64-bit** (keeping the original file name `APRSLocus_2.0.11.apk` — **this is what the in-app update downloads, and that logic is untouched**), **32-bit** (`_armeabi-v7a`) and **x86_64** (`_x86_64`, for emulators / Chromebooks).
+
+Keeping the plain name for the 64-bit build is not arbitrary: the in-app updater takes the **first `.apk`** in the asset list, and GitHub returns assets in **ascending name order** — `.` (0x2E) sorts before `_` (0x5F), so the 64-bit package is always first. `tool/check_release_assets.py` pins that invariant down (8 assertions, and its own negative self-test goes red 8/8), because breaking it **fails nothing at all** — someone just silently downloads a package that will not install.
+
+### 🧭 A "choose a package" block on the update page
+
+On Android, when a release has more than one package, the update page lists one row per file (**name · architecture · size**) with the first marked "Recommended" — the one the in-app update fetches — and **tapping a row opens that package's download URL in the browser**, so 32-bit-only devices can grab `_armeabi-v7a` directly. It only appears when there are two or more packages.
+
+- Also fixed: while downloading, the hero card and the card below it **each drew a progress bar** for the same download (it read as two separate tasks); now there is one.
+- The three cross-cutting rules — which package updates fetch, how they are named, and the order the list uses — were extracted into `lib/update_packages.dart` (pure functions; the page itself needs AppState and the network, so it cannot be unit-tested). Six unit tests cover them, one of which pins "**the row marked Recommended is the one the update downloads**".
+
+### 📣 Notice
+
+The in-app notice now explains the smaller package and which of the three to pick (Simplified Chinese / Traditional Chinese / English, generated for the website from the same source).
+
+## [2.0.10] - 2026-09-30
+
+### 🌏 新：支持国区（中国大陆）佳明 LiveTrack
+
+佳明的账号体系分**国际区**与**国区**两套服务器：国际区在 `livetrack.garmin.com`，
+国区在 `livetrack.garmin.cn`。此前只认国际区域名 —— 国区用户从佳明 App 分享过来
+只会看到「没有找到 LiveTrack 链接」，而且**连一次网络请求都没发出**，功能是静默失效的。
+
+现在三种域名写法都认（`.com` / `.cn` / `.com.cn`），**没有 `https://` 的一段链接也认**
+（从聊天窗口里复制出来的常常就是那样），并补了两处兜底：解析时会在**整篇文档**里找
+`trackPoints`（国区与老版分享页不是 Next.js 的流式块形态），抓取时照旧跟随 301 跳转。
+
+### 🐛 修：macOS 上主界面中文乱码
+
+正文几乎全部走同一个文字样式，而它的「主字体」在 macOS 上被写死成一个 CoreText
+**私有字体名**（`.SF NS Text`）。这个名字解析不到时，中文就**没有可回退的字体**，
+于是地图页、设置页的中文整片乱码。
+
+现在 macOS 交回系统默认字体（本来就是 SF，观感一致，但「挑字体 + 中文回退」交给系统做），
+并把中文回退表补全（`PingFang SC` / `Microsoft YaHei` / `Noto Sans CJK SC` …）；
+等宽区域（报文、日志、荣誉墙）也补上了中文回退 —— 等宽字体同样不含中文字形。
+`tool/check_ui_wiring.py` 加了判据：**不许再出现那个私有字体名**，回退表必须含三平台的中文字体。
+
+### 🐛 修：聊天输入框上方的长度计数器不实时
+
+报的是「字符数 / 整包字节」那一行不跟着打字变，**要等输入框失去焦点才更新**。
+
+根因：它在页面构建时读一次输入内容，而打字只会重建输入框自己，不会重建它旁边的计数器；
+「失焦」恰好也是一次重建，所以看起来像是失焦才刷新。
+
+现在它**自己监听输入**（打字时只重建这一行，不在每次按键时重建整个消息页），
+译发预览的判定（预览原文 == 当前输入）也一并搬进去；并补了回归测试 ——
+把监听去掉时测试立刻报红。
+
+## [2.0.10] - 2026-09-30 (English)
+
+### 🌏 New: LiveTrack from China-region Garmin accounts
+
+Garmin runs **two separate account systems** on two sets of servers: the international one at `livetrack.garmin.com` and the China-region (mainland) one at `livetrack.garmin.cn`. Only the international host was recognised, so a link shared from the China-region app just said "no LiveTrack link found" — and **not a single network request was ever made**, making the feature silently dead.
+
+All three host forms are accepted now (`.com` / `.cn` / `.com.cn`), including a link **without `https://`** (which is what copying from a chat window usually gives), and two fallbacks were added: parsing searches the **whole document** for `trackPoints` (the China-region and older share pages are not Next.js streaming chunks), and fetching still follows the 301 redirect.
+
+### 🐛 Fix: Chinese text was garbled across the macOS UI
+
+Almost all body text goes through one shared text style, and on macOS its "primary font" was pinned to a CoreText **private** family name (`.SF NS Text`). When that name fails to resolve, **no fallback is left for Chinese**, so the map page and the settings pages came out as garbage.
+
+macOS now uses the system default font instead (it is SF either way, so nothing looks different — the OS just does the font picking and CJK fallback), and the CJK fallback list was completed (`PingFang SC` / `Microsoft YaHei` / `Noto Sans CJK SC` …). Monospace areas (packets, logs, the honour wall) got CJK fallbacks as well — monospace faces carry no Chinese glyphs either. `tool/check_ui_wiring.py` now refuses that private font name and requires the three platforms' CJK families.
+
+### 🐛 Fix: the length counter above the chat input was not live
+
+Reported: the "characters / whole-packet bytes" row did not follow typing and **only updated once the field lost focus**.
+
+Cause: it read the field once during a page build, and typing rebuilds only the text field itself, never the counter beside it; losing focus happens to be one such rebuild, which is why it looked focus-driven.
+
+It now **listens to the input** (typing rebuilds just that one row, not the whole messages page), the translation-preview rule (the preview counts only while its source still matches what is typed) moved in with it, and a regression test goes red the moment that subscription is removed.
+
 ## [2.0.9] - 2026-09-28
 
 ### 🆘 新：生命守护增加「碰撞与摔倒检测」（测试）

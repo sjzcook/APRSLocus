@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'audio.dart';
 import 'audio_page.dart';
+import 'box_device_page.dart';
+import 'ext_gps_device_page.dart';
 import 'garmin_page.dart';
 import 'hr_page.dart';
+import 'ic705_device_page.dart';
 import 'link_test_card.dart';
 import 'pkwdwpl_device_page.dart';
 import 'platform_caps.dart';
@@ -49,26 +53,27 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
       builder: (context, _) => SettingsPageShell(
         guideId: 'device',
         title: s.deviceOverviewTitle,
-        subtitle: s.deviceOverviewSubtitle,
+        // 页副标题「数据来源、链路状态与自检」只是把这页有几块念了一遍 ——
+        // 用户说「设备页太多小字了」，这类描述结构的小字先删。
         icon: Icons.devices_other_rounded,
         color: C.indigo,
         body: Column(children: [
-          // ① 数据来源（多选 + 发射来源）
+          // 数据来源（多选 + 发射来源）
           DataSourceCard(
             state: state,
             extra: s.dataSourceSwitchHint,
           ),
           const SizedBox(height: 16),
-          // ② 网关
+          // ① 网关
           _igateCard(context, s),
           const SizedBox(height: 16),
-          // ③ 每条链路的状态（只读结论，避免在概览页误改参数）
+          // ② 每条链路的状态（只读结论，避免在概览页误改参数）
           _linksCard(context, s),
           const SizedBox(height: 16),
-          // ④ 子页入口
+          // ③ 子页入口
           _entriesCard(context, s),
           const SizedBox(height: 16),
-          // ⑤ 自检（折叠：结果很长，但排查时最有用）
+          // ④ 自检（折叠：结果很长，但排查时最有用）
           SettingsFold(
             title: s.diagTitle,
             subtitle: s.diagSubtitle,
@@ -135,7 +140,8 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           color: C.purple,
           onChanged: state.setIgateEnabled,
         ),
-        SettingsHint(s.igateHint),
+        // 原来这里还有一段两行的长说明（同样的意思副标题已经说过一遍）。
+        // 真正缺条件时下面那条橙色提示会指名道姓缺什么，不必常驻一条。
         // 启用前置条件没满足时**明确说缺什么**，而不是静默不工作。
         // 四种情形由 AppState.igateIdleReason 统一判定（勾没勾、连没连、
         // 是不是全被环路防护拒收），这里只负责把它翻成人话。
@@ -193,37 +199,53 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
     final rows = <Widget>[];
     for (final src in [
       AppState.srcAprsIs,
+      AppState.srcAcn,
       AppState.srcTnc,
       AppState.srcAudio,
       AppState.srcPkwdwpl,
+      AppState.srcNmeaGps,
     ]) {
       if (!state.enabledSources.contains(src)) continue;
       final up = state.isUp(src);
-      final isTx = state.dataSource == src;
-      final name = src == AppState.srcAprsIs
-          ? s.dataSourceAprsIs
-          : (src == AppState.srcTnc
-              ? s.dataSourceTnc
-              : (src == AppState.srcAudio
-                  ? s.dataSourceAudio
-                  : s.dataSourcePkwdwpl));
+      final isTx = state.posTxHas(src) || state.dataSourceMsg == src;
+      final isIcom = src == AppState.srcAudio &&
+          state.audio.config.source == AudioSource.icomLan;
+      final radioModel = state.audio.config.icomLan.model;
+      final name = switch (src) {
+        AppState.srcAprsIs => s.dataSourceAprsIs,
+        AppState.srcAcn => s.acnCardTitle,
+        AppState.srcTnc => s.dataSourceTnc,
+        AppState.srcAudio =>
+          isIcom ? 'WLAN 电台（${radioModel.id}）' : s.dataSourceAudio,
+        AppState.srcPkwdwpl => s.dataSourcePkwdwpl,
+        _ => s.dataSourceNmeaGps,
+      };
       final detail = switch (src) {
         AppState.srcAprsIs => '${state.aprs.server}:${state.aprs.port}',
+        AppState.srcAcn => '${state.acnServer}:${state.acnPort}',
         AppState.srcTnc => state.tnc.device?.label ?? s.tncNotBound,
         AppState.srcPkwdwpl =>
           state.pkwdwpl.device?.label ?? s.tncNotBound,
-        _ => '${state.audio.config.afsk.sampleRate} Hz · ${state.audio.backendName}',
+        AppState.srcNmeaGps =>
+          state.nmeaGps.device?.label ?? s.tncNotBound,
+        _ => isIcom
+            ? (state.audio.config.icomLan.host.isNotEmpty
+                ? '${radioModel.displayName} · ${state.audio.config.icomLan.host}:${state.audio.config.icomLan.controlPort}'
+                : 'WLAN 电台（${radioModel.id}）')
+            : '${state.audio.config.afsk.sampleRate} Hz · ${state.audio.backendName}',
       };
       final stats = switch (src) {
         AppState.srcAprsIs => s.notifRx('${state.packetsRx}'),
+        AppState.srcAcn => s.notifRx('${state.acnRx}'),
         AppState.srcTnc => s.tncStats(
             '${state.tnc.rxFrames}', '${state.tnc.txFrames}'),
         AppState.srcPkwdwpl => s.pkwdwplStats('${state.pkwdwpl.rxFrames}'),
+        AppState.srcNmeaGps => s.extGpsStats('${state.nmeaGps.fixes}'),
         _ => s.tncStats(
             '${state.audio.rxFrames}', '${state.audio.txFrames}'),
       };
       // 只读链路额外标一下：否则「只有收没有发」看着像统计坏了
-      final badge = src == AppState.srcPkwdwpl
+      final badge = (src == AppState.srcPkwdwpl || src == AppState.srcNmeaGps)
           ? ' · ${s.pkwdwplRxOnly}'
           : (isTx ? ' · ${s.dataSourceTxBadge}' : '');
       rows.add(SettingsRow2(
@@ -242,18 +264,18 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
     }
     return SettingsSectionCard(
       title: s.deviceCurrentLink,
-      subtitle: s.deviceCurrentLinkDesc,
+      // 「只读摘要 · 改参数请进对应子页」是讲这页怎么用的小字，删。
       icon: Icons.sensors_rounded,
       color: C.green,
       children: rows,
     );
   }
 
-  /// ④ 子页入口
+  /// ③ 子页入口
   Widget _entriesCard(BuildContext context, S s) {
     return SettingsSectionCard(
       title: s.deviceEntries,
-      subtitle: s.deviceEntriesDesc,
+      // 「每条链路一个子页，各管各的参数」同上：下面五行的标题已经说明了。
       icon: Icons.tune_rounded,
       color: C.cyan,
       children: [
@@ -266,6 +288,21 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           page: TncDevicePage(state: state),
           disabled: !tncPlatformSupported,
           disabledReason: s.iosFeatureUnsupported,
+        ),
+        _entry(
+          context,
+          icon: Icons.wifi_tethering_rounded,
+          color: C.cyan,
+          title: s.icomLanTitle,
+          desc: state.audio.config.source == AudioSource.icomLan
+              ? icomPhaseLabel(
+                  s,
+                  state.audio.icomLanLink?.phaseLabel ??
+                      (state.audio.connected
+                          ? s.connected
+                          : s.disconnected))
+              : s.icomTitleSubtitle,
+          page: Ic705DevicePage(state: state),
         ),
         _entry(
           context,
@@ -284,6 +321,34 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           page: PkwdwplDevicePage(state: state),
           disabled: !tncPlatformSupported,
           disabledReason: s.iosFeatureUnsupported,
+        ),
+        // 外接 GPS 模块：同样是一条「设备链路」（扫设备 / 绑定 / 连接），
+        // 只是它供的是本机位置。放在这里而不是只藏在数据来源卡里 ——
+        // 用户找「设备」时应该一眼看到它。
+        _entry(
+          context,
+          icon: Icons.gps_fixed_rounded,
+          color: C.blue,
+          title: s.extGpsDeviceTitle,
+          desc: s.extGpsDeviceDesc,
+          page: ExtGpsDevicePage(state: state),
+          disabled: !tncPlatformSupported,
+          disabledReason: s.iosFeatureUnsupported,
+        ),
+        // APRSlocus 小盒子（APRSlocusBOX）：它**不是报文来源** —— 盒子自己
+        // 就上 APRS-IS、自己组报文，本应用再收一遍只会与 APRS-IS/TNC 重复。
+        // 它对手机的意义是「一台要用手机管的设备」：改配置、喂位置、发信标。
+        // 所以它只出现在这里，不进「数据来源」多选。
+        _entry(
+          context,
+          icon: Icons.developer_board_rounded,
+          color: C.indigo,
+          title: s.boxDeviceTitle,
+          desc: state.box.config.enabled
+              ? '${state.box.connected ? s.connected : s.disconnected}'
+                  '${state.box.connected ? ' · ${state.box.device?.name ?? ''}' : ''}'
+              : s.boxDeviceDesc,
+          page: BoxDevicePage(state: state),
         ),
         // 心率带与佳明 LiveTrack：它们**不是报文链路**（不参与收发报文），
         // 而是「自己位置/心率的来源」，所以放在「设备」这一页的子页入口里，

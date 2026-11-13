@@ -1,9 +1,12 @@
 package com.aprslocus.aprslocus
 
 import android.Manifest
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -18,6 +21,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.security.MessageDigest
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aprslocus/location"
@@ -46,8 +50,36 @@ class MainActivity : FlutterActivity() {
     // 这次要读的字节上限。由 Dart 传进来：图标 2MB、背景图 8MB ——
     // 上限必须**在读之前**就知道，否则大文件照样会把内存吃爆。
     private var pickMaxBytes = MAX_ICON_BYTES
+
+    /// 导出文件写「公共下载目录」的权限请求（Android 9 及以下）。
+    ///
+    /// 单独的 requestCode：`onRequestPermissionsResult` 按 code 分派，
+    /// 与定位（100）/ 计步（200）/ 蓝牙（各自）混用会让两边同时命中、
+    /// 把对方还没完成的 Result 误 resolve。
+    private var pendingLegacyExport: PendingExport? = null
+
+    /// 一次待落盘的导出（Android 9 及以下：拿到存储权限后再写）。
+    ///
+    /// [content] / [bytes] 二选一：文本导出（ADIF / GPX / 备份）给前者，二进制
+    /// （WAV）给后者。两者「先要权限、拿到再写」的时机完全一样，所以共用这一条
+    /// 暂存路径，别各写一套。
+    private class PendingExport(
+        val result: MethodChannel.Result,
+        val filename: String,
+        val mime: String,
+        val content: String?,
+        val bytes: ByteArray?,
+        // 已经在磁盘上的文件（更新安装包）——直接流式复制进「下载」，
+        // 不走 Base64：34 MB 的包编成字符串会白白多占一倍内存。
+        val sourcePath: String? = null
+    )
+
     private companion object {
         const val REQ_PICK_BACKUP = 4711
+        const val EXPORT_PERM_CODE = 4712
+
+        /// 安卓安装包的 MIME：写「下载」条目与交给安装器都要用它。
+        const val APK_MIME = "application/vnd.android.package-archive"
 
         // 备份文本上限：读进来要整体转成 String 传给 Dart，
         // 不设上限的话一个误选的几个 G 的文件就能把应用 OOM 掉。
@@ -73,6 +105,16 @@ class MainActivity : FlutterActivity() {
     // 可以同时开着（各连各的设备）。协议区别全在 Dart 侧
     // （lib/pkwdwpl.dart 按行解析 NMEA，而不是解 KISS 帧）。
     private var pkwdwpl: TncManager? = null
+
+    // APRSlocusBOX（APRS 小盒子）：又说一遍 —— 独立通道 + 独立 socket，
+    // 所以「用手机管盒子」不会打断正在收发的 TNC。线上是明文命令行
+    // （`CFG k=v` / `POS …`），解析全在 Dart 侧（lib/box.dart）。
+    private var box: TncManager? = null
+
+    // 外接 GPS 模块（蓝牙 SPP）：字节搬运与前几条完全一样，线上是明文 NMEA
+    // 0183（`$GPRMC` / `$GPGGA` …），解析在 Dart 侧（lib/nmea.dart）。
+    // 独立通道 + 独立 socket：接 GPS 模块不能让电台那条链路断掉。
+    private var gps: TncManager? = null
 
     // 声卡 TNC（AFSK 1200）：同样只搬 PCM 采样，调制解调在 Dart 侧
     private var audio: AudioManager? = null
@@ -126,16 +168,17 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "startService" -> {
                     val mode = call.argument<String>("mode") ?: "gps_network"
+                    val intervalMs = (call.argument<Number>("intervalMs") ?: 0).toInt()
                     if (mode == LocationService.MODE_KEEPALIVE) {
                         // 模拟位置模式：不需要定位权限，但**仍需前台服务**，
                         // 否则应用一切到后台就会被冻结/回收：
                         // APRS-IS 连接断开、信标定时器停摆、地图不再刷新。
-                        startLocationService(mode)
+                        startLocationService(mode, intervalMs)
                         result.success(true)
                     } else if (!hasPermissions()) {
                         result.error("NO_PERMISSION", "缺少定位权限", null)
                     } else {
-                        startLocationService(mode)
+                        startLocationService(mode, intervalMs)
                         result.success(true)
                     }
                 }
@@ -148,9 +191,35 @@ class MainActivity : FlutterActivity() {
                     LocationService.setModeStatic(mode)
                     result.success(true)
                 }
+                // GPS 采样间隔（用户可调，见设置页的「GPS 采样间隔」）：
+                // 服务在跑就立即重建 provider 监听，没在跑就只记下来。
+                "setSampling" -> {
+                    val ms = (call.argument<Number>("intervalMs") ?: 0).toInt()
+                    LocationService.setSamplingStatic(ms)
+                    result.success(true)
+                }
+                "notifDiag" -> {
+                    val liveText = call.argument<String>("liveText") ?: ""
+                    val dartRunning = call.argument<Boolean>("dartRunning") ?: false
+                    val dartStatus = call.argument<String>("dartStatus") ?: ""
+                    result.success(diag(this, liveText, dartRunning, dartStatus))
+                }
+                // 服务到底在不在：Dart 那边只知道「启动调用发出去了」，
+                // 原生崩了/被系统挡下时它依然以为是跑着的。
+                "serviceAlive" -> result.success(LocationService.isRunning())
+                // 只改策略、不刷新文字：用户切了「实时更新」而服务没在跑，
+                // 靠文字刷新顺带设标志是丢的（没有 instance 就只写内存，也看不出）。
+                "setLiveUpdates" -> {
+                    LocationService.setLiveUpdatesStatic(call.argument<Boolean>("on") ?: false)
+                    result.success(true)
+                }
                 "updateNotification" -> {
                     val text = call.argument<String>("text") ?: "APRSlocus 运行中"
-                    updateServiceNotification(text)
+                    val short = call.argument<String>("short") ?: ""
+                    val live = call.argument<Boolean>("live") ?: false
+                    val countdown = (call.argument<Number>("countdown") ?: 0).toLong()
+                    LocationService.setLiveUpdatesStatic(live)
+                    updateServiceNotification(text, short, countdown)
                     result.success(true)
                 }
                 "showMessage" -> {
@@ -159,10 +228,42 @@ class MainActivity : FlutterActivity() {
                     NotifHelper.showMessage(this, from, text)
                     result.success(true)
                 }
+                // 订阅命中（lib/state.dart 的 _noteSubscriptions）：一条订阅一个通知位。
+                "showSubs" -> {
+                    val title = call.argument<String>("title") ?: ""
+                    val text = call.argument<String>("text") ?: ""
+                    val id = call.argument<String>("id") ?: ""
+                    NotifHelper.showSubs(this, title, text, id)
+                    result.success(true)
+                }
+                // 生命守护强提醒（issue #32）：高优先级 + 震动 + 抬头横幅。
+                "showAlarm" -> {
+                    val title = call.argument<String>("title") ?: ""
+                    val text = call.argument<String>("text") ?: ""
+                    NotifHelper.showAlarm(this, title, text)
+                    result.success(true)
+                }
                 "getBattery" -> {
                     val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
                     val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
                     result.success(level)
+                }
+                // 电量 + 是否在充电（低电量提醒用）：`ACTION_BATTERY_CHANGED` 是
+                // sticky 广播，`registerReceiver(null, filter)` 能当场拿到最近一次的状态，
+                // 不必常驻一个 BroadcastReceiver。
+                "getPower" -> {
+                    val bm = getSystemService(BATTERY_SERVICE) as android.os.BatteryManager
+                    val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                    val sticky = registerReceiver(
+                        null,
+                        android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                    )
+                    val status = sticky?.getIntExtra(
+                        android.os.BatteryManager.EXTRA_STATUS, -1
+                    ) ?: -1
+                    val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                        status == android.os.BatteryManager.BATTERY_STATUS_FULL
+                    result.success(mapOf("level" to level, "charging" to charging))
                 }
                 "checkPermissions" -> result.success(hasPermissions())
                 "requestPermissions" -> {
@@ -172,6 +273,16 @@ class MainActivity : FlutterActivity() {
                         permCompleter = result
                         requestPermissionsNow()
                     }
+                }
+                // 启动体检：只回答「现在哪些权限没在手上」，**不申请**。
+                // 申请是各功能自己的事（连接蓝牙时、开录音时、首次定位时）——
+                // 启动时再弹系统权限框，用户还没操作就先被拦一道。
+                "permissionReport" -> result.success(permissionReport())
+                // 体检提示里那个「去设置」：落到本应用的系统设置页，
+                // 用户在那儿把被关掉的权限打开，回来即生效。
+                "openAppSettings" -> {
+                    openAppSettings()
+                    result.success(true)
                 }
                 else -> result.notImplemented()
             }
@@ -216,17 +327,16 @@ class MainActivity : FlutterActivity() {
                             if (address.isNullOrEmpty()) {
                                 result.error("NO_ADDRESS", "缺少设备地址", null)
                             } else {
-                                try {
-                                    manager.connect(address)
-                                    // 蓝牙已接入：重算「还有没有设备在用蓝牙」，让前台
-                                    // 服务声明 connectedDevice 类型。与音频同一个坑 ——
-                                    // Android 14+ 不声明就会在退到后台后限制蓝牙访问
-                                    // （表现为「切后台收不到报文」）。
-                                    refreshBtActive()
-                                    result.success(true)
-                                } catch (e: Exception) {
-                                    result.error("BT_CONNECT_FAILED", e.message ?: "连接失败", null)
-                                }
+                                // connect 现在是**异步**的（RFCOMM 连接会阻塞十几秒，
+                                // 放主线程就是 ANR/闪退）：结果由 TncManager 在工作线程
+                                // 完成后回主线程 resolve —— 这里**不能**再 try/catch 同步包它，
+                                // 也不能自己 result.success(true)。
+                                manager.connect(address, result)
+                                // 蓝牙已接入：重算「还有没有设备在用蓝牙」，让前台服务
+                                // 声明 connectedDevice 类型（Android 14+ 不声明会在后台
+                                // 被限制蓝牙访问）。连接是异步的，所以在结果回来之前
+                                // 先按现状重算一次；真正连上后 emitState 还会再走一遍。
+                                refreshBtActive()
                             }
                         }
                         "disconnect" -> {
@@ -284,7 +394,7 @@ class MainActivity : FlutterActivity() {
         }
 
         // ① TNC（KISS 收发）
-        val tncManager = TncManager(this)
+        val tncManager = TncManager(this, onLinkChanged = { refreshBtActive() })
         tnc = tncManager
         wireSppLink(tncManager, TncManager.METHOD_CHANNEL, TncManager.EVENT_CHANNEL)
 
@@ -293,10 +403,12 @@ class MainActivity : FlutterActivity() {
             this,
             TncManager.METHOD_CHANNEL_PKWDWPL,
             TncManager.EVENT_CHANNEL_PKWDWPL,
+            // 注意：onLinkChanged 是**最后一个**具名参数，放在下面传入
             // 权限 requestCode 必须与 TNC 不同：下面 onRequestPermissionsResult
             // 会把结果转发给**两个**实例，共用同一个 code 会让两边同时命中，
             // 把对方尚未完成的 permResult 误 resolve。
             TncManager.PERM_REQUEST_PKWDWPL,
+            onLinkChanged = { refreshBtActive() },
         )
         pkwdwpl = pkwdwplManager
         wireSppLink(
@@ -304,6 +416,28 @@ class MainActivity : FlutterActivity() {
             TncManager.METHOD_CHANNEL_PKWDWPL,
             TncManager.EVENT_CHANNEL_PKWDWPL,
         )
+
+        // ③ APRSlocusBOX（APRS 小盒子：改配置 / 喂位置 / 催它发信标）
+        val boxManager = TncManager(
+            this,
+            TncManager.METHOD_CHANNEL_BOX,
+            TncManager.EVENT_CHANNEL_BOX,
+            TncManager.PERM_REQUEST_BOX,
+            onLinkChanged = { refreshBtActive() },
+        )
+        box = boxManager
+        wireSppLink(boxManager, TncManager.METHOD_CHANNEL_BOX, TncManager.EVENT_CHANNEL_BOX)
+
+        // ④ 外接 GPS 模块（NMEA 0183，位置来源）
+        val gpsManager = TncManager(
+            this,
+            TncManager.METHOD_CHANNEL_GPS,
+            TncManager.EVENT_CHANNEL_GPS,
+            TncManager.PERM_REQUEST_GPS,
+            onLinkChanged = { refreshBtActive() },
+        )
+        gps = gpsManager
+        wireSppLink(gpsManager, TncManager.METHOD_CHANNEL_GPS, TncManager.EVENT_CHANNEL_GPS)
 
         // BLE 心率带通道：扫描 → 连接 → 订阅标准心率服务 0x180D 的通知。
         //
@@ -322,7 +456,11 @@ class MainActivity : FlutterActivity() {
             // 传回调而不是把 TncManager 塞进去，是为了不让两个管理器互相引用 ——
             // 这里只需要「哪些地址现在被占着」这一个事实。
             busySppAddresses = {
-                setOfNotNull(tnc?.connectedAddress(), pkwdwpl?.connectedAddress())
+                setOfNotNull(
+                    tnc?.connectedAddress(),
+                    pkwdwpl?.connectedAddress(),
+                    box?.connectedAddress(),
+                )
             },
             // 链路状态是异步变化的（GATT 回调），Dart 的方法调用点覆盖不到，
             // 所以由管理器主动通知这里重算前台服务类型。
@@ -501,6 +639,11 @@ class MainActivity : FlutterActivity() {
                 }
             )
 
+        // IC-705 Wi-Fi 局域网通道：Android 平台网络选择器（无外网 AP 路由与 IP 探测）
+        val ic705Network = Ic705NetworkManager(applicationContext)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, Ic705NetworkManager.CHANNEL_NAME)
+            .setMethodCallHandler(ic705Network)
+
         // 安装器通道：安装 APK 更新包
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.aprslocus/installer").setMethodCallHandler { call, result ->
             when (call.method) {
@@ -512,6 +655,111 @@ class MainActivity : FlutterActivity() {
                         val ok = installApk(path)
                         result.success(ok)
                     }
+                }
+                // 安装包的身份：包名 / 版本号 / 签名摘要。不安装，只读。
+                "apkInfo" -> {
+                    val path = call.argument<String>("path")
+                    if (path == null) {
+                        result.error("NO_PATH", "缺少安装包路径", null)
+                    } else {
+                        Thread {
+                            val info = apkInfoOf(path)
+                            runOnUiThread { result.success(info) }
+                        }.start()
+                    }
+                }
+                // 本应用自己的身份（包名 / 版本号 / 签名摘要）：校验下载包时拿它比。
+                "ownSignature" -> result.success(ownInfo())
+                // 把下载好的包复制进系统「下载」目录（用户要求能自己找到）。
+                "copyToDownloads" -> {
+                    val path = call.argument<String>("path")
+                    val filename = call.argument<String>("filename")
+                    if (path == null || filename == null) {
+                        result.error("NO_PATH", "缺少路径或文件名", null)
+                    } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        // 旧系统写公共目录要存储权限：走导出那条「先要权限再写」的路。
+                        startExport(PendingExport(result, filename, APK_MIME, null, null, path))
+                    } else {
+                        Thread {
+                            val r = copyFileToDownloads(filename, path, APK_MIME)
+                            runOnUiThread { result.success(r) }
+                        }.start()
+                    }
+                }
+                // 列出「下载」里已经有的安装包（更新页的「已下载」靠它）。
+                "listDownloads" -> {
+                    val prefix = call.argument<String>("prefix") ?: ""
+                    Thread {
+                        val rows = listDownloads(prefix)
+                        runOnUiThread { result.success(rows) }
+                    }.start()
+                }
+                "deleteDownloads" -> {
+                    val name = call.argument<String>("name")
+                    if (name == null) {
+                        result.error("NO_NAME", "缺少安装包名", null)
+                    } else {
+                        result.success(deleteDownload(name))
+                    }
+                }
+                // 从「下载」里取包未安装：先校签名，再交给系统安装器。
+                "installApkFromDownloads" -> {
+                    val name = call.argument<String>("name")
+                    if (name == null) {
+                        result.error("NO_NAME", "缺少安装包名", null)
+                    } else {
+                        Thread {
+                            val prep = prepareDownloadsApk(name)
+                            runOnUiThread {
+                                val f = prep.file
+                                if (f == null) {
+                                    result.success(prep.error ?: "failed")
+                                } else {
+                                    result.success(if (launchInstall(f)) "ok" else "failed")
+                                }
+                            }
+                        }.start()
+                    }
+                }
+                // 校一下「下载」里那个包的签名（不安装、不留副本）。
+                "verifyDownloads" -> {
+                    val name = call.argument<String>("name")
+                    if (name == null) {
+                        result.error("NO_NAME", "缺少安装包名", null)
+                    } else {
+                        Thread {
+                            val prep = prepareDownloadsApk(name)
+                            val f = prep.file
+                            val status = if (f == null) {
+                                prep.error ?: "failed"
+                            } else {
+                                // 只是看一眼：临时副本立刻删掉
+                                if (!f.delete()) f.deleteOnExit()
+                                "ok"
+                            }
+                            runOnUiThread { result.success(status) }
+                        }.start()
+                    }
+                }
+                // 「下载」里那个包的完整身份（含文件 SHA-256）：联网校验用它比仓库那份。
+                "apkInfoFromDownloads" -> {
+                    val name = call.argument<String>("name")
+                    if (name == null) {
+                        result.error("NO_NAME", "缺少安装包名", null)
+                    } else {
+                        Thread {
+                            val info = infoOfDownloads(name)
+                            runOnUiThread { result.success(info) }
+                        }.start()
+                    }
+                }
+                // 安装完重启后清掉安装时的临时副本（cacheDir/update）。
+                "cleanUpdateCache" -> {
+                    try {
+                        File(cacheDir, "update").listFiles()?.forEach { it.delete() }
+                    } catch (_: Exception) {
+                    }
+                    result.success(true)
                 }
                 "canRequestInstall" -> result.success(canRequestPackageInstalls())
                 "openInstallSettings" -> {
@@ -592,15 +840,15 @@ class MainActivity : FlutterActivity() {
                 "saveToDownloads" -> {
                     val filename = call.argument<String>("filename") ?: "export.adi"
                     val content = call.argument<String>("content") ?: ""
-                    // 备份是 application/json，ADIF/音频保持 text/plain。
+                    // 备份是 application/json，ADIF/GPX/音频保持 text/plain。
                     // 不能都写 text/plain：部分系统会据此给文件名追加 .txt。
                     val mime = call.argument<String>("mimeType") ?: "text/plain"
-                    val path = saveToDownloads(filename, content, mime)
-                    if (path == null) {
-                        result.error("SAVE_FAILED", "保存失败", null)
-                    } else {
-                        result.success(path)
-                    }
+                    // Android 9 及以下：没有 MediaStore，写**公共**下载目录要
+                    // WRITE_EXTERNAL_STORAGE。先要权限，拿到后再真正落盘 ——
+                    // 不能「没权限就当失败」：那等于旧机器上导出功能直接不可用。
+                    startExport(
+                        PendingExport(result, filename, mime, content = content, bytes = null)
+                    )
                 }
                 // 音频 WAV 导出：二进制不能走 saveToDownloads（那条按 UTF-8 写文本）
                 "saveBytesToDownloads" -> {
@@ -618,14 +866,39 @@ class MainActivity : FlutterActivity() {
                         if (bytes == null) {
                             result.error("BAD_DATA", "文件内容解码失败", null)
                         } else {
-                            val path = saveBytesToDownloads(filename, bytes, mime)
-                            if (path == null) {
-                                result.error("SAVE_FAILED", "保存失败", null)
-                            } else {
-                                result.success(path)
-                            }
+                            // 音频也走同一条「先要权限」的路：否则旧机器上会悄悄
+                            // 落到应用私有目录，照着提示去找却找不到。
+                            startExport(
+                                PendingExport(
+                                    result, filename, mime, content = null, bytes = bytes
+                                )
+                            )
                         }
                     }
+                }
+                // 导出后直接分享：同一份文本当文件交给系统分享面板
+                "shareFile" -> {
+                    val filename = call.argument<String>("filename") ?: "export.gpx"
+                    val content = call.argument<String>("content") ?: ""
+                    val mime = call.argument<String>("mimeType") ?: "text/plain"
+                    result.success(shareFileTo(filename, content, mime))
+                }
+                // 分享**二进制**（轨迹叠层导出的 PNG）：同一个分享面板，内容走
+                // base64 —— 图片按 UTF-8 写会被替换字符毁掉。
+                "shareBytes" -> {
+                    val filename = call.argument<String>("filename") ?: "image.png"
+                    val b64 = call.argument<String>("base64")
+                    val mime = call.argument<String>("mimeType") ?: "image/png"
+                    val bytes = try {
+                        if (b64 == null) null
+                        else android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    result.success(
+                        if (bytes == null) false
+                        else shareBytesTo(filename, bytes, mime)
+                    )
                 }
                 // 备份导入：拉起系统文件选择器，返回 {name, content}
                 // 用户取消返回 null；文件过大 / 读失败走 error
@@ -780,8 +1053,10 @@ class MainActivity : FlutterActivity() {
     ///
     /// - Android 10（API 29）及以上：走 MediaStore，**无需任何存储权限**
     ///   （应用向 Downloads 集合插入自己的内容不需要 WRITE_EXTERNAL_STORAGE）。
-    /// - Android 9 及以下：写入应用的外部私有目录（同样无需权限；
-    ///   在那些系统版本上该目录可被文件管理器直接浏览）。
+    /// - Android 9 及以下：写入**公共**的「下载」目录（用户要求「放在文件
+    ///   目录，可以公共读」）。这是唯一一处需要 WRITE_EXTERNAL_STORAGE 的
+    ///   地方，且只在 24~28 上要（调用方已先要权限，见 `saveToDownloads`
+    ///   那条通道的分派）。
     private fun saveToDownloads(
         filename: String,
         content: String,
@@ -789,6 +1064,43 @@ class MainActivity : FlutterActivity() {
     ): String? = saveToDownloads(filename, mime) {
         it.write(content.toByteArray(Charsets.UTF_8))
     }
+
+    /// 落盘一次导出：旧系统上先要存储权限（拿到后由 `onRequestPermissionsResult`
+    /// 补做），其余情况直接写。
+    private fun startExport(job: PendingExport) {
+        if (needsLegacyStorage()) {
+            pendingLegacyExport = job
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                EXPORT_PERM_CODE,
+            )
+        } else {
+            finishExport(job)
+        }
+    }
+
+    /// 把一次导出落盘并回给 Dart（权限到手 / 不需要权限时都走这里）。
+    private fun finishExport(job: PendingExport) {
+        val bin = job.bytes
+        val src = job.sourcePath
+        val path = when {
+            src != null -> copyFileToDownloads(job.filename, src, job.mime)
+            bin != null -> saveBytesToDownloads(job.filename, bin, job.mime)
+            else -> saveToDownloads(job.filename, job.content ?: "", job.mime)
+        }
+        if (path == null) {
+            job.result.error("SAVE_FAILED", "保存失败", null)
+        } else {
+            job.result.success(path)
+        }
+    }
+
+    /// 是否需要先要 WRITE_EXTERNAL_STORAGE：只有 Android 9 及以下写公共目录才要。
+    private fun needsLegacyStorage(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
 
     /// 二进制版本（音频 WAV 导出用）。
     ///
@@ -803,6 +1115,23 @@ class MainActivity : FlutterActivity() {
         mime: String = "audio/wav"
     ): String? = saveToDownloads(filename, mime) { it.write(bytes) }
 
+    /// 把一个已经落盘的文件（更新安装包）复制进「下载」目录。
+    ///
+    /// 为什么不读成 Base64 传给 `saveBytesToDownloads`：安装包三十多 MB，
+    /// 编成字符串在 Dart 与 Kotlin 两头都要再占一份内存，低端机会直接被杀。
+    /// 这里逐块拷（默认 8 KB 缓冲），内存占用与包大小无关。
+    private fun copyFileToDownloads(
+        filename: String,
+        source: String,
+        mime: String
+    ): String? {
+        val f = File(source)
+        if (!f.exists()) return null
+        return saveToDownloads(filename, mime) { out ->
+            f.inputStream().use { input -> input.copyTo(out) }
+        }
+    }
+
     /// 写入「下载」目录的公共实现：插入 MediaStore 条目（或落到应用外部目录）
     /// → 交给 [write] 写内容 → 把文件名改成我们要求的那个。
     ///
@@ -814,6 +1143,11 @@ class MainActivity : FlutterActivity() {
     ): String? {
         // 文件名来自 Dart，做一次净化，避免路径穿越
         val safe = filename.replace('/', '_').replace('\\', '_')
+        // 音频 WAV 属于音乐/音频类型：放进 Downloads 的 Audio 子目录更整齐，
+        // 也让系统文件管理器的分类视图能直接找到（导出后要能一眼找到，
+        // 才能拿它去给 Direwolf / 电台解）。两个分支（MediaStore / 旧版公共
+        // 目录）都要用，所以判断提到 if 外面，避免两处各写一遍走偏。
+        val isAudio = safe.lowercase().endsWith(".wav")
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -821,10 +1155,6 @@ class MainActivity : FlutterActivity() {
                     put(MediaStore.MediaColumns.MIME_TYPE, mime)
                 }
                 val resolver = contentResolver
-                // 音频 WAV 属于音乐/音频类型：放进 Downloads 的 Audio 子目录更整齐，
-                // 也让系统文件管理器的分类视图能直接找到（导出后要能一眼找到，
-                // 才能拿它去给 Direwolf / 电台解）。
-                val isAudio = safe.lowercase().endsWith(".wav")
                 values.put(
                     MediaStore.MediaColumns.RELATIVE_PATH,
                     if (isAudio) {
@@ -866,10 +1196,34 @@ class MainActivity : FlutterActivity() {
                     "Download/$safe"
                 }
             } else {
-                val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
-                val f = File(dir, safe)
-                f.outputStream().use { write(it) }
-                f.absolutePath
+                // Android 9 及以下：没有 MediaStore，直接写**公共**下载目录。
+                // 用户要求「放在文件目录，可以公共读」：私有目录（以前的写法）
+                // 文件管理器里根本看不到，等于导出完找不到。写公共目录需要
+                // WRITE_EXTERNAL_STORAGE，调用方已先要过权限（见导出通道那条分派）。
+                val pub = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+                val dir = if (isAudio) File(pub, "APRSlocusAudio") else pub
+                val wrote = if (dir.exists() || dir.mkdirs()) {
+                    try {
+                        File(dir, safe).outputStream().use { write(it) }
+                        true
+                    } catch (_: Exception) {
+                        false
+                    }
+                } else {
+                    false
+                }
+                if (wrote) {
+                    if (isAudio) "Download/APRSlocusAudio/$safe" else "Download/$safe"
+                } else {
+                    // 拿不到权限 / 建不出目录时退回应用私有目录：
+                    // 宁可用户要多找一步，也不要「导出直接失败」。
+                    val priv = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir
+                    val f = File(priv, safe)
+                    f.outputStream().use { write(it) }
+                    f.absolutePath
+                }
             }
         } catch (_: Exception) {
             null
@@ -900,6 +1254,36 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {
             // 无可用分享目标时静默失败
         }
+    }
+
+    /// 系统分享面板（文件版）：把导出内容写进 cacheDir/share/，以 FileProvider
+    /// 的 content:// URI 交给其他 App（微信 / QQ / 邮件 / 网盘）。
+    ///
+    /// 为什么不能直接分享 file://：Android 7 起应用向外发 file:// 会抛
+    /// FileUriExposedException，应用当场崩溃。必须走 FileProvider。
+    /// 返回是否真的拉起了分享面板（没有可用目标时回 false，让 UI 如实提示）。
+    private fun shareFileTo(filename: String, content: String, mime: String): Boolean =
+        shareBytesTo(filename, content.toByteArray(Charsets.UTF_8), mime)
+
+    /// 同一套分享逻辑的字节版（图片 / 音频这类二进制）。
+    ///
+    /// 写成一份而不是两份：FileProvider 授权、cacheDir/share 落点、无目标时回
+    /// false 这几件事必须一致，复制一遍就等着哪天只修了其中一处。
+    private fun shareBytesTo(filename: String, bytes: ByteArray, mime: String): Boolean = try {
+        val safe = filename.replace('/', '_').replace('\\', '_')
+        val dir = File(cacheDir, "share").apply { mkdirs() }
+        val f = File(dir, safe)
+        f.writeBytes(bytes)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "分享 APRSlocus"))
+        true
+    } catch (_: Exception) {
+        false
     }
 
     /// 冷启动的分享入口。
@@ -1082,8 +1466,19 @@ class MainActivity : FlutterActivity() {
         // 蓝牙/录音权限请求走各自的 requestCode，勿与定位权限混淆
         tnc?.onRequestPermissionsResult(requestCode, grantResults)
         pkwdwpl?.onRequestPermissionsResult(requestCode, grantResults)
+        box?.onRequestPermissionsResult(requestCode, grantResults)
+        gps?.onRequestPermissionsResult(requestCode, grantResults)
         audio?.onRequestPermissionsResult(requestCode, grantResults)
         bleHr?.onRequestPermissionsResult(requestCode, grantResults)
+        // 导出落盘的存储权限（仅 Android 9 及以下会走到这里）：拿到权限后把
+        // 暂存的这次导出补做完。无论允许还是拒绝都要回一次 Result ——
+        // 拒绝时 saveToDownloads 会退到私有目录，导出仍然成功，不会被卡住。
+        if (requestCode == EXPORT_PERM_CODE) {
+            val pending = pendingLegacyExport
+            pendingLegacyExport = null
+            if (pending != null) finishExport(pending)
+            return
+        }
         if (requestCode != 100) return
         val ok = hasPermissions()
         permCompleter?.success(ok)
@@ -1100,9 +1495,55 @@ class MainActivity : FlutterActivity() {
         return fine || coarse
     }
 
-    private fun startLocationService(mode: String = LocationService.MODE_GPS_NETWORK) {
+    /**
+     * 当前权限授予情况：启动体检用（**只查、不申请**）。
+     *
+     * 为什么不复用各链路自己的 `checkPermissions`：那些只回答「够不够我这一条路
+     * 用」。权限有个很难自查的失败模式 —— 用户在系统设置里把它关掉之后，界面上
+     * 什么都看不出来，只会在用到的那一刻失败（定位那条最坏：前台服务声明拿不到
+     * 权限，服务直接结束）。启动时一次问清，界面才好如实说「缺哪一项、什么用不了」。
+     *
+     * 只报**核心功能**要用的两项：
+     *   * `location`：地图定位与信标上报；
+     *   * `notifications`：常驻通知、消息与生命守护强提醒（Android 13 起才是运行时权限，
+     *     之前一律算已授予）。
+     * 蓝牙 / 录音 / 计步这些是**按功能**要的，各自在用到的那一刻申请并提示
+     * （见 `TncManager`、`AudioManager`、`MotionManager`），放进启动体检只会在用户
+     * 根本没开那个功能时乱报「缺权限」。
+     */
+    private fun permissionReport(): Map<String, Boolean> {
+        fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
+        return mapOf(
+            "location" to hasPermissions(),
+            "notifications" to (
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    granted("android.permission.POST_NOTIFICATIONS")
+                ),
+        )
+    }
+
+    /** 打开本应用的系统设置页（权限体检提示里的「去设置」）。 */
+    private fun openAppSettings() {
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (_: Exception) {
+            // 极少数 ROM 没有这个页面：静默失败，用户仍可从系统设置自己进去
+        }
+    }
+
+    private fun startLocationService(
+        mode: String = LocationService.MODE_GPS_NETWORK,
+        intervalMs: Int = 0
+    ) {
         val intent = Intent(this, LocationService::class.java).apply {
             putExtra(LocationService.EXTRA_MODE, mode)
+            // 0 = 没指定：保持服务里现有的值（Dart 侧每次启动都会带上）
+            if (intervalMs > 0) putExtra(LocationService.EXTRA_INTERVAL, intervalMs)
         }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1125,11 +1566,13 @@ class MainActivity : FlutterActivity() {
     /// 各自传值调用，「断开时该传什么」各写各的 —— 已经踩过一次：先断开的那条
     /// 链路会把仍在工作的那条的 connectedDevice 声明撤掉，落回「退到后台就收不到
     /// 报文」的坑（Android 14+ 后台访问蓝牙必须有这个前台服务类型）。所以改成：
-    /// **调用方都不传布尔值**，由这里统一统计四条链路里是否还有活着的。
+    /// **调用方都不传布尔值**，由这里统一统计五条链路里是否还有活着的。
     /// 任何「我这条链路断了所以整体不活跃」的判断都是错的，必须走这里。
     private fun refreshBtActive() {
         val anyActive = tnc?.isConnected() == true ||
             pkwdwpl?.isConnected() == true ||
+            box?.isConnected() == true ||
+            gps?.isConnected() == true ||
             usbSerial?.isConnected() == true ||
             bleHr?.isConnected() == true
         setBtActive(anyActive)
@@ -1154,8 +1597,12 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun updateServiceNotification(text: String) {
-        LocationService.updateNotificationStatic(text)
+    private fun updateServiceNotification(
+        text: String,
+        short: String = "",
+        countdown: Long = 0
+    ) {
+        LocationService.updateNotificationStatic(text, short, countdown)
     }
 
     /// 音频采集会把麦克风带进前台服务：Android 14+ 必须让服务声明 microphone
@@ -1194,18 +1641,24 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun installApk(path: String): Boolean {
+        val file = File(path)
+        if (!file.exists()) return false
+        return launchInstall(file)
+    }
+
+    /// 把一个本地文件交给系统安装器（FileProvider 的 content:// URI）。
+    ///
+    /// 为什么不能直接分享 file://：Android 7 起应用向外发 file:// 会抛
+    /// FileUriExposedException。安装器虽然是系统应用，也照样得走 content://。
+    private fun launchInstall(file: File): Boolean {
         return try {
-            val file = File(path)
-            if (!file.exists()) {
-                return false
-            }
             val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             } else {
                 Uri.fromFile(file)
             }
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
+                setDataAndType(uri, APK_MIME)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -1213,6 +1666,266 @@ class MainActivity : FlutterActivity() {
             true
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /// 一次「从下载目录取包」的准备结果：要么给出可直接安装的本地文件，
+    /// 要么给出失败原因（`no-file` / `sig-mismatch` / `failed`）。
+    private class ApkPrep(val file: File?, val error: String?)
+
+    /// 从系统「下载」目录取一个安装包：复制到 cacheDir/update（应用自己可读）
+    /// → 校验证书与本机一致 → 交给系统安装器。
+    ///
+    /// 为什么不在下载目录里直接装：Android 10 起应用拿不到公共下载目录的
+    /// 文件路径（scoped storage），FileProvider 也就读不到它；而从 MediaStore
+    /// 的 content:// 直接交给安装器又依赖对外的 URI 授权，各系统实现不一致。
+    /// 复制一份到 cache 是最稳的一条路，二十几 MB 拷一次不到一秒。
+    private fun prepareDownloadsApk(name: String): ApkPrep {
+        val safe = name.replace('/', '_').replace('\\', '_')
+        val mine = ownSignature() ?: return ApkPrep(null, "failed")
+        val dir = File(cacheDir, "update")
+        if (!dir.exists() && !dir.mkdirs()) return ApkPrep(null, "failed")
+        // 只留一份：上一次没装完的副本在这里清掉
+        dir.listFiles()?.forEach { if (it.isFile) it.delete() }
+        val target = File(dir, safe)
+        if (!copyDownloadsTo(safe, target)) return ApkPrep(null, "no-file")
+        val info = apkInfoOf(target.absolutePath)
+        if (info == null) {
+            target.delete()
+            return ApkPrep(null, "failed")
+        }
+        val sig = info["sig"] as? String
+        val pkg = info["package"] as? String
+        if (sig == null || sig != mine || pkg != packageName) {
+            target.delete()
+            return ApkPrep(null, "sig-mismatch")
+        }
+        return ApkPrep(target, null)
+    }
+
+    /// 「下载」里那个包的完整身份：复制到缓存读一遍，读完就删。
+    ///
+    /// 与 [prepareDownloadsApk] 的区别：这里**不判**签名对不对——校验结果要
+    /// 原样交回 Dart 去显示（签名不对也要让用户看见是哪一道不对），不在这里
+    /// 一删了之。失败时返回 `{"error": "no-file" | "failed"}`。
+    private fun infoOfDownloads(name: String): Map<String, Any?> {
+        val safe = name.replace('/', '_').replace('\\', '_')
+        val dir = File(cacheDir, "update")
+        if (!dir.exists() && !dir.mkdirs()) return mapOf("error" to "failed")
+        // 只留这一份：上一次没读完的副本在这里清掉
+        dir.listFiles()?.forEach { if (it.isFile) it.delete() }
+        val target = File(dir, "info_$safe")
+        if (!copyDownloadsTo(safe, target)) return mapOf("error" to "no-file")
+        val info = apkInfoOf(target.absolutePath) ?: mapOf("error" to "failed")
+        target.delete()
+        return info
+    }
+
+    /// 把「下载」里叫 [name] 的那一份复制到 [target]。
+    private fun copyDownloadsTo(name: String, target: File): Boolean {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                val id = contentResolver.query(
+                    uri,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME}=?",
+                    arrayOf(name),
+                    "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+                )?.use { c -> if (c.moveToFirst()) c.getLong(0) else -1L } ?: -1L
+                if (id < 0L) return false
+                val row = ContentUris.withAppendedId(uri, id)
+                val input = contentResolver.openInputStream(row) ?: return false
+                input.use { ins -> target.outputStream().use { out -> ins.copyTo(out) } }
+                return true
+            }
+            val pub = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS
+            )
+            val f = File(pub, name)
+            if (!f.exists()) return false
+            f.inputStream().use { ins -> target.outputStream().use { out -> ins.copyTo(out) } }
+            return true
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    /// 列出「下载」目录里以 [prefix] 开头的文件（更新页的「已下载」用）。
+    private fun listDownloads(prefix: String): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                contentResolver.query(
+                    uri,
+                    arrayOf(
+                        MediaStore.MediaColumns.DISPLAY_NAME,
+                        MediaStore.MediaColumns.SIZE
+                    ),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf("$prefix%"),
+                    "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        val n = c.getString(0) ?: continue
+                        out.add(mapOf("name" to n, "size" to c.getLong(1)))
+                    }
+                }
+            } else {
+                val pub = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+                pub.listFiles()
+                    ?.sortedByDescending { it.lastModified() }
+                    ?.forEach { f ->
+                        if (f.isFile && f.name.startsWith(prefix)) {
+                            out.add(mapOf("name" to f.name, "size" to f.length()))
+                        }
+                    }
+            }
+        } catch (_: Exception) {
+        }
+        return out
+    }
+
+    /// 删掉「下载」目录里叫 [name] 的那一份。返回是否真的删掉了东西。
+    private fun deleteDownload(name: String): Boolean {
+        val safe = name.replace('/', '_').replace('\\', '_')
+        var ok = false
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // 先记下 id 再删：在游标未关时删同一张表，部分实现会报错。
+                val uri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                val ids = ArrayList<Long>()
+                contentResolver.query(
+                    uri,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.DISPLAY_NAME}=?",
+                    arrayOf(safe),
+                    null
+                )?.use { c ->
+                    while (c.moveToNext()) ids.add(c.getLong(0))
+                }
+                for (id in ids) {
+                    try {
+                        val row = ContentUris.withAppendedId(uri, id)
+                        if (contentResolver.delete(row, null, null) > 0) ok = true
+                    } catch (_: Exception) {
+                    }
+                }
+            } else {
+                val pub = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS
+                )
+                val f = File(pub, safe)
+                if (f.exists()) ok = f.delete()
+            }
+        } catch (_: Exception) {
+        }
+        return ok
+    }
+
+    /// 本应用的签名摘要（SHA-256，多个签名按字典序用逗号连）。
+    private fun ownSignature(): String? = ownInfo()?.get("sig") as? String
+
+    /// 本应用的包名 / 版本号 / 签名摘要。
+    @Suppress("DEPRECATION")
+    private fun ownInfo(): Map<String, Any?>? {
+        return try {
+            val info = packageManager.getPackageInfo(packageName, signatureFlags())
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                info.versionCode.toLong()
+            }
+            mapOf(
+                "sig" to signatureDigestOf(info),
+                "package" to info.packageName,
+                "versionCode" to code
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun signatureFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+
+    /// 一个包（已安装的、或磁盘上的 apk）到底用哪张证书签的。
+    @Suppress("DEPRECATION")
+    private fun signatureDigestOf(info: PackageInfo): String? {
+        val sigs: List<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val si = info.signingInfo ?: return null
+            si.apkContentsSigners?.toList() ?: return null
+        } else {
+            info.signatures?.toList() ?: return null
+        }
+        if (sigs.isEmpty()) return null
+        return sigs.map { sha256Hex(it.toByteArray()) }.sorted().joinToString(",")
+    }
+
+    private fun sha256Hex(data: ByteArray): String {
+        return hex(MessageDigest.getInstance("SHA-256").digest(data))
+    }
+
+    private fun hex(d: ByteArray): String {
+        val sb = StringBuilder(d.size * 2)
+        for (b in d) {
+            val v = b.toInt() and 0xFF
+            if (v < 16) sb.append('0')
+            sb.append(Integer.toHexString(v))
+        }
+        return sb.toString()
+    }
+
+    /// 一个文件的 SHA-256。联网校验拿它跟仓库里那份资产的 digest 比——
+    /// 签名只说明「同一个证书签的」，摘要才说明「就是这一次发布的那个文件」。
+    private fun sha256OfFile(f: File): String? {
+        return try {
+            val md = MessageDigest.getInstance("SHA-256")
+            f.inputStream().use { ins ->
+                val buf = ByteArray(1 shl 16)
+                while (true) {
+                    val n = ins.read(buf)
+                    if (n <= 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+            hex(md.digest())
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /// 读一个 apk 的包名 / 版本号 / 签名摘要（不安装）。
+    @Suppress("DEPRECATION")
+    private fun apkInfoOf(path: String): Map<String, Any?>? {
+        return try {
+            val f = File(path)
+            if (!f.exists()) return null
+            val info = packageManager.getPackageArchiveInfo(f.absolutePath, signatureFlags())
+                ?: return null
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                info.versionCode.toLong()
+            }
+            mapOf(
+                "sig" to signatureDigestOf(info),
+                "package" to info.packageName,
+                "versionCode" to code,
+                "versionName" to info.versionName,
+                "size" to f.length(),
+                "sha256" to sha256OfFile(f)
+            )
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -1231,10 +1944,14 @@ class MainActivity : FlutterActivity() {
         }
         tnc = null
         try {
+            box?.dispose()
+            box = null
             pkwdwpl?.dispose()
+            gps?.dispose()
         } catch (_: Exception) {
         }
         pkwdwpl = null
+        gps = null
         // 传感器监听必须显式注销：否则 Activity 销毁后传感器仍在唤醒
         try {
             motion?.stop()

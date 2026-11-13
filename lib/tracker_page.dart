@@ -858,15 +858,27 @@ class _TrackerPageState extends State<TrackerPage>
 
 
   /// 发送快捷聊天消息
-  void _sheetSend(
+  Future<void> _sheetSend(
     TextEditingController ctrl,
     bool isGroup,
     String? target,
     void Function() refresh,
-  ) {
+  ) async {
     final text = ctrl.text.trim();
     if (text.isEmpty) return;
+    // 发送前的连接自检（用户要求）：未连接服务器则报文发不出去，直接拦下。
+    if (!widget.state.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.of(context).chatNeedConnect),
+          backgroundColor: C.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     if (isGroup) {
+      // 用户要求：群聊发送不再弹「确定/取消」确认，直接发。
       widget.state.sendGroupMessage(
         widget.group.groupCall,
         text,
@@ -906,8 +918,8 @@ class _TrackerPageState extends State<TrackerPage>
                   .take(30)
                   .toList();
               return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  color: C.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),

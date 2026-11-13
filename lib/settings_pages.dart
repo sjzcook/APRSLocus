@@ -2,18 +2,29 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'theme.dart';
 import 'state.dart';
+import 'consent.dart';
+import 'desktop_metrics.dart';
 import 'models.dart';
+import 'coord_format.dart';
 import 'widgets.dart';
 import 'settings_widgets.dart';
 import 'garmin_page.dart';
 import 'hr_card.dart';
 import 'log_page.dart';
 import 'tile_map.dart';
+import 'audio.dart';
 import 'audio_page.dart';
 import 'device_page.dart';
+import 'acn_link_page.dart';
+import 'aprs_is_cards.dart';
+import 'crac_cert.dart';
+import 'crac_cert_page.dart';
+import 'ic705_device_page.dart';
 import 'platform_caps.dart';
+import 'desktop_tray.dart';
 import 'pkwdwpl_device_page.dart';
 import 'tnc_page.dart';
 import 'early_member.dart';
@@ -23,6 +34,8 @@ import 'theme_store.dart';
 import 'markdown_view.dart';
 import 'material.dart';
 import 'notice.dart';
+import 'agent.dart';
+import 'agent_ui.dart';
 
 /// ─── 电台设置 ───
 class StationSettingsPage extends StatefulWidget {
@@ -32,7 +45,25 @@ class StationSettingsPage extends StatefulWidget {
   State<StationSettingsPage> createState() => _StationSettingsPageState();
 }
 
-class _StationSettingsPageState extends State<StationSettingsPage> {
+/// ─── 电台身份卡片 ───
+///
+/// 呼号 / SSID / 默认徽章 / 台站备注，外加（设置页那一张才有的）高级设置与
+/// 「发射」按钮。单独成一块是因为它有两个入口：设置 → 电台里那一张，以及
+/// 地图页长按「上报状态条」呼出的编辑面板（[showStationIdentitySheet]）。
+/// 两处各写一遍的话，同一个字段迟早出现两套说法。
+class StationIdentityCard extends StatefulWidget {
+  final AppState state;
+
+  /// true = 设置页里那一张（含高级设置与发射按钮）；
+  /// false = 快捷编辑面板，只留身份字段。
+  final bool full;
+  const StationIdentityCard({super.key, required this.state, this.full = true});
+
+  @override
+  State<StationIdentityCard> createState() => _StationIdentityCardState();
+}
+
+class _StationIdentityCardState extends State<StationIdentityCard> {
   late final TextEditingController _call;
   late final TextEditingController _comment;
   late final TextEditingController _status;
@@ -147,12 +178,15 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
     // 增益**都**属于同一个 `PHGphgd`，见 [AppState.hasPhg]）；没有扩展就不发
     // 位置报文 —— 位置包的价值就在那段随包扩展上。
     final hasExt = st.hasPhg;
-    // 「填了 PHG 却没定位」要**明说**：`sendBeacon()` 内部被 `!myHasFix`
-    // 直接挡回（没坐标不能发位置包），这么一来只发出一帧状态报文。
+    // 「填了 PHG 却没定位」要**明说**：`sendBeacon()` 内部被上报闸
+    // （!myPositionReportable）挡回（没有**本轮**定位不能发位置包），
+    // 这么一来只发出一帧状态报文。
     // 不提示的话用户会以为 PHG 已经上天了 —— 只看流量、看不到一条位置帧。
-    final noFix = hasExt && !st.myHasFix;
+    // ⚠ 判据与 sendBeacon 同源：myPositionReportable 而非 myHasFix
+    // （后者含「上次保存的位置」，会让这里宣称发了、实际没发）。
+    final noFix = hasExt && !st.myPositionReportable;
     final sent = <String>[];
-    if (hasExt && st.myHasFix) {
+    if (hasExt && st.myPositionReportable) {
       st.sendBeacon();
       sent.add(s.txPartPosition);
     }
@@ -247,38 +281,35 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: st,
-      builder: (context, _) => SettingsPageShell(
-        title: S.of(context).stationSettings2,
-        subtitle: S.of(context).stationSettingsDetail,
-        icon: Icons.person_rounded,
+      builder: (context, _) => SettingsSectionCard(
+        title: S.of(context).stationIdentity,
+        subtitle: S.of(context).settingsStationIdentitySubtitle,
+        icon: Icons.badge_rounded,
         color: C.blue,
-        body: Column(children: [
-        SettingsSectionCard(
-          title: S.of(context).stationIdentity,
-          subtitle: S.of(context).settingsStationIdentitySubtitle,
-          icon: Icons.badge_rounded,
-          color: C.blue,
-          children: [
-            SettingsInput(S.of(context).callsign, _call,
-                tip: S.of(context).aprsCallsignHint,
-                onChanged: (v) {
-              if (v.trim().isNotEmpty) {
-                st.myCall = v.trim().toUpperCase();
-                st.persist();
-              }
-            }),
-            _ssidRow(),
-            _defaultBadgeRow(),
-            SettingsInput(S.of(context).callComment, _comment,
-                tip: S.of(context).callCommentHint,
-                // 这一行**默认就是空的**（v1.6.80 起备注默认清空），而它又是
-                // 自由文本 —— 用户反馈「都不知道那里是可以输入的」正是指这一行。
-                // 所以给它一句比通用提示更直白的占位文案。
-                hint: S.of(context).callCommentEmpty,
-                onChanged: (v) {
-              st.myComment = v.trim();
+        children: [
+          SettingsInput(S.of(context).callsign, _call,
+              tip: S.of(context).aprsCallsignHint,
+              onChanged: (v) {
+            if (v.trim().isNotEmpty) {
+              st.myCall = v.trim().toUpperCase();
               st.persist();
-            }),
+            }
+          }),
+          _ssidRow(),
+          _defaultBadgeRow(),
+          SettingsInput(S.of(context).callComment, _comment,
+              tip: S.of(context).callCommentHint,
+              // 这一行**默认就是空的**（v1.6.80 起备注默认清空），而它又是
+              // 自由文本 —— 用户反馈「都不知道那里是可以输入的」正是指这一行。
+              // 所以给它一句比通用提示更直白的占位文案。
+              hint: S.of(context).callCommentEmpty,
+              onChanged: (v) {
+            st.myComment = v.trim();
+            st.persist();
+          }),
+          // 高级设置与「发射」只在设置页那一张里出现：
+          // 快捷面板是用来改呼号/备注的，不是发射台。
+          if (widget.full) ...[
             // ── 高级设置（默认折叠）──
             //
             // 为什么折叠：这些项（高度覆盖 / PHG 三项 / 状态报文）平时根本不改，
@@ -307,24 +338,10 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
               ),
             ),
           ],
-        ),
-        SizedBox(height: 16),
-        SettingsSectionCard(
-          title: S.of(context).displayInfo,
-          subtitle: S.of(context).settingsDisplayInfoSubtitle,
-          icon: Icons.info_outline_rounded,
-          color: C.purple,
-          children: [
-            _symbolPicker(),
-            SettingsRow2(S.of(context).grid, st.myGrid),
-            SettingsRow2(S.of(context).myLocation, st.myPosStr),
-          ],
-        ),
-      ]),
+        ],
       ),
     );
   }
-
   Widget _ssidRow() {
     return GestureDetector(
       onTap: () => _pickSsid(context),
@@ -332,21 +349,38 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+        // 右端这一簇（SSID / 完整呼号 / 徽章 / 箭头）在窄屏上可能超宽：
+        // 左边标签让位（Flexible 1 : 3），整簇再用 FittedBox 缩一点，
+        // 不会溢出，也不会把徽章挤成省略号。
         child: Row(children: [
           Icon(Icons.tag_rounded, size: 16, color: C.blue),
           SizedBox(width: 8),
-          Text(S.of(context).ssidSuffix, style: ts(12, c: C.slate)),
-          Spacer(),
-          Text(
-            st.mySsid == 0 ? S.of(context).none : '-${st.mySsid}',
-            style: ts(13, c: C.blue, w: FontWeight.w700),
+          Flexible(
+            child: Text(S.of(context).ssidSuffix,
+                style: ts(12, c: C.slate),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
           ),
-          SizedBox(width: 4),
-          Text('· ${st.myFullCall}', style: ts(10, c: C.grey)),
-          SizedBox(width: 6),
-          HonorBadge(st.myFullCall, symbol: st.mySymbol),
-          SizedBox(width: 4),
-          Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+          SizedBox(width: 8),
+          Flexible(
+            flex: 3,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(
+                  st.mySsid.isEmpty ? S.of(context).none : '-${st.mySsid}',
+                  style: ts(13, c: C.blue, w: FontWeight.w700),
+                ),
+                SizedBox(width: 4),
+                Text('· ${st.myFullCall}', style: ts(10, c: C.grey)),
+                SizedBox(width: 6),
+                HonorBadge(st.myFullCall, symbol: st.mySymbol),
+                SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+              ]),
+            ),
+          ),
         ]),
       ),
     );
@@ -472,68 +506,149 @@ class _StationSettingsPageState extends State<StationSettingsPage> {
     );
   }
 
-  void _pickSsid(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setModalState) => MaterialSurface(
-          radius: 24,
-          topOnly: true,
-          child: Container(
-            decoration: BoxDecoration(
-              color: C.sheetFill,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 36, height: 4, decoration: BoxDecoration(
-                  color: C.greyLight, borderRadius: BorderRadius.circular(2))),
-              SizedBox(height: 14),
-              Text(S.of(context).chooseSsidSuffix, style: ts(16, w: FontWeight.w700)),
-              SizedBox(height: 4),
-              Text(S.of(context).ssidDesc,
-                  style: ts(11, c: C.grey), textAlign: TextAlign.center),
-              SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  for (final val in [0, ...List.generate(15, (i) => i + 1)])
-                    GestureDetector(
-                      onTap: () {
-                        setState(() => st.mySsid = val);
-                        st.persist();
-                        setModalState(() {});
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        width: 64,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: st.mySsid == val ? C.blue : C.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: st.mySsid == val ? C.blue : C.border),
-                        ),
-                        child: Text(val == 0 ? S.of(context).none : '-$val',
-                            textAlign: TextAlign.center,
-                            style: ts(13,
-                                c: st.mySsid == val ? Colors.white : C.slate,
-                                w: st.mySsid == val
-                                    ? FontWeight.w700
-                                    : FontWeight.w500)),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-            ]),
+  /// 选后缀：弹层在 settings_widgets 里（两个入口共用同一套），这里只管把
+  /// 选中的值写回并刷新 —— 前缀「-」与合法性都由 [AppState.setSsid] 处理。
+  Future<void> _pickSsid(BuildContext context) async {
+    final v = await showSsidPicker(context, current: st.mySsid);
+    if (v == null || !mounted) return;
+    st.setSsid(v);
+    setState(() {});
+  }
+
+}
+
+/// ─── 电台设置页 ───
+///
+/// 这一页只剩两件东西：身份卡（[StationIdentityCard]）与展示信息。
+class _StationSettingsPageState extends State<StationSettingsPage> {
+  AppState get st => widget.state;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: st,
+      builder: (context, _) => SettingsPageShell(
+        title: S.of(context).stationSettings2,
+        subtitle: S.of(context).stationSettingsDetail,
+        icon: Icons.person_rounded,
+        color: C.blue,
+        body: Column(children: [
+          StationIdentityCard(state: st),
+          _certCard(),
+          SizedBox(height: 16),
+          SettingsSectionCard(
+            title: S.of(context).displayInfo,
+            subtitle: S.of(context).settingsDisplayInfoSubtitle,
+            icon: Icons.info_outline_rounded,
+            color: C.purple,
+            children: [
+              _symbolPicker(),
+              SettingsRow2(S.of(context).grid, st.myGrid),
+              SettingsRow2(S.of(context).myLocation, st.myPosStr),
+            ],
           ),
-        ),
+        ]),
       ),
     );
+  }
+
+  /// 操作证验证：入口在本机没记录时，记录在本机有记录时。
+  ///
+  /// 用户 2026-10-22：电台页就能验证操作证，点进去**单独一页**先同意再填；
+  /// 只有内地呼号显示（其他地区的呼号不出现这一块）。
+  ///
+  /// 清除也放在这里 —— 记录是在哪块显示的，撤销就在哪块做。
+  Widget _certCard() {
+    if (!cracCallSupported(st.myBaseCall)) return const SizedBox.shrink();
+    final info = st.cracCert;
+    final s = S.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SettingsSectionCard(
+        title: s.cracCertInfo,
+        icon: Icons.verified_user_rounded,
+        color: C.green,
+        children: [
+          if (info == null)
+            InkWell(
+              onTap: _openCertPage,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(children: [
+                  Icon(Icons.add_circle_outline_rounded,
+                      size: 16, color: C.green),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(s.cracCertEntry,
+                        style: ts(13, c: C.ink, w: FontWeight.w600)),
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+                ]),
+              ),
+            )
+          else ...[
+            if (info.typeLabel.isNotEmpty)
+              SettingsRow2(s.cracCertType, info.typeLabel),
+            SettingsRow2(s.cracCertCall, info.call),
+            if (info.certNo.isNotEmpty)
+              SettingsRow2(s.cracCertNumber, info.certNo),
+            if (info.at.isNotEmpty) SettingsRow2(s.cracCertChecked, info.at),
+            InkWell(
+              onTap: _clearCert,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(children: [
+                  Icon(Icons.delete_outline_rounded, size: 16, color: C.red),
+                  const SizedBox(width: 8),
+                  Text(s.cracCertClear,
+                      style: ts(12, c: C.red, w: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ],
+          SettingsHint(s.cracCertVoluntary),
+        ],
+      ),
+    );
+  }
+
+  /// 跳进验证页：那一页自己有一段说明与「我同意」，同意后才看得到表单。
+  void _openCertPage() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => CracCertPage(state: st),
+    ));
+  }
+
+  /// 清除本机存的证书记录。要用户点一次确认，清掉之后可以重新查。
+  Future<void> _clearCert() async {
+    final s = S.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.cracCertClear, style: ts(15, w: FontWeight.w700)),
+        content: Text(s.cracCertClearAsk, style: ts(12, c: C.slate)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(s.cancel, style: ts(13, c: C.slate))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(s.clear,
+                  style: ts(13, c: C.red, w: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (yes != true || !mounted) return;
+    st.setCracCert(null);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(s.cracCertClearDone),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: C.ink,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
 
   Widget _symbolPicker() {
@@ -978,6 +1093,47 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
 
   AppState get st => widget.state;
 
+  /// 改「打开软件时」的档位：先把后果说清楚再落盘。
+  ///
+  /// 回到「不做操作」不用确认 —— 那只是少做一件事；往后开（自动连接 /
+  /// 自动上报）要用户点一下确认，因为它改变的是以后每次开机的行为，
+  /// 而「开机就发位置」没人替他决定。
+  Future<void> _pickAutoStart(int v) async {
+    if (v == st.autoStartMode) return;
+    if (v == 0) {
+      st.setAutoStartMode(0);
+      return;
+    }
+    final s = S.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.power_settings_new_rounded, color: C.green, size: 22),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(s.autoStartAskTitle, style: ts(16, w: FontWeight.w700)),
+          ),
+        ]),
+        content: Text(v == 2 ? s.autoStartAskReport : s.autoStartAskConnect,
+            style: ts(13, h: 1.7)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.autoStartAskCancel, style: ts(13, c: C.blue)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.autoStartAskOk, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || ok != true) return;
+    st.setAutoStartMode(v);
+  }
+
   /// 选「纯网络定位时用的符号」（issue #21-6）。
   ///
   /// 与「我的符号」那张卡共用同一张符号表（`_symCategories`），但**多一项**
@@ -1344,8 +1500,6 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   ),
                 ]),
               ),
-              SettingsHint(
-                  S.of(context).settingsManualLocHint),
             ],
           ),
         ],
@@ -1390,6 +1544,17 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   ),
                 ]),
               ),
+              // GPS 采样间隔（用户要求：「定位上报，用户可自调 GPS 采样率」）。
+              // 只在本平台真的能生效、而且真的会采样时才出现 —— 纯网络模式不注册
+              // GPS provider，iOS 的 CoreLocation 没有定时采样，桌面是 IP 定位。
+              if (st.locationMode != 'network' && gpsSamplingPlatformSupported)
+                SettingsChoice<int>(
+                  S.of(context).gpsSampleTitle,
+                  value: st.gpsIntervalSec,
+                  options: AppState.gpsSampleChoices,
+                  labelOf: (v) => S.of(context).gpsSampleSec('$v'),
+                  onChanged: st.setGpsIntervalSec,
+                ),
               // 诚实说清「网络辅助」的取舍：有用户报过「开了网络定位后位置
               // 飞来飞去」—— 那不是 bug，而是基站/Wi-Fi 定位本来就有几百米误差。
               // 说不清楚用户就会以为是应用坏了。纯网络模式下换一条更贴切的说明。
@@ -1418,6 +1583,23 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
             ],
           ),
         ],
+        const SizedBox(height: 16),
+        // 省电模式：一张自己的卡，而不是塞进「定位模式」里面 —— 它管的不只是
+        // 定位（地图上的动画也会停），而且纯网络 / 模拟定位下这个开关同样
+        // 有意义（仍然会停动画）。
+        SettingsSectionCard(
+          title: S.of(context).powerSave,
+          icon: Icons.battery_saver_rounded,
+          color: C.green,
+          children: [
+            SettingsSwitch(S.of(context).powerSave,
+                value: st.powerSave,
+                color: C.green,
+                onChanged: st.setPowerSave),
+            SettingsHint(S.of(context).powerSaveTip),
+            SizedBox(height: 10),
+          ],
+        ),
         SizedBox(height: 16),
         SettingsSectionCard(
           title: S.of(context).beaconingSection,
@@ -1427,6 +1609,38 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
           children: [
             SettingsSwitch(S.of(context).beaconEnabled, value: st.beaconEnabled,
                 onChanged: st.setBeaconEnabled),
+            // 用户反馈「上报的开关到处都有、不知道点哪个」——这里明确指路：
+            // 这个开关在主界面（地图）也有一键入口，且带「立即上报」。见
+            // widgets.ReportActions。
+            // 位置模糊：把发出去的位置降成一片方格（APRS101 第 8 章）。
+            // 只影响上报的那一包，本机地图与轨迹仍按真实坐标画。
+            SettingsChoice<int>(
+              S.of(context).beaconFuzz,
+              value: st.beaconAmbiguity,
+              options: const [0, 1, 2, 3],
+              labelOf: (v) => switch (v) {
+                1 => S.of(context).beaconFuzz200m,
+                2 => S.of(context).beaconFuzz2km,
+                3 => S.of(context).beaconFuzz20km,
+                _ => S.of(context).beaconFuzzOff,
+              },
+              onChanged: st.setBeaconAmbiguity,
+            ),
+            // ── 打开软件时：不做 / 自动连接 / 自动上报 ──
+            //
+            // 默认「不做操作」：开机就连网、就发位置是替用户做决定，所以由他自己
+            // 选，换档前还把后果摆到眼前（[_pickAutoStart] 的确认框）。
+            SettingsChoice<int>(
+              S.of(context).autoStartTitle,
+              value: st.autoStartMode,
+              options: const [0, 1, 2],
+              labelOf: (v) => switch (v) {
+                1 => S.of(context).autoStartConnect,
+                2 => S.of(context).autoStartReport,
+                _ => S.of(context).autoStartNone,
+              },
+              onChanged: (v) => unawaited(_pickAutoStart(v)),
+            ),
             // 上报状态栏样式：经典（单行）/ 详细（多一行判据，每秒刷新）。
             // 放在信标这一节里：它描述的就是「信标什么时候会发」。（issue #21-2）
             Padding(
@@ -1458,7 +1672,6 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                 ],
               ),
             ),
-            SettingsHint(S.of(context).beaconBarStyleTip),
             // 纯网络模式：没有可靠速度 → 智能信标 / 距离 / 转弯都不适用，
             // 改用**专用固定间隔**（见 AppState.beaconNetInterval）。
             if (st.locationMode == 'network')
@@ -1515,6 +1728,18 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   SettingsMiniSwitch(S.of(context).beaconIncludeSteps,
                       value: st.beaconIncludeSteps,
                       onChanged: st.setBeaconIncludeSteps),
+                  // 卫星数（用户 2026-10-14 要求）：同样是**非标准**备注字段
+                  // （`SAT=nn`），默认关。值来自正在供位的来源：手机 GPS（Android）
+                  // 或外接 GPS 模组（GGA），两条路汇到同一个 st.mySats。
+                  SettingsMiniSwitch(S.of(context).beaconIncludeSats,
+                      value: st.beaconIncludeSats,
+                      onChanged: st.setBeaconIncludeSats),
+                  // 电脑负载（用户要求）：桌面平台才出现 —— 手机上取不到
+                  // 「整机 CPU / 内存」，摆一个永远发不出值的开关只会让人以为坏了。
+                  if (DesktopMetrics.supported)
+                    SettingsMiniSwitch(S.of(context).beaconIncludeLoad,
+                        value: st.beaconIncludeDeskLoad,
+                        onChanged: st.setBeaconIncludeDeskLoad),
                 ],
               ),
             ),
@@ -1567,8 +1792,17 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                   ),
                 ),
               ),
-            if (st.hasStepSensor)
-              SettingsHint(S.of(context).stepsHint, color: C.grey),
+            // 卫星数：如实回显「现在几颗」（来源不说就是「—」，不是 0 ——
+            // 「不知道」与「一颗都没有」含义不同，见 AppState.mySats）。
+            SettingsRow2(
+              S.of(context).beaconSatsNow,
+              st.mySats == null ? '—' : '${st.mySats}',
+              valueColor: (st.mySats ?? 0) > 0 ? C.green : C.grey,
+            ),
+            // 「—」得有个说法：不然看起来就是「安卓取不到卫星数」。
+            // 真正的原因通常是来源不给（网络定位 / 机型差异），见 beaconSatsUnknown。
+            if (st.mySats == null)
+              SettingsHint(S.of(context).beaconSatsUnknown, color: C.grey),
             SettingsRow2(S.of(context).locationStatus,
                 localizedLocationStatus(context, st.locStatus)),
             SettingsRow2(S.of(context).beaconsSent,
@@ -1677,10 +1911,101 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
               ),
           ],
         ),
+        SizedBox(height: 16),
+        _consentCard(),
 
       ]),
       ),
     );
+  }
+
+  /// 上传/发射的「单独同意」（用户协议 V2.0 附件一）。
+  ///
+  /// 协议 5.2 要求授权与撤回在**同一层级**：这张卡就是那个层级 ——
+  /// 开关在信标那一节，看记录与撤回在这里，不多点一层、不弹二次确认
+  /// （撤回本身就应该和开启一样直接）。
+  Widget _consentCard() {
+    final s = S.of(context);
+    final log = st.consent.events;
+    return SettingsSectionCard(
+      title: s.consentSection,
+      subtitle: s.consentSectionHint,
+      icon: Icons.gavel_rounded,
+      color: C.orange,
+      children: [
+        for (final scope in ConsentScope.values)
+          SettingsSwitch(
+            _consentScopeName(s, scope),
+            value: st.hasConsent(scope),
+            onChanged: (v) {
+              if (v) {
+                // 授予走同一张同意书（与拨开关弹的是同一页）。
+                st.ensureConsent({scope});
+              } else {
+                unawaited(st.revokeConsent(scope));
+              }
+            },
+          ),
+        Divider(height: 1, color: C.border),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
+          child: Text(s.consentLogTitle,
+              style: ts(12, c: C.slate, w: FontWeight.w700)),
+        ),
+        if (log.isEmpty)
+          SettingsHint(s.consentLogEmpty)
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final e in log.take(8))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '${e.stamp} · ${e.version} · '
+                      '${e.granted ? s.consentActGrant : s.consentActRevoke}'
+                      ' · ${_consentScopeName(s, e.scope)}',
+                      style: ts(11, c: C.grey),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 14, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: log.isEmpty
+                  ? null
+                  : () async {
+                      await st.clearConsentLog();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(s.consentLogCleared)),
+                      );
+                    },
+              icon: const Icon(Icons.delete_outline_rounded, size: 16),
+              label: Text(s.consentLogClear, style: ts(12)),
+            ),
+          ),
+        ),
+        SettingsHint(s.consentLogClearHint),
+      ],
+    );
+  }
+
+  String _consentScopeName(S s, ConsentScope scope) {
+    switch (scope) {
+      case ConsentScope.internet:
+        return s.consentScopeInternet;
+      case ConsentScope.rf:
+        return s.consentScopeRf;
+      case ConsentScope.igate:
+        return s.consentScopeIgate;
+    }
   }
 
   // ─── 智能信标 · 按速度分档编辑区 ───
@@ -2015,7 +2340,9 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                           ScaffoldMessenger.of(ctx)
                             ..hideCurrentSnackBar()
                             ..showSnackBar(SnackBar(
-                              content: Text(err, style: ts(12)),
+                              // 底色是默认深色（inverseSurface）——文字必须显式白字，
+                              // 否则 ts() 的默认深色会压出「黑乎乎一片」（同运动榜）
+                              content: Text(err, style: ts(12, c: Colors.white)),
                               duration: const Duration(seconds: 2),
                             ));
                           return;
@@ -2088,6 +2415,8 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
     switch (st.positionSourceNow) {
       case PositionSourceNow.sim:
         return s.posSrcSim;
+      case PositionSourceNow.spp:
+        return s.posSrcSpp;
       case PositionSourceNow.garmin:
         return s.posSrcGarmin;
       case PositionSourceNow.phone:
@@ -2153,24 +2482,10 @@ class ConnectionSettingsPage extends StatefulWidget {
 }
 
 class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
-  late final TextEditingController _server;
-  late final TextEditingController _port;
-  late final TextEditingController _ws;
-  late final TextEditingController _pass;
   late final TextEditingController _filterLat;
   late final TextEditingController _filterLng;
   late final TextEditingController _filterRadius;
-  late final TextEditingController _maxStations;
-  late final TextEditingController _maxPackets;
-  late final TextEditingController _maxTrackPts;
-  // 在线判定时长（分钟）——原先写死 5 分钟，现改为用户可配置
-  late final TextEditingController _onlineWindow;
 
-  bool _configDirty = false;
-  String _origServer = '';
-  int _origPort = 14580;
-  String _origPass = '';
-  String? _origWs;
   int _origFilterRadius = 300;
   bool _origFilterFollow = false;
   double _origFilterLat = 39.90;
@@ -2181,21 +2496,9 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
   @override
   void initState() {
     super.initState();
-    _server = TextEditingController(text: st.aprs.server);
-    _port = TextEditingController(text: '${st.aprs.port}');
-    _ws = TextEditingController(text: st.aprs.wsUrl ?? '');
-    _pass = TextEditingController(text: st.aprs.passcode);
     _filterLat = TextEditingController(text: st.filterLat.toStringAsFixed(2));
     _filterLng = TextEditingController(text: st.filterLng.toStringAsFixed(2));
     _filterRadius = TextEditingController(text: '${st.filterRadius}');
-    _maxStations = TextEditingController(text: '${st.maxStations}');
-    _maxPackets = TextEditingController(text: '${st.maxPackets}');
-    _maxTrackPts = TextEditingController(text: '${st.maxTrackPts}');
-    _onlineWindow = TextEditingController(text: '${st.onlineWindowMin}');
-    _origServer = st.aprs.server;
-    _origPort = st.aprs.port;
-    _origPass = st.aprs.passcode;
-    _origWs = st.aprs.wsUrl;
     _origFilterRadius = st.filterRadius;
     _origFilterFollow = st.filterFollow;
     _origFilterLat = st.filterLat;
@@ -2204,17 +2507,9 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
 
   @override
   void dispose() {
-    _server.dispose();
-    _port.dispose();
-    _ws.dispose();
-    _pass.dispose();
     _filterLat.dispose();
     _filterLng.dispose();
     _filterRadius.dispose();
-    _maxStations.dispose();
-    _maxPackets.dispose();
-    _maxTrackPts.dispose();
-    _onlineWindow.dispose();
     super.dispose();
   }
 
@@ -2231,23 +2526,20 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
           icon: Icons.wifi_rounded,
           color: C.purple,
           body: Column(children: [
-            // ⓪ 指路：「数据来源」卡**只在设置→设备**那一页（用户反馈三处重复
-            //    「感觉乱套了」）。这一页专注「**这条链路**的参数」——下面每张卡
-            //    都只在对应链路启用时出现。但删掉来源卡必须留一句指路，否则用户
-            //    会以为「启用 TNC 的入口没了」。
+            // 一级页只摆两条互联网链路的入口：点进去才是各自的地址、端口、
+            // 凭证与发射圆点。用户：「netcn 是等价 is」—— 两条都是「一条 TCP
+            // 登录」，谁也不挂在谁下面，所以在这里是并列的两个大选项。
+            _linkEntries(),
+            const SizedBox(height: 16),
+            // 云同步不在这里：它跟着「APRSNETCN」那条链路走，卡在那一页里
+            // （见 acn_link_page.dart）。数据存在哪台机器上，就在哪台的页上配。
+            _filterCard(),
+            const SizedBox(height: 16),
+            // ① 指路：电台那几条（TNC / WLAN 电台 / 声卡 / PKWDWPL）仍在
+            //    「设置 → 设备」里启用（用户反馈三处重复「感觉乱套了」，
+            //    所以这里只留一句指路，不重复摆一份来源卡）。
             SettingsHint(S.of(context).sourceMovedHint),
             const SizedBox(height: 6),
-            // 多选：**每条已启用的来源都要有自己的卡片**，顺序固定为
-            // APRS-IS → TNC → 音频。此前只按「发射来源」显示一张，
-            // 于是「APRS-IS + TNC」时 TNC 的绑定状态/统计完全看不到。
-            if (st.aprsIsOn) ...[
-              _connectionCard(),
-              const SizedBox(height: 16),
-              _filterCard(),
-              const SizedBox(height: 16),
-              _storageCard(),
-              const SizedBox(height: 16),
-            ],
             if (st.tncOn) ...[
               _tncCard(),
               const SizedBox(height: 16),
@@ -2264,138 +2556,68 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
             ],
             const SizedBox(height: 16),
             // ④ 接收筛选：按国家或地区（客户端本地筛选，两个来源都适用）
+            // 消息收件人口径：与「接收筛选」在同一页 —— 两者都是「收什么」。
+            // 关掉后本机只回自己的那一份，多台设备并用时不互相打扰。
+            SettingsSectionCard(
+              title: S.of(context).msgRecvTitle,
+              icon: Icons.forum_rounded,
+              color: C.purple,
+              children: [
+                SettingsSwitch(S.of(context).msgRecvSsid,
+                    value: st.acceptOtherSsidMsgs,
+                    color: C.purple,
+                    onChanged: st.setAcceptOtherSsidMsgs),
+              ],
+            ),
+            const SizedBox(height: 16),
             _receivePrefCard(),
           ]),
       );
     });
   }
 
-  /// APRS-IS 连接卡片。
-  /// 原先拆成「服务器（连接状态）」+「服务器配置」两张卡，标题都指向服务器、
-  /// 语义重复；现合并为一张：连接状态 → 服务器参数 → 配置变更提示。
-  Widget _connectionCard() {
+  /// 一级页上的两个大选项：这是哪台服务器、现在通不通，点进去改设置。
+  Widget _linkEntries() {
+    final s = S.of(context);
     return SettingsSectionCard(
-      title: S.of(context).connectionCard2,
-      subtitle: S.of(context).settingsConnStatusSubtitle,
+      title: s.sourceGroupInternet,
+      subtitle: s.channelsSubtitle,
       icon: Icons.dns_rounded,
       color: C.purple,
       children: [
-        _connBanner(),
-        Divider(height: 1, color: C.border),
-        SettingsRow2(S.of(context).connection,
-            localizedConnectionInfo(context, st.connInfo)),
-        Divider(height: 1, color: C.border),
-        SettingsInput(S.of(context).server, _server,
-            onChanged: (v) {
-          st.aprs.server = v.trim();
-          _checkConfigDirty();
-        }),
-        SettingsInput(S.of(context).port, _port,
-            onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null) st.aprs.port = n;
-          _checkConfigDirty();
-        }),
-        _passcodeInput(),
-        SettingsInput(S.of(context).wsUrlOptional, _ws,
-            onChanged: (v) {
-          st.aprs.wsUrl = v.trim().isEmpty ? null : v.trim();
-          _checkConfigDirty();
-        }),
-        if (_configDirty) ...[
-          Divider(height: 1, color: C.border),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Icon(Icons.info_outline_rounded,
-                  color: C.orange, size: 20),
-              SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(S.of(context).configChanged,
-                          style: ts(13, c: C.orange, w: FontWeight.w700)),
-                      Text(S.of(context).reconnectToApply,
-                          style: ts(11,
-                              c: C.orange.withValues(alpha: 0.8))),
-                    ]),
-              ),
-              SizedBox(width: 8),
-              IconButton(
-                icon: Icon(Icons.refresh_rounded,
-                    color: C.orange, size: 22),
-                tooltip: S.of(context).reconnect,
-                onPressed: () async {
-                  setState(() => _configDirty = false);
-                  await st.reconnect();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(st.connected
-                            ? S.of(context).reconnected
-                            : S.of(context).connectFailedCheckConfig),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-              ),
-            ]),
-          ),
-        ],
-      ],
-    );
-  }
-
-  /// Passcode 输入（未验证时醒目提示）
-  Widget _passcodeInput() {
-    final isDefault = _pass.text.trim().isEmpty || _pass.text.trim() == '-1';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: C.border, width: 0.4)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(S.of(context).passcode, style: ts(12, c: C.slate)),
-          if (isDefault) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: C.orangeBg,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(S.of(context).unverified,
-                  style: ts(9, c: C.orange, w: FontWeight.w700)),
-            ),
-          ],
-        ]),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _pass,
-          style: ts(13, w: FontWeight.w600),
-          onChanged: (v) {
-            st.aprs.passcode = v.trim().isEmpty ? '-1' : v.trim();
-            _checkConfigDirty();
-          },
-          decoration: InputDecoration(
-            hintText: S.of(context).passcodeUnverifiedHint,
-            hintStyle: ts(13, c: C.greyLight),
-            isDense: true,
-            filled: true,
-            fillColor: C.bgSoft,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
-            ),
+        SettingsLinkEntry(
+          title: s.dataSourceAprsIs,
+          subtitle: s.aprsIsEntryDesc,
+          status: st.aprs.server.trim().isEmpty
+              ? s.serverMissing
+              : '${st.aprs.server.trim()}:${st.aprs.port}',
+          up: st.isUp(AppState.srcAprsIs),
+          on: st.aprsIsOn,
+          onToggle: (v) => st.toggleSource(AppState.srcAprsIs, v),
+          icon: Icons.cloud_rounded,
+          color: C.purple,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => AprsIsServerPage(state: st)),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(S.of(context).passcodeMessageWarning,
-            style: ts(10, c: C.grey)),
-      ]),
+        // 第二条链路只有裸 TCP，Web 上没有（与设备页那张卡同一个口径）
+        if (tcpLinkPlatformSupported)
+          SettingsLinkEntry(
+            title: s.acnCardTitle,
+            subtitle: s.acnOpenSettings,
+            status: st.acnServer.trim().isEmpty
+                ? s.serverMissing
+                : '${st.acnServer.trim()}:${st.acnPort}',
+            up: st.acnConnected,
+            on: st.acnOn,
+            onToggle: st.setAcnOn,
+            icon: Icons.hub_rounded,
+            color: C.purple,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AcnLinkPage(state: st)),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2404,16 +2626,35 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
     // 让用户以为另一条没在工作），并标出发射是哪条。
     final names = <String>[
       if (st.aprsIsOn) 'APRS-IS',
+      if (st.acnOn) S.of(context).acnCardTitle,
       if (st.tncOn) S.of(context).dataSourceTnc,
-      if (st.audioOn) S.of(context).dataSourceAudio,
+      if (st.icomLanOn) S.of(context).icomLanTitle,
+      if (st.audioDeviceOn) S.of(context).dataSourceAudio,
       if (st.pkwdwplOn) S.of(context).dataSourcePkwdwpl,
+      if (st.nmeaGpsOn) S.of(context).dataSourceNmeaGps,
     ];
-    final txIdx = [
+    final srcs = [
       if (st.aprsIsOn) AppState.srcAprsIs,
+      if (st.acnOn) AppState.srcAcn,
       if (st.tncOn) AppState.srcTnc,
-      if (st.audioOn) AppState.srcAudio,
+      if (st.icomLanOn) AppState.srcAudio,
+      if (st.audioDeviceOn) AppState.srcAudio,
       if (st.pkwdwplOn) AppState.srcPkwdwpl,
-    ].indexOf(st.dataSource);
+      // 外接 GPS 只收不发（不进 canTransmit），所以永远不会是 dataSource；
+      // 列出来只为与上一行**逐位对齐**（两个列表靠下标配对）。
+      if (st.nmeaGpsOn) AppState.srcNmeaGps,
+    ];
+    // 位置那条可以同时落在好几条链路上：标在每一条上；消息只有一条，
+    // 而且位置也用它时不用再写一遍。
+    String mark(int i) {
+      final tags = <String>[
+        if (st.posTxHas(srcs[i])) S.of(context).dataSourceTxBadge,
+        if (srcs[i] == st.dataSourceMsg && !st.posTxHas(srcs[i]))
+          S.of(context).messages,
+      ];
+      return tags.isEmpty ? '' : '(${tags.join('·')})';
+    }
+
     final srcLabel = names.isEmpty
         ? 'APRS-IS'
         : (names.length == 1
@@ -2421,9 +2662,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
             : names
                 .asMap()
                 .entries
-                .map((e) => e.key == txIdx
-                    ? '${e.value}(${S.of(context).dataSourceTxBadge})'
-                    : e.value)
+                .map((e) => '${e.value}${mark(e.key)}')
                 .join(' + '));
     final col = st.connected
         ? C.green
@@ -2541,21 +2780,35 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
   /// 过滤器在音频模式下全不生效），只放「链路状态 + 音频关键信息 + 进入音频页」。
   Widget _audioCard() {
     final a = st.audio;
+    final isIcom = a.config.source == AudioSource.icomLan;
     return SettingsSectionCard(
-      title: S.of(context).connectionCard2,
-      subtitle: S.of(context).dataSourceAudioDesc,
-      icon: Icons.graphic_eq_rounded,
+      title: isIcom
+          ? S.of(context).icomSwitchTitle(a.config.icomLan.model.id)
+          : S.of(context).connectionCard2,
+      subtitle: isIcom ? S.of(context).icomLanHint : S.of(context).dataSourceAudioDesc,
+      icon: isIcom ? Icons.wifi_tethering_rounded : Icons.graphic_eq_rounded,
       color: C.cyan,
       children: [
         _connBanner(),
         Divider(height: 1, color: C.border),
         SettingsRow2(
-          S.of(context).audioBackend,
-          a.backendName,
+          isIcom ? S.of(context).icomLanAddr : S.of(context).audioBackend,
+          isIcom
+              ? '${a.config.icomLan.host}:${a.config.icomLan.controlPort}'
+              : a.backendName,
         ),
         SettingsRow2(
-          S.of(context).audioSampleRate,
-          '${a.config.afsk.sampleRate} Hz',
+          isIcom ? S.of(context).icomLinkPhase : S.of(context).audioSampleRate,
+          isIcom
+              // 阶段串在 net 层是中文，这里翻成当前语言；link 还没建时退回连接态
+              // （那两串本身已本地化，传入 icomPhaseLabel 会原样返回）。
+              ? icomPhaseLabel(
+                  S.of(context),
+                  a.icomLanLink?.phaseLabel ??
+                      (a.connected
+                          ? S.of(context).connected
+                          : S.of(context).disconnected))
+              : '${a.config.afsk.sampleRate} Hz',
         ),
         if (st.connected)
           SettingsRow2(
@@ -2570,25 +2823,84 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
               : S.of(context).tncSwitchOff,
           valueColor: a.config.rfBeacon ? C.green : C.grey,
         ),
-        SettingsHint(S.of(context).connAudioSourceHint),
+        SettingsHint(isIcom
+            ? S.of(context).icomCardActive(
+                icomModelName(S.of(context), a.config.icomLan.model))
+            : S.of(context).connAudioSourceHint),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-          child: SizedBox(
-            width: double.infinity,
-            height: 42,
-            child: OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AudioSettingsPage(state: st),
+          child: Row(
+            children: [
+              if (isIcom) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Ic705DevicePage(state: st),
+                      ),
+                    ),
+                    icon: const Icon(Icons.wifi_tethering_rounded, size: 16),
+                    label: Text(S.of(context).icomLanTitle,
+                        style: ts(12, w: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: C.cyan,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
                 ),
-              ),
-              icon: const Icon(Icons.tune_rounded, size: 16),
-              label: Text(S.of(context).audioSettings, style: ts(12, w: FontWeight.w600)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: C.cyan,
-                side: BorderSide(color: C.cyan.withValues(alpha: 0.5)),
-              ),
-            ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AudioSettingsPage(state: st),
+                      ),
+                    ),
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: Text(S.of(context).audioSettings,
+                        style: ts(12, w: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.cyan,
+                      side: BorderSide(color: C.cyan.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AudioSettingsPage(state: st),
+                      ),
+                    ),
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: Text(S.of(context).audioSettings,
+                        style: ts(12, w: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.cyan,
+                      side: BorderSide(color: C.cyan.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Ic705DevicePage(state: st),
+                      ),
+                    ),
+                    icon: const Icon(Icons.wifi_tethering_rounded, size: 16),
+                    label: Text(S.of(context).icomLanTitle,
+                        style: ts(12, w: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.cyan,
+                      side: BorderSide(color: C.cyan.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],
@@ -2661,11 +2973,9 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
       icon: Icons.filter_alt_rounded,
       color: C.cyan,
       children: [
-        SettingsHint(S.of(context).settingsFilterHint),
         SettingsSwitch(S.of(context).filterCenterFollows, value: st.filterFollow, color: C.cyan,
             onChanged: (v) {
           st.filterFollow = v;
-          _checkConfigDirty();
         }),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2719,6 +3029,7 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
             ),
           ]),
         ),
+        _centerButton(),
         SettingsInput(S.of(context).filterRadius, _filterRadius,
             tip: S.of(context).radiusTip,
             onChanged: (v) {
@@ -2760,32 +3071,6 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(14),
-          child: OutlinedButton.icon(
-            onPressed: () {
-              if (st.myLat != null && st.myLng != null) {
-                // 只填入经纬度输入框，点"保存并应用"才生效
-                setState(() {
-                  _filterLat.text = st.myLat!.toStringAsFixed(4);
-                  _filterLng.text = st.myLng!.toStringAsFixed(4);
-                });
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(S.of(context).noFixYet)),
-                );
-              }
-            },
-            icon: Icon(Icons.my_location_rounded, size: 15),
-            label: Text(S.of(context).useMyLocation),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: C.blue,
-              side: BorderSide(color: C.blue.withValues(alpha: 0.5)),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              textStyle: ts(11, w: FontWeight.w600),
-            ),
-          ),
-        ),
         // 保存并应用过滤（显式保存当前经纬度/半径）
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
@@ -2825,7 +3110,6 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
                   _filterLng.text = st.filterLng.toStringAsFixed(4);
                 }
                 _filterRadius.text = '${st.filterRadius}';
-                _checkConfigDirty();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(S.of(context)
@@ -2846,44 +3130,61 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
     );
   }
 
-  /// 存储上限卡片。
-  /// 原先这三项被放在「过滤」卡片里 —— 它们与「取哪些台站」无关，
-  /// 而是「本地保留多少数据」，故按职责独立成卡。
-  Widget _storageCard() {
-    return SettingsSectionCard(
-      title: S.of(context).storageLimit,
-      subtitle: S.of(context).storageLimitSubtitle,
-      icon: Icons.sd_storage_rounded,
-      color: C.slate,
-      children: [
-        SettingsInput(S.of(context).maxStations, _maxStations,
-            tip: S.of(context).maxStationsTip,
-            onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null) st.setMaxStations(n);
-        }),
-        // 数据包保留条数（原先硬编码 200，偏少）
-        SettingsInput(S.of(context).maxPackets, _maxPackets,
-            tip: S.of(context).maxPacketsTip, onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null) st.setMaxPackets(n);
-        }),
-        // 单台站轨迹点数上限（原先硬编码 60，导致轨迹很短）
-        SettingsInput(S.of(context).maxTrackPts, _maxTrackPts,
-            tip: S.of(context).maxTrackPtsTip, onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null) st.setMaxTrackPts(n);
-        }),
-        // 在线判定时长（原先写死 5 分钟）
-        SettingsInput(S.of(context).onlineWindow, _onlineWindow,
-            tip: S.of(context).onlineWindowTip, onChanged: (v) {
-          final n = int.tryParse(v);
-          if (n != null) st.setOnlineWindowMin(n);
-        }),
-      ],
+  /// 「用我的位置作为过滤中心」：一次点按就把中心定成当前位置并**立刻生效**，
+  /// 不再要求用户再点一次「保存并应用过滤」。
+  ///
+  /// 以前这个按钮只往两个输入框里写数字：而「过滤中心跟随我的位置」默认是开的，
+  /// 那两个框是灰的，点完屏幕上看不出任何变化 —— 按钮像是坏的。
+  Widget _centerButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+      child: SizedBox(
+        width: double.infinity,
+        height: 38,
+        child: OutlinedButton.icon(
+          onPressed: _useMyLocationAsCenter,
+          icon: const Icon(Icons.my_location_rounded, size: 15),
+          label: Text(S.of(context).useMyLocation, style: ts(12, w: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: C.blue,
+            side: BorderSide(color: C.blue.withValues(alpha: 0.5)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            textStyle: ts(12, w: FontWeight.w600),
+          ),
+        ),
+      ),
     );
   }
 
+  /// 把过滤中心设成当前位置（半径取输入框里那个），并立刻应用。
+  ///
+  /// 不碰「跟随我的位置」那个开关：跟随是用户设的长期行为，
+  /// 一键设中心只影响这一次的坐标。
+  void _useMyLocationAsCenter() {
+    final lat = st.myLat;
+    final lng = st.myLng;
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.of(context).noFixYet)),
+      );
+      return;
+    }
+    final r = int.tryParse(_filterRadius.text) ?? st.filterRadius;
+    _filterLat.text = lat.toStringAsFixed(4);
+    _filterLng.text = lng.toStringAsFixed(4);
+    _filterRadius.text = '$r';
+    st.setFilter(lat, lng, r);
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(S.of(context)
+            .filterSavedRadius(S.of(context).filterSaved, st.filterRadius)),
+        backgroundColor: C.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   /// 接收呼号筛选卡片：按国家/地区分组 + 精确呼号接收
   Widget _receivePrefCard() {
@@ -2893,7 +3194,6 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
       icon: Icons.public_rounded,
       color: C.cyan,
       children: [
-        SettingsHint(S.of(context).settingsReceivePrefHint),
         // ── 其他台站（前移到国家列表之前）──
         // 它是「是否也接收未勾选国家的台站」的总开关；
         // 国家列表有 25 项，放在列表底部要滑很久才看得到。
@@ -3082,18 +3382,6 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
     if (_filterLat.text != latText) _filterLat.text = latText;
     if (_filterLng.text != lngText) _filterLng.text = lngText;
   }
-
-  void _checkConfigDirty() {
-    // 仅服务器相关配置变化才显示顶部"重新连接"横幅；
-    // 过滤范围修改通过卡片内的"保存并应用过滤"按钮应用（见 _filterCard）
-    final dirty = st.aprs.server != _origServer ||
-        st.aprs.port != _origPort ||
-        st.aprs.passcode != _origPass ||
-        st.aprs.wsUrl != _origWs;
-    if (dirty != _configDirty) {
-      setState(() => _configDirty = dirty);
-    }
-  }
 }
 
 /// ─── 显示设置 ───
@@ -3147,11 +3435,37 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
               if (ThemeController.instance.active.overridesColor('primary'))
                 SettingsHint(S.of(context).themeFixedPrimary, color: C.orange),
               _uiMaterialSelector(st),
-              _uiLayoutSelector(st),
+              // 精简模式下这套外壳不用了（有它自己的一套），所以这一行不显示 ——
+              // 留着能选会让人以为「选了却看不出来」。
+              if (!st.liteMode) _uiLayoutSelector(st),
+              // 桌面三平台才有系统托盘（手机/Web 上不出现这一行，也没意义）。
+              // 开着 = 关窗口收进托盘、托盘菜单可叫回；关着 = 关窗口就是退出。
+              if (desktopTraySupported)
+                SettingsSwitch(S.of(context).trayCloseToTray,
+                    value: st.closeToTray,
+                    color: C.slate,
+                    onChanged: (v) => st.setCloseToTray(v)),
+              _notifStyleSelector(st),
+              if (st.notifLiveUpdates) _notifLiveTextSelector(st),
+              _notifDiagRow(st),
               _languageSelector(st),
               _uiScaleSelector(st),
               SettingsRow2(S.of(context).unit, S.of(context).metricUnits),
               SettingsRow2(S.of(context).grid, 'Maidenhead'),
+              // 经纬度显示格式：只换**显示**，不换坐标系（那是下一行的事）。
+              // 用下拉而不是分段按钮：三种写法的标签（度分秒）在窄屏 + 西语
+              // 会挤爆一行，下拉自己会折。
+              SettingsChoice<String>(
+                S.of(context).coordFormat,
+                value: st.coordFormat,
+                options: const ['dec', 'dm', 'dms'],
+                labelOf: (v) => switch (coordFormatOf(v)) {
+                  CoordFormat.dec => S.of(context).coordFormatDec,
+                  CoordFormat.dm => S.of(context).coordFormatDm,
+                  CoordFormat.dms => S.of(context).coordFormatDms,
+                },
+                onChanged: st.setCoordFormat,
+              ),
               _datumSelector(),
             ],
           ),
@@ -3163,7 +3477,18 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
             color: C.blue,
             children: [
               _mapTypeSelector(),
-              SettingsHint(S.of(context).mapTypeDesc),
+              // 屏幕正中的经纬度读数（手机没有悬停，只有它能回答「正中这点在哪」）
+              SettingsSwitch(S.of(context).mapCenterCoord,
+                  value: st.mapCenterCoord,
+                  color: C.blue,
+                  onChanged: (v) => st.setMapCenterCoord(v)),
+              _heatLevelSelector(st),
+              // 无论台站多密 / 缩得多小都画呼号标签。开 = 强制显示（可能糊成一片、
+              // 也更费渲染）；关 = 沿用原取舍（台站少或放大到 13 级以上才显示）。
+              SettingsSwitch(S.of(context).mapLabelsAlways,
+                  value: st.mapLabelsAlways,
+                  color: C.blue,
+                  onChanged: (v) => st.setMapLabelsAlways(v)),
               SettingsNavRow(
                 title: S.of(context).offlineMap,
                 subtitle: S.of(context).offlineMapDesc,
@@ -3322,7 +3647,207 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
                 ),
               ),
             ),
-          SettingsHint(S.of(context).uiLayoutHint),
+        ],
+      ),
+    );
+  }
+
+  /// 常驻通知的显示样式。
+  ///
+  /// 两档的区别是**系统画在哪儿**：实时更新会被提到状态栏那一小条（Android 16
+  /// 的 Live Updates，可带一行倒计时胶囊），普通常驻通知就只在通知栏里。提不上
+  /// 去的时候实时更新也会退回普通通知，所以选了它不会少一条通知。
+  Widget _notifStyleSelector(AppState st) {
+    final options = <(String, String, String)>[
+      (
+        'plain',
+        S.of(context).notifStylePlain,
+        S.of(context).notifStylePlainDesc,
+      ),
+      (
+        'live',
+        S.of(context).notifStyleLive,
+        S.of(context).notifLiveHint,
+      ),
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(S.of(context).notifStyleTitle, style: ts(12, c: C.slate)),
+          const SizedBox(height: 8),
+          for (final (value, name, desc) in options)
+            GestureDetector(
+              onTap: () => st.setNotifStyle(value),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: st.notifStyle == value ? C.cyanBg : C.bgSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: st.notifStyle == value ? C.cyan : C.border,
+                    width: st.notifStyle == value ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(
+                        st.notifStyle == value
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 16,
+                        color:
+                            st.notifStyle == value ? C.cyan : C.greyLight,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: ts(
+                              12,
+                              c: st.notifStyle == value ? C.cyan : C.slate,
+                              w: st.notifStyle == value
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(desc, style: ts(10, c: C.grey, h: 1.3)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 实时更新那一行显示什么。
+  ///
+  /// 只在选了实时更新时才有意义，所以跟着上面的选择出现/消失 —— 留着不动
+  /// 会让选了「普通常驻通知」的人以为下面这个下拉能改什么。
+  Widget _notifLiveTextSelector(AppState st) {
+    final l = S.of(context);
+    return SettingsChoice<String>(
+      l.notifLiveTextTitle,
+      value: st.notifLiveText,
+      options: const [
+        'default',
+        'counts',
+        'msgs',
+        'near',
+        'grid',
+        'course',
+        'speed',
+        'alt',
+        'hr',
+        'batt',
+        'trip',
+        'beacon',
+      ],
+      labelOf: (v) {
+        switch (v) {
+          case 'counts':
+            return l.notifLiveTextCounts;
+          case 'msgs':
+            return l.notifLiveTextMsgs;
+          case 'near':
+            return l.notifLiveTextNear;
+          case 'grid':
+            return l.notifLiveTextGrid;
+          case 'course':
+            return l.notifLiveTextCourse;
+          case 'speed':
+            return l.notifLiveTextSpeed;
+          case 'alt':
+            return l.notifLiveTextAlt;
+          case 'hr':
+            return l.notifLiveTextHr;
+          case 'batt':
+            return l.notifLiveTextBatt;
+          case 'trip':
+            return l.notifLiveTextTrip;
+          case 'beacon':
+            return l.notifLiveTextBeacon;
+          default:
+            return l.notifLiveTextDefault;
+        }
+      },
+      onChanged: st.setNotifLiveText,
+    );
+  }
+
+  /// 通知诊断：把「这台设备到底支持什么」摆出来。
+  ///
+  /// 实时更新不是一个是/否开关，是四五个系统方法的组合；提不上去时用户只能
+  /// 看到「没反应」，所以给一个能直接读、能复制的自查结果。
+  Widget _notifDiagRow(AppState st) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+      child: Row(children: [
+        Expanded(
+          child: Text(S.of(context).notifDiagDesc,
+              style: ts(10, c: C.grey, h: 1.3)),
+        ),
+        const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: () => _showNotifDiag(st),
+          icon: Icon(Icons.bug_report_rounded, size: 15, color: C.blue),
+          label: Text(S.of(context).notifDiag,
+              style: ts(11, w: FontWeight.w700, c: C.blue)),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _showNotifDiag(AppState st) async {
+    final text = await st.loc.notifDiag(
+      liveText: st.notifLiveText,
+      dartRunning: st.loc.running,
+      dartStatus: st.locStatus,
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(S.of(ctx).notifDiag),
+        content: SelectableText(
+          text.isEmpty ? S.of(ctx).iosFeatureUnsupported : text,
+          style: mono(11),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: text));
+              Navigator.of(ctx).pop();
+            },
+            child: Text(S.of(ctx).copy),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(S.of(ctx).close),
+          ),
         ],
       ),
     );
@@ -3477,7 +4002,6 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
           // 「选了磨砂玻璃但底色没变成材质那样」是自己点坏了。
           if (ThemeController.instance.active.hasBackground)
             SettingsHint(S.of(context).uiMaterialBgHint, color: C.orange),
-          SettingsHint(S.of(context).uiMaterialHint),
         ],
       ),
     );
@@ -3598,6 +4122,58 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
   }
 
   /// 界面缩放选择
+  /// 热力图档位：弱 / 中 / 强 —— 决定台站热力光斑的大小与浓度。
+  /// 两套地图（栅格 / 矢量）共用同一个值；开关仍在**地图工具栏**上。
+  Widget _heatLevelSelector(AppState st) {
+    final labels = [
+      S.of(context).heatLevelLow,
+      S.of(context).heatLevelMid,
+      S.of(context).heatLevelHigh,
+    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(S.of(context).heatLevel, style: ts(12, c: C.slate)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                GestureDetector(
+                  onTap: () => st.setHeatLevel(i),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: st.heatLevel == i
+                          ? C.orange.withValues(alpha: 0.12)
+                          : C.bgSoft,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: st.heatLevel == i ? C.orange : C.border,
+                        width: st.heatLevel == i ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Text(labels[i],
+                        style: ts(12,
+                            c: st.heatLevel == i ? C.orange : C.slate,
+                            w: st.heatLevel == i
+                                ? FontWeight.w700
+                                : FontWeight.w500)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _uiScaleSelector(AppState st) {
     const presets = <double>[0.9, 1.0, 1.15, 1.3];
     return Container(
@@ -3704,6 +4280,12 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
 
   /// 地图类型选择
   Widget _mapTypeSelector() {
+    // 分组按枚举**声明顺序**去重，而不是写死 ['高德','其他'] —— 写死的话
+    // 新增分组（如「地形」）会悄悄漏掉：地图页菜单里有、设置页却选不到。
+    final groups = <String>[];
+    for (final t in MapType.values) {
+      if (!groups.contains(t.group)) groups.add(t.group);
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -3713,17 +4295,21 @@ class _DisplaySettingsPageState extends State<DisplaySettingsPage> {
         children: [
           Text(S.of(context).mapType, style: ts(12, c: C.slate)),
           SizedBox(height: 8),
-          // 注意：这里用 MapType.group 的原始判别值（'高德'/'其他'）做分组，
-          // 它们同时是数据实参——不能替换成 l10n 文案，否则分组会失效；
-          // 展示用的标题改走 domesticMaps / internationalMaps。
-          for (final group in const ['高德', '其他']) ...[
+          // 注意：这里用 MapType.group 的原始判别值（'高德'/'地形'/'天地图'/'其他'）
+          // 做分组，它们同时是数据实参——不能替换成 l10n 文案，否则分组会失效；
+          // 展示用的标题改走 domesticMaps / terrainGroup / tiandituGroup / internationalMaps。
+          for (final group in groups) ...[
             if (MapType.values.any((t) => t.group == group)) ...[
               Padding(
                 padding: const EdgeInsets.only(top: 4, bottom: 4),
                 child: Text(
                   group == '高德'
                       ? S.of(context).domesticMaps
-                      : S.of(context).internationalMaps,
+                      : group == '地形'
+                          ? S.of(context).terrainGroup
+                          : group == '天地图'
+                              ? S.of(context).tiandituGroup
+                              : S.of(context).internationalMaps,
                   style: ts(10, c: C.grey, w: FontWeight.w700),
                 ),
               ),
@@ -3834,6 +4420,84 @@ class DataSettingsPage extends StatefulWidget {
 class _DataSettingsPageState extends State<DataSettingsPage> {
   AppState get st => widget.state;
 
+  /// 可选的「天数」档位，自动清理保留天数与手动清理天数共用同一组。
+  /// 0 = 关闭（自动）/ 未选择（手动）。
+  static const List<int> _dayOptions = [0, 3, 7, 14, 30, 60, 90, 180, 365];
+
+  /// 手动清理使用的天数阈值。
+  ///
+  /// **刻意不从 [AppState.stationRetentionDays] 预填**：那是「自动清理策略」，
+  /// 手动清理应当由用户当场选择，两者是独立参数（用户反馈：复用自动清理的
+  /// 参数会让「点一下清掉多少」不可预期）。不落盘，一次性选择。
+  int _pruneDays = 0;
+
+  // 数据上限四项从「服务器」页搬过来了：它们管的是本地留多少数据，
+  // 与连哪台服务器没关系。
+  late final TextEditingController _maxStations;
+  late final TextEditingController _maxPackets;
+  late final TextEditingController _maxTrackPts;
+  // 在线判定时长（分钟）——原先写死 5 分钟，现改为用户可配置
+  late final TextEditingController _onlineWindow;
+
+  @override
+  void initState() {
+    super.initState();
+    _maxStations = TextEditingController(text: '${st.maxStations}');
+    _maxPackets = TextEditingController(text: '${st.maxPackets}');
+    _maxTrackPts = TextEditingController(text: '${st.maxTrackPts}');
+    _onlineWindow = TextEditingController(text: '${st.onlineWindowMin}');
+  }
+
+  @override
+  void dispose() {
+    _maxStations.dispose();
+    _maxPackets.dispose();
+    _maxTrackPts.dispose();
+    _onlineWindow.dispose();
+    super.dispose();
+  }
+
+  /// 存储上限卡片（数据页的最上面一张）。
+  ///
+  /// 它从「服务器」页搬过来：这四项管的是「本地保留多少数据」，
+  /// 与连哪台服务器、取哪些台站都无关（用户：「数据上限区块移到数据页」）。
+  Widget _storageCard() {
+    return SettingsSectionCard(
+      title: S.of(context).storageLimit,
+      subtitle: S.of(context).storageLimitSubtitle,
+      icon: Icons.sd_storage_rounded,
+      color: C.slate,
+      children: [
+        SettingsInput(S.of(context).maxStations, _maxStations,
+            tip: S.of(context).maxStationsTip,
+            onChanged: (v) {
+          final n = int.tryParse(v);
+          if (n != null) st.setMaxStations(n);
+        }),
+        // 数据包保留条数（原先硬编码 200，偏少）
+        SettingsInput(S.of(context).maxPackets, _maxPackets,
+            tip: S.of(context).maxPacketsTip, onChanged: (v) {
+          final n = int.tryParse(v);
+          if (n != null) st.setMaxPackets(n);
+        }),
+        // 单台站轨迹点数上限（原先硬编码 60，导致轨迹很短）
+        SettingsInput(S.of(context).maxTrackPts, _maxTrackPts,
+            tip: S.of(context).maxTrackPtsTip, onChanged: (v) {
+          final n = int.tryParse(v);
+          if (n != null) st.setMaxTrackPts(n);
+        }),
+        // 在线判定时长（原先写死 5 分钟）
+        SettingsInput(S.of(context).onlineWindow, _onlineWindow,
+            tip: S.of(context).onlineWindowTip, onChanged: (v) {
+          final n = int.tryParse(v);
+          if (n != null) st.setOnlineWindowMin(n);
+        }),
+        // 「台站保留天数」也在这页：它属于清理策略，和它要清理的那个按钮挨着。
+      ],
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -3844,6 +4508,8 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
         icon: Icons.storage_rounded,
         color: C.red,
         body: Column(children: [
+        _storageCard(),
+        const SizedBox(height: 16),
         // 单项：聊天记录（由原「聊天设置」页合并而来）
         SettingsSectionCard(
           title: S.of(context).chatRecords,
@@ -3918,6 +4584,73 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
           ],
         ),
         const SizedBox(height: 16),
+        // 单项：按天数清理**过时台站**（不是全清）——长期没再听到的普通台站，
+        // 收藏 / 手动添加的保留。与上面「清空台站列表」互补：那是「全清」，
+        // 这是「只清过时的」。
+        //
+        // 本卡把「清理策略」收拢在一处：上面一行是**自动清理**的保留天数
+        // （启动时按它跑一次），接着是**手动清理**——它有自己的天数选择器，
+        // 不套用自动清理那个数（用户反馈：混用会让结果不可预期）。
+        SettingsSectionCard(
+          title: S.of(context).pruneOldData,
+          subtitle: S.of(context).pruneOldDataDesc,
+          icon: Icons.delete_sweep_rounded,
+          color: C.orange,
+          children: [
+            SettingsChoice<int>(
+              S.of(context).stationRetention,
+              value: _dayValue(st.stationRetentionDays),
+              options: _dayOptions,
+              labelOf: (v) => v <= 0
+                  ? S.of(context).retentionDaysOff
+                  : S.of(context).nDays('$v'),
+              tip: S.of(context).stationRetentionTip,
+              onChanged: (v) => st.setStationRetentionDays(v),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(S.of(context).pruneHint, style: ts(11, c: C.grey, h: 1.4)),
+                const SizedBox(height: 12),
+                SettingsChoice<int>(
+                  S.of(context).pruneWithin,
+                  value: _pruneDays,
+                  options: _dayOptions,
+                  labelOf: (v) => v <= 0
+                      ? S.of(context).prunePickDays
+                      : S.of(context).nDays('$v'),
+                  tip: S.of(context).pruneWithinTip,
+                  onChanged: (v) => setState(() => _pruneDays = v),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pruneDays <= 0 ? null : _confirmPrune,
+                    icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+                    label: Text(_pruneDays <= 0
+                        ? S.of(context).prunePickDays
+                        : st.prunableStationCountFor(_pruneDays) == 0
+                            ? S.of(context).pruneNone
+                            : S.of(context).prunePreview(
+                                '${st.prunableStationCountFor(_pruneDays)}')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.orange,
+                      side: BorderSide(color: C.orange.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      textStyle: ts(12, w: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         SettingsSectionCard(
           title: S.of(context).clearAllData,
           subtitle: S.of(context).settingsClearDataSubtitle,
@@ -3962,6 +4695,62 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                     onPressed: () => _confirmClearAll(),
                     icon: Icon(Icons.delete_forever_rounded, size: 18),
                     label: Text(S.of(context).confirmClearAllData),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: C.red,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // 恢复出厂：比「清空全部数据」更进一步 —— 连**呼号与所有设置**一起清，
+        // 并重新跑首次引导。放在清空数据之后、离线地图之前，作为「数据维护」页
+        // 里最重的一档，视觉上用红色警示。
+        SettingsSectionCard(
+          title: S.of(context).factoryReset,
+          subtitle: S.of(context).factoryResetDesc,
+          icon: Icons.settings_backup_restore_rounded,
+          color: C.red,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(S.of(context).factoryResetIntro, style: ts(13)),
+                SizedBox(height: 8),
+                _clearDataItem(S.of(context).factoryResetCallsign,
+                    '${st.myFullCall}'),
+                _clearDataItem(S.of(context).factoryResetSettings, ''),
+                SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: C.redBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 14, color: C.red),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(S.of(context).factoryResetWarn,
+                          style: ts(11, c: C.red, w: FontWeight.w500)),
+                    ),
+                  ]),
+                ),
+                SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _confirmFactoryReset,
+                    icon: Icon(Icons.settings_backup_restore_rounded, size: 18),
+                    label: Text(S.of(context).factoryResetButton),
                     style: FilledButton.styleFrom(
                       backgroundColor: C.red,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -4083,6 +4872,71 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     );
   }
 
+  /// 把保存的保留天数吸附到最近的档位，避免下拉框 value 不在 options 里
+  /// （旧版本数字输入可能存过任意值，DropdownButton 遇到未知 value 会断言失败）。
+  int _dayValue(int days) {
+    if (days <= 0) return 0;
+    var best = _dayOptions.first;
+    var bestDiff = 1 << 30;
+    for (final o in _dayOptions) {
+      final d = (o - days).abs();
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  /// 按天数清理**过时台站**（收藏 / 手动添加的保留）。与全清不同：只删
+  /// `lastHeard` 早于**本页所选天数**的普通台站，且同样不可恢复，故先确认。
+  /// 天数取自 [_pruneDays]（用户当场选的），不套用自动清理的保留天数。
+  void _confirmPrune() {
+    final days = _pruneDays;
+    final n = st.prunableStationCountFor(days);
+    if (n == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.of(context).pruneNone)),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title:
+            Text(S.of(context).pruneOldData, style: ts(16, w: FontWeight.w700)),
+        content: Text(S.of(context).pruneConfirm('$days', '$n'),
+            style: ts(13, c: C.slate)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+          ),
+          FilledButton(
+            onPressed: () {
+              final removed = st.pruneOldStations(days);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(S.of(context).pruneDone('$removed')),
+                  backgroundColor: C.green,
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: C.orange,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(S.of(context).clear,
+                style: ts(13, c: Colors.white, w: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmClearAll() {
     showDialog(
       context: context,
@@ -4114,7 +4968,47 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
               backgroundColor: C.red,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text(S.of(context).confirmClear, style: ts(13, c: Colors.white, w: FontWeight.w700)),
+            child: Text(S.of(context).confirmClear,                 style: ts(13, c: Colors.white, w: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 恢复出厂二次确认。清空是**破坏性且不可逆**的，且会连呼号一起清掉，
+  /// 故文案必须把「会清掉什么」逐条讲明，确认按钮也用红色强调。
+  void _confirmFactoryReset() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Icon(Icons.warning_amber_rounded, color: C.red, size: 22),
+          SizedBox(width: 8),
+          Text(S.of(context).factoryReset, style: ts(16, w: FontWeight.w700)),
+        ]),
+        content: Text(S.of(context).factoryResetConfirm, style: ts(13, c: C.slate)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await st.factoryReset();
+              if (!mounted) return;
+              // factoryReset 已把 oobeDone 置回 false + reloadTick++，
+              // App 层会切到向导页并重建导航栈 —— 这里只需回根路由。
+              Navigator.of(context).popUntil((r) => r.isFirst);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: C.red,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(S.of(context).factoryResetButton,
+                style: ts(13, c: Colors.white, w: FontWeight.w700)),
           ),
         ],
       ),
@@ -4131,8 +5025,19 @@ class AdvancedSettingsPage extends StatefulWidget {
 }
 
 class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
+  /// 开发人员那一块的解锁口令。用户指定的 134679，就写在代码里：
+  /// 这一块平时锁着，点标题不会展开，长按输一次口令才开。
+  static const String _devCode = '134679';
+
   bool _labOpen = false;
   bool _devOpen = false;
+
+  /// 本次打开高级设置页期间是否已输过口令。不持久化 —— 下次进来又是锁着的。
+  bool _devUnlocked = false;
+
+  /// 口令弹层里的输入框。留成字段、在 dispose 里统一释放：
+  /// 弹层关闭动画还没走完就 dispose 掉控制器的话，动画里那一帧会用到已释放对象。
+  final _devCodeEntry = TextEditingController();
   final _devInput = TextEditingController();
   String? _devResult;
 
@@ -4140,8 +5045,78 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
 
   @override
   void dispose() {
+    _devCodeEntry.dispose();
     _devInput.dispose();
     super.dispose();
+  }
+
+  /// 点标题：没解锁就只说一句「长按输口令」，解锁后才正常折叠。
+  void _toggleDev() {
+    if (!_devUnlocked) {
+      _devToast(S.of(context).devLockTip);
+      return;
+    }
+    setState(() => _devOpen = !_devOpen);
+  }
+
+  /// 长按标题：输一次口令才解锁并展开。已解锁时就是普通的展开/收起。
+  Future<void> _unlockDev() async {
+    if (_devUnlocked) {
+      setState(() => _devOpen = !_devOpen);
+      return;
+    }
+    final s = S.of(context);
+    final input = _devCodeEntry..clear();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.lock_outline_rounded, size: 20, color: C.purple),
+          const SizedBox(width: 8),
+          Text(s.devLockTitle, style: ts(15, w: FontWeight.w700)),
+        ]),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          maxLength: 6,
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: s.devLockTitle,
+            hintStyle: ts(13, c: C.grey),
+          ),
+          style: ts(15, w: FontWeight.w700),
+          onSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(s.cancel, style: ts(13, c: C.slate))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, input.text),
+              child: Text(s.confirm,
+                  style: ts(13, c: C.purple, w: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (!mounted || code == null) return;
+    if (code.trim() != _devCode) {
+      _devToast(s.devLockWrong);
+      return;
+    }
+    setState(() {
+      _devUnlocked = true;
+      _devOpen = true;
+    });
+  }
+
+  void _devToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+    ));
   }
 
   /// 确认后重新运行设置向导
@@ -4252,6 +5227,52 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
     );
   }
 
+  /// 确认后清空「已阅读荣誉」记录（下次判定会把已拥有的荣誉重新弹一遍）。
+  void _confirmResetHonorSeen() {
+    showDialog(
+      context: context,
+      builder: (ctx) => MaterialSurface(
+        radius: 16,
+        child: AlertDialog(
+          backgroundColor: C.sheetFill,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(S.of(context).honorResetTitle, style: ts(16, w: FontWeight.w700)),
+          content: Text(S.of(context).honorResetConfirm,
+              style: ts(13, c: C.slate, h: 1.6)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(S.of(context).cancel, style: ts(13, c: C.grey)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: C.purple,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                unawaited(resetHonorsAndRecheck());
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(S.of(context).honorResetDone,
+                        style: ts(12, c: Colors.white)),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: C.ink,
+                  ),
+                );
+              },
+              child: Text(S.of(context).honorResetButton,
+                style: ts(13, c: Colors.white, w: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _confirmRestartOobe() {
     showDialog(
       context: context,
@@ -4308,16 +5329,41 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
             SettingsSwitch(S.of(context).allowLandscape, value: st.labLandscape, color: C.cyan,
                 onChanged: st.setLabLandscape),
             SettingsHint(S.of(context).labDesc),
+            Divider(height: 1, color: C.border),
+            // 智能体模式（实验）：开启后屏幕上出现一个 AI 聊天框。
+            SettingsSwitch(S.of(context).agentMode,
+                value: AgentService.instance.config.enabled, color: C.purple,
+                onChanged: (v) async {
+              // 开启需先签「智能体使用告知」，再获授权：未签弹告知页，未授权弹授权/申请页。
+              st.setAgentEnabled(v);
+              if (mounted) setState(() {});
+            }),
+            if (!st.agentAllowed) SettingsHint(S.of(context).agentAuthHint),
+            SettingsNavRow(
+              title: S.of(context).agentSettings,
+              subtitle: S.of(context).agentSettingsDesc,
+              icon: Icons.smart_toy_rounded,
+              color: C.purple,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                    builder: (_) => AgentSettingsPage(state: st)),
+              ),
+            ),
           ],
         ),
         SizedBox(height: 16),
         SettingsFold(
           title: S.of(context).devDesc,
-          subtitle: S.of(context).settingsDevSubtitle,
-          icon: Icons.bug_report_rounded,
+          subtitle: _devUnlocked
+              ? S.of(context).settingsDevSubtitle
+              : S.of(context).devLockTip,
+          icon: _devUnlocked
+              ? Icons.bug_report_rounded
+              : Icons.lock_outline_rounded,
           color: C.purple,
           open: _devOpen,
-          onToggle: () => setState(() => _devOpen = !_devOpen),
+          onToggle: _toggleDev,
+          onLongPress: _unlockDev,
           children: [
             SettingsSwitch(S.of(context).simData, value: st.devMode,
                 onChanged: st.setDevMode),
@@ -4349,6 +5395,18 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
               ),
             ),
             Divider(height: 1, color: C.border),
+            // 开发人员自测：操作证验证。电台页也能进（那边只对内地的呼号显示），
+            // 这一行是给开发者自己留的口子；右边显示已经验过的类别。
+            SettingsNavRow(
+              title: S.of(context).cracCertEntry,
+              icon: Icons.verified_user_rounded,
+              color: C.green,
+              trailing: st.cracCert?.typeLabel ?? '',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => CracCertPage(state: st)),
+              ),
+            ),
+            Divider(height: 1, color: C.border),
             InkWell(
               onTap: () => _confirmRestartOobe(),
               child: Container(
@@ -4372,6 +5430,22 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
                   Icon(Icons.help_outline_rounded, size: 16, color: C.purple),
                   SizedBox(width: 8),
                   Text(S.of(context).guideResetRow,
+                      style: ts(12, c: C.slate, w: FontWeight.w600)),
+                  Spacer(),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
+                ]),
+              ),
+            ),
+            Divider(height: 1, color: C.border),
+            // 清除「已阅读荣誉」记录：下次判定会把已拥有的荣誉重新弹一遍
+            InkWell(
+              onTap: () => _confirmResetHonorSeen(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(children: [
+                  Icon(Icons.emoji_events_outlined, size: 16, color: C.purple),
+                  SizedBox(width: 8),
+                  Text(S.of(context).honorResetRow,
                       style: ts(12, c: C.slate, w: FontWeight.w600)),
                   Spacer(),
                   Icon(Icons.chevron_right_rounded, size: 18, color: C.grey),
@@ -4462,3 +5536,57 @@ class _AdvancedSettingsPageState extends State<AdvancedSettingsPage> {
   }
 }
 
+
+/// 呼出「电台身份」编辑面板（地图页长按上报状态条）。
+///
+/// 搬进来的就是设置页那张卡片（[StationIdentityCard] 的 `full: false` 那份），
+/// 改完即存，不用离开地图。高级设置与「发射」留在设置页里 —— 面板是用来改
+/// 呼号 / SSID / 备注的，不是发射台。
+Future<void> showStationIdentitySheet(BuildContext context, AppState state) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => MaterialSurface(
+      radius: 24,
+      topOnly: true,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.82,
+        ),
+        decoration: BoxDecoration(
+          color: C.sheetFill,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        // 键盘弹起时整块抬高，否则呼号/备注那一行会被输入法盖住。
+        padding: EdgeInsets.fromLTRB(
+          16,
+          10,
+          16,
+          12 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: C.greyLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StationIdentityCard(state: state, full: false),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

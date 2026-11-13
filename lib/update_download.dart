@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'pinned_http.dart';
 import 'state.dart';
+import 'update_install.dart';
 
 /// ─── 更新包下载器（进程内后台下载，issue #22-5）───
 ///
@@ -42,7 +44,20 @@ class UpdateDownloader extends ChangeNotifier {
   String? tag;
 
   /// 下载完成的文件路径；没有则为 null。
+  ///
+  /// 安卓在校验、复制进系统「下载」之后会把这份私有副本删掉（[path] 变 null），
+  /// 桌面上它就是最终那份文件。
   String? path;
+
+  /// 用户看得到的那个位置：安卓是 `Download/APRSLocus_2.2.2.apk`，
+  /// 桌面上就是文件本身。
+  String? publicPath;
+
+  /// 落在「下载」里的文件名（删除与安装都按它走）。
+  String? publicName;
+
+  /// 安装包大小（字节）。
+  int size = 0;
 
   /// 下载成功的版本号。单独一个字段而不是复用 [tag]：完成时 [tag] 会被清空
   /// （它是「正在下载」的标志），而界面要显示「已下载 v2.0.8」。
@@ -70,16 +85,24 @@ class UpdateDownloader extends ChangeNotifier {
   HttpClient? _client;
 
   /// 开始下载。[dirProvider] 由页面传入（它知道各平台的下载目录口径）。
+  ///
+  /// [notes] 是这一版改了什么（从 release 正文里挑出的几行）：跟着包一起记下来，
+  /// 装上新版以后欢迎卡要拿它说「这次改了什么」。
   Future<void> start({
     required String url,
     required String fileName,
     required String versionTag,
     required Future<Directory> Function() dirProvider,
+    List<String> notes = const [],
   }) async {
     if (running) return; // 同一时刻只允许一个（重复点按钮不会开出两条流）
     final seq = ++_runSeq;
     tag = versionTag;
     path = null;
+    publicPath = null;
+    publicName = null;
+    size = 0;
+    doneTag = null;
     error = null;
     progress = 0;
     received = 0;
@@ -96,7 +119,9 @@ class UpdateDownloader extends ChangeNotifier {
       // 不会让下一次「已下载」扫描把一个半截的 APK 当成可用安装包。
       final part = File('${file.path}.part');
 
-      final client = HttpClient()
+      // 下载地址若指向自建服务器（自签证书），需要钉扎 context；
+      // 指向 GitHub 等公共站点时 pinnedContextFor 返回 null，即默认行为。
+      final client = HttpClient(context: pinnedContextFor(url))
         ..connectionTimeout = const Duration(seconds: 30);
       _client = client;
       final req = await client
@@ -143,7 +168,62 @@ class UpdateDownloader extends ChangeNotifier {
 
       // 原子改名：这一步之后才算「有一个可用的安装包」
       if (await part.exists()) await part.rename(file.path);
+      size = received;
+      publicName = fileName;
+      publicPath = file.path;
       path = file.path;
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        // ① 校签名：不是我们签的包（被替换 / 下载被劫持 / 镜像塞了私货）
+        //    直接删掉，既不留给安装器、也不留在「下载」里。
+        final trust = await UpdateInstaller.verify(file.path);
+        if (trust != ApkTrust.ok) {
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          path = null;
+          publicPath = null;
+          publicName = null;
+          tag = null;
+          error = trust == ApkTrust.mismatch
+              ? (l?.updatePkgSigBad ?? 'signature mismatch')
+              : (l?.updatePkgSigUnknown ?? 'cannot verify');
+          statusText = error!;
+          _notify();
+          _notifyBar();
+          return;
+        }
+        // ② 复制进系统「下载」：用户要能在文件管理器里自己找到它。
+        //    复制成功就删掉私有那份（以前一直堆在 Android/data 里，翻不到）；
+        //    失败时留着，安装改走真实路径那条。
+        final pub = await UpdateInstaller.publish(file.path, fileName);
+        // 只有真落在系统「下载」目录里才算成功：旧系统上权限被拒时原生会
+        // 退回应用私有目录（返回的是绝对路径），那条路用户照样翻不到，
+        // 所以这里把它当失败处理 —— 留着下载时那份，安装仍可用。
+        if (pub != null && pub.startsWith('Download/')) {
+          publicPath = pub;
+          try {
+            if (await file.exists()) await file.delete();
+          } catch (_) {}
+          path = null;
+        } else if (pub != null && pub != file.path) {
+          try {
+            final stray = File(pub);
+            if (await stray.exists()) await stray.delete();
+          } catch (_) {}
+          publicPath = file.path;
+        }
+      }
+      // 记下这个包：装上新版以后回到应用里再问「要不要删掉」。
+      // 桌面端也记（exe 就在系统「下载」里），走的是同一条欢迎卡。
+      _state?.rememberUpdatePackage(
+        tag: versionTag,
+        name: publicName ?? fileName,
+        path: path ?? '',
+        size: size,
+        notes: notes,
+      );
+
       doneTag = versionTag;
       tag = null;
       progress = 1;
@@ -209,7 +289,7 @@ class UpdateDownloader extends ChangeNotifier {
       st.setNotifExtra(l.notifUpdateDownload(tag ?? '', pct));
     } else if (error != null) {
       st.setNotifExtra(l.notifUpdateFailed);
-    } else if (path != null) {
+    } else if (doneTag != null) {
       st.setNotifExtra(l.notifUpdateReady);
     } else {
       st.setNotifExtra('');

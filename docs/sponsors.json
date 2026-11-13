@@ -1,6 +1,6 @@
 {
-  "version": 7,
-  "updated": "2026-09-25",
+  "version": 17,
+  "updated": "2026-10-26",
   "sponsors": [
     {
       "kind": "group",
@@ -85,6 +85,106 @@
         "zh": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
         "zh-TW": "贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音",
         "en": "Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG2WX",
+      "desc": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+      "descs": {
+        "zh": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+        "zh-TW": "贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音",
+        "en": "Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BA8AZJ",
+      "desc": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+      "descs": {
+        "zh": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+        "zh-TW": "贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音",
+        "en": "Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG7LZQ",
+      "desc": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+      "descs": {
+        "zh": "赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音",
+        "zh-TW": "贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音",
+        "en": "Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BD4TYW",
+      "desc": "赠我以琼琚 · 投我琼琚，报以长波",
+      "descs": {
+        "zh": "赠我以琼琚 · 投我琼琚，报以长波",
+        "zh-TW": "贈我以瓊琚 · 投我瓊琚，報以長波",
+        "en": "Gifted with jade — you gave jade, and are answered with the long wave."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BH2WIX",
+      "desc": "赠我以琼琚 · 琼琚有价，清音无价",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚有价，清音无价",
+        "zh-TW": "贈我以瓊琚 · 瓊琚有價，清音無價",
+        "en": "Gifted with jade — jade has a price, but a clear tone is priceless."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG7QZC",
+      "desc": "赠我以琼琚 · 琼琚虽微，长波可寄",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚虽微，长波可寄",
+        "zh-TW": "贈我以瓊琚 · 瓊琚雖微，長波可寄",
+        "en": "Gifted with jade — small as it is, the long wave carries it far."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BH4HGA",
+      "desc": "赠我以琼琚 · 琼琚在手，回响不息",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚在手，回响不息",
+        "zh-TW": "贈我以瓊琚 · 瓊琚在手，回響不息",
+        "en": "Gifted with jade — jade in hand, the echo goes on."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG2GNI",
+      "desc": "赠我以琼琚 · 琼琚一片，回声不散",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚一片，回声不散",
+        "zh-TW": "贈我以瓊琚 · 瓊琚一片，回聲不散",
+        "en": "Gifted with jade — one piece of jade, an echo that lingers."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG5AON",
+      "desc": "赠我以琼琚 · 琼琚在手，长路有灯",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚在手，长路有灯",
+        "zh-TW": "贈我以瓊琚 · 瓊琚在手，長路有燈",
+        "en": "Gifted with jade — jade in hand, a light along the road."
+      }
+    },
+    {
+      "kind": "jade",
+      "name": "BG5WRY",
+      "desc": "赠我以琼琚 · 琼琚在握，长波有应",
+      "descs": {
+        "zh": "赠我以琼琚 · 琼琚在握，长波有应",
+        "zh-TW": "贈我以瓊琚 · 瓊琚在握，長波有應",
+        "en": "Gifted with jade — jade in hand, the long wave answers."
       }
     },
     {

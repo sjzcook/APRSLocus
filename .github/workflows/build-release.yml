@@ -13,6 +13,18 @@ on:
 permissions:
   contents: write
 
+# 第三方接口的参数与地址一律不进源码（本仓库是公开的）：QWEATHER_KEY /
+# QWEATHER_HOST / TIANDITU_KEY / CRAC_ENDPOINT 都在构建时用 --dart-define 从仓库
+# Secrets 注入，源码里只有 `String.fromEnvironment`。没配置时对应功能自己报
+# 「未配置」，包里也就没有那串地址。
+
+# 同一个 tag 被反复刷新时（改一处 bug 就并回同版号重跑），**取消上一次仍在跑的构建**。
+# 否则多次构建并发，Release 会被"先跑完的那次"更新 —— 用户下载到的可能是中间某次
+# 的产物，看着就像"这一版没带上修复"（v2.0.20 就踩过这个坑）。
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     name: Build Windows Installer
@@ -24,7 +36,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Sync version
@@ -45,7 +57,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows (Release)
-        run: flutter build windows --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }}
+        run: flutter build windows --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }} --dart-define=CRAC_ENDPOINT=${{ secrets.CRAC_ENDPOINT }}
 
       - name: Setup Inno Setup
         shell: pwsh
@@ -76,7 +88,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Setup Java
@@ -117,20 +129,44 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
-      - name: Build APK (Release)
-        run: flutter build apk --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }}
+      # 安卓**分架构**打包（v2.0.11 起）：fat APK 里三份原生库（libapp.so 14~17MB +
+      # libflutter.so 8~12MB × 3）占了 94%，81.6MB 里 76.6MB 是它们。
+      # 改成 --split-per-abi 后每个架构包 ~30MB，三个都挂进 Release。
+      #
+      # ⚠ **64 位包必须叫 `APRSLocus_<版本>.apk`（不带 ABI 后缀）**：应用内更新取的是
+      # 资产列表里第一个 `.apk`，而 GitHub 按**名字升序**返回资产（12 个历史版本逐个
+      # 核对过）——`APRSLocus_2.0.11.apk` 里那个 `.`（0x2E）比 `_`（0x5F）小，
+      # 所以它永远排在 `APRSLocus_2.0.11_armeabi-v7a.apk` 前面。
+      # 这样 64 位用户走的还是原来那条路，**应用内更新逻辑一行都不用改**。
+      # 这条不变量由 tool/check_release_assets.py 盯着（改名字/改顺序都会当场报红）。
+      - name: Build APK (Release, split per ABI)
+        run: flutter build apk --release --split-per-abi --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }} --dart-define=CRAC_ENDPOINT=${{ secrets.CRAC_ENDPOINT }}
 
-      - name: Rename APK
+      - name: Rename APKs (split per ABI)
         shell: bash
         run: |
+          set -euo pipefail
           ver=$(grep -E '^version:' pubspec.yaml | head -1 | sed -E 's/version: ([0-9.]+).*/\1/')
-          mv build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/APRSLocus_${ver}.apk"
+          a=build/app/outputs/flutter-apk
+          # 先确认三个架构都真的产出了：`--split-per-abi` 的产物名是 Flutter 定的，
+          # 万一它改名而这里照旧 mv，就会变成「流水线全绿、Release 少两个包」。
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            test -f "$a/app-${abi}-release.apk" \
+              || { echo "::error::缺少 $a/app-${abi}-release.apk —— --split-per-abi 没产出这个架构？"; exit 1; }
+          done
+          # 64 位用**原来的名字**（见上面那段注释：应用内更新按它挑包）；
+          # 另外两个各带 ABI 后缀，直接发在 Release 页供手动下载。
+          mv "$a/app-arm64-v8a-release.apk"   "$a/APRSLocus_${ver}.apk"
+          mv "$a/app-armeabi-v7a-release.apk" "$a/APRSLocus_${ver}_armeabi-v7a.apk"
+          mv "$a/app-x86_64-release.apk"      "$a/APRSLocus_${ver}_x86_64.apk"
+          ls -la "$a"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: APRSLocus-Android
           path: build/app/outputs/flutter-apk/APRSLocus_*.apk
+          if-no-files-found: error
 
   build-ios:
     name: Build iOS
@@ -142,7 +178,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.9
           cache: true
 
       - name: Sync version
@@ -163,7 +199,7 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS (Release, no codesign)
-        run: flutter build ios --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --no-codesign
+        run: flutter build ios --release --dart-define=QWEATHER_KEY=${{ secrets.QWEATHER_KEY }} --dart-define=QWEATHER_HOST=${{ secrets.QWEATHER_HOST || 'pf4ewvjfqj.re.qweatherapi.com' }} --dart-define=TIANDITU_KEY=${{ secrets.TIANDITU_KEY }} --dart-define=CRAC_ENDPOINT=${{ secrets.CRAC_ENDPOINT }} --no-codesign
 
       # 把 .app 封成**未签名 .ipa**。为什么非有这一步不可：
       # `.app` 是**目录**，而 action-gh-release 对目录是**静默跳过** ——
@@ -244,13 +280,193 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # 把每个安装包的 SHA-256 写进发布说明。
+      #
+      # 为什么非要有这一段：只有 GitHub 会给资产算 digest，镜像与 OSS 渠道
+      # 都没有 —— 客户端「联网校验」在那些渠道上就一直拿不到摘要（用户反馈
+      # 「一直是无法校验」）。正文会跟着镜像一起过去，于是任何渠道都能核对。
+      - name: Append package digests
+        id: digests
+        shell: bash
+        run: |
+          {
+            echo "block<<EOF"
+            echo ""
+            echo "### 安装包 SHA-256"
+            echo ""
+            find APRSLocus-Android APRSLocus-Windows APRSLocus-iOS -type f 2>/dev/null \
+              | sort | while read -r f; do
+                  case "$f" in
+                    *.apk|*.exe|*.ipa) ;;
+                    *) continue ;;
+                  esac
+                  [ -s "$f" ] || continue
+                  echo "- $(basename "$f") sha256: $(sha256sum "$f" | cut -d' ' -f1)"
+                done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ steps.notes.outputs.notes }}
+          body: ${{ steps.notes.outputs.notes }}${{ steps.digests.outputs.block }}
+          # 同一个 tag 再跑一次 = **只更新资产**（`overwrite_files` 默认开着，同名资产直接覆盖）；
+          # Release 的正文不会跟着变：这个版本的动作没有更新正文的入参
+          # （旧注释写的 `allow_updates` 根本不存在，只会被当成未知输入忽略并打一条 warning）。
+          # 要改已发出版本的正文，只能自己 PATCH `/repos/{repo}/releases/{id}`。
+          # 为什么需要重跑：发出去的版本如果马上发现 bug，把修复合回同一版号重跑即可，
+          # 不必为一次打包失误多占一个版本号；没有它，第二次跑会直接失败
+          # （"Release already exists"），用户那边则停在旧的包上。
+          overwrite_files: true
           # 只挂 .ipa。**.app 是目录，action-gh-release 会静默跳过** ——
           # v1.6.175~177 的 Release 页因此一个 iOS 资产都没有，而流水线全绿。
           files: |
             APRSLocus-Windows/*.exe
             APRSLocus-Android/*.apk
             APRSLocus-iOS/*.ipa
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # 阿里云 OSS 更新渠道（**可选**）：把安装包 + 一份 GitHub 同格式的 releases
+  # 索引传到**公开读**的 OSS bucket，客户端即可从 OSS 走阿里云 CDN 检查 / 下载
+  # 更新（见 AppState.updateChannelBases['aliyun'] / ['aliyun_hk']、
+  # tool/oss_index.py、tool/check_oss_channel.py）。
+  #
+  # **两个节点一起发**：广州（`aprslocus`，客户端读默认域名
+  # `aprslocus.oss-cn-guangzhou.aliyuncs.com`）与香港（`aprslocushk`，客户端读
+  # CNAME 自定义域 `aprslocushk.oss.theez.top`）。两边的索引 key 相同，各自
+  # 指向自己域名下的安装包；App 的「Aliyun OSS / Aliyun OSS（香港）」两个渠道
+  # 分别对应它们。
+  #
+  # 凭据一律来自仓库 Secrets（**绝不写明文**，本仓库是公开的）：
+  #     OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET（两个 bucket 共用同一套）
+  # 未配置时**跳过并告警**（该渠道是可选项，不该让每次发版都变红）——与安卓
+  # keystore 的处理一致；一旦配置了却传失败，则**当场失败**。本 job 与官方
+  # Release 相互独立，它失败不影响 GitHub / Windows / Android / iOS 发版。
+  # 首次启用：① 加上述两个 secret；② 把两个 bucket 读权限都设为公共读。
+  # ─────────────────────────────────────────────────────────────────────────
+  publish-oss:
+    name: Publish to Aliyun OSS
+    needs: [build-windows, build-android, build-ios]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    env:
+      OSS_BUCKET: aprslocus
+      OSS_ENDPOINT: oss-cn-guangzhou.aliyuncs.com
+      OSS_INDEX_KEY: DarionDong/APRSLocus/releases
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      # 香港节点（同一条 OSS 通道，香港区域）：客户端走 CNAME 自定义域
+      # `aprslocushk.oss.theez.top`（见 AppState.updateChannelBases['aliyun_hk']），
+      # 上传用原生 endpoint `oss-cn-hongkong.aliyuncs.com`。索引 key 与广州一致。
+      # 复用同一套 OSS_ACCESS_KEY_ID / _SECRET（该 AK 对两个 bucket 都有权限）。
+      OSS_HK_BUCKET: aprslocushk
+      OSS_HK_ENDPOINT: oss-cn-hongkong.aliyuncs.com
+      OSS_HK_DOMAIN: aprslocushk.oss.theez.top
+    steps:
+      - name: Check OSS credentials
+        id: creds
+        run: |
+          if [ -z "${OSS_ACCESS_KEY_ID:-}" ] || [ -z "${OSS_ACCESS_KEY_SECRET:-}" ]; then
+            echo "::warning::未配置 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET —— 跳过阿里云 OSS 渠道发布（该渠道为可选）。配置：仓库 Settings → Secrets and variables → Actions。"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+
+      - name: Install ossutil
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://gosspublic.alicdn.com/ossutil/1.7.19/ossutil-v1.7.19-linux-amd64.zip" -o /tmp/ossutil.zip
+          python3 -c "import zipfile;zipfile.ZipFile('/tmp/ossutil.zip').extractall('/tmp/ossutil-bin')"
+          OSSUTIL=/tmp/ossutil-bin/ossutil-v1.7.19-linux-amd64/ossutil
+          chmod +x "$OSSUTIL"
+          echo "OSSUTIL=$OSSUTIL" >> "$GITHUB_ENV"
+
+      - name: Upload installers (public-read)
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF#refs/tags/v}"
+          prefix="downloads/${ver}"
+          # 广州与香港是两个区域、两个 bucket，各用自己的原生 endpoint 上传。
+          ossgz() { "$OSSUTIL" "$@" -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"; }
+          osshk() { "$OSSUTIL" "$@" -e "$OSS_HK_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"; }
+          shopt -s nullglob
+          files=(APRSLocus-Windows/*.exe APRSLocus-Android/*.apk APRSLocus-iOS/*.ipa)
+          test "${#files[@]}" -gt 0 || { echo "::error::没有可上传的安装包产物"; exit 1; }
+          for f in "${files[@]}"; do
+            # 目标对象名由 tool/oss_index.py 的同一套规则给出：OSS 默认域名对
+            # `.apk` / `.ipa` 下载返回 400（ApkDownloadForbidden），故会被加上
+            # `.bin` 后缀上传（香港走的是 CNAME 自定义域，本不受此限，但为与
+            # 广州保持同一份索引形状，仍沿用同一套命名）；索引里的
+            # browser_download_url 与这里保持一致。
+            obj="$(python3 tool/oss_index.py --delivery-name "$(basename "$f")")"
+            ossgz cp "$f" "oss://${OSS_BUCKET}/${prefix}/${obj}" -f --acl public-read \
+              --meta "Content-Type:application/octet-stream"
+            osshk cp "$f" "oss://${OSS_HK_BUCKET}/${prefix}/${obj}" -f --acl public-read \
+              --meta "Content-Type:application/octet-stream"
+            echo "uploaded ${obj} (guangzhou + hongkong)"
+          done
+
+      - name: Build & upload releases index
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF#refs/tags/v}"
+          prefix="downloads/${ver}"
+          ossgz() { "$OSSUTIL" "$@" -e "$OSS_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"; }
+          osshk() { "$OSSUTIL" "$@" -e "$OSS_HK_ENDPOINT" -i "$OSS_ACCESS_KEY_ID" -k "$OSS_ACCESS_KEY_SECRET"; }
+          shopt -s nullglob
+          files=(APRSLocus-Windows/*.exe APRSLocus-Android/*.apk APRSLocus-iOS/*.ipa)
+          # 广州：url-base 用默认域名（客户端就读这个）。线上旧索引可能不存在 → 忽略。
+          ossgz cp "oss://${OSS_BUCKET}/${OSS_INDEX_KEY}" /tmp/existing_gz.json -f || true
+          python3 tool/oss_index.py --ver "$ver" \
+            --url-base "https://${OSS_BUCKET}.${OSS_ENDPOINT}/${prefix}" \
+            --changelog CHANGELOG.md --existing /tmp/existing_gz.json \
+            --out /tmp/releases_gz.json "${files[@]}"
+          ossgz cp /tmp/releases_gz.json "oss://${OSS_BUCKET}/${OSS_INDEX_KEY}" -f --acl public-read
+          # 香港：客户端走 CNAME 自定义域，所以 url-base 必须用 OSS_HK_DOMAIN，
+          # 否则 App 走香港渠道会去下 oss-cn-hongkong 默认域名的对象（可能 400/慢）。
+          osshk cp "oss://${OSS_HK_BUCKET}/${OSS_INDEX_KEY}" /tmp/existing_hk.json -f || true
+          python3 tool/oss_index.py --ver "$ver" \
+            --url-base "https://${OSS_HK_DOMAIN}/${prefix}" \
+            --changelog CHANGELOG.md --existing /tmp/existing_hk.json \
+            --out /tmp/releases_hk.json "${files[@]}"
+          osshk cp /tmp/releases_hk.json "oss://${OSS_HK_BUCKET}/${OSS_INDEX_KEY}" -f --acl public-read
+
+      - name: Verify (anonymous, same as the app)
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          # 两个节点都用**客户端实际会请求的地址**做匿名自检：广州=默认域名，
+          # 香港=CNAME 自定义域。索引读不到、或任一资产拿不到 200/206，都当场失败。
+          verify() {
+            local label="$1" url="$2" urls="$3"
+            local body
+            body="$(curl -fsS "$url")" || {
+              echo "::error::[$label] 匿名读取 $url 失败 —— bucket 未开公共读，或对象 ACL 不是 public-read。"
+              echo "::error::[$label] 请把该 bucket 读权限设为「公共读」，否则 App 走这条渠道会拿到 403。"
+              exit 1
+            }
+            echo "$body" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d,list) and d and d[0].get("assets"); print("index OK:", d[0]["tag_name"], len(d[0]["assets"]), "assets")'
+            echo "$body" | python3 -c 'import json,sys; [print(a["browser_download_url"]) for a in json.load(sys.stdin)[0]["assets"]]' > "$urls"
+            while read -r u; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$u")"
+              if [ "$code" != "200" ] && [ "$code" != "206" ]; then
+                echo "::error::[$label] 匿名下载失败 HTTP $code：$u"
+                exit 1
+              fi
+              echo "[$label] download OK ($code): $u"
+            done < "$urls"
+          }
+          verify gz "https://${OSS_BUCKET}.${OSS_ENDPOINT}/${OSS_INDEX_KEY}" /tmp/oss_urls_gz.txt
+          verify hk "https://${OSS_HK_DOMAIN}/${OSS_INDEX_KEY}" /tmp/oss_urls_hk.txt

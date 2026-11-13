@@ -24,6 +24,12 @@ bool get isIOSPlatform =>
 /// 其余平台（Android / Windows / Linux / macOS）沿用原有实现。
 bool get tncPlatformSupported => !isIOSPlatform;
 
+/// 直连 TCP 的报文链路（APRS-IS / APRSNETCN SERVER）在本平台是否可用。
+///
+/// Web 没有裸 TCP：主链路在 Web 上走的是 WebSocket 网关（另一回事），副链路
+/// 只有 14580 明文端口，摆一个永远连不上的开关不如不摆。
+bool get tcpLinkPlatformSupported => !kIsWeb;
+
 /// 蓝牙心率带（BLE 标准心率服务）在本平台是否可用：Android / iOS 有原生实现。
 bool get bleHrPlatformSupported =>
     !kIsWeb &&
@@ -35,3 +41,12 @@ bool get motionPlatformSupported =>
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS);
+
+/// 「GPS 采样间隔」在本平台是否真的有效。
+///
+/// 只有 Android 能控：`LocationManager.requestLocationUpdates` 的 `minTime`
+/// 就是采样间隔。iOS 的 CoreLocation 没有「定时采样」这一说（由系统按精度
+/// 与移动状态自己决定），桌面走的是 IP 网络定位。摆一个改了不生效的档位
+/// 比不摆更糟，所以这些平台干脆不显示。
+bool get gpsSamplingPlatformSupported =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

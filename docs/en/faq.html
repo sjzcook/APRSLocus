@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Help Center — APRSlocus FAQ & Guides</title>
 <meta name="description" content="APRSlocus help center: connection and Passcode, the four data sources and the iGate, positioning and beacon, display and offline maps, home-screen widgets and HF propagation, backup and updates — 23 frequently asked questions.">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="Help Center — APRSlocus FAQ & Guides">
@@ -26,19 +26,18 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/faq.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/faq.html">
 <link rel="icon" type="image/png" href="../assets/favicon.png">
-<link rel="stylesheet" href="../css/style.css?v=5">
+<link rel="stylesheet" href="../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统。必须在首帧前执行，
-   否则深色偏好用户会先闪一下白屏（CSS 键在 <html data-theme> 上）。 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）。
+   必须在首帧前执行，否则会闪一下亮底（token 的键在 <html data-theme> 上）。 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -71,7 +70,7 @@
       "name": "Connection fails or keeps dropping?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The app reconnects with progressive backoff (8 → 16 → 32 → 60 s). If it keeps failing, check your network, confirm the server (default rotate.aprs2.net:14580) and port are not blocked, or switch servers in Connection Settings and tap Reconnect."
+        "text": "The app reconnects with progressive backoff (8 → 16 → 32 → 60 s). If it keeps failing, check your network and whether the server address and port are blocked, or switch servers in Connection Settings and tap Reconnect."
       }
     },
     {
@@ -296,7 +295,7 @@
     <p class="faq-nohit" id="faqNohit" hidden>No matching question — try another keyword.</p>
   </div>
 
-    <h3 class="faq-group" id="g0">Connection & Messaging</h3>
+    <h2 class="faq-group" id="g0">Connection & Messaging</h2>
     <div class="faq-list">
       <details class="faq reveal" open>
         <summary>Cannot send or receive messages?<span class="chev"></span></summary>
@@ -308,7 +307,7 @@
       </details>
       <details class="faq reveal">
         <summary>Connection fails or keeps dropping?<span class="chev"></span></summary>
-        <p>The app reconnects with progressive backoff (8 → 16 → 32 → 60 s). If it keeps failing, check your network, confirm the server (default <code>rotate.aprs2.net:14580</code>) and port are not blocked, or switch servers in Connection Settings and tap Reconnect.</p>
+        <p>The app reconnects with progressive backoff (8 → 16 → 32 → 60 s). If it keeps failing, check your network and whether the server address and port are blocked, or switch servers in Connection Settings and tap Reconnect.</p>
       </details>
       <details class="faq reveal">
         <summary>Which data sources are supported?<span class="chev"></span></summary>
@@ -327,7 +326,7 @@
         <p>Wire the headphone / mic jack to the radio’s SPK / MIC and set up PTT. During transmission the app maxes media volume and mutes the mic; the link self-test shows the audio level. If others cannot decode you, check level and wiring first.</p>
       </details>
     </div>
-    <h3 class="faq-group" id="g1">Positioning & Beacon</h3>
+    <h2 class="faq-group" id="g1">Positioning & Beacon</h2>
     <div class="faq-list">
       <details class="faq reveal">
         <summary>Cannot see nearby stations on mobile?<span class="chev"></span></summary>
@@ -346,7 +345,7 @@
         <p>Settings → Track history keeps days on disk, with total distance, average and top speed and moving time — it survives a restart, and tapping a day replays that day’s route on the map (draggable, 0.5×–4× speed). It is <b>deliberately separate</b> from the on-screen “my track”, which serves this session only (gone on exit, cleared on a confirmed jump).</p>
       </details>
     </div>
-    <h3 class="faq-group" id="g2">Display & Maps</h3>
+    <h2 class="faq-group" id="g2">Display & Maps</h2>
     <div class="faq-list">
       <details class="faq reveal">
         <summary>Map display issues on Windows?<span class="chev"></span></summary>
@@ -369,7 +368,7 @@
         <p>Six UI languages: Simplified Chinese, Traditional Chinese, English, Japanese, Indonesian and Spanish. Chat translation works out of the box on a free endpoint — <b>no API key</b> — two-way, side-by-side, and pre-send.</p>
       </details>
     </div>
-    <h3 class="faq-group" id="g3">Widgets & HF Propagation</h3>
+    <h2 class="faq-group" id="g3">Widgets & HF Propagation</h2>
     <div class="faq-list">
       <details class="faq reveal">
         <summary>How do I add the widgets? Why are they empty?<span class="chev"></span></summary>
@@ -384,7 +383,7 @@
         <p>The weather widget has four adaptive sizes; since v1.6.133 the HF and system-status widgets resize too, switching to a taller tier when you drag them up.</p>
       </details>
     </div>
-    <h3 class="faq-group" id="g4">Data, Backup & Install</h3>
+    <h2 class="faq-group" id="g4">Data, Backup & Install</h2>
     <div class="faq-list">
       <details class="faq reveal">
         <summary>How do I migrate to a new device?<span class="chev"></span></summary>
@@ -439,7 +438,7 @@
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../js/main.js"></script>
+<script src="../js/main.js?v=8"></script>
 <script>
 /* 帮助中心专属：客户端搜索 + 全部展开/收起（无 JS 时题目仍是原生 details，可正常使用） */
 (function () {

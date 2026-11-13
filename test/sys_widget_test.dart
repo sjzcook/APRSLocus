@@ -14,6 +14,7 @@ import 'package:aprslocus/sys_widget.dart';
 /// 少一条链路，Kotlin 侧只会安静地留空（`read()` 刻意容错），
 /// 错误全部落在「界面上少了一块」而不报错。
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final zh = lookupAppLocalizations(const Locale('zh'));
   final en = lookupAppLocalizations(const Locale('en'));
 
@@ -114,6 +115,7 @@ void main() {
     test('已定位时用「已定位」，且网格不是 --', () {
       final st = fresh();
       st.myHasFix = true;
+      st.debugSetFreshFix(); // 本轮已拿到定位（否则只是「已保存位置」）
       st.myLat = 22.5;
       st.myLng = 114.0;
       final snap = buildSysWidgetSnapshot(st: st, s: zh);

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>臺站與篩選 — APRSlocus</title>
 <meta name="description" content="目標：先收得到（範圍過濾），再看得清（列表篩選與詳情）。">
-<meta name="theme-color" content="#f3f6fd">
+<meta name="theme-color" content="#0a0e12">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="APRSlocus">
 <meta property="og:title" content="臺站與篩選 — APRSlocus">
@@ -22,18 +22,17 @@
     <link rel="alternate" hreflang="en" href="https://aprslocus.theez.top/en/manual/stations.html">
     <link rel="alternate" hreflang="x-default" href="https://aprslocus.theez.top/manual/stations.html">
 <link rel="icon" type="image/png" href="../../assets/favicon.png">
-<link rel="stylesheet" href="../../css/style.css?v=5">
+<link rel="stylesheet" href="../../css/style.css?v=8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
 <script>
-/* 主题：localStorage 优先，否则跟随系统；首帧前执行防闪白 */
+/* 主题：localStorage 优先，没存过就用深色（本站默认皮肤 = 深空黑）；首帧前执行防闪底 */
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    if (t !== 'dark' && t !== 'light')
-      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'dark' && t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
     var m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', t === 'dark' ? '#0b1220' : '#f3f6fd');
+    if (m) m.setAttribute('content', t === 'dark' ? '#0a0e12' : '#f4f7fc');
   } catch (e) {}
 })();
 </script>
@@ -167,7 +166,7 @@
     <div class="manual-body">
   <section class="chapter reveal" id="receive">
     <h2 id="receive">收什麼：範圍與接收偏好<a class="hdr-anchor" href="#receive" aria-label="本節永久連結" title="本節永久連結">#</a></h2>
-<p>兩層過濾都在 <b>設定 → 連線</b>，決定「封包到不到得了你」：</p>
+<p>兩層過濾都在 <b>設定 → 伺服器</b>，決定「封包到不到得了你」：</p>
 <ol class="m-steps">
 <li><b>接收範圍過濾</b>：<code>r/緯度/經度/半徑</code>，預設 <b>300 km</b>（最小 10 km）。
 勾「過濾中心跟隨我的位置」就以你為圓心；改完點 <b>儲存並套用</b>。</li>
@@ -182,7 +181,7 @@
     <h2 id="display">看什麼：列表篩選<a class="hdr-anchor" href="#display" aria-label="本節永久連結" title="本節永久連結">#</a></h2>
 <p><b>臺站頁籤</b>上再做一層<b>展示篩選</b>（不影響接收）：</p>
 <ul>
-<li><b>狀態</b>：線上 / 移動 / 靜止 —— 「線上判定時長」在 <b>設定 → 連線 → 資料上限</b>（預設 5 分鐘）。</li>
+<li><b>狀態</b>：線上 / 移動 / 靜止 —— 「線上判定時長」在 <b>設定 → 伺服器 → 資料上限</b>（預設 5 分鐘）。</li>
 <li><b>類型</b>：APRS 類型（車載/固定/中繼/氣象）、軟體（APRSLocus）、裝置類別與具體型號。</li>
 <li><b>收藏</b>：加星的臺站單獨一檔。</li>
 <li><b>搜尋</b>：呼號 / 類型 / 備註 / 網格 —— 臺站幾萬條也不卡（記憶體上限預設 10 萬條，可調）。</li>
@@ -206,7 +205,7 @@
 
     <aside class="m-related reveal" aria-label="相關章節">
       <div class="mr-title">相關章節</div>
-      <div class="mr-links"><a href="connections.html#sources">四條鏈路：收可複選，發只有一條</a><a href="maps.html#offline">下載離線地圖</a><a href="troubleshooting.html#matrix">症狀 → 原因 → 動作</a></div>
+      <div class="mr-links"><a href="connections.html#sources">六條鏈路：兩條在網際網路，四條接電臺</a><a href="maps.html#offline">下載離線地圖</a><a href="troubleshooting.html#matrix">症狀 → 原因 → 動作</a></div>
     </aside>
     </div>
   </div>
@@ -246,7 +245,7 @@
   <svg class="backtop-arrow" viewBox="0 0 24 24"><path d="M12 5l7 7-1.4 1.4L13 8.8V20h-2V8.8l-4.6 4.6L5 12l7-7z"/></svg>
 </a>
 
-<script src="../../js/main.js"></script>
+<script src="../../js/main.js?v=8"></script>
 <script>
 /* 手册页专属：小节搜索 + 侧栏 scrollspy（无 JS 时正文照常可读） */
 (function () {

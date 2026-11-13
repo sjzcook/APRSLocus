@@ -10,6 +10,7 @@ import 'widgets.dart';
 import 'theme_store.dart';
 import 'theme_text.dart';
 import 'theme_icons.dart';
+import 'tnc_page.dart';
 import 'map_page.dart';
 import 'notice_banner.dart';
 import 'stations_page.dart';
@@ -32,6 +33,8 @@ class _HomePageState extends State<HomePage> {
   String _search = '';
   int _lastFocusSeq = 0;
   int _lastPickSeq = 0;
+  int _lastStrategyJumpSeq = 0;
+  int _lastTabSeq = 0;
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce; // 搜索防抖：台站多时避免每敲一个字符重建地图/列表
 
@@ -113,28 +116,8 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     };
-    // 收到新消息时弹出顶部气泡
-    widget.state.onNewMessage = (src, text, groupId) {
-      String? groupName;
-      if (groupId != null) {
-        for (final g in widget.state.chatGroups) {
-          if (g.id == groupId) {
-            groupName = g.name;
-            break;
-          }
-        }
-      }
-      _showBubble = true;
-      _bubbleCall = groupName != null
-          ? S.of(context).groupBubble(groupName)
-          : src;
-      _bubbleText = text;
-      if (mounted) setState(() {});
-      _bubbleTimer?.cancel();
-      _bubbleTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _showBubble = false);
-      });
-    };
+    // 收到新消息时弹出顶部气泡（用多监听者注册，避免把智能体的消息任务回调顶掉）
+    widget.state.addNewMessageListener(_onIncomingMessage);
     // 收到群聊邀请时弹窗
     widget.state.onInviteReceived = (from, groupCall, groupName) {
       _showInviteDialog(from, groupCall, groupName);
@@ -153,119 +136,10 @@ class _HomePageState extends State<HomePage> {
         );
       }
     };
-    // 首次连接成功后询问：是否自动上报位置
-    widget.state.onAskBeaconAuto = () {
-      if (mounted) _askBeaconAuto();
-    };
-    // 首帧后补查一次：覆盖“OOBE 完成瞬间连接成功、绑定晚于连接”的竞态漏弹
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) widget.state.maybeAskBeaconAuto();
-    });
+    // 连上服务器后**不再**自动弹「是否自动上报」询问：改为主界面上一个正式的
+    // 「开始上报」按钮，由用户手动确认后再上报（见 ReportActions）。
   }
 
-
-  /// 首次连接成功后：询问是否自动上报位置（记住选择）
-  Future<void> _askBeaconAuto() async {
-    if (!mounted) return;
-    final st = widget.state;
-    final enable = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final sheet = MaterialSurface(
-          radius: 24,
-          child: Container(
-            margin: const EdgeInsets.all(12),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            decoration: BoxDecoration(
-              color: C.sheetFill,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: C.greenBg,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.send_rounded, color: C.green, size: 20),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        S.of(ctx).beaconAutoAskTitle,
-                        style: ts(16, w: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10),
-                Text(
-                  S.of(ctx).beaconAutoAskDesc,
-                  style: ts(12, c: C.slate, h: 1.6),
-                ),
-                SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: C.slate,
-                          side: BorderSide(color: C.borderStrong),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(S.of(ctx).beaconAutoNo,
-                            style: ts(13, w: FontWeight.w600)),
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: C.green,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(S.of(ctx).beaconAutoYes,
-                            style: ts(13, w: FontWeight.w700)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-        return SafeArea(child: sheet);
-      },
-    );
-    if (!mounted || enable == null) {
-      // 用户直接划掉/返回：视为本次不选择，为避免反复打扰同样记住已问过
-      if (mounted) widget.state.beaconAutoAnswered();
-      return;
-    }
-    // 用户已做出选择 → 记录“已询问过”
-    widget.state.beaconAutoAnswered();
-    if (enable) {
-      st.setBeaconEnabled(true);
-      // 立即上报一次，让用户确认能在地图上看到自己
-      if (st.myHasFix) {
-        st.sendBeacon();
-      } else {
-        st.startTracking();
-      }
-    } else {
-      st.setBeaconEnabled(false);
-    }
-  }
 
   void _onStateChanged() {
     if (!mounted) return;
@@ -287,6 +161,26 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+    // 「群聊消息 → 打开策略地图」：与上面两条一样，先切回地图页签，
+    // 由常驻的 MapPage 负责 push（见 AppState.openStrategyMap）。
+    if (widget.state.strategyJumpSeq != _lastStrategyJumpSeq) {
+      _lastStrategyJumpSeq = widget.state.strategyJumpSeq;
+      if (_tab != 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _tab = 0);
+        });
+      }
+    }
+    // 智能体「切到某页签」请求（见 AppState.requestTab）。
+    if (widget.state.tabJumpSeq != _lastTabSeq) {
+      _lastTabSeq = widget.state.tabJumpSeq;
+      final target = widget.state.tabJumpIndex.clamp(0, 4);
+      if (_tab != target) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _tab = target);
+        });
+      }
+    }
   }
 
   /// 群聊邀请弹窗
@@ -295,7 +189,7 @@ class _HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: C.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
@@ -387,13 +281,34 @@ class _HomePageState extends State<HomePage> {
     widget.state.removeListener(_onStateChanged);
     widget.state.onGarminShared = null;
     widget.state.onGarminShareNoLink = null;
-    widget.state.onNewMessage = null;
+    widget.state.removeNewMessageListener(_onIncomingMessage);
     widget.state.onInviteReceived = null;
     widget.state.onGroupEvent = null;
     widget.state.onAskBeaconAuto = null;
     _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  /// 顶部气泡：收到新消息时弹一条，4 秒后自动收起。
+  void _onIncomingMessage(String src, String text, String? groupId) {
+    String? groupName;
+    if (groupId != null) {
+      for (final g in widget.state.chatGroups) {
+        if (g.id == groupId) {
+          groupName = g.name;
+          break;
+        }
+      }
+    }
+    _showBubble = true;
+    _bubbleCall = groupName != null ? S.of(context).groupBubble(groupName) : src;
+    _bubbleText = text;
+    if (mounted) setState(() {});
+    _bubbleTimer?.cancel();
+    _bubbleTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showBubble = false);
+    });
   }
 
   /// 页签的图标与文案都来自主题：
@@ -461,7 +376,9 @@ class _HomePageState extends State<HomePage> {
           StationsPage(state: widget.state, searchQuery: _search),
           MessagesPage(state: widget.state, isActive: _tab == 2),
           PacketsPage(state: widget.state),
-          SettingsPage(state: widget.state),
+          // 卡片逐条淡入上移跟着页签走：它是常驻子页，不传这一条就会在开
+          // 机那一刻把动画跑完，用户点开设置时什么都看不到。
+          SettingsPage(state: widget.state, isActive: _tab == 4),
         ],
       ),
     );
@@ -610,37 +527,52 @@ class _HomePageState extends State<HomePage> {
       overWallpaper: true,
       child: Container(
         width: width,
-        color: C.surfaceFillStrong,
+        // 侧栏右沿一条 1px 分隔线。原来侧栏与内容同是白底，只有用户设了
+        // 背景图 / 材质时才分得开；一条线把骨架立起来（2.0 的顶栏横条也这么做）。
+        decoration: BoxDecoration(
+          color: C.surfaceFillStrong,
+          border: Border(right: BorderSide(color: C.border)),
+        ),
         child: Column(
           children: [
             // Logo
+            //
+            // 左内边距刻意与下面导航项**同一左基线**（列表 8/12 + 项内 10/14）：
+            // 原来是 12/20，Logo 图标比那五个图标各自偏出去 6 ~ 8 px，
+            // 整列看着就是歪的 —— 这不是配色问题，是对不齐。
             Padding(
               padding: compact
-                  ? const EdgeInsets.fromLTRB(12, 12, 12, 10)
-                  : const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  ? const EdgeInsets.fromLTRB(18, 12, 18, 10)
+                  : const EdgeInsets.fromLTRB(26, 20, 26, 16),
               child: Row(
                 children: [
                   AppLogo(size: compact ? 30 : 38),
-                  SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'APRSlocus',
-                        style: ts(
-                          compact ? 14 : 17,
-                          w: FontWeight.w800,
-                          ls: -0.3,
-                        ),
-                      ),
-                      if (!compact) ...[
-                        SizedBox(height: 1),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          S.of(context).appTagline,
-                          style: ts(10, c: C.grey),
+                          'APRSlocus',
+                          style: ts(
+                            compact ? 14 : 17,
+                            w: FontWeight.w800,
+                            ls: -0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        if (!compact) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            S.of(context).appTagline,
+                            style: ts(10, c: C.grey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -657,23 +589,26 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (_, i) {
                   final sel = _tab == i;
                   final item = _nav[i];
+                  // 圆角取主题令牌（与卡片/输入框同一套，默认 12）：
+                  // 原来写死 12，用户把卡片圆角调大后侧栏不跟，壳和内容两种圆角。
+                  final itemRadius = BorderRadius.circular(C.fieldRadius);
+                  final itemAccent = ThemeController.instance.tabAccent(
+                        item.$1,
+                        isDark: C.dark,
+                      ) ??
+                      C.blue;
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     decoration: BoxDecoration(
                       color: sel
-                          ? (ThemeController.instance.tabAccent(
-                                      item.$1,
-                                      isDark: C.dark,
-                                    ) ??
-                                    C.blue)
-                                .withValues(alpha: 0.12)
+                          ? itemAccent.withValues(alpha: 0.12)
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: itemRadius,
                     ),
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: itemRadius,
                         onTap: () {
                           if (i == 2) widget.state.clearUnread();
                           setState(() => _tab = i);
@@ -688,35 +623,23 @@ class _HomePageState extends State<HomePage> {
                               ThemeController.instance.buildSlotIcon(
                                 item.$1,
                                 size: compact ? 18 : 20,
-                                color: sel
-                                    ? (ThemeController.instance.tabAccent(
-                                            item.$1,
-                                            isDark: C.dark,
-                                          ) ??
-                                          C.blue)
-                                    : C.slate,
+                                color: sel ? itemAccent : C.slate,
                                 fallbackIcon: themeIconByName(item.$2),
                                 selected: sel,
                               ),
-                              SizedBox(width: 10),
+                              const SizedBox(width: 10),
                               Text(
                                 item.$3,
                                 style: ts(
                                   compact ? 12 : 13,
-                                  c: sel
-                                      ? (ThemeController.instance.tabAccent(
-                                              item.$1,
-                                              isDark: C.dark,
-                                            ) ??
-                                            C.blue)
-                                      : C.ink,
+                                  c: sel ? itemAccent : C.ink,
                                   w: sel ? FontWeight.w600 : FontWeight.w500,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const Spacer(),
                               if (i == 2 && widget.state.unreadMessages > 0)
-                                _countBadge(widget.state.unreadMessages),
+                                _unreadBadge(widget.state.unreadMessages),
                             ],
                           ),
                         ),
@@ -734,28 +657,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _countBadge(int n) {
-    if (n == 0) return const SizedBox.shrink();
-    return Container(
-      width: 18,
-      height: 18,
-      decoration: BoxDecoration(
-        color: C.red,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(
-          '$n',
-          style: ts(9, c: Colors.white, w: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-
-  /// 底部导航小角标（窄屏）
-  Widget _miniBadge(int n) {
+  /// 未读角标。侧栏与窄屏底栏**共用同一颗**：两处各画一遍的话，
+  /// 尺寸/圆角/字号迟早会分头漂（一颗 18、一颗 14，并排就看出来了）。
+  Widget _unreadBadge(int n) {
     if (n <= 0) return const SizedBox.shrink();
-    final text = n > 99 ? '99+' : '$n';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
@@ -765,7 +670,7 @@ class _HomePageState extends State<HomePage> {
       ),
       child: Center(
         child: Text(
-          text,
+          n > 99 ? '99+' : '$n',
           style: ts(9, c: Colors.white, w: FontWeight.w700),
         ),
       ),
@@ -774,19 +679,38 @@ class _HomePageState extends State<HomePage> {
 
 
   // ─── 顶栏 ───
+
+  /// 顶栏右侧那排控件共用的高度。
+  ///
+  /// 原来是三个数：搜索框 38、统计胶囊 ~25、设备按钮 34 —— 并排站在一起
+  /// 高低不齐，整条顶栏看着就是散的。现在统一到一条基线上。
+  static const double _kTopCtrlH = 34;
+
+  /// 顶栏控件的间距（原来 8 与 12 混用）。
+  static const double _kTopGap = 8;
+
   Widget _topBar() {
     final compact = _compact;
+    final st = widget.state;
     return MaterialSurface(
       // 同上：顶栏背后没有内容，只有壁纸
       overWallpaper: true,
       child: Container(
         height: compact ? 48 : 58,
         padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 20),
-        color: C.surfaceFillStrong,
+        // 下沿一条分隔线，与侧栏那条同色同粗细：三条壳（侧栏 / 顶栏 / 底栏）
+        // 都有边界，内容区才像「被框住的一块」，而不是浮在白色里。
+        decoration: BoxDecoration(
+          color: C.surfaceFillStrong,
+          border: Border(bottom: BorderSide(color: C.border)),
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // 手机横屏紧凑模式下：只要右侧宽度足够就保留搜索+统计，否则只留标题+在线数
-            final wide = constraints.maxWidth > 560;
+            // 手机横屏紧凑模式下：右侧宽度够才放搜索框与三项统计。
+            // 两个门槛是按「标题还留得下字」定的：640 以下只剩搜索以外的一格，
+            // 860 以下先砍「收包」（它最长，而且是三项里最不常用的那个）。
+            final wide = constraints.maxWidth > 640;
+            final showPackets = constraints.maxWidth > 860;
             final searchW = (constraints.maxWidth * 0.28).clamp(140.0, 260.0);
             return Row(
               children: [
@@ -799,92 +723,26 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 if (wide) ...[
-                  Container(
-                    width: searchW,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: C.bgSoft,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      onChanged: (v) {
-                        // 防抖：输入停止 300ms 才更新搜索，台站多时避免逐字重建卡顿
-                        _searchDebounce?.cancel();
-                        _searchDebounce = Timer(
-                          const Duration(milliseconds: 300),
-                          () {
-                            if (mounted) setState(() => _search = v);
-                          },
-                        );
-                      },
-                      style: ts(13),
-                      decoration: InputDecoration(
-                        hintText: S.of(context).searchHint,
-                        hintStyle: ts(13, c: C.grey),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          size: 18,
-                          color: C.grey,
-                        ),
-                        suffixIcon: _search.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.close_rounded,
-                                  size: 16,
-                                  color: C.grey,
-                                ),
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  setState(() => _search = '');
-                                },
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  // 天气组件（在线左侧）：默认显示当前天气 + 温度，点击弹浮动面板
-                  if (widget.state.weatherEnabled) ...[
-                    WeatherBadge(state: widget.state),
-                    const SizedBox(width: 8),
-                  ],
-                  _statTag(
-                    '${widget.state.online}',
-                    S.of(context).online,
-                    C.green,
-                    C.greenBg,
-                  ),
-                  SizedBox(width: 8),
-                  _statTag(
-                    '${widget.state.moving}',
-                    S.of(context).moving,
-                    C.blue,
-                    C.blueBg,
-                  ),
-                  SizedBox(width: 8),
-                  _statTag(
-                    '${widget.state.packetsRx}',
-                    S.of(context).packetsReceived,
-                    C.slate,
-                    C.greyBg,
-                  ),
-                ] else ...[
-                  // 天气组件（在线左侧）：窄屏同样展示（标题可收缩防溢出）
-                  if (widget.state.weatherEnabled) ...[
-                    WeatherBadge(state: widget.state),
-                    const SizedBox(width: 8),
-                  ],
-                  _statTag(
-                    '${widget.state.online}',
-                    S.of(context).online,
-                    C.green,
-                    C.greenBg,
-                  ),
+                  _searchBox(searchW),
+                  const SizedBox(width: _kTopGap),
                 ],
+                // 天气组件（在线左侧）：点击弹浮动面板。它的自然高度比这排控件
+                // 矮一截，包一层等高的盒子让它与搜索框、统计胶囊居中对齐。
+                if (st.weatherEnabled) ...[
+                  SizedBox(
+                    height: _kTopCtrlH,
+                    child: Center(child: WeatherBadge(state: st)),
+                  ),
+                  const SizedBox(width: _kTopGap),
+                ],
+                _statGroup(
+                  moving: wide,
+                  packets: wide && showPackets,
+                ),
+                const SizedBox(width: _kTopGap),
+                // 设备快捷面板：APRS-IS / APRSNETCN / TNC / 音频一屏切换。
+                // 与 2.0 顶栏那颗同一个入口、同一个面板（[showLinkSheet]）。
+                _quickPanelBtn(),
               ],
             );
           },
@@ -893,20 +751,126 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _statTag(String val, String label, Color c, Color bg) {
+  Widget _searchBox(double width) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      width: width,
+      height: _kTopCtrlH,
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(24),
+        color: C.bgSoft,
+        borderRadius: BorderRadius.circular(C.fieldRadius),
       ),
-      child: Text(
-        '$val $label',
-        style: ts(11, c: c, w: FontWeight.w600),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) {
+          // 防抖：输入停止 300ms 才更新搜索，台站多时避免逐字重建卡顿
+          _searchDebounce?.cancel();
+          _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+            if (mounted) setState(() => _search = v);
+          });
+        },
+        style: ts(13),
+        decoration: InputDecoration(
+          hintText: S.of(context).searchHint,
+          hintStyle: ts(12, c: C.grey),
+          prefixIcon: Icon(Icons.search_rounded, size: 17, color: C.grey),
+          suffixIcon: _search.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded, size: 16, color: C.grey),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _search = '');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 7),
+        ),
       ),
     );
   }
 
+  /// 顶栏的三项统计：收成**一只中性胶囊**，段间一条细竖线。
+  ///
+  /// 原来三个各自上色的彩块（绿底 / 蓝底 / 灰底）并排在一条顶栏里，加上搜索框、
+  /// 天气胶囊、设备按钮，一块地方四种底色，又碎又抢眼。现在底色只留一层，
+  /// 颜色退到每个数值前的小圆点上，「在线 / 移动 / 收包」照样一眼分得开。
+  Widget _statGroup({bool moving = true, bool packets = true}) {
+    final st = widget.state;
+    final s = S.of(context);
+    return Container(
+      height: _kTopCtrlH,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: C.bgSoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _statCell(C.green, '${st.online}', s.online),
+          if (moving) ...[
+            _statDivider(),
+            _statCell(C.blue, '${st.moving}', s.moving),
+          ],
+          if (packets) ...[
+            _statDivider(),
+            _statCell(C.slate, '${st.packetsRx}', s.packetsReceived),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statDivider() {
+    return Container(
+      width: 1,
+      height: 12,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: C.border,
+    );
+  }
+
+  Widget _statCell(Color dot, String val, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(val, style: ts(11, w: FontWeight.w700)),
+        const SizedBox(width: 4),
+        Text(label, style: ts(10, c: C.slate)),
+      ],
+    );
+  }
+
+  /// 设备快捷面板入口：与 2.0 外壳顶栏那颗同一份实现（[showLinkSheet]）。
+  ///
+  /// 换链路是高频动作，而它原来藏在设置 → 设备 → 数据来源卡片里。
+  Widget _quickPanelBtn() {
+    return Tooltip(
+      message: S.of(context).dataSourceTitle,
+      child: ClickCursor(
+        child: GestureDetector(
+          onTap: () => showLinkSheet(context, widget.state),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: _kTopCtrlH,
+            height: _kTopCtrlH,
+            decoration: BoxDecoration(
+              color: C.blue.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.devices_other_rounded, size: 18, color: C.blue),
+          ),
+        ),
+      ),
+    );
+  }
 
   // ─── 未连接 / Passcode 错误提示横幅 ───
   Widget _connBanner() {
@@ -917,73 +881,25 @@ class _HomePageState extends State<HomePage> {
         final compact = _compact;
         // Passcode 未验证：显示黄色警告横幅（类似未连接提示）
         if (st.connected && st.passcodeInvalid) {
-          return Container(
-            margin: EdgeInsets.fromLTRB(
-                compact ? 10 : 12, 0, compact ? 10 : 12, compact ? 6 : 10),
-            padding: EdgeInsets.symmetric(
-                horizontal: compact ? 12 : 14, vertical: compact ? 7 : 10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: elev3(),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Colors.white,
-                  size: 20,
+          return _bannerCard(
+            compact: compact,
+            icon: Icons.warning_amber_rounded,
+            tint: C.yellow,
+            bg: C.yellowBg,
+            title: S.of(context).passcodeUnverified,
+            subtitle: S.of(context).passcodeWarning,
+            actionLabel: S.of(context).goSettings,
+            onAction: () {
+              // 跳到设置 tab 并直接打开「连接设置」（passcode 输入所在页），
+              // 而不是只停在设置首页
+              if (_tab != 4) setState(() => _tab = 4);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ConnectionSettingsPage(state: widget.state),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        S.of(context).passcodeUnverified,
-                        style: ts(12, c: Colors.white, w: FontWeight.w700),
-                      ),
-                      Text(
-                        S.of(context).passcodeWarning,
-                        style: ts(10, c: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    // 跳到设置 tab 并直接打开「连接设置」（passcode 输入所在页），
-                    // 而不是只停在设置首页
-                    if (_tab != 4) setState(() => _tab = 4);
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ConnectionSettingsPage(
-                          state: widget.state,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      S.of(context).goSettings,
-                      style: ts(11, c: Colors.white, w: FontWeight.w700),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
+            filled: false,
           );
         }
         if (st.connected) return const SizedBox.shrink();
@@ -1006,18 +922,27 @@ class _HomePageState extends State<HomePage> {
         // TNC，而发射仍走未连接的 APRS-IS）。这时也不能说「未连接」——
         // 用户明明刚连上东西，界面却报未连接。
         final rxOnly = st.rxActive && !st.txSourceUp && !pkwdwplMode;
-        // 音频来源没有「设备」概念，改成展示采样率（用户真正关心的参数）
+        final isIcom = st.isIcomLanTx || (st.icomLanOn && !st.audioDeviceOn);
         final tncName = audioMode
-            ? '${st.audio.config.afsk.sampleRate}Hz'
+            ? (isIcom
+                ? (st.audio.config.icomLan.host.isNotEmpty
+                    ? '${st.audio.config.icomLan.host}:${st.audio.config.icomLan.controlPort}'
+                    : S.of(context).icomLanTitle)
+                : '${st.audio.config.afsk.sampleRate}Hz')
             : (st.tnc.device?.label ?? S.of(context).tncNotBound);
+        final radioName = st.audio.config.icomLan.model.id;
         final title = connecting
             ? (audioMode
-                ? S.of(context).dataSourceAudio
+                ? (isIcom
+                    ? '正在连接 $radioName'
+                    : S.of(context).dataSourceAudio)
                 : (tncMode
                     ? S.of(context).dataSourceTnc
                     : S.of(context).connectingServer))
             : (audioMode
-                ? S.of(context).audioCaptureStart
+                ? (isIcom
+                    ? '连接 $radioName 电台'
+                    : S.of(context).audioCaptureStart)
                 : (tncMode
                     ? S.of(context).connectTncBar
                     : (pkwdwplMode
@@ -1025,14 +950,20 @@ class _HomePageState extends State<HomePage> {
                         : (rxOnly ? 'RX' : S.of(context).notConnectedAprsServer))));
         final subtitle = connecting
             ? (audioMode
-                ? S.of(context).connConnectingAudio(tncName)
+                ? (isIcom
+                    ? '正在连接 $radioName（$tncName）…'
+                    : S.of(context).connConnectingAudio(tncName))
                 : (tncMode
                     ? S.of(context).connectingToTnc(tncName)
                     : S
                         .of(context)
                         .connectingToServer(st.aprs.server, st.aprs.port)))
             : (audioMode
-                ? S.of(context).dataSourceAudioDesc
+                ? (isIcom
+                    ? (st.audio.config.icomLan.host.isNotEmpty
+                        ? '${st.audio.config.icomLan.host}:${st.audio.config.icomLan.controlPort} · 局域网直连电台收发与 CI-V 控制'
+                        : '通过局域网直连 $radioName 电台收发报文与控制')
+                    : S.of(context).dataSourceAudioDesc)
                 : (tncMode
                     ? S.of(context).dataSourceTncDesc
                     : (pkwdwplMode
@@ -1040,79 +971,114 @@ class _HomePageState extends State<HomePage> {
                         : (rxOnly
                             ? S.of(context).rxOnlyBanner(st.rxSourceLabel)
                             : S.of(context).connectNearbyDesc))));
-        return Container(
-          margin: EdgeInsets.fromLTRB(
-              compact ? 10 : 12, 0, compact ? 10 : 12, compact ? 6 : 10),
-          padding: EdgeInsets.symmetric(
-              horizontal: compact ? 12 : 14, vertical: compact ? 7 : 10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [C.blue, C.indigo],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: elev3(),
-          ),
-          child: Row(
-            children: [
-              if (connecting)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: Colors.white,
-                  ),
-                )
-              else
-                Icon(
-                  Icons.wifi_tethering_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: ts(13, c: Colors.white, w: FontWeight.w700),
-                    ),
-                    Text(
-                      subtitle,
-                      style: ts(10, c: Colors.white.withValues(alpha: 0.8)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 8),
-              GestureDetector(
-                onTap: connecting ? null : st.toggleConnect,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    connecting
-                        ? S.of(context).connecting
-                        : S.of(context).connectAction,
-                    style: ts(12, c: C.blue, w: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        return _bannerCard(
+          compact: compact,
+          icon: isIcom
+              ? Icons.wifi_tethering_rounded
+              : (audioMode
+                  ? Icons.graphic_eq_rounded
+                  : (tncMode
+                      ? Icons.settings_input_antenna_rounded
+                      : Icons.cloud_off_rounded)),
+          spinner: connecting,
+          tint: C.blue,
+          bg: C.blueBg,
+          title: title,
+          subtitle: subtitle,
+          actionLabel:
+              connecting ? S.of(context).connecting : S.of(context).connectAction,
+          onAction: connecting ? null : st.toggleConnect,
         );
       },
+    );
+  }
+
+  /// 未连接 / 验证码这两条横幅的**同一个形状**。
+  ///
+  /// 原来两条各写一遍：一条蓝→紫渐变、一条写死的琥珀渐变（`0xFFF59E0B`），
+  /// 与整页的令牌色、与上面那条公告横幅都不是一套；两条的形状也不一样
+  /// （16 圆角 + 投影 vs 16 圆角 + 投影，但内边距与按钮各是一套）。
+  /// 现在统一成：主题淡底 + 同色描边 + 一枚小图标，只有动作按钮是实色 ——
+  /// 一屏里强调色只出现一次，也不再有不随主题走的写死颜色。
+  Widget _bannerCard({
+    required bool compact,
+    required IconData icon,
+    required Color tint,
+    required Color bg,
+    required String title,
+    required String subtitle,
+    required String actionLabel,
+    required VoidCallback? onAction,
+    bool filled = true,
+    bool spinner = false,
+  }) {
+    final h = compact ? 8.0 : 10.0;
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+          compact ? 10 : 12, 0, compact ? 10 : 12, compact ? 6 : 10),
+      padding: EdgeInsets.fromLTRB(compact ? 10 : 12, h, 8, h),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(compact ? 10 : 12),
+        border: Border.all(color: tint.withValues(alpha: 0.40)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: spinner
+                ? CircularProgressIndicator(strokeWidth: 2.2, color: tint)
+                : Icon(icon, size: 18, color: tint),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: ts(compact ? 12 : 13, c: C.ink, w: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: ts(10, c: C.slate),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onAction,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: filled
+                    ? (onAction == null
+                        ? tint.withValues(alpha: 0.45)
+                        : tint)
+                    : tint.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                actionLabel,
+                style: ts(
+                  11,
+                  c: filled ? Colors.white : tint,
+                  w: FontWeight.w700,
+                ),
+                maxLines: 1,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1134,6 +1100,14 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               children: List.generate(_nav.length, (i) {
                 final sel = _tab == i;
+                // 与侧栏的导航项同一套选中态：同一个 tabAccent、同一档淡底
+                // （侧栏 12% 的圆角块）。原来底栏只有图标变色，
+                // 竖屏与横屏看同一件事却是两种样子。
+                final accent = ThemeController.instance.tabAccent(
+                      _nav[i].$1,
+                      isDark: C.dark,
+                    ) ??
+                    C.blue;
                 return Expanded(
                   child: GestureDetector(
                     onTap: () {
@@ -1147,41 +1121,46 @@ class _HomePageState extends State<HomePage> {
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            ThemeController.instance.buildSlotIcon(
-                              _nav[i].$1,
-                              size: 22,
-                              color: sel
-                                  ? (ThemeController.instance.tabAccent(
-                                          _nav[i].$1,
-                                          isDark: C.dark,
-                                        ) ??
-                                        C.blue)
-                                  : C.grey,
-                              fallbackIcon: themeIconByName(_nav[i].$2),
-                              selected: sel,
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: sel
+                                    ? accent.withValues(alpha: 0.12)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: ThemeController.instance.buildSlotIcon(
+                                _nav[i].$1,
+                                size: 20,
+                                color: sel ? accent : C.grey,
+                                fallbackIcon: themeIconByName(_nav[i].$2),
+                                selected: sel,
+                              ),
                             ),
                             if (i == 2 && widget.state.unreadMessages > 0)
                               Positioned(
                                 right: -8,
                                 top: -4,
-                                child: _miniBadge(widget.state.unreadMessages),
+                                child: _unreadBadge(
+                                  widget.state.unreadMessages,
+                                ),
                               ),
                           ],
                         ),
-                        SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
                           _nav[i].$3,
                           style: ts(
                             10,
-                            c: sel
-                                ? (ThemeController.instance.tabAccent(
-                                        _nav[i].$1,
-                                        isDark: C.dark,
-                                      ) ??
-                                      C.blue)
-                                : C.grey,
+                            c: sel ? accent : C.grey,
                             w: sel ? FontWeight.w600 : FontWeight.w400,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),

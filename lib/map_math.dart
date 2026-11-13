@@ -276,12 +276,25 @@ const Map<String, String> tileHeaders = {
   'Referer': 'https://www.amap.com/',
 };
 
-/// 高德瓦片：按 tx+ty 哈希轮询 4 个子域名，避免单域名限流
-String _gaodeUrl(int tx, int ty, int z, {int style = 7}) {
+/// 高德瓦片：按 tx+ty 哈希轮询 4 个子域名，避免单域名限流。
+///
+/// **高清（hd）**：只有街道图（`style=7`）支持 —— 换用较新的 `wprd` 主机并带
+/// `scl=2`，返回 **512×512** 的瓦片。实测：老的 `webrd` 主机加 `scale=2`/`scl=2`
+/// 仍只给 256，卫星图（`style=6`）加 `scl=2` 也仍是 256，所以都不切换。
+/// 普通路径保持 `webrd` 原样，行为与旧版逐字节一致（降低回归风险）。
+String _gaodeUrl(int tx, int ty, int z, {int style = 7, bool hd = false}) {
   final s = ((tx * 7 + ty * 13) % 4) + 1;
-  return 'https://webrd0$s.is.autonavi.com/appmaptile'
-      '?lang=zh_cn&size=1&scale=1&style=$style&x=$tx&y=$ty&z=$z';
+  final host = hd ? 'wprd0$s' : 'webrd0$s';
+  final scl = hd ? '&scl=2' : '';
+  return 'https://$host.is.autonavi.com/appmaptile'
+      '?lang=zh_cn&size=1&scale=1$scl&style=$style&x=$tx&y=$ty&z=$z';
 }
+
+/// 该图源是否提供高清（2×）瓦片。目前仅高德街道图 [MapType.gaode]。
+bool supportsHd(MapType t) => t == MapType.gaode;
+
+/// 高清瓦片的缓存 / 来源键（与 1× 区分，避免同一 z/x/y 两种分辨率互相顶掉）。
+String hdSourceName(MapType t) => '${t.name}_hd';
 
 /// 该图源是否为 GCJ-02（火星坐标）瓦片。
 /// 国内图源（高德/腾讯）均为 GCJ-02，而 APRS 数据是 WGS-84，
@@ -291,6 +304,19 @@ bool isGcjMapType(MapType t) =>
     t == MapType.gaode_sat ||
     t == MapType.tencent ||
     t == MapType.tencent_sat;
+
+/// 该图源是否为「影像 / 卫星」底图。
+///
+/// 这类底图整体偏暗、纹理杂，标记与文字的可读性策略与浅色街道图不同：
+/// 需要给符号加可读性光晕、把呼号标签反过来用「深底白字」
+/// （见 `AprsSymbolImage.halo` 与 `MapPage._callLabel`）。
+///
+/// 判据用命名特征而非逐个列举枚举：以后新增 `xxx_sat` 或影像图源
+/// （如天地图影像 `tianditu_img`）也能自动归入这一档，不必改这份清单。
+bool isSatelliteMapType(MapType t) {
+  final n = t.name;
+  return n.contains('_sat') || n.endsWith('_img');
+}
 
 /// 该图源是否为 BD-09（百度）。
 bool isBaiduMapType(MapType t) =>
@@ -338,6 +364,64 @@ const _esriStreetUrl =
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 const _esriSatUrl =
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+// Esri 地形系列（免 key）。三张各司其职，不是重复：
+//   Topo      带等高线 + 路网/地名标注，最像「有等高线的地形图」；
+//   ShadedRelief 纯地形浮雕（无标注）；
+//   Hillshade 只画山体阴影（透明底，适合叠在其它图层上看沟壑）。
+// 都只给 256px，清晰度靠上层 zoom.round() 选层级（见 tile_map 的说明）。
+const _esriTopoUrl =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
+const _esriReliefUrl =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}';
+const _esriHillshadeUrl =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}';
+
+// ─── 天地图（国家地理信息公共服务平台）───
+//
+// 天地图**不是** GCJ-02：把它的瓦片与 Esri/OSM 影像做相位相关，实测偏移为
+// 0 像素，而 GCJ-02 在同一位置会偏出 50~70px（>1.5km）。所以按 **WGS-84**
+// 处理，不做纠偏 —— 既能与 OSM 互为兜底，也能照常离线下载。
+//
+// Key 走构建期注入（`--dart-define=TIANDITU_KEY`，CI 里来自仓库 Secret
+// TIANDITU_KEY），源码不硬编码，与 lib/weather.dart 的和风 key 同款做法。
+// 未配置 key 时下面返回空串 —— 上层候选链会自动退到 OSM（同为 WGS-84），
+// 地图仍然可用，只是显示 OSM 而非天地图。
+const String _tdtKey = String.fromEnvironment('TIANDITU_KEY');
+const String _tdtQuery =
+    '?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&STYLE=default'
+    '&TILEMATRIXSET=w&FORMAT=tiles';
+
+/// 天地图子域名：实测 t0..t7 可用（t8 不通），按 tx/ty 轮询 8 个摊薄限流。
+String _tdtHost(int tx, int ty) => 't${(tx * 7 + ty * 13) % 8}.tianditu.gov.cn';
+
+String _tdtTile(String layer, int tx, int ty, int z) {
+  if (_tdtKey.isEmpty) return '';
+  return 'https://${_tdtHost(tx, ty)}/${layer}_w/wmts$_tdtQuery'
+      '&LAYER=$layer&TILEMATRIX=$z&TILEROW=$ty&TILECOL=$tx&tk=$_tdtKey';
+}
+
+/// 天地图各底图对应的**注记层**（透明底，叠在底图上）。
+///
+/// 天地图的注记无法画进底图 —— `vec`/`img`/`ter` 本身不含地名，文字都在
+/// `cva`/`cia`/`cta` 里。不叠注记就是一张「没有地名的地图」。
+const Map<MapType, String> _tdtAnnotations = {
+  MapType.tianditu: 'cva',
+  MapType.tianditu_img: 'cia',
+  MapType.tianditu_ter: 'cta',
+};
+
+/// 该图源的注记叠加层名（无注记返回 null）。
+String? annotationLayerOf(MapType t) => _tdtAnnotations[t];
+
+/// 该图源注记层的瓦片地址（无注记返回空串）。
+String annotationUrl(MapType t, int tx, int ty, int z) {
+  final l = _tdtAnnotations[t];
+  return l == null ? '' : _tdtTile(l, tx, ty, z);
+}
+
+/// 注记瓦片的缓存 / 来源键：与底图分开存（底图 `t.name`、注记 `t.name_ann`），
+/// 否则同一 z/x/y 的底图与注记会互相顶掉。
+String annotationSourceName(MapType t) => '${t.name}_ann';
 
 /// 替换 {z}/{x}/{y}/{s}，{s} 为子域名轮询（a/b/c）
 String _fillTemplate(String tpl, int tx, int ty, int z) {
@@ -353,10 +437,11 @@ String _fillTemplate(String tpl, int tx, int ty, int z) {
 ///
 /// 在线渲染与离线下载**共用这一个函数**：两处各写一份 URL 拼接迟早会
 /// 漂移成「下载得到的和显示要的不是同一张图」。
-String tileUrl(MapType t, int tx, int ty, int z) {
+String tileUrl(MapType t, int tx, int ty, int z, {bool hd = false}) {
   switch (t) {
     case MapType.gaode:
-      return _gaodeUrl(tx, ty, z, style: 7);
+      // 只有它支持 2×（512px）；hd 由调用方按屏幕像素密度决定
+      return _gaodeUrl(tx, ty, z, style: 7, hd: hd);
     case MapType.gaode_sat:
       return _gaodeUrl(tx, ty, z, style: 6);
     case MapType.tencent:
@@ -379,6 +464,18 @@ String tileUrl(MapType t, int tx, int ty, int z) {
       return _fillTemplate(_esriStreetUrl, tx, ty, z);
     case MapType.esri_sat:
       return _fillTemplate(_esriSatUrl, tx, ty, z);
+    case MapType.esri_topo:
+      return _fillTemplate(_esriTopoUrl, tx, ty, z);
+    case MapType.esri_relief:
+      return _fillTemplate(_esriReliefUrl, tx, ty, z);
+    case MapType.esri_hillshade:
+      return _fillTemplate(_esriHillshadeUrl, tx, ty, z);
+    case MapType.tianditu:
+      return _tdtTile('vec', tx, ty, z);
+    case MapType.tianditu_img:
+      return _tdtTile('img', tx, ty, z);
+    case MapType.tianditu_ter:
+      return _tdtTile('ter', tx, ty, z);
     case MapType.baidu:
     case MapType.baidu_sat:
       // 上层列/行 → 百度瓦片编号（y 朝北）：见 [BaiduProjection] 的说明
@@ -410,7 +507,18 @@ enum MapType {
   carto_voyager('Carto 航行者', group: '其他'),
   osm('OSM 标准', group: '其他'),
   osm_hot('OSM 人道', group: '其他'),
-  open_topo('OpenTopo 地形', group: '其他'),
+  // 地形/等高线一组：OpenTopo 与三张 Esri 地形底图同属「地形」，
+  // 放在一起才找得到（此前 OpenTopo 混在「其他」里）。
+  open_topo('OpenTopo 地形', group: '地形'),
+  esri_topo('Esri 地形(等高线)', group: '地形'),
+  esri_relief('Esri 地形浮雕', group: '地形'),
+  esri_hillshade('Esri 山体阴影', group: '地形'),
+  // 天地图一组：国家地理信息公共服务平台。三张底图各自**另叠**一张透明注记层
+  // （cva/cia/cta）显示地名 —— 天地图底图不自带文字，见 _tdtAnnotations。
+  // 需构建期注入 TIANDITU_KEY；无 key 时自动退到 OSM（同为 WGS-84）。
+  tianditu('天地图 矢量', group: '天地图'),
+  tianditu_img('天地图 影像', group: '天地图'),
+  tianditu_ter('天地图 地形', group: '天地图'),
   esri_street('Esri 街道', group: '其他'),
   esri_sat('Esri 影像', group: '其他');
 

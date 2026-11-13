@@ -62,6 +62,20 @@ class Station {
   }
   bool favorite;
   bool manual; // 手动添加的联系人
+
+  /// 这条记录是**别的服务器替我们听到的**（目前只有 APRSNETCN 的 24 小时
+  /// 台站接口）。不是本地链路的收包结果，所以：
+  ///   * 不参与收包速率/过滤器的统计；
+  ///   * 详情页标出来源，用户才知道「这个我没收到过」；
+  ///   * 本地一旦真的收到同呼号报文，仍由 [_upsertStation] 正常更新它。
+  bool remote;
+
+  /// 最后一条报文从哪条链路进来，取 AppState 的 `src*` 常量：
+  /// `aprsis` / `acn` / `tnc` / `audio` / `pkwdwpl`。
+  ///
+  /// 与 [remote] 是两件事：`remote` 是「我们根本没收到，是 24 小时台站接口
+  /// 补进来的」，这里记的是收到它的那条链路。旧数据里没有这一项，为 null。
+  String? heardVia;
   /// 速度/高度遥测历史（内存态，与 track 一致不持久化）
   List<TelemetryPt> telemetry;
 
@@ -88,6 +102,8 @@ class Station {
     this.statusText,
     this.favorite = false,
     this.manual = false,
+    this.remote = false,
+    this.heardVia,
   });
 
   String get lastSeen {
@@ -231,6 +247,18 @@ class Station {
 
 enum TypeGroup { mobile, fixed, infra, wx, fmo, other }
 
+/// 名字 → 类型分组（偏好里的 `mapHiddenTypes` 存的是名字，认不出的旧名 / 脏值
+/// 返回 null）。
+///
+/// 存名字而不是下标：下标会随枚举顺序变化而错位，改坏之后会静静地把
+/// 「隐藏天气」变成「隐藏固定台站」。
+TypeGroup? typeGroupByName(String name) {
+  for (final g in TypeGroup.values) {
+    if (g.name == name) return g;
+  }
+  return null;
+}
+
 /// 台站筛选条件（台站面板的 chips + 设备筛选）。
 /// 由台站面板编辑；开启 [AppState.applyFilterToMap] 后同样作用于地图显示，
 /// 两处共用 [matches] 同一套判定，避免行为不一致。
@@ -240,6 +268,8 @@ class StationFilter {
   final String app; // all | aprslocus
   final String dev; // all | 设备类别 key
   final String model; // all | 设备显示名
+  /// 只看收藏台站（"我想盯着的那些人"）。与其它条件并列生效。
+  final bool favoriteOnly;
 
   const StationFilter({
     this.status = 'all',
@@ -247,6 +277,7 @@ class StationFilter {
     this.app = 'all',
     this.dev = 'all',
     this.model = 'all',
+    this.favoriteOnly = false,
   });
 
   /// 无任何生效筛选
@@ -255,10 +286,64 @@ class StationFilter {
       type == 'all' &&
       app == 'all' &&
       dev == 'all' &&
-      model == 'all';
+      model == 'all' &&
+      !favoriteOnly;
 
   /// 缓存键：任一条件变化即失效
-  String get key => '$status|$type|$app|$dev|$model';
+  String get key =>
+      '$status|$type|$app|$dev|$model|fav${favoriteOnly ? 1 : 0}';
+
+  /// 落盘用的键值（[fromJson] 读回）。字段名与构造参数同名，改名要两处一起改。
+  Map<String, dynamic> toJson() => {
+        'status': status,
+        'type': type,
+        'app': app,
+        'dev': dev,
+        'model': model,
+        'favoriteOnly': favoriteOnly,
+      };
+
+  /// 各档的合法取值（读回时逐项校验，认不出的一律回落 `all`）。
+  static const List<String> statusValues = [
+    'all',
+    'online',
+    'moving',
+    'stopped',
+    'iss',
+  ];
+  static const List<String> typeValues = [
+    'all',
+    'mobile',
+    'fixed',
+    'infra',
+    'wx',
+  ];
+  static const List<String> appValues = ['all', 'aprslocus'];
+
+  /// 从偏好里读回筛选条件：任何解析失败 / 脏值都回落成「无筛选」。
+  ///
+  /// 用户要求台站面板的筛选「记住」—— 它原来只活在面板的 State 里，关掉应用就
+  /// 回到「全部」。脏值（手改偏好文件 / 旧版本写进去的东西）只回落一次，不抛异常，
+  /// 也不能把面板做成第三种状态。
+  static StationFilter fromJson(Object? raw) {
+    if (raw is! Map) return const StationFilter();
+    String pick(String k, List<String> allowed) {
+      final v = raw[k];
+      return v is String && allowed.contains(v) ? v : 'all';
+    }
+
+    final fav = raw['favoriteOnly'];
+    final dev = raw['dev'];
+    final model = raw['model'];
+    return StationFilter(
+      status: pick('status', statusValues),
+      type: pick('type', typeValues),
+      app: pick('app', appValues),
+      dev: dev is String ? dev : 'all',
+      model: model is String ? model : 'all',
+      favoriteOnly: fav is bool ? fav : false,
+    );
+  }
 
   StationFilter copyWith({
     String? status,
@@ -266,6 +351,7 @@ class StationFilter {
     String? app,
     String? dev,
     String? model,
+    bool? favoriteOnly,
   }) =>
       StationFilter(
         status: status ?? this.status,
@@ -273,6 +359,7 @@ class StationFilter {
         app: app ?? this.app,
         dev: dev ?? this.dev,
         model: model ?? this.model,
+        favoriteOnly: favoriteOnly ?? this.favoriteOnly,
       );
 
   /// 该台站是否命中当前筛选
@@ -299,6 +386,8 @@ class StationFilter {
           (type == 'wx' && tg == TypeGroup.wx);
       if (!ok) return false;
     }
+    // 收藏：只看自己收藏过的（用户要求）
+    if (favoriteOnly && !s.favorite) return false;
     if (dev != 'all' && s.deviceClassKey != dev) return false;
     if (model != 'all' && (s.deviceName ?? '') != model) return false;
     // 同款软件（APRSlocus）：复用 Station 上的单一判定，
@@ -339,6 +428,26 @@ class AprsMsg {
   /// 只存译文则用户看不懂自己的聊天记录；只存原文则无法核对到底发出了什么。
   final String? sentAs;
 
+  /// 系统消息子类型（可点击/可路由用）。目前有：
+  ///   * `strategy`：「XX 共享了一个标点」这类提示，点一下能跳进策略地图；
+  ///   * `location`：私聊里发/收的**位置点**消息，气泡可点，跳去主地图；
+  /// 空串=普通系统消息。
+  final String? type;
+
+  /// 位置点消息的坐标（仅 [type] == `location` 时有值）。
+  ///
+  /// 为什么不塞进 [text] 再解析：`text` 是**给用户看的内容**，而位置点的
+  /// 空中帧（`$M1 Q …`）是协议文本，直接显示等于把用户当调试器。两个字段各司
+  /// 其职：`text` 存可读描述（如「位置点」），坐标存这里供气泡跳地图用。
+  final double? lat;
+  final double? lng;
+
+  /// 分享的**台站呼号**（仅当这条位置点是「分享某个台站」、而非自由选点时非空）。
+  ///
+  /// 有值时气泡按「台站卡片」渲染、点按打开该台站面板；为空时按普通位置点渲染、
+  /// 点按跳主地图。呼号随帧的标签字段一起走（见 `StrategyProto.encodeLocation`）。
+  final String? stationCall;
+
   /// 是否译发过
   bool get translated => sentAs != null && sentAs!.isNotEmpty && sentAs != text;
 
@@ -353,6 +462,10 @@ class AprsMsg {
     this.groupId,
     this.system = false,
     this.sentAs,
+    this.type,
+    this.lat,
+    this.lng,
+    this.stationCall,
   });
 
   Map<String, dynamic> toJson() => {
@@ -366,6 +479,10 @@ class AprsMsg {
     if (groupId != null) 'groupId': groupId,
     if (system) 'system': system,
     if (sentAs != null) 'sentAs': sentAs,
+    if (type != null) 'type': type,
+    if (lat != null) 'lat': lat,
+    if (lng != null) 'lng': lng,
+    if (stationCall != null) 'stationCall': stationCall,
   };
 
   factory AprsMsg.fromJson(Map<String, dynamic> j) => AprsMsg(
@@ -379,6 +496,10 @@ class AprsMsg {
     groupId: j['groupId'] as String?,
     system: j['system'] as bool? ?? false,
     sentAs: j['sentAs'] as String?,
+    type: j['type'] as String?,
+    lat: (j['lat'] as num?)?.toDouble(),
+    lng: (j['lng'] as num?)?.toDouble(),
+    stationCall: j['stationCall'] as String?,
   );
 }
 
@@ -474,7 +595,18 @@ class Packet {
   final String raw, src, dest, type;
   final DateTime time;
   final String? info;
-  Packet(this.raw, this.src, this.dest, this.type, this.time, {this.info});
+
+  /// 数据包来源（哪条链路收到 / 发出去的）。
+  ///
+  /// 取值与 [AppState] 的 `src*` 常量一致（`aprsis` / `tnc` / `audio` /
+  /// `pkwdwpl` / `box`），本机生成或手动注入的包用 `local`。
+  ///
+  /// 为什么要有：数据包页此前不区分来源，同一个台站既可能从 APRS-IS 来、
+  /// 也可能从射频（TNC / 声卡）来 —— 排查「射频通不通 / 网关有没有转」
+  /// 时，看不出这一条到底是从哪进来的，等于少了最关键的一条线索。
+  final String source;
+  Packet(this.raw, this.src, this.dest, this.type, this.time,
+      {this.info, this.source = 'local'});
 }
 
 enum LogLevel { debug, info, warn, error }

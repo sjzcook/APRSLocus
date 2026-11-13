@@ -76,9 +76,21 @@
   "maxSpeedTiers": "Up to 5 speed tiers",
   "iconDefaultMySymbol": "Icon · Default (my symbol)",
   "iconNamed": "Icon · {name}",
-  "@iconNamed": {"placeholders": {"name": {"type": "String"}}},
+  "@iconNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "everyNSeconds": "Every {sec} s",
-  "@everyNSeconds": {"placeholders": {"sec": {"type": "String"}}},
+  "@everyNSeconds": {
+    "placeholders": {
+      "sec": {
+        "type": "String"
+      }
+    }
+  },
   "tierIdleTitle": "Edit · Idle/low-speed tier",
   "tierSpeedTitle": "Edit · Speed tier",
   "minSpeedKmh": "Minimum speed (km/h)",
@@ -98,11 +110,29 @@
   "weatherWidget": "Weather widget",
   "groupChatLabel": "Group chats",
   "nItems": "{n}",
-  "@nItems": {"placeholders": {"n": {"type": "String"}}},
+  "@nItems": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "nMessages": "{n}",
-  "@nMessages": {"placeholders": {"n": {"type": "String"}}},
+  "@nMessages": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "confirmDeleteMessages": "Delete all {n} chat messages? This cannot be undone.",
-  "@confirmDeleteMessages": {"placeholders": {"n": {"type": "String"}}},
+  "@confirmDeleteMessages": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "weatherSimFollowLive": "Follow live",
   "wxClear": "Clear",
   "wxCloudy": "Cloudy",
@@ -120,7 +150,13 @@
   "restartWizardButton": "Run again",
   "pasteAprsPacketHint": "Paste a raw APRS packet, e.g.\\nBV2XYZ>APRS,TCPIP*:!3904.25N/11624.44E>Test",
   "beaconsSentCount": "{n}",
-  "@beaconsSentCount": {"placeholders": {"n": {"type": "String"}}},
+  "@beaconsSentCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "myBadgesAndAchievements": "My badges and achievements",
   "quitApp": "Quit app",
   "quitAppDesc": "Quitting stops location reporting and background reception, and ends the process.",
@@ -135,13 +171,27 @@
   "mapTypeOsm": "OSM Standard",
   "mapTypeOsmHot": "OSM Humanitarian",
   "mapTypeOpenTopo": "OpenTopo Terrain",
+  "terrainGroup": "Terrain",
+  "mapTypeEsriTopo": "Esri Topo (contours)",
+  "mapTypeEsriRelief": "Esri Shaded Relief",
+  "mapTypeEsriHillshade": "Esri Hillshade",
+  "tiandituGroup": "Tianditu",
+  "mapTypeTianditu": "Tianditu Vector",
+  "mapTypeTiandituImg": "Tianditu Imagery",
+  "mapTypeTiandituTer": "Tianditu Terrain",
   "mapTypeEsriStreet": "Esri Streets",
   "mapTypeEsriSat": "Esri Imagery",
   "simulatedKeepAlive": "Simulated location · keep-alive",
   "symCatEmergency": "Emergency",
   "symSmallAircraft": "Small aircraft",
   "myPositionSet": "My position set, grid {grid}",
-  "@myPositionSet": {"placeholders": {"grid": {"type": "String"}}},
+  "@myPositionSet": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      }
+    }
+  },
   "tierIdleShort": "Idle/low",
   "symHouse": "House",
   "symPerson": "Person",
@@ -269,7 +319,7 @@
   "oobeWelcomeIs": "APRS-IS feed",
   "oobeCallTitle": "Set callsign",
   "oobeSymbolTitle": "Choose station symbol",
-  "oobeServerTitle": "Connect to APRS-IS server",
+  "oobeServerTitle": "Server (optional)",
   "weatherData": "Weather data",
   "fmoInfo": "FMO info",
   "aprslocusInfo": "APRSlocus info",
@@ -292,7 +342,7 @@
   "filterSaved": "Filter saved and applied",
   "stationsShown": "Stations",
   "myCallsign": "My callsign",
-  "beaconEnabled": "Enable beaconing",
+  "beaconEnabled": "Auto-report",
   "smartBeacon": "SmartBeacon (by speed)",
   "packetConsole": "Packet console",
   "rawMode": "Raw mode",
@@ -309,13 +359,13 @@
   "clearedPackets": "Packets cleared",
   "clearPackets": "Clear packets",
   "noPositionInfo": "No position information for {call} (packet contains no position)",
-  "settingsDesc": "Configure station, location & connection",
+  "settingsDesc": "Station, location, links & data",
   "radioCat": "Station",
   "radioCatDesc": "Callsign · SSID · Symbol",
   "beaconCat": "Beaconing",
   "beaconCatDesc": "GPS · Beaconing · Manual position",
-  "connectionCat": "Connection",
-  "connectionCatDesc": "Server · Range filter",
+  "connectionCat": "Servers",
+  "connectionCatDesc": "Two links · filter range",
   "displayCat": "Display",
   "displayCatDesc": "Coords · Theme",
   "chatCat": "Chat",
@@ -332,13 +382,13 @@
   "oobeWelcomeDesc": "Start configuring your APRS station",
   "oobeCallDesc": "Enter your callsign",
   "oobeSymbolDesc": "The symbol represents your station type and is sent with position beacons",
-  "oobeServerDesc": "Connect to receive APRS station data worldwide. The default settings work as-is.",
+  "oobeServerDesc": "Leave it empty to connect to no server at all - the app then works locally only. This software neither provides nor recommends any server address; if you want to go online, enter a server and port you trust yourself.",
   "wizard": "Setup wizard",
   "setStep": "Step",
   "chooseSymbol": "Choose station symbol",
   "settingsSubtitle": "Map coordinates & display preferences",
   "stationSettingsSubtitle": "Callsign, symbol & beaconing",
-  "connectionSettingsSubtitle": "APRS-IS server & receive range",
+  "connectionSettingsSubtitle": "Both links can be online at once, each getting its own copy of every packet.",
   "chatSettingsSubtitle": "Message history & contacts",
   "dataSettingsSubtitle": "Local data management",
   "advancedSettingsSubtitle": "Lab & developer tools",
@@ -354,11 +404,350 @@
   "showTrails": "Show tracks",
   "showStations": "Show stations",
   "aboutTitle": "About",
-  "aboutSubtitle": "APRS tracking & mapping",
+  "aboutSubtitle": "APRS client · tracking & map",
   "author": "Author",
   "codeContributions": "Code contributions",
   "codeContributionI18n": "Internationalization / English UI",
   "codeContributionZhTw": "Traditional Chinese UI",
+  "@icomLinkConnected": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomBindHint": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectRadio": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomSwitchTitle": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomCardActive": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingTo": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectTitle": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingSub": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      },
+      "tnc": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescRadio": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "icomTitleSubtitle": "Direct Icom LAN radio (IC-705 / IC-9700 / IC-7610 / IC-905): 12 kHz PCM audio and CI-V control",
+  "icomLinkStatusTitle": "Radio link status",
+  "icomLinkConnected": "LAN link established with {model}",
+  "icomLinkHandshaking": "Not connected or handshaking",
+  "icomBindHint": "When on, the APRS audio source binds directly to the {model} LAN link",
+  "icomLinkPhase": "Link phase",
+  "icomRfStats": "RF RX/TX stats",
+  "icomAudioFmt": "12000 Hz (LPCM 16-bit mono)",
+  "icomProcessing": "Working...",
+  "icomDisconnectRadio": "Disconnect radio",
+  "icomConnectRadio": "Connect {model} now",
+  "icomNetworkTitle": "Radio network settings",
+  "icomNetworkSubtitle": "Pick a radio preset and set the IP and Network User credentials",
+  "icomModelPreset": "Radio preset",
+  "icomIpHint": "Radio IP address",
+  "icomUserHint": "Radio Network User name",
+  "icomPassHint": "Radio Network User password",
+  "icomCredHint": "Note: the username and password must match the radio's internal Network User Setting exactly.",
+  "icomCivTitle": "CI-V control & transmit",
+  "icomCivSubtitle": "PTT auto control, TX delay and beacon options",
+  "icomRfBeaconHint": "Allow the radio to beacon automatically over RF (half-duplex: listen is muted while transmitting).",
+  "icomTxDelayLabel": "TX preamble delay (TX Delay, ms)",
+  "icomCivAddrLabel": "Radio CI-V address (hex)",
+  "icomControllerAddr": "Controller address",
+  "icomControllerAddrValue": "0xE0 (default)",
+  "icomGuideTitle": "Radio setup guide",
+  "icomGuideSubtitle": "Required preparation steps on the Icom radio",
+  "icomGuide1Title": "Network connection",
+  "icomGuide1Body": "On the IC-705, choose Connect to Network in MENU → SET → WLAN Set to join your router's Wi-Fi, or Access Point to host a hotspot for the phone; the IC-9700 / IC-7610 / IC-905 can plug into a router LAN port or join via a wireless bridge.",
+  "icomGuide2Title": "Add a Network User",
+  "icomGuide2Body": "Go to WLAN Set / Network Set → Network User Setting, add a user (with username and password) and allow the connection.",
+  "icomGuide3Title": "Confirm the CI-V address and port",
+  "icomGuide3Body": "Go to MENU → SET → Connectors → CI-V and confirm the CI-V Address and control port.",
+  "icomGuide4Title": "Set mode and frequency",
+  "icomGuide4Body": "Set the radio's mode for that band to FM-D.",
+  "icomLogTitle": "Radio comms diagnostic log",
+  "icomLogSubtitle": "Inspect Icom LAN control packets and CI-V traffic",
+  "icomLogEmpty": "No comms log yet",
+  "icomPhaseOpeningSockets": "Opening ports…",
+  "icomPhaseDiscovering": "Discovering radio…",
+  "icomPhaseAuthenticating": "Signing in to radio…",
+  "icomPhaseNegotiating": "Negotiating audio stream…",
+  "icomPhaseOpeningStreams": "Opening streams…",
+  "icomPhaseReady": "Connected (awaiting audio)",
+  "icomPhaseReceiving": "Connected (receiving)",
+  "icomPhaseReconnect": "Link dropped — reconnecting…",
+  "icomPhaseFailed": "Connection failed",
+  "icomPhaseUnsupported": "This platform does not support the IC-705 LAN link",
+  "icomSwitchTitle": "WLAN radio ({model})",
+  "icomLanAddr": "Radio address",
+  "icomCardActive": "The {model} LAN direct link is currently active.",
+  "icomConnectingTo": "Connecting to {radio}",
+  "icomConnectTitle": "Connect {radio} radio",
+  "icomConnectingSub": "Connecting to {radio} ({tnc})…",
+  "icomDescHost": "{host} · LAN direct radio RX/TX and CI-V control",
+  "icomDescRadio": "Send/receive and control the {radio} over a direct LAN link",
+  "modelIc705Desc": "Portable all-mode QRP radio (built-in Wi-Fi AP / STA)",
+  "modelIc9700Desc": "VHF/UHF/1.2 GHz all-mode base (Ethernet LAN / Wi-Fi)",
+  "modelIc7610Desc": "HF/50 MHz dual-receiver SDR base (Ethernet LAN)",
+  "modelIc905Desc": "144 MHz–10 GHz all-mode microwave radio (Ethernet LAN)",
+  "modelCustomName": "Custom / other",
+  "modelCustomDesc": "Set a custom Icom CI-V address and port",
+  "assetWindowsPackage": "Windows installer",
+  "assetApkPackage": "APK package",
+  "honorTagPerseverance": "Wellness",
+  "@agentTestOk": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentError": {
+    "placeholders": {
+      "msg": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentToolCalling": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "agentMode": "Agent mode",
+  "agentModeDesc": "Shows an AI chat box that can change settings, send messages and look up stations (bring your own API key)",
+  "agentSettings": "Agent settings",
+  "agentSettingsDesc": "API base URL / key / model, and which actions the agent may perform",
+  "agentEnabled": "Enable agent",
+  "agentBaseUrl": "API base URL",
+  "agentApiKey": "API key",
+  "agentModel": "Model",
+  "agentPreset": "Preset",
+  "agentPresetCustom": "Custom",
+  "agentSystemPrompt": "System prompt (optional)",
+  "agentAllowSend": "Allow sending messages",
+  "agentAllowSendDesc": "Let the agent send direct messages, group messages and beacons",
+  "agentAllowSettings": "Allow changing settings",
+  "agentAllowSettingsDesc": "Let the agent change app settings (off = read-only)",
+  "agentTest": "Test connection",
+  "agentTesting": "Testing…",
+  "agentTestOk": "Connected: {model}",
+  "agentNeedConfig": "Please fill in the API base URL, key and model",
+  "agentChatTitle": "Agent assistant",
+  "agentInputHint": "Tell the agent what to do…",
+  "agentSend": "Send",
+  "agentClear": "Clear chat",
+  "agentClearConfirm": "Clear this conversation?",
+  "agentWelcome": "Hi, I am the APRSLocus agent assistant. Ask me to change settings, send messages or look up stations. Please set your API key in “Agent settings” first.",
+  "agentThinking": "Thinking…",
+  "agentError": "Error: {msg}",
+  "agentConfirmTitle": "The agent wants to run an action",
+  "agentConfirmRun": "Allow",
+  "agentConfirmDeny": "Deny",
+  "agentDenied": "Action denied",
+  "agentExecuted": "Done",
+  "agentToolResult": "Tool result",
+  "agentStopped": "Stopped",
+  "agentStop": "Stop",
+  "agentOpenSettings": "Agent settings",
+  "agentNeedsEnable": "Enable “Agent mode” in Lab features first",
+  "agentToolCalling": "Running: {name}",
+  "agentMinimize": "Minimize",
+  "agentApiKeyTip": "The key is stored on this device only and is never sent to any APRSlocus server.",
+  "agentPresetHint": "Quickly fill the API URL and model",
+  "agentInterfaceSection": "API configuration",
+  "agentPermissions": "Permissions",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentMemory": "Long-term memory",
+  "agentMemoryDesc": "Let the agent remember your preferences across chats",
+  "agentMemoryOn": "Enable long-term memory",
+  "agentMemoryHint": "The agent can call the remember/forget tools, or just take “remember …”. Stored on this device only.",
+  "agentMemoryEmpty": "No memories yet. Tell the agent “remember …” to add one.",
+  "agentMemoryClear": "Clear all memories",
+  "agentMemoryClearConfirm": "Clear all long-term memories? This cannot be undone.",
+  "agentCompress": "Conversation compression",
+  "agentCompressDesc": "Fold old turns into a summary when history grows, to save context",
+  "agentCompressOn": "Enable auto compression",
+  "agentCompressHint": "Compresses beyond ~40 messages. The summary stays in the system prompt; recent turns are untouched.",
+  "agentCompressNow": "Compress now",
+  "agentCompressNothing": "Nothing to compress",
+  "agentCompressDone": "Conversation compressed",
+  "agentAllowNetwork": "Allow network requests",
+  "agentAllowNetworkDesc": "Let the agent make HTTP requests (GET / POST / PUT / DELETE…). Off by default; every request still asks you first.",
+  "agentNoFinalAnswer": "Reached the per-turn limit for tool actions, so no conclusion could be produced. Send “continue” to let it carry on.",
+  "agentTool_http_request": "Make a network request",
+  "agentTool_save_memory": "Remember a fact",
+  "agentTool_list_memories": "Read memories",
+  "agentTool_forget_memory": "Forget a fact",
+  "huangyanTitle": "Huangyan Island",
+  "huangyanBadge": "Hidden station · Chinese territory",
+  "huangyanTagline": "An atoll in the eastern Zhongsha Islands, South China Sea — Chinese territory",
+  "huangyanShort": "Chinese territory · atoll in the eastern Zhongsha Islands, South China Sea",
+  "huangyanGrid": "OL98gd",
+  "huangyanGeoHead": "Geography",
+  "huangyanGeoBody": "Huangyan Island (also known as Scarborough Shoal) lies in the eastern Zhongsha Islands of the South China Sea. It is a large, roughly isosceles-triangular atoll with a perimeter of about 55 km and a reef area of roughly 150 km², enclosing a lagoon about 15 km long. Most of the reef rim is submerged; parts emerge at low tide, making it the only feature of the Zhongsha Islands that breaks the surface.",
+  "huangyanHistoryHead": "History",
+  "huangyanHistory1": "Chinese records of Huangyan Island go back centuries. In 1297 the Yuan-dynasty astronomer Guo Shoujing set up an observation point in these waters during the \"four-seas survey\"; later official maps and nautical documents consistently placed it within Chinese territory, and fishermen from Hainan and Guangdong have worked these waters for generations under the name \"Huangyan\". Western charts later adopted the name Scarborough Shoal.",
+  "huangyanHistory2": "In modern times the Chinese government has continuously exercised sovereignty and jurisdiction over Huangyan Island and its adjacent waters. In 1983 the China Committee on Geographical Names formally published the standard name \"Huangyan Island\".",
+  "huangyanHamHead": "Amateur radio",
+  "huangyanHamBody": "In amateur radio, Huangyan Island is known by the DXCC entity prefix BS7. In 1995 Chinese and international amateurs mounted the BS7H DXpedition, putting the atoll on the air for the first time and earning it a reputation as a rare and sought-after DX destination.",
+  "huangyanLegal": "Material on this card is provided for amateur-radio educational display only. Huangyan Island is Chinese territory, over which China has indisputable sovereignty, as it does over its adjacent waters.",
+  "huangyanTagReef": "Coral atoll",
+  "huangyanTagDxcc": "DXCC BS7",
+  "huangyanTagAxis": "Zhongsha Islands",
+  "huangyanFootNote": "Compiled from public geographic and historical sources for educational reference only.",
+  "huangyanOpen": "Open the introduction",
+  "agentTabConnection": "Connection",
+  "agentTabPermissions": "Permissions",
+  "agentTabAutomation": "Automation",
+  "agentSystemPromptHint": "Leave empty to use the built-in prompt",
+  "agentAlwaysAllow": "Always allow",
+  "agentAlwaysAllowDesc": "These tools run without asking. Tap “Always allow” on the confirm bar to add one.",
+  "agentAlwaysAllowEmpty": "None yet. Tap “Always allow” on a confirm bar to add one.",
+  "agentAlwaysAllowClear": "Clear all",
+  "agentAutoReply": "Auto reply",
+  "agentAutoReplyDesc": "Let the agent answer new messages automatically (experimental)",
+  "agentAutoReplyOn": "Enable auto reply",
+  "agentAutoReplyHint": "Direct messages only; limited by quiet hours and a cooldown; requires “Allow sending messages”.",
+  "agentReplyGroups": "Also reply in groups",
+  "agentReplyGroupsDesc": "Speaking automatically in groups is riskier; off by default",
+  "agentQuietHours": "Quiet hours",
+  "agentQuietHoursDesc": "e.g. 23:00-07:00; empty = no limit. No auto reply in this window.",
+  "agentTasks": "Scheduled tasks",
+  "agentTasksDesc": "Run an instruction later automatically",
+  "agentTasksEmpty": "No scheduled tasks yet",
+  "agentTaskNew": "New scheduled task",
+  "agentTaskPrompt": "Instruction",
+  "agentTaskPromptHint": "e.g. summarize stations heard in the last hour",
+  "agentTaskInterval": "Interval (minutes)",
+  "agentTaskIntervalHint": "0 = run once; repeating min 1 min",
+  "agentTaskCreate": "Create",
+  "agentTaskDelete": "Delete",
+  "agentTaskEvery": "Every {n} min",
+  "agentTaskOnce": "Once",
+  "agentAutoReplyPrompt": "[Auto reply] {from} sent you: {text}\nYou may call read-only tools (stations, messages, …) for facts, but do not change settings or send anything. Output only the single message to send back.",
+  "agentTool_get_app_state": "Read app state",
+  "agentTool_list_groups": "List groups",
+  "agentTool_search_stations": "Search stations",
+  "agentTool_list_stations": "List stations",
+  "agentTool_station_detail": "Station details",
+  "agentTool_read_messages": "Read messages",
+  "agentTool_send_message": "Send message",
+  "agentTool_send_beacon_now": "Send beacon now",
+  "agentTool_set_preferences": "Change preferences",
+  "agentTool_set_station_filters": "Change station filters",
+  "agentTool_set_nickname": "Change callsign info",
+  "agentTool_navigate": "Switch screen",
+  "agentTool_create_task": "Create scheduled task",
+  "agentTool_list_tasks": "List scheduled tasks",
+  "agentTool_cancel_task": "Cancel scheduled task",
+  "agentTool_set_connection_server": "Change server address",
+  "agentTool_set_connection_source": "Change connection source",
+  "agentTool_connect": "Connect",
+  "agentTool_disconnect": "Disconnect",
+  "agentTool_nearby_stations": "Nearby stations",
+  "agentTool_reply_message": "Reply to message",
+  "agentTool_send_group_message": "Send group message",
+  "agentTool_create_group": "Create group",
+  "agentTool_set_task_enabled": "Pause/resume task",
+  "agentTool_list_strategy": "List strategy map",
+  "agentTool_strategy_add_point": "Add marker",
+  "agentTool_strategy_add_rally": "Add rally point",
+  "agentTool_strategy_add_circle": "Add circle",
+  "agentTool_strategy_add_line": "Add line",
+  "agentTool_strategy_update": "Edit strategy element",
+  "agentTool_strategy_delete": "Delete strategy element",
+  "agentTool_strategy_clear": "Clear strategy map",
+  "agentTool_strategy_request_snapshot": "Request map snapshot",
+  "agentTool_unknown": "Run action",
+  "agentMessageTasks": "Message triggers",
+  "agentMessageTasksDesc": "Run an instruction when a new message arrives",
+  "agentMessageTasksEmpty": "No message triggers yet",
+  "agentMessageTaskNew": "New message trigger",
+  "agentMessageTaskPromptHint": "e.g. note the location in this message",
+  "agentMessageTaskEvery": "On incoming message",
+  "agentMessageTaskRunPrompt": "[Message trigger] Your message-trigger task #{n} fired.\nTask instruction: {task}\nIncoming message from {from}: {text}\nCarry out the task instruction and output only the result or conclusion, not this notice.",
+  "agentNoticeTitle": "AI agent notice",
+  "agentNoticeAccept": "Agree and enable",
+  "agentNoticeDecline": "Not now",
+  "agentNoticeBody": "The AI agent sends your conversation and the local data it reads (stations, location, messages, settings, …) to the third-party model service you configure (e.g. OpenAI, DeepSeek, a self-hosted endpoint) for processing. Do not share state secrets, trade secrets, personal privacy or sensitive location information in the chat.\n\nYou are responsible for confirming that the model service you choose is lawful and compliant, and you bear the consequences of any cross-border data transfer or personal-data processing. We do not operate any such service and have no affiliation, agency or partnership with it.\n\nBy default the agent can only read data; actions with side effects (sending messages, changing settings) require your separate authorization and per-action confirmation, and you can disable the agent at any time.\n\nTapping \"Agree and enable\" means you have read, understood and accepted the above (see the agent clauses of the User Agreement).",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentStreamReply": "Stream replies",
+  "agentStreamReplyDesc": "Show the text while the model is still writing it. If the backend cannot stream, the whole reply is shown at once instead — never fewer replies.",
+  "agentToolHistory": "Tool activity",
+  "agentToolHistoryEmpty": "No tool activity yet. Ask the agent to do something and each call will show up here.",
+  "agentToolWorking": "Working: {tool}",
+  "agentToolDenied": "Denied",
+  "agentToolFailed": "Failed",
+  "@agentToolWorking": {"placeholders": {"tool": {"type": "String"}}},
   "codeContributionTranslation": "Translation",
   "dataSourceTxHint": "You can enable several links at once to receive from all of them, but **only one transmits** (the dot on the right). Sending the same callsign over two links would duplicate packets.",
   "dataSourceTxBadge": "TX",
@@ -391,13 +780,58 @@
   "grpNameTooLong": "Group name is limited to {max} characters (longer makes the invite exceed the APRS message limit)",
   "grpInviteSent": "Invite sent to {n} member(s)",
   "grpSelfPending": "Waiting for the owner",
-  "@grpSysJoined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysLeft": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysJoinReq": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysDeclined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpInviteBody": {"placeholders": {"from": {"type": "String"}, "name": {"type": "String"}}},
-  "@grpNameTooLong": {"placeholders": {"max": {"type": "int"}}},
-  "@grpInviteSent": {"placeholders": {"n": {"type": "int"}}},
+  "@grpSysJoined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysLeft": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysJoinReq": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysDeclined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpInviteBody": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpNameTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "@grpInviteSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deviceOverviewTitle": "Devices",
   "deviceOverviewSubtitle": "Data source, link status and self-test",
   "deviceCurrentLink": "Current link",
@@ -426,18 +860,60 @@
   "tncTxTestOk": "Written to the TNC ({n} frames total). If the radio still does not transmit, the issue is on the TNC side: try the init string or check TxDelay.",
   "tncTxTestFail": "Not written: {err}",
   "tncNeedConnected": "Connect the TNC first",
-  "@tncInitSent": {"placeholders": {"n": {"type": "int"}}},
-  "@tncTxTestOk": {"placeholders": {"n": {"type": "String"}}},
-  "@tncTxTestFail": {"placeholders": {"err": {"type": "String"}}},
+  "@tncInitSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@tncTxTestOk": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncTxTestFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "msgLenCounter": "{chars}/67 chars · {bytes}/512 bytes total",
   "msgOverSpecAsk": "This message is {chars} characters, over the APRS spec limit of 67. Most clients will still show it, but some clients/gateways truncate or reject it, so the other station may not be able to parse it. Send anyway?",
   "msgOverServerLimit": "The packet is {bytes} bytes, over the 512-byte APRS-IS line limit. The server may drop it entirely (not even the header arrives). Please shorten by about {over} bytes.",
   "msgSendAnyway": "Send anyway",
   "msgSpecLimitHint": "The APRS spec recommends keeping a message under 67 characters: longer text may be truncated or fail to parse in some clients.",
   "msgBlockedTooLong": "Send blocked: packet exceeds the APRS-IS limit",
-  "@msgLenCounter": {"placeholders": {"chars": {"type": "int"}, "bytes": {"type": "int"}}},
-  "@msgOverSpecAsk": {"placeholders": {"chars": {"type": "int"}}},
-  "@msgOverServerLimit": {"placeholders": {"bytes": {"type": "int"}, "over": {"type": "int"}}},
+  "@msgLenCounter": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      },
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverSpecAsk": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverServerLimit": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "over": {
+        "type": "int"
+      }
+    }
+  },
   "beaconRfBeaconOff": "RF beacon is off",
   "beaconRfEnableHint": "Automatic transmission on an RF source requires the “RF beacon” switch. Until then no position is transmitted automatically (and the countdown does not run).",
   "beaconRfEnableAction": "Enable RF beacon",
@@ -500,22 +976,124 @@
   "audioRestart": "Restart audio link",
   "audioTxDisabled": "\"Allow transmit\" is off — receiving only",
   "audioLoopbackHint": "The self-test really does a modulate→demodulate round trip; on Android the microphone is paused while transmitting (half duplex)",
-  "@diagPassed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagFailed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagAx25Mismatch": {"placeholders": {"got": {"type": "String"}}},
-  "@diagTncLoopbackOk": {"placeholders": {"len": {"type": "int"}}},
-  "@diagAfskLoopbackOk": {"placeholders": {"samples": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagAfskLoopbackFail": {"placeholders": {"n": {"type": "int"}}},
-  "@diagPlatformOk": {"placeholders": {"name": {"type": "String"}}},
-  "@diagCaptureOk": {"placeholders": {"bytes": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagCaptureFailed": {"placeholders": {"err": {"type": "String"}}},
-  "@diagSpeakerFail": {"placeholders": {"err": {"type": "String"}}},
-  "@diagFileIoOk": {"placeholders": {"rate": {"type": "int"}}},
-  "@diagFileWriteFail": {"placeholders": {"err": {"type": "String"}}},
-  "@testTxFail": {"placeholders": {"err": {"type": "String"}}},
-  "@audioStatRx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatTx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatDrop": {"placeholders": {"n": {"type": "int"}}},
+  "@diagPassed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFailed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAx25Mismatch": {
+    "placeholders": {
+      "got": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagTncLoopbackOk": {
+    "placeholders": {
+      "len": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackOk": {
+    "placeholders": {
+      "samples": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackFail": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagPlatformOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagCaptureOk": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagCaptureFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagSpeakerFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagFileIoOk": {
+    "placeholders": {
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFileWriteFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@testTxFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioStatRx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatTx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatDrop": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "notifAudioConnected": "Audio link online",
   "notifAudioDisconnected": "Audio link disconnected",
   "connConnectingAudio": "Opening audio ({name})…",
@@ -569,16 +1147,79 @@
   "audioWavFound": "Decoded {n} packet(s)",
   "audioWavWritten": "Written to {path}",
   "audioWavFailed": "File I/O failed: {err}",
-  "@connConnectingAudio": {"placeholders": {"name": {"type": "String"}}},
-  "@connAudioConnected": {"placeholders": {"rate": {"type": "String"}}},
-  "@connRetryAudio": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connRetryAudioDetail": {"placeholders": {"detail": {"type": "String"}, "seconds": {"type": "int"}}},
-  "@connAudioLinkLost": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connAudioPositionSent": {"placeholders": {"call": {"type": "String"}}},
-  "@audioBadFrames": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavFound": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavWritten": {"placeholders": {"path": {"type": "String"}}},
-  "@audioWavFailed": {"placeholders": {"err": {"type": "String"}}},
+  "@connConnectingAudio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioConnected": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryAudio": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryAudioDetail": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioLinkLost": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioPositionSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioBadFrames": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavFound": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavWritten": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioWavFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "connTncConnected": "TNC connected · {arg}",
   "connTncPositionSent": "TNC connected · position sent ({arg})",
   "connRetryTnc": "TNC connection failed · retrying in {n}s…",
@@ -689,23 +1330,143 @@
   "translateNotNeeded": "Nothing to translate here (numbers / symbols / callsigns)",
   "translateBubbleCount": "{n} translated",
   "translatePrivacyNote": "Translation sends message text to the third-party provider you choose; assess privacy accordingly",
-  "@connTncConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@connTncPositionSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connRetryTnc": {"placeholders": {"n": {"type": "int"}}},
-  "@connRetryTncDetail": {"placeholders": {"e": {"type": "String"}, "n": {"type": "int"}}},
-  "@connTncLinkLost": {"placeholders": {"n": {"type": "int"}}},
-  "@translateCustomBodyTip": {"placeholders": {"text": {"type": "String"}, "from": {"type": "String"}, "to": {"type": "String"}}},
-  "@translateFreeFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateAutoAllFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateOutPreview": {"placeholders": {"text": {"type": "String"}}},
-  "@translateOutPreviewHint": {"placeholders": {"lang": {"type": "String"}}},
-  "@translateSentAs": {"placeholders": {"text": {"type": "String"}}},
-  "@translateTooLongAfter": {"placeholders": {"n": {"type": "int"}}},
-  "@translateTestOk": {"placeholders": {"text": {"type": "String"}}},
-  "@translateFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateBubbleCount": {"placeholders": {"n": {"type": "int"}}},
-  "@dateDividerFull": {"placeholders": {"y": {"type": "int"}, "m": {"type": "int"}, "d": {"type": "int"}, "w": {"type": "String"}}},
-  "@dateWeekday": {"placeholders": {"d": {"type": "String"}}},
+  "@connTncConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncPositionSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryTnc": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryTncDetail": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connTncLinkLost": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateCustomBodyTip": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFreeFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateAutoAllFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreview": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreviewHint": {
+    "placeholders": {
+      "lang": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateSentAs": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateTooLongAfter": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateTestOk": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateBubbleCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@dateDividerFull": {
+    "placeholders": {
+      "y": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      },
+      "d": {
+        "type": "int"
+      },
+      "w": {
+        "type": "String"
+      }
+    }
+  },
+  "@dateWeekday": {
+    "placeholders": {
+      "d": {
+        "type": "String"
+      }
+    }
+  },
   "notifTncConnected": "TNC connected",
   "notifTncDisconnected": "TNC disconnected",
   "dataSourceTitle": "Data source",
@@ -715,6 +1476,96 @@
   "dataSourceTnc": "TNC",
   "dataSourceTncDesc": "Send and receive on air through a Bluetooth or serial TNC",
   "dataSourceSwitchHint": "Switching the data source disconnects the current link",
+  "honorResetRow": "Clear read honors",
+  "honorResetTitle": "Clear read honors?",
+  "honorResetConfirm": "This clears the “read” record so every honor you already own shows again on the next launch.",
+  "honorResetButton": "Clear",
+  "honorResetDone": "Read honors cleared",
+  "heatLevel": "Heatmap level",
+  "heatLevelLow": "Light",
+  "heatLevelMid": "Medium",
+  "heatLevelHigh": "Strong",
+  "mapLabelsAlways": "Always show map labels",
+  "mapLabelsAlwaysDesc": "Show every station callsign label on the map regardless of station count or zoom.",
+  "startFromFavorites": "Start from a favourite station",
+  "boxConnectAction": "Connect box",
+  "boxLinkUnsupported": "The box link is not supported on this platform (needs Bluetooth or USB serial)",
+  "boxNoDevicePaired": "No device found - pair the box in system Bluetooth settings first, or plug in a USB serial cable (OTG)",
+  "dataNoticeTitle": "Data & Network Notice",
+  "dataNoticeBody": "Connecting to a third-party APRS server is your own choice. This software does not provide, operate, or recommend any server address.\n\nOnce connected, your callsign, position, messages and other content travel through that server and the APRS-IS network, and may be received, stored, or publicly archived by others. APRS is plain text: never send state secrets, trade secrets, personal data, or sensitive location information.\n\nYou must confirm that the server you connect to and your use of it are lawful, and you bear the responsibility arising from cross-border data transfer, personal-data processing, and radio regulation. We operate no server and have no affiliation, agency, or cooperation with any third-party server.\n\nBy tapping \"Agree and connect\" you confirm that you have read, understood, and accepted the above (see clauses 2.4, 2.5 and 4.8 of the Terms of Use).",
+  "dataNoticeAccept": "Agree and connect",
+  "dataNoticeDecline": "Not now",
+  "blTitle": "This device has been blocked",
+  "agentAuthTitle": "The Agent needs authorization",
+  "agentAuthBody": "The Agent is not open to ordinary users. Download and fill in the letter of commitment, then email it to the address below. Once approved, your call sign is added to the authorization list, which the app pulls from the official site.",
+  "agentAuthCallLabel": "This device call sign",
+  "agentAuthStep1Title": "Download the letter",
+  "agentAuthStep1Desc": "Tap \"Download the letter\" below to open the official letter in your browser.",
+  "agentAuthStep2Title": "Fill in and send",
+  "agentAuthStep2Desc": "After filling it in truthfully, email it to:",
+  "agentAuthStep3Title": "Wait for review, then check again",
+  "agentAuthStep3Desc": "Once approved, tap \"Check again\" to enable it. The list uses the same architecture as the blocklist and is pulled from the official site.",
+  "agentAuthDownload": "Download the letter",
+  "agentAuthEmail": "Send by email",
+  "agentAuthMailTo": "Apply to:",
+  "agentAuthMailSubject": "Agent authorization request",
+  "agentAuthMailBody": "Hello, I would like to use the APRSLocus Agent feature. I have filled in the letter of commitment truthfully and agree to its terms. My call sign:",
+  "agentAuthRecheck": "Check authorization again",
+  "agentAuthChecking": "Checking…",
+  "agentAuthBack": "Not now",
+  "agentAuthGranted": "Authorization confirmed - the Agent is now enabled",
+  "agentAuthStillPending": "No authorization found yet; your request may still be under review",
+  "agentAuthHint": "The Agent feature requires authorization; this call sign is not on the authorization list.",
+  "blBody": "Under section 8.2 of the Terms of Use we may restrict, suspend, or terminate use by anyone who violates the agreement. This device (callsign or install ID) is on the restriction list, so the app can no longer be used.",
+  "blReason": "Reason",
+  "blMatched": "Matched entry",
+  "blId": "Install ID",
+  "blContact": "If you believe this is a mistake, open an Issue in the GitHub repository and include the install ID above - it is the only thing we can match against.",
+  "blRetry": "Check again",
+  "blChecking": "Checking…",
+  "donateNotice": "Tips are entirely voluntary: they do not buy any feature, priority support, or service commitment, and are non-refundable. Minors should ask a guardian first.",
+  "boxDeviceTitle": "APRSlocusBOX",
+  "boxDeviceDesc": "The box: connect to change its config, feed it a position, trigger a beacon",
+  "boxBindTitle": "Box connection",
+  "boxModeTip": "Bluetooth only works when the box link mode is bt or both; in wifi mode use a USB serial cable. link and bt apply after rebooting the box.",
+  "boxBtLinkWarn": "The box is in link = wifi: Bluetooth management will not work. Set it to bt/both and reboot, or use a USB serial cable.",
+  "boxBaud": "Serial baud rate (USB / desktop)",
+  "boxStatTitle": "Box status",
+  "boxStatLinkMode": "Link mode",
+  "boxStatBeacon": "Auto beacon",
+  "boxStatHost": "APRS-IS server",
+  "boxStatGps": "GPS baud",
+  "boxStatEvents": "Event counters",
+  "boxLastEvent": "Last event",
+  "boxNoEventYet": "No events yet",
+  "boxCfgTitle": "Box config",
+  "boxCfgSubtitle": "Key names match the box documentation; tap an item to change it",
+  "boxCfgRead": "Read config",
+  "boxCfgEmpty": "No config read yet — connect first, then tap Read config",
+  "boxCfgRebootHint": "link and bt are boot settings: reboot the box to apply",
+  "boxCfgSent": "Sent to the box",
+  "boxCfgEditTitle": "Change setting",
+  "boxCfgEditHint": "Sends CFG key=value; leave empty to clear the value",
+  "boxCfgMasked": "Passwords are not echoed: leave empty to keep it, enter a new value to overwrite",
+  "boxCfgNoChange": "Not changed (password is not echoed)",
+  "boxFeedTitle": "Feed position to the box",
+  "boxFeedSubtitle": "Use it when the box has no GPS; a fed position stays valid for 60 seconds",
+  "boxFeedAuto": "Feed automatically (every 30 s)",
+  "boxFeedSend": "Send current position",
+  "boxFeedStop": "Stop feeding",
+  "boxFeedNoFix": "No fix on the phone yet — get a position on the home page first",
+  "boxActTitle": "Box actions",
+  "boxActBeacon": "Beacon now",
+  "boxActStatus": "Status packet",
+  "boxActNet": "Reconnect APRS-IS",
+  "boxActClear": "Clear stations",
+  "boxActTest": "Format self-test",
+  "boxActReboot": "Reboot box",
+  "boxPushTitle": "Phone status to the box",
+  "boxPushStatus": "Push live status (heart rate / speed / countdown / mileage / nearby)",
+  "boxPushHint": "The box PHONE page shows these; it only draws on the box screen, never on air. Separate from feeding a position.",
+  "boxPassHint": "The box APRS-IS passcode is -1 (**receive-only**): to transmit, change `pass` below to your passcode - note it is the one for the **base callsign** (without the -SSID)",
+  "boxEvtTitle": "Box events",
   "dataSourcePkwdwpl": "PKWDWPL (Kenwood waypoints)",
   "dataSourcePkwdwplDesc": "Read the Kenwood $PKWDWPL waypoint sentences from the radio over Bluetooth or serial (receive-only)",
   "dataSourcePkwdwplHint": "PKWDWPL is a **receive-only** link: it brings in stations but never transmits (use APRS-IS / TNC / audio for transmitting)",
@@ -731,7 +1582,13 @@
   "deviceInUseByTnc": "In use by TNC — cannot bind again",
   "deviceInUseByPkwdwpl": "In use by PKWDWPL — cannot bind again",
   "rxOnlyBanner": "{arg} connected · receive-only (the transmit source is offline)",
-  "@rxOnlyBanner": {"placeholders": {"arg": {"type": "String"}}},
+  "@rxOnlyBanner": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
   "pkwdwplTip": "Set the PC / GPS port output format on the radio to \"$PKWDWPL\" (usually 4800 8N1). This link is read-only and transmits nothing.",
   "pkwdwplStrictChecksum": "Strict checksum (drop mismatches)",
   "pkwdwplStrictChecksumTip": "Off by default: a mismatch is flagged and logged instead of dropped, because on a local cable it usually means the firmware format differs from the manual. Dropping every sentence would leave the screen empty and make diagnosis much harder.",
@@ -742,9 +1599,27 @@
   "pkwdwplStatMismatch": "Checksum mismatches",
   "pkwdwplStatIgnored": "Other NMEA sentences (ignored)",
   "pkwdwplLogEmpty": "No PKWDWPL log yet",
-  "@connConnectingPkwdwpl": {"placeholders": {"arg": {"type": "String"}}},
-  "@connPkwdwplConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@pkwdwplStats": {"placeholders": {"rx": {"type": "String"}}},
+  "@connConnectingPkwdwpl": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connPkwdwplConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkwdwplStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      }
+    }
+  },
   "tncBindTitle": "Bluetooth TNC",
   "tncBindSubtitle": "Bind and connect the TNC on your radio",
   "tncBoundDevice": "Bound device",
@@ -801,9 +1676,30 @@
   "tncGroupDisabled": "Group broadcasts are unavailable in radio mode",
   "tncMsgLimitHint": "{n} characters per message (APRS spec)",
   "tncMsgTooLong": "Exceeds the message length limit for radio mode",
-  "@tncStats": {"placeholders": {"rx": {"type": "String"}, "tx": {"type": "String"}}},
-  "@connectingToTnc": {"placeholders": {"name": {"type": "String"}}},
-  "@tncMsgLimitHint": {"placeholders": {"n": {"type": "String"}}},
+  "@tncStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      },
+      "tx": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectingToTnc": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncMsgLimitHint": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "licenseSection": "License",
   "licenseName": "GNU GPL v3",
   "licenseStatement": "This software is released under the GNU GPL v3. You may run, study, modify, and redistribute it under the terms of the license; modified and redistributed versions must comply with the applicable GPL v3 requirements. This software is provided without warranty.",
@@ -821,8 +1717,9 @@
   "features": "Features",
   "openSource": "Open-source acknowledgements",
   "feedback": "Feedback",
+  "feedbackEntryDesc": "Open a repo issue",
+  "openLinkFailed": "Couldn't open the link",
   "officialWebsite": "Official website",
-  "qqGroup": "QQ group",
   "projectRepo": "Repository",
   "testMembers": "Test members",
   "aiSupport": "AI compute support",
@@ -843,7 +1740,7 @@
   "chatSettings2": "Chat settings",
   "dataSettings2": "Data settings",
   "advancedSettings2": "Advanced settings",
-  "connectionSettings2": "Connection settings",
+  "connectionSettings2": "Servers",
   "copiedPacket": "Packet copied",
   "mapPickMode": "Map position picker",
   "mapPickDesc": "Tap the map to set your position",
@@ -1166,8 +2063,8 @@
   "disconnect": "Disconnect",
   "connectAprsIs": "Connect APRS-IS",
   "packetsReceived": "RX",
-  "passcodeUnverified": "Passcode not verified",
-  "passcodeWarning": "The login passcode may be incorrect; messages may not work",
+  "passcodeUnverified": "Login not verified",
+  "passcodeWarning": "The passcode or the account password may be wrong; messages may not work",
   "goSettings": "Settings",
   "connectingServer": "Connecting to server…",
   "notConnectedAprsServer": "Not connected to APRS-IS",
@@ -1176,7 +2073,6 @@
   "connectAction": "Connect",
   "backgroundRunTip": "Background operation: allow APRSlocus to run in the background, disable battery optimization, and allow autostart to keep beaconing active.",
   "connectedAprsIs": "Connected to APRS-IS",
-  "qqGroupDesc": "APRSlocus · Feedback and discussion",
   "reselectPoint": "Pick again",
   "disableClustering": "Disable clustering",
   "enableClustering": "Enable clustering",
@@ -1232,11 +2128,11 @@
   "nameLabel": "Name",
   "viewSponsorDetails": "View author and sponsor details →",
   "thanks": "Thanks",
-  "qqSoftwareName": "APRSlocus",
   "usageNotice": "For amateur-radio learning and communication only\nFollow your local radio regulations",
   "licenseNotice": "GNU GPL v3 · Copyright © BG7LZQ",
   "appInfoText": "APRSlocus v{version}\nAuthor: BG7LZQ (Darion)\nWebsite: Theez.top",
   "eggBg7lzq": "Hey, what are you doing~",
+  "eggCuriosityWorld": "Keep your curiosity, keep exploring the world.",
   "eggBg7pgw": "Seriously?",
   "eggBg7lmw": "Quiet as ever...",
   "eggBg7osl": "You have got some nerve",
@@ -1364,7 +2260,7 @@
   "locModeNetwork": "Network only",
   "locModeNetworkDesc": "Cell / Wi-Fi only, accurate to a few hundred metres; most power-saving, for devices without GPS",
   "locModeNetworkHint": "In network-only mode the fix comes from cell / Wi-Fi only: it can be hundreds of metres off and is **never** written to the track or history. It will not auto-beacon unless you enable “force auto-beacon on coarse fixes”.",
-  "beaconingSection": "Beaconing",
+  "beaconingSection": "Auto-report",
   "beaconIntervalTip": "Position beacon interval, minimum 5 seconds",
   "beaconNetInterval": "Network-only interval (s)",
   "beaconNetIntervalTip": "In network-only mode a fixed interval is used; cell/Wi-Fi fixes have no reliable speed, so smart beaconing (speed / distance / turn) is not used",
@@ -1492,6 +2388,7 @@
   "vectorMapLoadFailed": "Vector map failed to load\n{error}",
   "loadingVectorMap": "Loading vector map…",
   "updateChannel": "Update channel",
+  "updateChannelQinglingHint": "Self-hosted mirror (清零)",
   "serverReturned": "Server returned {code}",
   "invalidResponseData": "Invalid response format",
   "noVersionsFound": "No releases found",
@@ -1539,7 +2436,7 @@
   "settingsStationIdentitySubtitle": "Callsign, SSID and comment",
   "settingsDisplayInfoSubtitle": "My symbol and current position",
   "settingsLocSourceSubtitle": "Choose position source",
-  "settingsBeaconSubtitle": "Transmit interval & report content",
+  "settingsBeaconSubtitle": "Report switch, interval & content",
   "settingsManualLocSubtitle": "Manual input or map pick when no fix",
   "settingsManualLocHint": "When auto-location is unavailable, enter coordinates manually or pick on the map for beacon reporting and station distance calculation.",
   "settingsConnStatusSubtitle": "Connection status and info",
@@ -1860,7 +2757,7 @@
   "chatRecords": "Chat history",
   "chatRecordsCleared": "Chat history cleared",
   "deviceCat": "Device",
-  "deviceCatDesc": "Radio gear · coming soon",
+  "deviceCatDesc": "Sources · links · iGate",
   "deviceSettings2": "Device settings",
   "deviceSettingsSubtitle": "Connect your radio equipment",
   "underConstruction": "Under construction — not open yet",
@@ -1885,24 +2782,68 @@
   "honorCriteriaLine": "How to earn: {c}",
   "badgeFallback": "Badge",
   "honoredBadges": "{n}/{m} badges unlocked",
-  "@honoredBadges": {"placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}},
+  "@honoredBadges": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
   "achievementsProgress": "{n}/{m} achievements",
-  "@achievementsProgress": {"placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}},
+  "@achievementsProgress": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
   "beaconNotConnected": "Not connected",
   "beaconWaitingFix": "Waiting for fix",
+  "beaconNeedConfirm": "Confirm to report",
+  "reportStartNow": "Start reporting",
   "beaconSoon": "Due now",
   "beaconNextIn": "Next report in {s}",
-  "@beaconNextIn": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconNextIn": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "beaconImminent": "Reporting now…",
   "notifConnected": "Connected",
   "notifConnecting": "Connecting",
   "notifDisconnected": "Disconnected",
   "notifOnline": "{n} online",
-  "@notifOnline": {"placeholders": {"n": {"type": "String"}}},
+  "@notifOnline": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "notifRx": "RX {n}",
-  "@notifRx": {"placeholders": {"n": {"type": "String"}}},
+  "@notifRx": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "notifBeacon": "Beacon {v}",
-  "@notifBeacon": {"placeholders": {"v": {"type": "String"}}},
+  "@notifBeacon": {
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
+  },
   "selectAll": "Select all",
   "deselectAll": "Deselect all",
   "selectedCount": "{n} selected",
@@ -1948,19 +2889,35 @@
   "sysLinkOff": "Off",
   "sysRx": "Rx {n}",
   "@sysRx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysTx": "Tx {n}",
   "@sysTx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysBeacon": "Beacon {t}",
   "@sysBeacon": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "sysStations": "Stations {n}",
   "@sysStations": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysFixOk": "Located",
   "sysLinkAudio": "Audio",
@@ -1978,10 +2935,14 @@
   "backupCopyDone": "Backup copied to clipboard",
   "backupSavedTo": "Saved to: {path}",
   "@backupSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "backupCatSettings": "Settings",
-  "backupCatSettingsDesc": "Station, beacon, map, filters, sources, server",
+  "backupCatSettingsDesc": "Station, beacon, map, filters, sources, server, track history",
   "backupCatStations": "Stations & contacts",
   "backupCatStationsDesc": "Favourites, manual contacts and their notes",
   "backupCatMessages": "Messages",
@@ -1994,7 +2955,11 @@
   "backupCatHonorsDesc": "Unlocks, counters and default badge",
   "backupItems": "{n} items",
   "@backupItems": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSelectAll": "Select all",
   "backupNoSelection": "Select at least one group",
@@ -2006,22 +2971,38 @@
   "backupPreview": "Backup contents",
   "backupFromVersion": "From version {v}",
   "@backupFromVersion": {
-    "placeholders": {"v": {"type": "String"}}
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
   },
   "backupExportedAt": "Exported {t}",
   "@backupExportedAt": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "backupImportSelected": "Import selected",
   "backupImportConfirmTitle": "Import this backup?",
   "backupImportConfirm": "The selected groups will be overwritten and this cannot be undone. Consider exporting a backup of the current data first.",
   "backupImported": "Imported {n} items",
   "@backupImported": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSkipped": "Skipped {n} unknown entries",
   "@backupSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupImportNothing": "The backup has no data for the selected groups",
   "backupRestartTitle": "Import complete",
@@ -2064,7 +3045,11 @@
   "themeDelete": "Delete theme",
   "themeDeleteConfirm": "Delete the theme “{name}”? This cannot be undone.",
   "@themeDeleteConfirm": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeReset": "Reset",
   "themeResetAll": "Reset this theme",
@@ -2079,7 +3064,11 @@
   "themeIconImportHint": "PNG/JPG/WebP/GIF/BMP/SVG, up to 2 MB",
   "themeIconImportDone": "Icon imported: {name}",
   "@themeIconImportDone": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeIconWebHint": "Importing images is not available on the web — use the built-in icon library",
   "themeIconErrFormat": "Unsupported image format (PNG/JPG/WebP/GIF/BMP/SVG)",
@@ -2094,7 +3083,11 @@
   "themeImportPaste": "Import from clipboard",
   "themeImportDone": "Imported {n} themes",
   "@themeImportDone": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "themeErrNotJson": "The file is not valid JSON",
   "themeErrNotTheme": "This is not an APRSlocus theme file",
@@ -2134,13 +3127,21 @@
   "themeExportWithImages": "Include images in the export",
   "themeExportWithImagesHint": "The export will carry the images themselves (about {size}), so the recipient sees the same background and icons. The file is then no longer hand-editable.",
   "@themeExportWithImagesHint": {
-    "placeholders": {"size": {"type": "String"}}
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   },
   "themeExportNoImages": "This theme references no images; the export contains only colours and text",
   "themeExportClipboardTooBig": "The images are too large for the clipboard — use \"Export all themes\" to save a file instead",
   "themeImportImagesSkipped": "{n} image(s) were not imported (too large or unsupported)",
   "@themeImportImagesSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupThemeImagesHint": "The backup will embed the images your themes use. Without them, a restored theme falls back to built-in icons.",
   "backupThemeImagesOff": "Images excluded: a smaller backup, but a restored theme will be missing its background and custom icons",
@@ -2196,7 +3197,11 @@
   "audioWavExportToDownloads": "Export to Downloads",
   "audioWavSavedTo": "Saved to {path}",
   "@audioWavSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "audioWavCopyPath": "Copy path",
   "audioWavPathCopied": "Path copied",
@@ -2208,27 +3213,56 @@
   "audioTxLevelTip": "Before transmitting the media volume is raised to maximum and the mic is paused; a peak that is too low or clipped means the other side cannot decode",
   "audioTxPeak": "Peak {p}% · {sec}s · preamble {flags} flags",
   "@audioTxPeak": {
-    "placeholders": {"p": {"type": "int"}, "sec": {"type": "String"}, "flags": {"type": "int"}}
+    "placeholders": {
+      "p": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "String"
+      },
+      "flags": {
+        "type": "int"
+      }
+    }
   },
   "audioTxLevelClip": "Clipped: lower the output amplitude below 0.8 (clipping adds harmonics)",
   "audioTxLevelLow": "Low level: the other side may not decode — raise amplitude and device volume",
   "audioWiringHint": "Use an audio cable to the radio (headphone out → data/mic jack). Phone speakers roll off badly at 2200 Hz, so acoustic coupling rarely decodes. If the far end is Direwolf, first verify with the exported WAV: if that decodes, the problem is the audio path, not the protocol",
   "packetLimitRf": "Packet {bytes} B · RF frame limit {max} B",
   "@packetLimitRf": {
-    "placeholders": {"bytes": {"type": "int"}, "max": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
   },
   "packetLimitIs": "Packet {bytes} B · APRS-IS line limit 512 B",
   "@packetLimitIs": {
-    "placeholders": {"bytes": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      }
+    }
   },
   "packetTcpipWarning": "Contains TCPIP*: it is stripped on RF (that path belongs to APRS-IS)",
   "packetSent": "Handed to the link: {line}",
   "@packetSent": {
-    "placeholders": {"line": {"type": "String"}}
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
   },
   "packetSendFailed": "Not sent: {err}",
   "@packetSendFailed": {
-    "placeholders": {"err": {"type": "String"}}
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
   },
   "tncSerialBaud": "Serial baud rate (bd)",
   "tncSerialBaudTip": "A USB serial cable and the radio data port must agree on the speed, otherwise not a single byte gets through. Common values: 9600 / 19200 / 38400 / 57600 / 115200. Bluetooth SPP has no baud rate, so this is ignored for Bluetooth devices.",
@@ -2253,7 +3287,7 @@
   "uiLayoutSheetDesc": "The map stays full-screen; stations / messages / packets / settings live in a draggable card below — swipe up or tap the handle to expand",
   "uiLayoutHint": "Takes effect immediately; both layouts keep their own settings. Map controls move up automatically as the card collapses",
   "linkNotConnected": "Not connected",
-  "linkTapForSettings": "Tap to open connection settings",
+  "linkTapForSettings": "Tap to open server settings",
   "uiMaterialGlassFull": "Full frosted glass",
   "uiMaterialGlassFullDesc": "The most transparent and the blurriest, **including the small widgets** (map tool buttons, legend, hint pills) — the heaviest look, and the heaviest on the GPU",
   "posAccuracy": "Position accuracy",
@@ -2283,11 +3317,23 @@
   "tierMinDist": "Distance (m)",
   "tierMinDistHint": "Also beacon after moving this far since the last report; 0 = off (interval only)",
   "orMoveM": "or {dist} m",
-  "@orMoveM": {"placeholders": {"dist": {"type": "String"}}},
+  "@orMoveM": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "tierMinTurn": "Turn (degrees)",
   "tierMinTurnHint": "Beacon once after turning this far (10–180); 0 = off. Only while moving (heading is noise when parked)",
   "orTurnDeg": "or {deg}°",
-  "@orTurnDeg": {"placeholders": {"deg": {"type": "String"}}},
+  "@orTurnDeg": {
+    "placeholders": {
+      "deg": {
+        "type": "String"
+      }
+    }
+  },
   "inputTapHint": "Tap to type",
   "callCommentEmpty": "Not set · tap to type",
   "noticeTitle": "Announcements",
@@ -2295,9 +3341,21 @@
   "noticeLoading": "Loading…",
   "noticeReadMore": "Read more",
   "noticeCached": "Cached · {ago}",
-  "@noticeCached": {"placeholders": {"ago": {"type": "String"}}},
+  "@noticeCached": {
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
   "noticeOfflineCache": "Offline copy · {time} (updates automatically once online)",
-  "@noticeOfflineCache": {"placeholders": {"time": {"type": "String"}}},
+  "@noticeOfflineCache": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "timeJustNow": "just now",
   "refresh": "Refresh",
   "noticeEntryDesc": "Latest announcements from the website",
@@ -2384,31 +3442,67 @@
   "garminUrlHint": "livetrack.garmin.com/session/…/token/…",
   "beaconGarminSource": "Beaconing from Garmin LiveTrack",
   "beaconGarminNext": "Garmin · {s} · ❤{hr}",
-  "@beaconGarminNext": {"placeholders": {"s": {"type": "String"}, "hr": {"type": "String"}}},
+  "@beaconGarminNext": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      },
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceLabel": "Position source",
   "hrSourceLabel": "Heart-rate source",
   "ownSourcePhoneGps": "Phone GPS",
   "positionBeaconDetail": "Position beacon · Grid {grid} · {detail}",
   "beaconAttachedHr": "HR {hr}",
   "beaconAttachedNone": "no heart rate",
-  "@positionBeaconDetail": {"placeholders": {"grid": {"type": "String"}, "detail": {"type": "String"}}},
-  "@beaconAttachedHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@positionBeaconDetail": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "@beaconAttachedHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceIdle": "Not tracking (location off)",
   "ownSourceGarminLive": "Tracking (phone GPS stepped aside)",
   "ownSourceGarminStale": "Link set, but Garmin has no fresh points",
   "ownSourceHrIdle": "Not connected (tap to connect a strap)",
   "hrLineHr": "HR {hr}",
-  "@hrLineHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@hrLineHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "garminShareNoLink": "No Garmin LiveTrack link found in what was shared",
   "hrFromGarmin": "Heart rate from Garmin LiveTrack (watch)",
-  "sourceMovedHint": "To enable or switch data sources (links), go to Settings → Devices",
-  "posSourcePrecedence": "Priority when several are available: simulated/manual › Garmin (while the watch has live data) › phone GPS",
+  "sourceMovedHint": "Radio links (TNC, WLAN radio, audio) are enabled in Settings → Devices",
+  "posSourcePrecedence": "Priority when several are available: simulated/manual › external GPS module › Garmin (while the watch has live data) › phone GPS",
   "posSourceUsing": "In use now: {src}",
   "posSrcSim": "simulated/manual",
   "posSrcGarmin": "Garmin LiveTrack",
   "posSrcPhone": "phone GPS",
   "posSrcNone": "no fix",
-  "@posSourceUsing": {"placeholders": {"src": {"type": "String"}}},
+  "@posSourceUsing": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
   "garminNotStarted": "Not tracking",
   "garminAutoFilled": "Share link filled in automatically",
   "garminLinkOk": "Link is valid",
@@ -2416,7 +3510,13 @@
   "beaconForceCoarseHint": "Off by default: network fixes (cell / Wi-Fi) are often hundreds of metres off, so beaconing them announces a wrong coordinate to everyone. Turn this on only when the device has no GPS (tablet, network-only). Coarse points are still filtered the usual way for the map and track, so those do not get jumpy. Manual \"beacon now\" is unaffected.",
   "beaconCoarseForced": "Network fix (coarse) · {s}",
   "beaconCoarseForcedNote": "Beaconing a network (coarse) fix",
-  "@beaconCoarseForced": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconCoarseForced": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "advancedMenu": "Advanced",
   "aprsStatus": "Standalone status packet",
   "aprsStatusHint": "This sends a standalone status packet (starts with `>`, carries no coordinates, and does not move you on aprs.fi) - a different APRS packet type from the comment above. Left empty, the built-in APRSlocus online frame is sent instead.",
@@ -2427,22 +3527,64 @@
   "beaconAntHeightLabel": "Antenna height (ft)",
   "beaconGainLabel": "Gain (dB)",
   "beaconPhgPreview": "The packet will carry: {phg}",
-  "@beaconPhgPreview": {"placeholders": {"phg": {"type": "String"}}},
+  "@beaconPhgPreview": {
+    "placeholders": {
+      "phg": {
+        "type": "String"
+      }
+    }
+  },
   "beaconPhgTip": "Power, antenna height and gain share one PHG data extension: filling any of them encodes and sends all of them (the spec defines it as a single fixed 7-byte field). Power takes the largest step not exceeding the real value: 25 W reports 25, and so does 30 W, because over-reporting inflates your coverage circle. Antenna height is measured above average local terrain - a different quantity from the /A= altitude sent automatically above.",
+  "phgTitle": "PHG antenna",
+  "phgPower": "Power",
+  "phgHeight": "Height",
+  "phgGain": "Gain",
+  "phgDirection": "Direction",
+  "phgOmni": "Omni",
   "beaconPowerLabel": "Power (W)",
   "txButton": "Transmit",
   "txPartPosition": "position packet",
   "txPartStatus": "status packet",
   "txSent": "Transmitted: {parts}",
-  "@txSent": {"placeholders": {"parts": {"type": "String"}}},
+  "@txSent": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
   "txNoFixKeptStatus": "Sent: {parts} (no fix yet - the position packet with PHG was not sent)",
   "connStatusSent": "Connected · Status packet sent ({call})",
   "connTncStatusSent": "TNC connected · status packet sent ({arg})",
   "connAudioStatusSent": "Sent over audio · status packet sent ({call})",
-  "@txNoFixKeptStatus": {"placeholders": {"parts": {"type": "String"}}},
-  "@connStatusSent": {"placeholders": {"call": {"type": "String"}}},
-  "@connTncStatusSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connAudioStatusSent": {"placeholders": {"call": {"type": "String"}}},
+  "@txNoFixKeptStatus": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "@connStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncStatusSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
   "codeContribution": "Code contribution",
   "historyCharts": "Charts",
   "historyChartsShow": "Show charts",
@@ -2464,18 +3606,57 @@
   "beaconBarTierNetwork": "Network fix · fixed interval",
   "beaconBarTierSmart": "Smart tier",
   "beaconBarTierSmartFrom": "Smart tier · ≥{speed} km/h",
-  "@beaconBarTierSmartFrom": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTierSmartFrom": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTierFixed": "Fixed interval",
   "beaconBarTimeLeft": "Time {time}",
-  "@beaconBarTimeLeft": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTimeLeft": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarDistLeft": "Distance {dist}",
-  "@beaconBarDistLeft": {"placeholders": {"dist": {"type": "String"}}},
+  "@beaconBarDistLeft": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLeft": "Turn {cur}° / {need}°",
-  "@beaconBarTurnLeft": {"placeholders": {"cur": {"type": "String"}, "need": {"type": "String"}}},
+  "@beaconBarTurnLeft": {
+    "placeholders": {
+      "cur": {
+        "type": "String"
+      },
+      "need": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLowSpeed": "Turn on hold · needs ≥{speed} km/h",
-  "@beaconBarTurnLowSpeed": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTurnLowSpeed": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnWait": "Turn on hold · ready in {time}",
-  "@beaconBarTurnWait": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTurnWait": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "netSymbol": "Station icon for network fixes",
   "netSymbolHint": "Network fixes can be off by hundreds of metres to kilometres; a distinct icon makes it obvious that the position came from the network. Defaults to following your own symbol.",
   "netSymbolFollow": "Follow my symbol",
@@ -2498,7 +3679,19 @@
   "hrAlarmTelTip": "The number dialled from the alarm; defaults to 120. Change it to 112 or a teammate's number as needed.",
   "hrAlarmTitle": "Abnormal heart rate",
   "hrAlarmBody": "Heart rate {bpm} bpm is outside your {low}–{high} range.\n\nIf you feel unwell, call emergency services now. You can also send a help message to stations within 100 km — nearby hams will see it.",
-  "@hrAlarmBody": {"placeholders": {"bpm": {"type": "String"}, "low": {"type": "String"}, "high": {"type": "String"}}},
+  "@hrAlarmBody": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmDismiss": "I'm fine",
   "hrAlarmCall": "Call emergency",
   "hrAlarmSendNearby": "Ask nearby stations",
@@ -2506,11 +3699,32 @@
   "hrAlarmNoNearby": "No known stations within 100 km",
   "hrAlarmSendConfirmTitle": "Send the request?",
   "hrAlarmSendConfirmBody": "One message will be sent to each of the nearest {n} stations:\n{calls}\n\nThese will show up on their devices — please confirm.",
-  "@hrAlarmSendConfirmBody": {"placeholders": {"n": {"type": "String"}, "calls": {"type": "String"}}},
+  "@hrAlarmSendConfirmBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "calls": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmSent": "Help request sent to {n} station(s)",
-  "@hrAlarmSent": {"placeholders": {"n": {"type": "String"}}},
+  "@hrAlarmSent": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmNotif": "Abnormal HR {bpm} bpm",
-  "@hrAlarmNotif": {"placeholders": {"bpm": {"type": "String"}}},
+  "@hrAlarmNotif": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      }
+    }
+  },
   "locExtGpsActive": "External GPS active · phone GPS idle",
   "locExtGpsLost": "External GPS lost · using phone GPS",
   "locPhoneGpsActive": "Phone GPS took over",
@@ -2532,7 +3746,13 @@
   "beaconIncludeSteps": "Steps",
   "stepsTodayLabel": "Today's steps",
   "stepsCount": "{n} steps",
-  "@stepsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@stepsCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "stepsUnsupported": "No step-counting sensor on this device",
   "stepsNeedPermission": "Permission needed",
   "stepsGrant": "Grant activity permission",
@@ -2557,7 +3777,16 @@
   "downloadCanceled": "Download cancelled",
   "downloadBackgroundHint": "You can leave this page or put the app in the background — the download keeps going (progress also shows in the notification). It stops if the app process is killed.",
   "notifUpdateDownload": "Downloading update {tag} · {pct}%",
-  "@notifUpdateDownload": {"placeholders": {"tag": {"type": "String"}, "pct": {"type": "String"}}},
+  "@notifUpdateDownload": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
   "notifUpdateReady": "Update downloaded · open the update page to install",
   "notifUpdateFailed": "Update download failed",
   "sportRankGateNoSensor": "This device has no step sensor, so turning it on will **not actually send any steps** (there are none to send). It only unlocks the board — which is fine: you can see others because you accepted the same two-way rule.",
@@ -2565,11 +3794,752 @@
   "crashCard": "Crash & fall detection",
   "crashCardSub": "Judged from the phone accelerometer; warns when detected (beta)",
   "crashEnabled": "Enable crash/fall alerts",
-  "crashHowItWorks": "The test is **two-stage**: (1) a sharp spike in acceleration (both crashes and falls produce one); (2) then almost no movement for 12 seconds. Both must hold.\n\nWhy the second stage: with the spike alone, **speed bumps, a phone dropped on a desk and a good shake** all qualify, and an alert that fires several times a day gets ignored. The trade-off is that **a minor impact (where you can still move) will not alert** — this feature is about \"I cannot move\", not \"a collision happened\".",
+  "crashHowItWorks": "There are two criteria. A **fall** needs ① a free fall first (weightlessness — total acceleration near 0), ② a landing impact, and ③ ~12 s of no motion afterwards. A **crash** has no weightlessness to rely on, so it demands a **much harder** impact (about twice the sensitivity threshold) plus the same ~12 s of stillness.\n\nWhy all this: on a single spike alone, **setting the phone down a bit firmly, speed bumps, a shake** all count — and an alert that fires several times a day is one nobody keeps. Splitting \"fall (with weightlessness)\" from \"crash (no weightlessness, must be harder)\" is exactly what keeps ordinary actions like setting the phone down from triggering. The cost is that **a light collision does not alert** — this feature is aimed at \"the person can no longer move\", not \"an impact happened\".",
   "crashNoSensor": "This device has no accelerometer, so detection is unavailable",
   "crashPending": "Impact detected — watching",
   "crashFalsePositive": "**It can false-alarm**: hitting a speed bump and then standing still for 12 seconds (at a red light) satisfies both stages. The first button in the alert is \"I am fine\" — dismiss it and nothing else is affected.",
   "crashAlarmTitle": "Possible crash or fall detected",
-  "crashAlarmBody": "The phone detected a strong impact, followed by no significant movement (about 12 seconds).\n\nIf you are fine, tap \"I am fine\". If you feel unwell or cannot move, call emergency services now, or send a help message to stations within 100 km.\n\n**This is a heuristic, not engineering-grade crash detection**: a speed bump or dropping the phone can trigger it.",
-  "crashNotif": "Life guard: possible crash detected"
+  "crashAlarmBody": "The phone detected a strong impact, and there has been no clear movement for about 12 seconds since.\n\nIf you are fine, just tap \"I am fine\". If you feel unwell or cannot move, call emergency services now, or send a help message to stations within 100 km.\n\n**This is a heuristic judgement, not engineering-grade crash detection**.",
+  "crashNotif": "Life guard: possible crash detected",
+  "icomLanTitle": "WLAN Radio Direct Link",
+  "icomLanEnable": "Enable WLAN radio LAN link",
+  "icomLanHost": "Radio IP",
+  "icomLanPort": "Control port",
+  "icomLanUsername": "Username (Network User)",
+  "icomLanPassword": "Password (Network User)",
+  "icomLanHint": "Enable remote control in the radio WLAN settings, set the Network User name/password, and keep the phone on the same subnet. WLAN radio LAN audio is fixed at 12000 Hz.",
+  "codeContributionIcomLan": "WLAN radio link",
+  "honorCelebrateTitle": "New honor unlocked",
+  "honorCelebrateOk": "Awesome",
+  "confirmSendToGroup": "Send to {group}?",
+  "@confirmSendToGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmInviteMember": "Invite {call} to the group chat?",
+  "@confirmInviteMember": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmCreateGroup": "Create the group and invite {n} member(s)?",
+  "@confirmCreateGroup": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "choosePackage": "Choose a package",
+  "pkgRecommended": "Recommended",
+  "choosePackageHint": "The 64-bit package covers almost every phone (this is what the in-app update fetches); _armeabi-v7a is for older 32-bit devices; _x86_64 is only for emulators / Chromebooks. Tapping a row opens that package's download URL.",
+  "lifeGuardStrongHint": "Alarms also fire a **high-priority system notification** (sound / vibration / lock-screen banner), not just an in-app dialog — a dialog is invisible with the phone in your pocket. Please allow notifications for this app and keep this channel out of Do Not Disturb.",
+  "crashSensitivity": "Detection sensitivity",
+  "crashSensGentle": "Sensitive",
+  "crashSensStandard": "Standard",
+  "crashSensFirm": "Firm",
+  "crashSensHint": "Sensitivity decides how strong an impact counts: a fall uses this threshold, a crash demands about twice it. Cycling with the phone in a pocket — use Firm; so does a bar mount. Default is Standard. Sensitivity only affects **detection** (which impact counts), not what the alarm does.",
+  "crashFallAlarmTitle": "Possible fall detected",
+  "crashFallAlarmBody": "The phone free-fell, then took a landing impact, and has shown no clear movement since for about 12 seconds — the typical acceleration signature of a fall.\n\nIf you are fine, just tap \"I am fine\". If you feel unwell or cannot move, call emergency services now, or send a help message to stations within 100 km.\n\n**This is a heuristic judgement, not engineering-grade detection**.",
+  "crashKindHint": "It distinguishes a **crash** from a **fall**: a fall almost always starts with a free fall (weightlessness — total acceleration near 0) before the landing impact, whereas a vehicle crash does not. The rule is therefore: with weightlessness, label it a **fall** (use the sensitivity threshold); without it, label it a **crash** and require an impact about twice the threshold (so actions like setting the phone down do not false-alarm). This only makes the wording more accurate — both are handled exactly the same (I am fine / call / ask for help).",
+  "stationRetention": "Station retention (days)",
+  "stationRetentionTip": "Stations not heard from for longer than this are pruned automatically at startup. 0 = off (manual prune is still available). Favorites, manual contacts and your own station are never pruned.",
+  "pruneOldData": "Prune stale stations",
+  "pruneOldDataDesc": "Remove stations not heard from in a while, keeping the useful ones",
+  "pruneHint": "Only ordinary stations are pruned; favorites and manual contacts are kept. Pruning cannot be undone.",
+  "pruneNone": "Nothing to prune",
+  "pruneConfirm": "About to prune {m} station(s) not heard from in {n} days (favorites / manual contacts are kept). This cannot be undone.",
+  "pruneDone": "Pruned {n} stale station(s)",
+  "retentionOff": "Auto-prune is off (retention is 0); prune manually, or set a number of days first",
+  "@pruneConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@pruneDone": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "prunePreview": "Will prune {n}",
+  "@prunePreview": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "nDays": "{n} days",
+  "retentionDaysOff": "Off (no auto-prune)",
+  "pruneWithin": "Prune stations older than",
+  "pruneWithinTip": "Days used by manual pruning, **independent** of the auto-prune retention above — only ordinary stations not heard from for this many days are removed.",
+  "prunePickDays": "Choose a number of days first",
+  "factoryReset": "Erase all data and start over",
+  "factoryResetDesc": "Clears callsign and all settings too, then re-runs the first-run wizard",
+  "factoryResetIntro": "Restores the app to a just-installed state:",
+  "factoryResetCallsign": "Callsign and SSID",
+  "factoryResetSettings": "All settings: server, beacon, UI, etc.",
+  "factoryResetWarn": "This cannot be undone, and the first-run wizard will run again. Export a backup first.",
+  "factoryResetButton": "Erase everything and restart",
+  "factoryResetConfirm": "This clears **all settings** (callsign, server, beacon, UI) and **all data** (stations, messages, logs, tracks), then runs the first-run wizard again. This **cannot be undone**. Continue?",
+  "@nDays": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActions": "Report",
+  "reportNow": "Report now",
+  "reportAutoStart": "Start auto",
+  "reportAutoStop": "Stop auto",
+  "reportTagAuto": "AUTO",
+  "reportTagOnce": "ONCE",
+  "reportStatusAuto": "Auto-reporting",
+  "reportStatusOnce": "Single report",
+  "reportToggleHint": "Tap to switch: Auto = transmit on interval / distance / turn; Single = only when you tap “Report now”. Either way you can always send one manually.",
+  "reportRfEnabledToast": "RF beacon enabled — auto-reporting started",
+  "reportEnabledToast": "Auto-report turned on",
+  "reportDisabledToast": "Auto-report off — single report only",
+  "autoReportEntryHint": "You can change this anytime from the main screen: tap the “AUTO / ONCE” button on the map (bottom-left / bottom bar) to switch, and “Report now” beside it to send immediately.",
+  "backupTracks": "Includes {n} days of track history",
+  "@backupTracks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sendPositionBeacon": "Transmit position beacon",
+  "strategyMap": "Strategy map",
+  "strategyMapHint": "Share points, routes and meeting points with your group over APRS messages",
+  "strategyPickGroup": "Pick group",
+  "strategyNeedGroup": "Join or pick a group first",
+  "strategyNoGroup": "Join a group to use the strategy map",
+  "strategyAddPoint": "Point",
+  "strategyAddLine": "Line",
+  "strategyAddCircle": "Circle",
+  "strategyAddRally": "Meeting point",
+  "strategyNavigate": "Navigate",
+  "strategyEditInfo": "Edit info",
+  "strategyDeleteItem": "Delete",
+  "strategyClearAll": "Clear layer",
+  "strategyClearConfirm": "Clear all shared points, routes and meeting points in this group? This syncs to every teammate.",
+  "strategyLabel": "Name",
+  "strategyLabelHint": "Name this point (optional)",
+  "strategyRadius": "Radius (m)",
+  "strategyRadiusHint": "Radius in metres, e.g. 800",
+  "strategySend": "Share",
+  "strategyShared": "Shared to group",
+  "strategyEmpty": "Layer is empty — use the tools below to drop a point or meeting point",
+  "strategySnapshot": "Sync",
+  "strategyLineHint": "Tap points on the map (at least 2), tap Done to finish",
+  "strategyNeedTwoPoints": "A line needs at least two points",
+  "strategyItemOf": "Shared by {call}",
+  "@strategyItemOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyPan": "Pan",
+  "strategySendFailed": "Shown locally, but not sent (check connection)",
+  "strategyTeammates": "Teammate positions",
+  "strategyTeammateOf": "Position of {call}",
+  "strategyColor": "Color",
+  "strategyColorDefault": "Default",
+  "strategySeeInMap": "Tap to view on strategy map",
+  "strategySharedItem": "{call} shared a {kind}",
+  "@strategyTeammateOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategySharedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyRetry": "Resend unconfirmed",
+  "strategyRetryAll": "Resend all",
+  "strategyAckPending": "{n} frame(s) unconfirmed — resend if RF dropped them",
+  "strategyAckOk": "A teammate confirmed delivery",
+  "strategyRetryNone": "Nothing unconfirmed",
+  "@strategyAckPending": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "groupRfNotice": "RF mode: group chat and strategy frames are broadcast — teammates who listen on the same channel receive them. Strategy frames rely on teammate acks; resend from the strategy map if packets drop.",
+  "chatNeedConnect": "Not connected — cannot send. Connect a data source first.",
+  "strategyUpdatedItem": "{call} updated a {kind}",
+  "strategyDeletedItem": "{call} deleted a {kind}",
+  "strategyClearedMsg": "{call} cleared the shared layer",
+  "@strategyUpdatedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyDeletedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyClearedMsg": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "sendLocation": "Send location",
+  "needFixToSendLocation": "No fix yet — cannot send a location",
+  "msgLocation": "Location",
+  "locationTapToView": "Tap to view on map",
+  "locationPickTitle": "Pick a point to send",
+  "locationPickHint": "Tap the map to choose the coordinate",
+  "locationMyPos": "My position",
+  "locationSendTo": "Send to {call}",
+  "@locationSendTo": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMore": "More",
+  "stationTapToView": "Tap to view station",
+  "locationPickStations": "Pick a station",
+  "locationSearchHint": "Search callsign / alias",
+  "locationNoStation": "No matching station",
+  "locationPrevPage": "Prev",
+  "locationNextPage": "Next",
+  "shareStation": "Share station",
+  "shareStationPick": "Send to which chat?",
+  "shareStationSent": "Shared {call}",
+  "locationPageInfo": "Page {n} / {m}",
+  "@locationPageInfo": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@shareStationSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "packetSource": "Source",
+  "packetSrcLocal": "Local",
+  "packetSrcAprsIs": "APRS-IS",
+  "packetSrcTnc": "TNC",
+  "packetSrcAudio": "Soundcard",
+  "packetSrcPkwdwpl": "Kenwood",
+  "audioTxAmplitude": "Output amplitude (0.05–1.0)",
+  "audioTxAmplitudeTip": "Relative amplitude of the TX waveform. Clipping (≥99%) creates harmonics and destroys the FSK spectrum, while too low a level starves the far end of SNR. The 0.6 default leaves ~4 dB headroom; start at 0.5–0.7 into a radio and watch the peak in TX diagnostics.",
+  "audioTxSourceRow": "TX source",
+  "audioTxSourceYes": "This link",
+  "audioTxNotSourceWarn": "The audio link is up, but it is not the current TX source — messages and beacons go out over \"{src}\". To transmit via audio, pick it as the TX source in Settings → Devices.",
+  "@audioTxNotSourceWarn": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTxPttHint": "The audio link never keys the radio's PTT — it only plays AFSK audio. For the radio to actually transmit, the radio itself must be keyed: set it to VOX (voice-operated), or use a cable that keys PTT from the audio/data port. If the radio never transmits, check this first.",
+  "updateChannelAliyunHint": "⚠️ Paid for by the dev team -- please use sparingly 🙏",
+  "connectingAliyun": "Checking for updates via Aliyun OSS ☁️",
+  "icomAudioSampleRate": "Audio sample rate",
+  "icomAudioFmtValue": "12000 Hz (LPCM 16-bit mono)",
+  "icomLanHotspotRoutingHint": "After joining the radio hotspot, radio traffic is bound to that Wi-Fi LAN while mobile data stays on APRS-IS. If the system treats the hotspot as the default internet route, turn off \"auto-switch network\" in that Wi-Fi's advanced settings.",
+  "posSrcSpp": "external GPS module",
+  "locationExtGps": "external GPS (Bluetooth)",
+  "dataSourceNmeaGps": "External GPS (Bluetooth)",
+  "dataSourceNmeaGpsDesc": "Read NMEA 0183 position sentences from a GPS module and use them as this device own position (receive-only)",
+  "dataSourceNmeaGpsHint": "This link supplies your own position (not other stations' packets): it takes priority once connected, and the phone GPS takes over again 30 seconds after the module stops sending",
+  "extGpsDeviceTitle": "External GPS",
+  "extGpsDeviceDesc": "NMEA 0183 position source over Bluetooth SPP or serial",
+  "extGpsBindTitle": "Device and connection",
+  "extGpsBindSubtitle": "Scan paired devices and bind one (Bluetooth permission is shared with the other links)",
+  "extGpsTip": "Once connected the position comes from the module first (it usually sits on the roof or by a window, so it beats the phone and the watch); the phone GPS takes over again 30 seconds after the last fix.",
+  "extGpsReadOnly": "Receive-only: the module only outputs position and never transmits",
+  "extGpsStatTitle": "Position reception",
+  "extGpsStats": "{rx} positions received",
+  "extGpsStatNoFix": "Valid sentences, no fix yet",
+  "extGpsStatMismatch": "Checksum mismatches",
+  "extGpsStatRejected": "Dropped or invalid sentences",
+  "extGpsStatIgnored": "Other NMEA sentences (ignored)",
+  "extGpsSatellites": "Satellites",
+  "extGpsAccuracy": "Accuracy",
+  "extGpsWaitingFix": "Connected, acquiring satellites (no usable fix yet)",
+  "extGpsSilent": "Connected but no sentences at all (check power and whether another app holds the device)",
+  "extGpsLogEmpty": "No external GPS log yet",
+  "ownSourceExtGpsLive": "Module supplying position (phone GPS stood down)",
+  "deviceInUseByOther": "Already used by another link, cannot bind twice",
+  "extGpsStrictChecksum": "Strict checksum (drop mismatches)",
+  "extGpsStrictChecksumTip": "On by default: a GPS module sends standard sentences, so a checksum mismatch almost always means line noise — the sentence is dropped so a single bad byte cannot skew the position. A few cheap modules really do send a wrong checksum; turn this off for those (the drop counter and log stay visible).",
+  "beaconSppSource": "Beaconing from external GPS",
+  "beaconSppNext": "External GPS · {s}",
+  "linkScanAction": "Scan devices",
+  "linkConnectAction": "Connect device",
+  "linkBoundDevice": "Bound device",
+  "linkNotBound": "No device bound",
+  "linkNoPaired": "No device found -- pair it in the system Bluetooth settings first, or plug in the USB serial cable (OTG)",
+  "beaconIncludeSats": "Satellites",
+  "beaconSatsNow": "Satellites now",
+  "beaconSatsHint": "The satellite count comes from whichever source is supplying position -- phone GPS (Android) or the external GPS module (GGA sentence). SAT=nn is a non-standard comment field (like STEPS=) that third-party maps only show as comment text; when the source does not provide it, nothing is sent rather than a zero.",
+  "extGpsFixTitle": "Current fix",
+  "extGpsFixSubtitle": "The latest fix the module reported -- position and age are the two numbers worth watching here",
+  "extGpsFixAge": "Last fix",
+  "extGpsFixType": "Fix type",
+  "extGpsFixType2d": "2D fix",
+  "extGpsFixType3d": "3D fix",
+  "extGpsFixTypeNoFix": "No fix (per GSA)",
+  "extGpsFixTypeNone": "Not reported (no GSA)",
+  "extGpsFixUtc": "Module time (UTC)",
+  "extGpsFixSource": "Trigger sentence",
+  "extGpsFixRaw": "Latest sentence",
+  "extGpsFixHint": "Accuracy is estimated from HDOP (about HDOP x 5 m), not measured; the fix type comes from GSA, so a module that only sends RMC/GGA has no such line; module time comes from the satellites and may not be synced yet.",
+  "beaconSatsUnknown": "The current source does not provide a satellite count: network positioning (cell / Wi-Fi) has no satellites, and some Android devices or ROMs do not report the data.",
+  "lockMapCenter": "Lock map center",
+  "unlockMapCenter": "Unlock map center",
+  "partners": "Partners",
+  "partnerAprsnetCnDesc": "Beacons keep going, echoes keep answering",
+  "serverMissing": "Not set",
+  "serverMissingWarning": "No server address set · APRS-IS cannot be reached, fill one in before connecting",
+  "historyExportGpx": "Export GPX",
+  "gpxRangeTitle": "Choose a time range",
+  "gpxRangeToday": "Today",
+  "gpxRangeWeek": "Last 7 days",
+  "gpxRangeMonth": "Last 30 days",
+  "gpxRangeYear": "Last year",
+  "gpxRangeCustom": "Custom range",
+  "gpxRangeEmpty": "No track points in this range.",
+  "gpxExported": "Exported {days} day(s), {points} track point(s)",
+  "gpxExportFailed": "Export failed. Check storage permission or free space.",
+  "gpxSavedTo": "Saved to: {path}",
+  "@gpxExported": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@gpxSavedTo": {"placeholders": {"path": {"type": "String"}}},
+  "permCheckTitle": "Permissions are off",
+  "permCheckLocation": "Location is off. The map cannot show your position and nothing can be beaconed.",
+  "permCheckNotify": "Notifications are off. Reminders and the life-guard alarm will not show.",
+  "searchHistoryTitle": "Recent searches",
+  "serverHistoryTitle": "Recent servers",
+  "serverAccountTitle": "Account",
+  "serverAccountHint": "The account the server gave you",
+  "serverPasswordTitle": "Password",
+  "serverPasswordHint": "The password the server gave you",
+  "serverAccountNote": "Only servers like APRSNETCN need these. Leave both empty on a standard APRS-IS server.",
+  "acnSyncTitle": "Sync 24h stations",
+  "acnSyncLast": "Last sync",
+  "acnSyncDone": "The server had {total} stations, {added} of them new here",
+  "acnSyncNoAccount": "Fill in the account and password to sync.",
+  "@acnSyncDone": {"placeholders": {"total": {"type": "String"}, "added": {"type": "String"}}},
+  "stationSource": "Source",
+  "acnCardTitle": "APRSNETCN SERVER",
+  "acnCardSubtitle": "A server built on the APRSNETCN SERVER protocol. It carries traffic both ways.",
+  "acnLinkSwitch": "APRSNETCN",
+  "acnLinkStatus": "Link status",
+  "acnLinkNote": "Messages go out on the link you ticked on its card. Stations heard here are marked as coming from the server and are never gatewayed.",
+  "acnAccountNote": "Account and password issued by the server. Leave both empty to receive on the passcode alone.",
+  "packetSrcAcn": "APRSNETCN",
+  "acnLoginTitle": "Login",
+  "acnLoginOk": "Verified",
+  "acnLoginRejected": "Account or password wrong",
+  "acnSyncNow": "Sync now",
+  "acnSyncing": "Syncing…",
+  "acnSyncHint": "Pulled only when you press the button, never on connect.",
+  "sourceGroupInternet": "Internet links",
+  "sourceGroupRadio": "Radio links",
+  "acnPageLead": "An APRS-IS server built on the APRSNETCN SERVER protocol. Its address goes in Settings → Servers, and the link can send and receive. Both links can stay online at once, each with its own feed.",
+  "acnServerProto": "Server proto",
+  "acnServerRetention": "Positions kept {hours} h",
+  "acnDefaultFilter": "Default feed",
+  "acnAllPackets": "All packets",
+  "acnOpenMap": "Station map",
+  "@acnServerRetention": {"placeholders": {"hours": {"type": "String"}}},
+  "channelsSubtitle": "Both servers can stay online at once; each one collects its own copy.",
+  "acnOpenSettings": "Address and account",
+  "acnFilterTitle": "Filter",
+  "acnFilterSubtitle": "Stations inside the radius, plus the calls you list.",
+  "acnFilterRadius": "Radius (km)",
+  "acnFilterCalls": "Also these calls",
+  "acnFilterCallsHint": "Callsign, press enter",
+  "txChannel": "Send channel",
+  "txChannelHint": "Packets go out on this link only.",
+  "translateProviderBili": "Bilibili Index-Translate",
+  "translateProviderBiliDesc": "No key, no cost. Bilibili's public translation model; a free endpoint with no guarantee.",
+  "translateBiliUrl": "Endpoint",
+  "translateBiliModel": "Model",
+  "translateBiliTip": "The public endpoint may rate-limit. Point the address and model at your own deployment if you run one.",
+  "txSourcePick": "Send on this link",
+  "acnPasscodeHint": "Leave it empty to use the APRS-IS link's passcode",
+  "aprsIsServerTitle": "APRS-IS server",
+  "aprsIsServerLead": "Address, port and passcode go here.",
+  "aprsIsCardSubtitle": "Login details and connection state",
+  "aprsIsEntryDesc": "Address, port and passcode",
+  "txKindPosition": "Position and status packets",
+  "notifLiveTitle": "Live updates",
+  "notifLiveHint": "On Android 16 this promotes the ongoing notification to the status bar pill; on iPhone it shows on the Dynamic Island and the lock screen. Pick what it shows below. Where the system lacks it, it stays a normal ongoing notification.",
+  "notifTitle": "Notifications",
+  "notifStyleTitle": "Notification style",
+  "notifStylePlain": "Normal ongoing notification",
+  "notifStylePlainDesc": "One ongoing notification in the shade; expand it to read everything.",
+  "notifStyleLive": "Live updates",
+  "notifDiag": "Notification check",
+  "notifDiagDesc": "Shows what this phone supports for live updates and focus notifications.",
+  "notifStyleFocus": "Xiaomi focus notification",
+  "notifStyleFocusDesc": "On Xiaomi, Redmi and POCO, tries the Xiaomi focus notification (super island). Without vendor permission it falls back to live updates or a normal notification.",
+  "notifLiveTextTitle": "Live update text",
+  "notifLiveTextDefault": "Default",
+  "notifLiveTextCounts": "Sent / received",
+  "notifLiveTextGrid": "Grid",
+  "notifLiveTextCourse": "Heading",
+  "notifLiveTextBeacon": "Beacon countdown",
+  "notifLiveOff": "Paused for now: on some systems it makes the ongoing notification disappear. It posts a normal one instead.",
+  "notifLiveTextMsgs": "Unread messages",
+  "notifLiveTextNear": "Nearby stations",
+  "notifLiveTextSpeed": "Speed",
+  "notifLiveTextAlt": "Altitude",
+  "notifLiveTextHr": "Heart rate",
+  "notifLiveTextBatt": "Battery",
+  "notifLiveTextTrip": "Trip distance",
+  "notifLiveNearShort": "{n} stn",
+  "@notifLiveNearShort": {"placeholders": {"n": {"type": "String"}}},
+  "consentTitle": "Separate consent for upload and transmit",
+  "consentLead": "Before you turn on any upload or transmit feature, confirm these three points.",
+  "consentNatureTitle": "What the data is",
+  "consentNatureBody": "What you are about to upload contains movement tracks, which are sensitive personal information under China's Personal Information Protection Law.",
+  "consentNeedTitle": "Why it is necessary",
+  "consentNeedBody": "APRS works by sending your position to a public network. No alternative gives the same function without uploading.",
+  "consentImpactTitle": "Impact on your rights",
+  "consentImpactBody": "Data entering APRS-IS is stored by third-party servers, and some public servers keep positions for 180 days or longer. Once data is on a public network it cannot be withdrawn or deleted.",
+  "consentAgree": "I agree",
+  "consentScopeInternet": "APRS-IS beacon upload",
+  "consentScopeRf": "RF beacon transmit",
+  "consentScopeIgate": "iGate forwarding",
+  "consentAccept": "Agree and turn on",
+  "consentCancel": "Not now",
+  "consentPickOne": "Tick at least one feature.",
+  "consentPickAgree": "Tick \"I agree\" first.",
+  "consentSection": "Separate consent",
+  "consentSectionHint": "Turn one off and that feature stops sending new data at once. Data already sent cannot be taken back.",
+  "consentLogTitle": "Consent log",
+  "consentLogEmpty": "No entries yet.",
+  "consentLogClear": "Clear the log",
+  "consentLogClearHint": "This clears the log only. Consents you already gave stay in place.",
+  "consentLogCleared": "Consent log cleared",
+  "consentActGrant": "agreed",
+  "consentActRevoke": "withdrawn",
+  "autoStartTitle": "When I open the app",
+  "autoStartNone": "Do nothing",
+  "autoStartConnect": "Auto connect",
+  "autoStartReport": "Auto report",
+  "autoStartNoneHint": "Nothing happens when you open the app.",
+  "autoStartConnectHint": "The app connects to the server when you open it. Reporting still waits for your tap.",
+  "autoStartReportHint": "The app connects to the server and starts reporting the position right away.",
+  "autoStartAskTitle": "Turn it on?",
+  "autoStartAskConnect": "From now on the app connects to the server every time you open it.",
+  "autoStartAskReport": "From now on the app connects to the server and starts reporting every time you open it.",
+  "autoStartAskOk": "Turn on",
+  "autoStartAskCancel": "Cancel",
+  "mvTitle": "Update required",
+  "mvBody": "This version is no longer supported. Update to {min} or later to continue.",
+  "mvCurrent": "Current version",
+  "mvRequired": "Minimum version",
+  "mvReason": "Note",
+  "mvUpdate": "Update",
+  "mvExit": "Quit",
+  "mvChecking": "Checking…",
+  "@mvBody": {"placeholders": {"min": {"type": "String"}}},
+  "featureCat": "Features",
+  "featureCatDesc": "Modules and lite mode",
+  "featureLite": "Lite mode",
+  "featureLiteDesc": "Keep only APRS send and receive, in a bare layout.",
+  "featureModules": "Modules",
+  "featureLiteBlocks": "Modules stay off in lite mode. Turn it off to pick them.",
+  "featureWeather": "Weather",
+  "featureTranslate": "Translation",
+  "manualTitle": "Manual",
+  "ssidCustom": "Custom suffix",
+  "ssidCustomHint": "1-2 digits or letters",
+  "ssidInvalid": "The suffix must be 1-2 digits or letters",
+  "ssidUse": "Use this",
+  "icomTxTailLabel": "Post-TX delay (ms)",
+  "cracCertTitle": "Certificate lookup",
+  "cracCertName": "Name",
+  "cracCertNumber": "Certificate no.",
+  "cracCertId": "ID number",
+  "cracCertPrivacy": "The name and certificate number are used for this lookup only. Neither the server nor the app collects them, and the result stays on this device.",
+  "cracCertQuery": "Look up",
+  "cracCertQuerying": "Looking up…",
+  "cracCertResult": "Result",
+  "cracCertNeedName": "Enter a name first",
+  "cracCertNeedKey": "Fill in the certificate number",
+  "cracCertNotFound": "No record found",
+  "cracCertFailed": "Lookup failed: ",
+  "cracCertSaved": "Saved for {call}",
+  "cracCertOtherCall": "This record is registered to {call}, not to your callsign",
+  "cracCertType": "Class",
+  "cracCertCall": "Callsign",
+  "cracCertPassDate": "Passed on",
+  "cracCertIssueDate": "Issued on",
+  "cracCertRegion": "Place",
+  "cracCertValid": "Valid until",
+  "cracCertBadge": "{type} class licence",
+  "@cracCertSaved": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertOtherCall": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertBadge": {"placeholders": {"type": {"type": "String"}}},
+  "cracCertInfo": "Certificate",
+  "cracCertChecked": "Checked",
+  "cracCertClear": "Clear certificate",
+  "cracCertClearAsk": "This page will stop showing the certificate. You can look it up again any time.",
+  "cracCertClearDone": "Certificate cleared",
+  "devLockTitle": "Developer code",
+  "devLockTip": "Locked. Long-press and enter the code.",
+  "devLockWrong": "Wrong code",
+  "cracCertVerified": "Verified",
+  "gpsSampleTitle": "GPS sampling",
+  "gpsSampleSec": "{s} s",
+  "@gpsSampleSec": {"placeholders": {"s": {"type": "String"}}},
+  "historyRecord": "Track history",
+  "historyEmptyOff": "Recording is off. Turn it on above to start.",
+  "cracCertClosed": "Not open yet",
+  "cracCertWhyRequired": "The APRS-IS protocol puts the duty on the software developer to verify that users are amateur radio operators.",
+  "cracCertEntry": "Licence check",
+  "cracCertVoluntary": "Verification is voluntary. The app works the same without it.",
+  "cracCertLocal": "The check runs by program, with no human review. The result comes back to this device only, and keeps just the pass and the licence class.",
+  "oobeCallInvalid": "That callsign does not look right. Common forms are BG7LZQ or JA1AA.",
+  "oobeSsidInvalid": "The SSID can be one or two letters or digits.",
+  "oobeFinishLocal": "Finish",
+  "oobeDoneTitle": "All set",
+  "oobeDoneLocalNote": "No address, so the app stays local. Fill in a server in settings when you want to go online.",
+  "oobeDoneConnectNote": "Finishing will connect to {link}.",
+  "oobeDoneSymbolLabel": "Symbol",
+  "oobeDoneUnset": "Empty",
+  "oobeDoneMap": "Stations",
+  "oobeDoneMapDesc": "Neighbouring stations are on the map and stations tabs.",
+  "oobeDoneBeacon": "Send a beacon",
+  "oobeDoneBeaconDesc": "Once connected, the start button sits at the bottom of the map page.",
+  "oobeDoneManualDesc": "Settings has the manual. It covers hooking up a radio and what to check when sending fails.",
+  "@oobeDoneConnectNote": {"placeholders": {"link": {"type": "String"}}},
+  "oobeRestore": "Restore from a backup",
+  "trayCloseToTray": "Minimize to tray on close",
+  "trayMenuShow": "Show window",
+  "trayMenuHide": "Hide to tray",
+  "trayMenuQuit": "Quit APRSLocus",
+  "beaconFuzz": "Location fuzz",
+  "beaconFuzzOff": "Off",
+  "beaconFuzz200m": "~200 m",
+  "beaconFuzz2km": "~2 km",
+  "beaconFuzz20km": "~20 km",
+  "subsTitle": "Subscriptions",
+  "subsLead": "Watch one station, one digipeater, or a word inside a packet. Matches are listed below.",
+  "subsAdd": "Add",
+  "subsKindStation": "Station",
+  "subsKindDigi": "Digipeater",
+  "subsKindKeyword": "Keyword",
+  "subsFieldStation": "Callsign, SSID optional",
+  "subsFieldDigi": "Digipeater or gateway callsign",
+  "subsFieldKeyword": "A word in the packet",
+  "subsEmpty": "Nothing watched yet",
+  "subsEmptyNote": "Add one and matching packets show up here.",
+  "subsHitsTitle": "Matches",
+  "subsNoHits": "No matches yet.",
+  "subsHitsCount": "{n} hits",
+  "subsClear": "Clear",
+  "subsAdded": "Watching {v}",
+  "subsExists": "{v} is already watched",
+  "subsRemoved": "Stopped watching",
+  "subsMenuOn": "Watch this station",
+  "subsMenuOff": "Stop watching",
+  "subsCopied": "Packet copied",
+  "@subsHitsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@subsAdded": {"placeholders": {"v": {"type": "String"}}},
+  "@subsExists": {"placeholders": {"v": {"type": "String"}}},
+  "msgSendId": "Send as",
+  "msgOtherSsid": "This one arrived for another SSID. You can reply as {to} or as this device.",
+  "@msgOtherSsid": {"placeholders": {"to": {"type": "String"}}},
+  "beaconIncludeLoad": "PC CPU and memory load",
+  "myOtherSsidLabel": "My other SSIDs",
+  "ssidCmdActivate": "Wake",
+  "ssidCmdBeacon": "Send beacon",
+  "ssidCmdStop": "Stop reporting",
+  "ssidCmdSent": "Sent to {call}: {cmd}",
+  "ssidCmdNoLink": "No link is up, so the command cannot go out",
+  "@ssidCmdSent": {"placeholders": {"call": {"type": "String"}, "cmd": {"type": "String"}}},
+  "msgRecvTitle": "Message reception",
+  "msgRecvSsid": "Also receive messages for my other SSIDs",
+  "subsRoleTitle": "What it does",
+  "subsRoleSource": "Sent by itself",
+  "subsRolePath": "Relayed through it",
+  "subsPacketTitle": "Packets",
+  "subsPacketAll": "All",
+  "subsPacketBeacon": "Beacons",
+  "subsPacketMessage": "Messages",
+  "subsHitSource": "sent",
+  "subsHitPath": "relayed",
+  "myOtherSsidNone": "No other SSID under your callsign heard yet",
+  "subsEdit": "Edit subscription",
+  "subsNotify": "Notifications",
+  "subsNotifyTitle": "Subscription hit · {value}",
+  "subsNotifyMore": "+{n} more",
+  "@subsNotifyTitle": {"placeholders": {"value": {"type": "String"}}},
+  "@subsNotifyMore": {"placeholders": {"n": {"type": "String"}}},
+  "coordFormat": "Coordinate format",
+  "coordFormatDec": "Decimal",
+  "coordFormatDm": "Deg-min",
+  "coordFormatDms": "Deg-min-sec",
+  "mapCenterCoord": "Centre coordinates",
+  "oobeServerSkip": "Skip, set it later in settings",
+  "advChannels": "Per-link sending",
+  "codeContributionEncoding": "Chinese text encoding",
+  "oobeFeatureTitle": "Which extras do you want",
+  "oobeFeatureDesc": "A module you turn off leaves the settings page. Change it later in Settings → Features.",
+  "historyOverlay": "Track overlay",
+  "historyOverlayShare": "Share image",
+  "historyOverlayExport": "Export image",
+  "historyOverlayExportFailed": "Could not export the image",
+  "historyOverlayEmpty": "No tracks to overlay yet.",
+  "historyOverlayAll": "Show all",
+  "historyOverlaySummary": "{days}/{total} days · {km}",
+  "@historyOverlaySummary": {"placeholders": {"days": {"type": "String"}, "total": {"type": "String"}, "km": {"type": "String"}}},
+  "powerSave": "Power saving",
+  "powerSaveTip": "GPS updates every 30 seconds and station animations stop.",
+  "lowBatteryWarn": "Battery at {level}%. Turn on power saving?",
+  "@lowBatteryWarn": {"placeholders": {"level": {"type": "String"}}},
+  "syncTitle": "Cloud sync",
+  "syncLead": "Messages and track history live on the server, ready when you change devices.",
+  "syncAccount": "Account",
+  "syncPassword": "Password",
+  "syncLogin": "Sign in",
+  "syncLogout": "Sign out",
+  "syncLoggedIn": "Signed in as {call}",
+  "syncNeedLogin": "Sign in first",
+  "syncMode": "Mode",
+  "syncModeOff": "Off",
+  "syncModeManual": "Manual",
+  "syncModeAuto": "Auto",
+  "syncModeAutoHint": "Auto pulls once at startup, then runs on the interval above.",
+  "syncMessages": "Messages",
+  "syncTracks": "Track history",
+  "syncNow": "Sync now",
+  "syncRunDone": "Synced",
+  "syncClear": "Clear cloud data",
+  "syncClearHint": "Removes this callsign's messages, tracks and backups from the server. Nothing on this device changes.",
+  "syncClearAsk": "Clear the cloud data?",
+  "syncClearDone": "Cloud data cleared",
+  "syncPlainHint": "The connection is plain HTTP, so passwords and content are not encrypted.",
+  "syncLastAt": "Last sync",
+  "syncNever": "Never synced",
+  "syncFailed": "Sync failed",
+  "syncTrackSummary": "{days} days · {points} points",
+  "syncMsgSummary": "{n} messages",
+  "syncBackupElsewhere": "Cloud backups are uploaded and restored from the backup page.",
+  "syncNoWeb": "Not available on the web",
+  "syncBusy": "Syncing",
+  "backupCloud": "Cloud backup",
+  "backupCloudUpload": "Upload",
+  "backupCloudRestore": "Restore from cloud",
+  "backupCloudHint": "Cloud backups leave out track history; tracks are kept by cloud sync.",
+  "backupCloudDone": "Uploaded",
+  "backupCloudEmpty": "No backups in the cloud yet",
+  "backupCloudFailed": "Cloud operation failed",
+  "@syncLoggedIn": {"placeholders": {"call": {"type": "String"}}},
+  "@syncTrackSummary": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@syncMsgSummary": {"placeholders": {"n": {"type": "String"}}},
+  "syncServer": "Server",
+  "syncServerNow": "Address in use",
+  "syncServerHint": "Changing it signs you out. Nothing moves over from the old server.",
+  "syncCloudData": "On the server",
+  "syncAccountHint": "The account is the one on the server's access list, the same one the APRSNETCN link page uses.",
+  "syncContent": "What syncs",
+  "syncContentHint": "Turn both off and sync only signs in. Nothing is sent or pulled.",
+  "syncAutoEvery": "Auto sync every",
+  "syncEveryMin": "{n} min",
+  "syncDevicesTitle": "Signed-in devices",
+  "syncDeviceThis": "This device",
+  "syncDeviceRemove": "Remove",
+  "syncDeviceRemoved": "Removed. That device has to sign in again on its next sync.",
+  "syncBackups": "Cloud backups",
+  "syncBackupsCount": "{n} in total",
+  "syncDeviceHint": "These are the devices signed in to this server. Remove one and it has to sign in again on its next sync.",
+  "@syncEveryMin": {"placeholders": {"n": {"type": "String"}}},
+  "@syncBackupsCount": {"placeholders": {"n": {"type": "String"}}},
+  "syncNoServer": "Fill in the APRSNETCN server address above first.",
+  "acnHttpPort": "HTTP port",
+  "updatePkgWelcomeTitle": "Welcome to {v}",
+  "updatePkgWelcomeBody": "The new version is installed. The package is still in your Downloads folder. Keep it to install on another device, or delete it to free the space.",
+  "updatePkgInDownloads": "In Downloads",
+  "updatePkgRemember": "Do this from now on",
+  "updatePkgDelete": "Delete the package",
+  "updatePkgKeep": "Keep it",
+  "updatePkgKept": "The package stays in Downloads",
+  "updatePkgSigOk": "Signature verified",
+  "updatePkgSigBad": "The package is signed with a different key, so it was deleted. Download it again from an official channel.",
+  "updatePkgSigUnknown": "The package signature could not be read, so it was deleted. Download it again.",
+  "updatePkgNoFile": "That package is not in Downloads any more. Download it again.",
+  "updatePkgAction": "Update package",
+  "updatePkgAfterUpdate": "After updating",
+  "updatePkgActionAsk": "Ask each time",
+  "updatePkgActionDelete": "Delete it",
+  "updatePkgActionKeep": "Always keep",
+  "@updatePkgWelcomeTitle": {"placeholders": {"v": {"type": "String"}}},
+  "updatePkgSigChecking": "Checking the signature",
+  "updatePkgSigMismatch": "The signature does not match this device",
+  "updatePkgSigUnchecked": "Could not read the signature",
+  "connectingChannel": "Connecting to {name}",
+  "@connectingChannel": {"placeholders": {"name": {"type": "String"}}},
+  "updateCheckChecking": "Checking online",
+  "updateCheckOk": "Checked online: version, digest and signature all match",
+  "updateCheckOffline": "Offline: cannot verify the version matches",
+  "updateCheckNotFound": "No digest for this version in the repository: cannot verify",
+  "updateCheckVersion": "The version inside does not match this release",
+  "updateCheckSha": "The digest does not match the file in the repository",
+  "updatePkgWhatsNew": "What's new in this version",
+  "updatePkgWelcomeHello": "The new version is installed.",
+  "updatePkgDeleteTitle": "Keep the installer?",
+  "updatePkgUnverifiedTitle": "This package could not be verified",
+  "updatePkgUnverifiedBody": "Either there is no network, or the release has no digest to compare. Installing anyway is at your own risk.",
+  "installAnyway": "Install anyway",
+  "updatePkgUnreadable": "Cannot read this package"
 }

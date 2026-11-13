@@ -18,6 +18,7 @@ import 'theme.dart';
 import 'theme_icons.dart';
 import 'theme_store.dart';
 import 'theme_text.dart';
+import 'tnc_page.dart';
 import 'weather.dart';
 import 'widgets.dart';
 
@@ -71,12 +72,16 @@ class _HomeShell2State extends State<HomeShell2>
   /// 上一次通知时的「外壳所显示的值」快照（见 [_onState]）
   String _stateKey = '';
 
-  /// 「在地图查看 / 在地图选点」上一次处理过的序号（见 [_onState]）。
+  /// 「在地图查看 / 在地图选点 / 打开策略地图」上一次处理过的序号（见 [_onState]）。
   int _lastFocusSeq = 0;
   int _lastPickSeq = 0;
+  int _lastStrategyJumpSeq = 0;
 
   /// 「展开内容面板」上一次处理过的序号（见 [AppState.requestSheetExpand]）。
   int _lastExpandSeq = 0;
+
+  /// 「切页签」上一次处理过的序号（见 [AppState.requestTab]，智能体调用）。
+  int _lastTabSeq = 0;
 
   /// 是否刚刚用「滚动」动过面板（决定滚动结束后要不要吸附）
   bool _movedByScroll = false;
@@ -90,10 +95,8 @@ class _HomeShell2State extends State<HomeShell2>
   /// 「自身固定为最高档高度、只裁出可视区」（见面板那一段的注释）—— 拖动时
   /// 模糊层的几何完全不变，代价只剩「底图不变时可复用」的那一次。
   ///
-  /// 它现在只服务两件事：
-  /// * [_paneOpen]（→ 地图冻结）—— 动画中面板也在往上长，就得算「开着」；
-  /// * [_insetSheetH]（→ 传给地图的让位量）—— 动画中要传**吸附目标值**，
-  ///   否则地图每帧重排重绘。
+  /// 它现在只服务一件事：[_paneOpen]（→ 地图冻结）—— 动画中面板也在
+  /// 往上长，就得算「开着」。
   bool get _paneAnimating => _anim.isAnimating || _dragging || _movedByScroll;
 
   /// 面板是否**占着屏幕**（含动画：动画中它也在往上长）。
@@ -272,39 +275,43 @@ class _HomeShell2State extends State<HomeShell2>
         ),
       );
     };
-    widget.state.onNewMessage = (src, text, groupId) {
-      String? groupName;
-      if (groupId != null) {
-        for (final g in widget.state.chatGroups) {
-          if (g.id == groupId) {
-            groupName = g.name;
-            break;
-          }
-        }
-      }
-      if (!mounted) return;
-      setState(() {
-        _bubbleCall =
-            groupName != null ? S.of(context).groupBubble(groupName) : src;
-        _bubbleText = text;
-        _showBubble = true;
-      });
-      _bubbleTimer?.cancel();
-      _bubbleTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _showBubble = false);
-      });
-    };
+    // 用多监听者注册，避免把智能体（消息触发任务）注册的回调顶掉。
+    widget.state.addNewMessageListener(_onIncomingMessage);
   }
 
   @override
   void dispose() {
     _anim.dispose();
     _bubbleTimer?.cancel();
-    widget.state.onNewMessage = null;
+    widget.state.removeNewMessageListener(_onIncomingMessage);
     widget.state.removeListener(_onState);
     widget.state.onGarminShared = null;
     widget.state.onGarminShareNoLink = null;
     super.dispose();
+  }
+
+  /// 顶部气泡：收到新消息时弹一条，4 秒后自动收起。
+  void _onIncomingMessage(String src, String text, String? groupId) {
+    String? groupName;
+    if (groupId != null) {
+      for (final g in widget.state.chatGroups) {
+        if (g.id == groupId) {
+          groupName = g.name;
+          break;
+        }
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _bubbleCall =
+          groupName != null ? S.of(context).groupBubble(groupName) : src;
+      _bubbleText = text;
+      _showBubble = true;
+    });
+    _bubbleTimer?.cancel();
+    _bubbleTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showBubble = false);
+    });
   }
 
   /// 只在「外壳真正显示的值」变化时重建。
@@ -333,9 +340,12 @@ class _HomeShell2State extends State<HomeShell2>
     // 我重写 2.0 外壳时整段漏掉了 —— 结果是台站页点「在地图查看」之后，
     // 地图在背后悄悄飞到了那个台站，用户却还停在台站面板上，看着就像
     // 「点了没反应」。
-    if (st.mapFocusSeq != _lastFocusSeq || st.pickSeq != _lastPickSeq) {
+    if (st.mapFocusSeq != _lastFocusSeq ||
+        st.pickSeq != _lastPickSeq ||
+        st.strategyJumpSeq != _lastStrategyJumpSeq) {
       _lastFocusSeq = st.mapFocusSeq;
       _lastPickSeq = st.pickSeq;
+      _lastStrategyJumpSeq = st.strategyJumpSeq;
       // 放到帧后：这两条可能由本帧的 build/通知里改出来，
       // 直接 setState 会在 build 期间标记重建。
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -349,6 +359,14 @@ class _HomeShell2State extends State<HomeShell2>
         if (!mounted || _tab == 0) return;
         final full = _fullRatioOf();
         if (_extent < full - 0.01) _snapTo(full);
+      });
+    }
+    // 智能体「切到某页签」请求（见 AppState.requestTab）。
+    if (st.tabJumpSeq != _lastTabSeq) {
+      _lastTabSeq = st.tabJumpSeq;
+      final target = st.tabJumpIndex.clamp(0, 4);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _select(target);
       });
     }
     final key = '${st.connected}|${st.connecting}|${st.online}|'
@@ -387,18 +405,6 @@ class _HomeShell2State extends State<HomeShell2>
   /// 当前屏高 / 面板可达的最大比例（拖动与滚动两条路共用，避免两处算法漂移）
   double _screenH() => MediaQuery.of(context).size.height;
 
-  /// 传给地图的「面板占用高度」：动画/拖动期间取**吸附目标**，静止时取当前值。
-  ///
-  /// 两个值在静止时相同（所以不会出现跳变），只在动画中是「目标 vs 逐帧中间态」——
-  /// 而后者正是我们不想让地图知道的：它每帧变一次，地图就每帧重排重绘一次。
-  double _insetSheetH() {
-    if (!_paneAnimating) return _extent * _screenH();
-    // `Tween.end` 的类型是 `double?`（可以为 null），必须兜一下 ——
-    // 否则 analyze 报 unchecked_use_of_nullable_value。
-    final target = _anim.isAnimating ? (_snap.end ?? _extent) : _extent;
-    return target.clamp(0.0, 1.0) * _screenH();
-  }
-
   double _fullRatioOf() =>
       _fullRatio(MediaQuery.of(context).size, _navSpace(context), _topInset());
 
@@ -419,7 +425,7 @@ class _HomeShell2State extends State<HomeShell2>
   void _onDrag(double dy) {
     _anim.stop();
     setState(() {
-      _dragging = true; // 只用于 _paneAnimating/_insetSheetH 的判断（不再影响模糊）
+      _dragging = true; // 只用于 _paneAnimating 的判断（不再影响模糊）
       _extent = (_extent - dy / _screenH()).clamp(0.0, _fullRatioOf());
     });
   }
@@ -511,17 +517,17 @@ class _HomeShell2State extends State<HomeShell2>
               // RepaintBoundary 的光栅化结果可以被复用，面板的模糊改成采样缓存纹理。
               frozen: _paneOpen,
               topInset: topInset,
-              // 底部被占用的边界 B（自屏幕底算起）＝ 导航 + （面板 + 间隙）。
-              // 地图那边的口径是「相对安全区」，所以这里减去 pad.bottom ——
-              // 这样贴底控件永远落在 B 上方 14px：面板收起时贴着导航，
-              // 面板打开时贴着面板，而不是随卡片高度漂出一个大空隙。
+              // 底部被占用的边界 B（自屏幕底算起）＝ 导航条 + 间隙。
               //
-              // ⚠ 动画/拖动期间用**吸附目标值** `_snap.end` 而不是当前 `sheetH`：
-              // 否则每帧都会把新的 inset 传进 MapPage，触发一次重排 + 重绘，
-              // 正好把上面那个「冻结」抵消掉。地图在动画期间本来就该是「固定」的。
-              bottomInset: navSpace +
-                  (showSheet ? _kGutter + _insetSheetH() : 0) -
-                  pad.bottom,
+              // **不含内容面板**：面板是别的页的底层，它开合一次只改「盖住多少
+              // 地图」，与地图自己的控件怎么摆、摆在哪毫无关系。以前把它算进
+              // 让位量，一开面板工具列与贴底控件就被顶上去（矮屏时还多分一列），
+              // 看起来就是「地图控件被重排了」（用户报的「地图页的控件不应受 UI 2.0
+              // 其他页面底层的影响，目前触发了重新排序」）。现在面板只是盖在上面，
+              // 地图控件的排列与位置一份不变 —— 收起面板看到的就是刚才那份。
+              //
+              // 地图那边的口径是「相对安全区」，所以这里减去 pad.bottom。
+              bottomInset: navSpace - pad.bottom,
             ),
           ),
 
@@ -793,7 +799,8 @@ class _HomeShell2State extends State<HomeShell2>
         // 写死 true 会让消息页在别的 tab 上也拦返回、也把「正在看的会话」算错。
         MessagesPage(state: widget.state, isActive: _tab == 2),
         PacketsPage(state: widget.state),
-        SettingsPage(state: widget.state),
+        // 同上：设置页常驻，动画的起跑跟着页签
+        SettingsPage(state: widget.state, isActive: _tab == 4),
       ],
     );
     return _contentCache!;
@@ -1293,7 +1300,7 @@ class _HomeShell2State extends State<HomeShell2>
     // 两个理由：一是台站页**自己就有搜索框**，外壳这个对它是重复的
     // （StationsPage._query 优先用本页那一个，外壳的只在它为空时才起作用）；
     // 二是「一整条浮在地图上的浅色横条」本身就压视觉重量。
-    // 现在只留右上角一簇悬浮胶囊：连接状态 + 定位。
+    // 现在只留右上角一簇悬浮胶囊：连接状态 + 快捷面板。
     // 包成**一只实心胶囊**：去掉搜索条之后这几个小块原本各自 12% 透明直接压在
     // 瓦片上，既读不清也不整。这里刻意**不套** MaterialSurface —— 这一簇面积远
     // 这一簇是「小浮层」，本来就不该模糊（见 material.dart），套了只是白加一层；
@@ -1308,7 +1315,7 @@ class _HomeShell2State extends State<HomeShell2>
         radius: 999,
         blurSigma: C.chipBlur,
         child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         decoration: BoxDecoration(
           color: C.chipFill,
           borderRadius: BorderRadius.circular(999),
@@ -1330,7 +1337,7 @@ class _HomeShell2State extends State<HomeShell2>
           // 漏掉了 —— 结果 2.0 里只能进连接设置页才能连/断。补回来。
           _connBtn(st),
           const SizedBox(width: 6),
-          _locateBtn(st),
+          _quickPanelBtn(st),
         ],
         ),
         ),
@@ -1443,8 +1450,8 @@ class _HomeShell2State extends State<HomeShell2>
       return Tooltip(
         message: s.connecting,
         child: Container(
-          width: 32,
-          height: 32,
+          width: kChipControlHeight,
+          height: kChipControlHeight,
           decoration: BoxDecoration(
             color: C.blue.withValues(alpha: 0.12),
             shape: BoxShape.circle,
@@ -1453,7 +1460,7 @@ class _HomeShell2State extends State<HomeShell2>
           // `const Padding(... color: C.blue)` 会报 invalid_constant ——
           // 仓库里别处也踩过同一个坑（station_detail.dart 有注释记着）。
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(7),
             child: CircularProgressIndicator(strokeWidth: 2, color: C.blue),
           ),
         ),
@@ -1478,7 +1485,9 @@ class _HomeShell2State extends State<HomeShell2>
           onTap: st.toggleConnect,
           behavior: HitTestBehavior.opaque,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            height: kChipControlHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: (up ? C.red : C.blue).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(999),
@@ -1504,24 +1513,18 @@ class _HomeShell2State extends State<HomeShell2>
     );
   }
 
-  /// 定位按钮：回到地图并居中到我
+  /// 快捷面板按钮：呼出「数据来源」面板（APRS-IS / APRSNETCN / TNC / 音频…
+  /// 一屏切换，面板里每一行还能点进它自己的设置页）。
   ///
-  /// 2.0 里地图始终在，所以从任何一页点它都能直接落回地图 —— 不必先切页。
-  Widget _locateBtn(AppState st) {
-    return _iconBtn(Icons.my_location_rounded, C.blue, () {
-      if (_tab != 0) _select(0);
-      final me = st.myStation;
-      if (me != null) {
-        st.focusOnMap(me);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(S.of(context).noFixYet),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    });
+  /// 这一颗原来是「定位」（回到地图并居中到我）。用户要求把它换掉：定位在
+  /// 地图页右侧工具列里本来就有一颗，而换链路是更高频的动作 —— 原来得先进
+  /// 设置、进设备页、再滚到数据来源卡片。
+  Widget _quickPanelBtn(AppState st) {
+    return _iconBtn(
+      Icons.devices_other_rounded,
+      C.blue,
+      () => showLinkSheet(context, st),
+    );
   }
 
   /// 连接状态胶囊 + 当前链路来源。
@@ -1557,7 +1560,9 @@ class _HomeShell2State extends State<HomeShell2>
             MaterialPageRoute(builder: (_) => ConnectionSettingsPage(state: st)),
           ),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            height: kChipControlHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(999),
@@ -1597,7 +1602,11 @@ class _HomeShell2State extends State<HomeShell2>
   /// `APRS-IS` / `TNC` / `PKWDWPL` 是协议名与设备类别名，不是可翻译短语，直接用字面量。
   String _sourceLabel(AppState st) {
     if (st.dataSource == AppState.srcTnc) return 'TNC';
-    if (st.dataSource == AppState.srcAudio) return S.of(context).dataSourceAudioShort;
+    if (st.dataSource == AppState.srcAudio) {
+      return st.isIcomLanTx
+          ? st.audio.config.icomLan.model.id
+          : S.of(context).dataSourceAudioShort;
+    }
     if (st.dataSource == AppState.srcPkwdwpl) return 'PKWDWPL';
     return 'APRS-IS';
   }
@@ -1624,6 +1633,11 @@ class _HomeShell2State extends State<HomeShell2>
       return st.pkwdwpl.device?.label ?? S.of(context).tncNotBound;
     }
     if (st.dataSource == AppState.srcAudio) {
+      if (st.isIcomLanTx) {
+        return st.audio.config.icomLan.host.isNotEmpty
+            ? '${st.audio.config.icomLan.host}:${st.audio.config.icomLan.controlPort}'
+            : st.audio.config.icomLan.model.id;
+      }
       return '${st.audio.config.afsk.sampleRate} Hz';
     }
     final s = S.of(context);
@@ -1638,13 +1652,13 @@ class _HomeShell2State extends State<HomeShell2>
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 32,
-          height: 32,
+          width: kChipControlHeight,
+          height: kChipControlHeight,
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.12),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, size: 18, color: color),
+          child: Icon(icon, size: 17, color: color),
         ),
       ),
     );

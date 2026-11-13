@@ -7,14 +7,19 @@ import 'theme.dart';
 import 'guide.dart';
 import 'models.dart';
 import 'pos_quality.dart';
+import 'settings_pages.dart';
 import 'state.dart';
 import 'widgets.dart';
 import 'station_detail.dart';
+import 'station_note.dart';
 import 'tile_map.dart';
 import 'vector_map.dart';
 import 'immersive_page.dart';
+import 'strategy_map_page.dart';
 import 'track_groups_sheet.dart';
 import 'coord.dart';
+import 'coord_format.dart';
+import 'map_toolbar.dart';
 import 'material.dart';
 
 class MapPage extends StatefulWidget {
@@ -91,6 +96,42 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   Offset _pan = Offset.zero;
   bool _showTracks = true;
   bool _heatEnabled = true; // 低缩放热力图开关
+
+  /// 锁定地图中心的**三态**（用户要求把这一颗改成切换）：
+  /// 0 关（自由拖动）/ 1 锁定中心·正北朝上 / 2 锁定中心·航向朝上。
+  ///
+  /// 值与落盘都在 [AppState.mapFollowMode]：用户要求「上次选的航向锁定要能保持」，
+  /// 它原来是本页的 State 字段，冷启动就回到 0。
+  ///
+  /// 与上面那颗「定位」的分工不变：定位是**跳一次**，锁定是**一直跟着** ——
+  /// 自己走动（或新定位点到达）时地图跟着走。两种动作会自动解锁：
+  /// 拖地图（见下方 Listener）、点了某个台站要聚焦过去（见 [_handleViewFocus]）——
+  /// 用户一动手就是要自己看，不该在下一帧被拽回中心。
+  int get _followMode => widget.state.mapFollowMode;
+
+  /// 旧口径沿用：`> 0` 就是「锁定中心」。其余引用（拖一下解锁、矢量底图
+  /// 跟随）关心的只是「有没有锁」，不用跟着三态一起改。
+  bool get _followMe => _followMode > 0;
+
+  /// 航向朝上时的画布转角（弧度，顺时针为正 = -航向）。
+  ///
+  /// 由 [_rotCtrl] 平滑逼近目标角（定位每秒一帧，直接跳会抖）；同帧把
+  /// `cos/sin` 一并算好存着 —— `_toScreen` 每个台站每帧都要用，不能逐点算。
+  late final AnimationController _rotCtrl;
+  Tween<double> _rotTween = Tween<double>(begin: 0, end: 0);
+  double _rot = 0;
+  double _rotCos = 1;
+  double _rotSin = 0;
+
+  /// 这次已经安排给 [_rotCtrl] 的目标角。判断「目标变了没有」要用原始角，
+  /// 不能用 `_rotTween.end`：那是化到当前角附近的等价角，会差 2π。
+  double _rotWant = 0;
+
+  /// 旋转时底图的边长（屏幕对角线，见 [_mapCanvas]）。
+  double _diag = 0;
+
+  /// 按下时的指针位置，只用于判断「这是拖还是点」（见 build 里的 Listener）。
+  Offset? _dragStart;
   /// 缩小到该级别以下时自动显示热力图（按网格统计台站密度）。
   ///
   /// 6.5 → 9.0（用户反馈「热力图不容易触发」）：6.5 已经是「省/区域」级，
@@ -98,10 +139,20 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   static const double _heatZoom = 9.0;
   Size _lastSize = Size.zero;
 
+  /// 地图**画出来的**那几层（轨迹 / 信标点 / 选中轨迹 / 精度圈 / 热力图）用的裁剪器。
+  ///
+  /// 每帧在 build 里按外壳传进来的让位量重建（为什么必须裁，见赋值处的说明）。
+  _OverlayInsetClipper _ovClip =
+      _OverlayInsetClipper(left: 0, top: 0, bottom: 0);
+
   MapType get _currentMapType => MapType.values.firstWhere(
     (t) => t.name == widget.state.mapType,
     orElse: () => MapType.gaode,
   );
+
+  /// 当前底图是否为卫星/影像：决定符号光晕与呼号标签的配色
+  /// （卫星影像底图偏暗、纹理杂，普通标记与白底标签都容易糊进去）。
+  bool get _isSat => isSatelliteMapType(_currentMapType);
 
   /// 是否使用矢量地图模式（flutter_map）：OpenFreeMap Liberty / Carto Positron
   bool get _isVector =>
@@ -113,7 +164,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   /// 低缩放热力图：瓦片自绘模式 + 开关开启 + zoom 足够低 + 台站够多
   bool get _showHeatmap =>
-      !_usePluginMap &&
+      // 矢量地图也支持（见 VectorMapView.showHeatmap）—— 以前这里写着 !_usePluginMap，
+      // 于是"矢量地图热力图失效"。
       _heatEnabled &&
       _zoom <= _heatZoom &&
       // 20 → 10：城市里同时可见 20 个台站的场景太少，门槛跟 zoom 一起放宽
@@ -122,12 +174,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   Station? _selected;
   final ValueNotifier<Offset?> _hover = ValueNotifier(null);
 
-  /// 右侧工具列**单列**的总高：3 个工具钮（3×38 + 2×6 间隙）+ 组间 6
-  /// + 5 个缩放钮（5×38 + 4×6 间隙）= 346。
-  ///
-  /// 只用来判断「要不要分两列」（见 [_rightToolbar]）。以前那里是一个裸的
-  /// 「520」，看不出与按钮尺寸的关系 —— 改一颗按钮的高度就得重新猜阈值。
-  static const double _kToolbarColH = 346;
 
   // 脉冲动画（移动/选中标记）
   late final AnimationController _pulse;
@@ -142,6 +188,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   bool _didInitView = false;
   String? _lastFocusedCall;
   int _lastFocusSeq = -1;
+
+  /// 「从群聊消息跳进策略地图」上一次处理过的序号（见 [AppState.openStrategyMap]）。
+  /// 初值必须是 0（= [AppState.strategyJumpSeq] 的初值），否则首帧会把
+  /// 「序号没变」误判成新请求，一启动就弹出群选择。
+  int _lastStrategyJumpSeq = 0;
   int _lastPickSeq = -1;
   bool _pickMode = false;
 
@@ -152,10 +203,24 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 1600),
     );
+    _rotCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    )..addListener(_onRotTick);
   }
 
   /// 脉冲动画按需启停：没有移动/选中台站时停转，省掉每帧重建开销
   void _syncPulse() {
+    // 省电模式：脉冲动画一律不跑。它是地图上唯一的**每帧**重绘来源 —— 停下
+    // 之后地图那层 RepaintBoundary 的光栅化结果可以被复用，静止画面不再每帧
+    // 重画（省电模式下最值得省的正是这个）。
+    if (widget.state.powerSave) {
+      if (_pulse.isAnimating) {
+        _pulse.stop();
+        _forceMarkerRebuild = true; // 去掉标记里残留的脉冲圈
+      }
+      return;
+    }
     // 移动台站过多时（>12）停用脉冲动画，避免同一动画驱动大量实例每帧重绘卡顿
     final sel = _selected?.call;
     var moving = 0;
@@ -191,6 +256,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   void dispose() {
     _cancelAnim();
     _pulse.dispose();
+    _rotCtrl.dispose();
     _hover.dispose();
     super.dispose();
   }
@@ -229,14 +295,123 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   /// 当前渲染投影：百度不是 Web Mercator，标记必须与瓦片共用同一套投影
   MapProjection get _proj => projectionFor(_currentMapType);
 
+  /// 取与 [ref] 最接近的等价角（避免 359°→1° 反向绕一整圈）
+  static double _nearest(double target, double ref) {
+    var d = (target - ref) % (2 * math.pi);
+    if (d > math.pi) d -= 2 * math.pi;
+    if (d < -math.pi) d += 2 * math.pi;
+    return ref + d;
+  }
+
+  /// 绕 [c] 旋转（旋转量取当前 `_rot` 的 cos/sin）
+  Offset _spin(Offset p, Offset c) {
+    final d = p - c;
+    return Offset(
+      c.dx + d.dx * _rotCos - d.dy * _rotSin,
+      c.dy + d.dx * _rotSin + d.dy * _rotCos,
+    );
+  }
+
   Offset _toScreen(double lat, double lng, Size size) {
     final g = _toTileCoord(lat, lng);
     final b = _projBase;
     final c = _proj.latLngToPx(b.$1, b.$2, _zoom);
     final p = _proj.latLngToPx(g.$1, g.$2, _zoom);
-    return Offset(
+    final raw = Offset(
       p.dx - c.dx + size.width / 2 + _pan.dx,
       p.dy - c.dy + size.height / 2 + _pan.dy,
+    );
+    // 航向朝上：底图被 `Transform.rotate(_rot)` 转过（见 [_mapCanvas]，
+    // 旋转中心与页面中心重合），所以覆盖层（轨迹 / 信标点 / 标记）要跟着
+    // 绕页面中心转同一个角，否则会从底图上滑开。
+    return _rot == 0 ? raw : _spin(raw, size.center(Offset.zero));
+  }
+
+  /// 底图给的**局部坐标** → 页面坐标。
+  ///
+  /// 旋转时底图是「对角线画布」（边长 [_diag]，见 [_mapCanvas]），它的原点
+  /// 与页面不重合：先减画布中心、旋转、再加回页面中心。没转时两者本是一套。
+  Offset _canvasToPage(Offset local, Size size) {
+    if (_rot == 0 || _diag <= 0) return local;
+    final c = Offset(_diag / 2, _diag / 2);
+    return size.center(Offset.zero) + (_spin(local, c) - c);
+  }
+
+  /// 页面坐标 → 经纬度（鼠标悬停读数用）。
+  ///
+  /// 转过之后先绕页面中心反旋回去，再交给 [_screenToLatLng] —— 那套算法
+  /// 假定坐标系没转过。
+  (double, double) _pageToLatLng(Offset pagePoint, Size size) {
+    if (_rot == 0) return _screenToLatLng(pagePoint, size);
+    final c = size.center(Offset.zero);
+    final d = pagePoint - c;
+    return _screenToLatLng(
+      Offset(
+        c.dx + d.dx * _rotCos + d.dy * _rotSin,
+        c.dy - d.dx * _rotSin + d.dy * _rotCos,
+      ),
+      size,
+    );
+  }
+
+  /// 算这一帧的「航向朝上」目标角，目标一变就安排一段过渡。
+  ///
+  /// 目标角 = -航向（Flutter 正角为顺时针）。没有航向 / 没在动 / 底图是矢量
+  /// （相机在 flutter_map 手里，转不了）时回正北 —— 与沉浸页同一套口径。
+  ///
+  /// 不能在 build 里直接 `forward`（那会在 build 期间就通知监听者重建），
+  /// 所以只在这里定好 tween，启动交给 post-frame 回调。
+  void _syncRot() {
+    final st = widget.state;
+    final course = st.myCourse;
+    final moving = (st.mySpeed ?? 0) > 0.5;
+    final bool headingUp = _followMode == 2 &&
+        !_isVector &&
+        st.myHasFix &&
+        course != null &&
+        course >= 0 &&
+        moving;
+    final double want = headingUp ? -course * math.pi / 180 : 0.0;
+    if (want == _rotWant) return;
+    _rotWant = want;
+    // 从**当前角**出发取等价角，避免 359°→1° 时绕一整圈
+    _rotTween = Tween<double>(begin: _rot, end: _nearest(want, _rot));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _rotCtrl.forward(from: 0);
+    });
+  }
+
+  /// 每帧把展示角逼近目标角（同帧算好 cos/sin 供覆盖层逐点用）
+  void _onRotTick() {
+    final r = _rotTween.evaluate(_rotCtrl);
+    if (r == _rot) return;
+    setState(() {
+      _rot = r;
+      _rotCos = math.cos(r);
+      _rotSin = math.sin(r);
+    });
+  }
+
+  /// 航向朝上时把底图连画布一起转：画布取屏幕**对角线**长度并居中，
+  /// 这样任意角度四角都不会露白（与沉浸页同一套做法）。
+  ///
+  /// 转的时候底图自己的手势（拖动 / 双指缩放 / 滚轮 / 点击）都在**画布**
+  /// 坐标系里发生：`TileMapView` 的 pan 本来就是「相对画布中心」的量，所以
+  /// 拖动与缩放锚点都不用换算；只有点地图选点的落点要经 [_canvasToPage]。
+  Widget _mapCanvas(Size size, Widget child) {
+    if (_rot == 0 || _diag <= 0) return child;
+    return ClipRect(
+      child: Transform.rotate(
+        angle: _rot,
+        child: OverflowBox(
+          minWidth: _diag,
+          maxWidth: _diag,
+          minHeight: _diag,
+          maxHeight: _diag,
+          child: SizedBox(width: _diag, height: _diag, child: child),
+        ),
+      ),
     );
   }
 
@@ -250,11 +425,15 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     final g = _proj.pxToLatLng(p, _zoom);
     // GCJ 瓦片：坐标是 GCJ-02，按用户 datum 偏好输出 WGS-84；
     // 百度由投影内部转回 WGS-84；国际 WGS 瓦片原样。
+    //
+    // 经度一律用 [wrapLng] 收进 [-180,180)：pan 是不封顶的（瓦片按取模换列），
+    // 拖动越过一整圈之后反算出来的经度会一路累加，读数就成了 181°、360°…
     if (_isGcjTile) {
-      if (widget.state.coordDatum == 'gcj') return g;
-      return Gcj.gcjToWgs(g.$1, g.$2);
+      if (widget.state.coordDatum == 'gcj') return (g.$1, wrapLng(g.$2));
+      final w = Gcj.gcjToWgs(g.$1, g.$2);
+      return (w.$1, wrapLng(w.$2));
     }
-    return g;
+    return (g.$1, wrapLng(g.$2));
   }
 
   /// 让某点居中的 pan：screen = p - c + size/2 + pan = size/2 → pan = c - p
@@ -334,13 +513,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     ctrl.forward();
   }
 
-  void _animateToStation(Station s, {double? zoom}) {
-    _animateTo(
-      zoom ?? math.max(_zoom, 14.0),
-      _panFor(s.lat, s.lng, zoom ?? math.max(_zoom, 14.0)),
-    );
-  }
-
   void _setView(double zoom, Offset pan) {
     _cancelAnim();
     setState(() {
@@ -362,7 +534,10 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   // 图层筛选：隐藏的类型
-  final Set<TypeGroup> _hiddenTypes = {};
+  //
+  // 不另存一份：直接读写 [AppState.mapHiddenTypes]（用户要求「地图筛选要记住」）。
+  // 存两份的话，面板里的勾与落盘那份迟早会不同步 —— 那种错只有在重启后才看得见。
+  Set<TypeGroup> get _hiddenTypes => widget.state.mapHiddenTypes;
 
   // 可见台站缓存：台站版本 + 筛选条件未变时复用，
   // 避免每秒 tick 重建时对几百个台站反复全量过滤
@@ -426,6 +601,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       builder: (context, _) {
         // 处理视图初始化 + 焦点跳转（一次性，避免互相覆盖）
         _handleViewFocus();
+        _handleStrategyJump();
         // 进入地图选点模式 —— 用 postFrameCallback 避免 build 中 setState
         if (widget.state.pickSeq != _lastPickSeq) {
           _lastPickSeq = widget.state.pickSeq;
@@ -439,26 +615,70 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
           builder: (ctx, constraints) {
             final size = Size(constraints.maxWidth, constraints.maxHeight);
             _lastSize = size;
+            // 旋转时的底图边长（见 [_mapCanvas]）：先算好供 _canvasToPage 用
+            if (size.width > 0 && size.height > 0) {
+              _diag = math.sqrt(
+                size.width * size.width + size.height * size.height,
+              );
+            }
+            // 锁定地图中心：每次状态刷新（多半是收到一条新的定位点）都把地图对回
+            // 我的位置。这里**只改写 `_pan`、不 setState** —— 本帧的地图本来就会拿
+            // 新的 `_pan` 去画，再 setState 只是白多一帧重建。
+            //
+            // 矢量底图不走 `_pan`（相机在 flutter_map 自己手里），那一条由
+            // [VectorMapView.follow] 负责，两条口径一致。
+            final st0 = widget.state;
+            if (_followMe &&
+                st0.myHasFix &&
+                st0.myLat != null &&
+                st0.myLng != null) {
+              _pan = _panFor(st0.myLat!, st0.myLng!, _zoom);
+            }
+            // 航向朝上：算这一帧的目标转角（目标变了就安排一段过渡）
+            _syncRot();
             final vis = _visible;
             final searched = widget.searchQuery.trim().isNotEmpty;
-            // 矮横屏（小屏手机横放，以及「窗口很宽但很矮」的桌面窗口）：
-            // 隐藏图例减少遮挡，并让右侧工具列换两列（见 _rightToolbar）。
+            // ── 浮层几何：顶部锚点、工具列分几列、贴底控件还摆不摆 ──
             //
-            // 判据用**顶栏之下实际可用**的高度，而不是裸屏高：顶部让位量会被
-            // 未连接横幅与公告横幅各顶掉一行（合计 +84），桌面上又常有「很宽
-            // 但很矮」的窗口形状 —— 按裸屏高判断这些都会漏判，而漏判的表现
-            // 就是工具列最下面的「定位」被 Stack 裁掉、点不到。
-            final double availH =
-                size.height - widget.topInset - widget.bottomInset;
-            final bool shortWide =
-                size.width > size.height && availH < _kToolbarColH + 54;
-            // 顶部锚点的基准：所有顶部浮层从 14 挪到「外壳顶栏之下」
-            final double topBase = 14 + widget.topInset;
-            // 贴底控件（比例尺/坐标条、上报横杠）在 2.0 里会被卡片顶上来。
-            // 顶到右侧工具列（约 390 高）那一段就会同时压住工具列与顶栏 ——
-            // 这正是「混乱」的来源。所以按顶栏之下的可用高度判断：
-            // 不够就**不显示**，而不是硬塞进去。440 ≈ 工具列高 + 间隙。
-            final bool roomForBottom = availH > 440;
+            // 算式都在 `lib/map_toolbar.dart`（纯函数、有单测）。这里只递几个
+            // 当帧的实数进去：**列数**按窗口尺寸与固定预留算，同一块屏幕上
+            // 永远是同一个答案（横幅、开始上报、外壳内容面板都不参与，那几项
+            // 以前是「地图控件排序被重排」的根因）；**贴底控件摆不摆**用当帧
+            // 几何判，它管的是「会不会真压住」。
+            final double padBottom = MediaQuery.of(context).padding.bottom;
+            // 横屏时系统导航栏 / 挖孔在**右**侧（竖屏才在底部）—— 贴右控件必须
+            // 让开，否则工具列、上报横杠、底部坐标条会被导航栏盖住
+            //（用户报的「横屏地图操作控件被遮挡」）。
+            final double padRight = MediaQuery.of(context).padding.right;
+            final MapToolbarLayout tools = MapToolbar.layout(
+              height: size.height,
+              topInset: widget.topInset,
+              bottomInset: widget.bottomInset,
+              padBottom: padBottom,
+              beaconOn: widget.state.connected && widget.state.myHasFix,
+            );
+            final double topBase = tools.topBase;
+            final int toolbarCols = tools.cols;
+            final bool roomForBottom = tools.roomForBottom;
+            final double rightGutter = tools.rightGutter;
+            // ── 地图**画出来的**那几层也要让开外壳占用的区域 ──
+            //
+            // 与贴左控件同一个口径（见 [leftInset] 与 [bottomInset]）：2.0 外壳的
+            // 导航竖条、内容面板、顶栏与贴底浮层都是**磨砂半透明**地悬在整屏地图
+            // 之上（1.0 与地图并排，传进来的几个 inset 都是 0，这里等于不裁）。
+            // 控件早就会让开，画上去的那几层却照旧铺满整屏 —— 于是蓝线从卡片背后
+            // 透出来，看着像「轨迹压住了卡片」。裁到可见地图区之后，卡片底下不再有
+            // 这条线，磨砂里剩下的只有底图，观感与「卡片是实的」一致。
+            //
+            // 画笔坐标与各层位置都不变：`CustomPaint` 自己就是 `size` 大小，外面包
+            // 一层同尺寸的 `ClipRect` 只改「画到哪儿」，不改「画在哪儿」。
+            _ovClip = _OverlayInsetClipper(
+              left: widget.leftInset,
+              top: widget.topInset,
+              // 贴底浮层（上报横杠 / 底部坐标条）的底边距与自身高度必须与下面那两个
+              // `Positioned` 一致，否则裁剪线会落在横杠里面（线上还会剩一截露在杠下）。
+              bottom: tools.clipBottom,
+            );
             if (widget.frozen) {
               // 冻结：停掉脉冲动画。它是地图这边**唯一的每帧**重绘来源
               // （`_pulse.repeat()` 会驱动所有移动台站的扩散圈逐帧重建），
@@ -484,53 +704,86 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 ),
                 // 瓦片地图（RepaintBoundary 隔离重绘）
                 RepaintBoundary(
-                  child: MouseRegion(
-                    onHover: (e) => _hover.value = e.localPosition,
-                    onExit: (_) => _hover.value = null,
-                    child: _isVector
-                        ? VectorMapView(
-                            stations: _visible,
-                            styleUrl: vectorStyleUrlFor(_currentMapType.name),
-                            stationsVersion: widget.state.stationsVersion,
-                            myCall: widget.state.myFullCall,
-                            myHasFix: widget.state.myHasFix,
-                            myLat: widget.state.myLat,
-                            myLng: widget.state.myLng,
-                            myTrack: widget.state.myTrack,
-                            selectedCall: _selected?.call,
-                            selectedTrack: _selected?.track ?? const [],
-                            selectedColor: _selected?.color,
-                            focusSeq: widget.state.mapFocusSeq,
-                            focusLat: widget.state.mapFocus?.lat,
-                            focusLng: widget.state.mapFocus?.lng,
-                            actionSeq: _mapActionSeq,
-                            action: _mapAction,
-                            showTracks: _showTracks,
-                            onTap: _handleMapLatLng,
-                            onStationTap: (s) {
-                              _openDetail(s);
-                              _selected = s;
-                              // 这里照常同步脉冲：选中态要在屏幕上看得见。
-                              // 若此刻处于冻结（面板正在动），下一帧 build 会把
-                              // 它再停掉 —— 用户的点击反馈优先于省这一两帧。
-                              _syncPulse();
-                            },
-                          )
-                        : TileMapView(
-                            centerLat: _projBase.$1,
-                            centerLng: _projBase.$2,
-                            zoom: _zoom,
-                            pan: _pan,
-                            onPan: _panDelta,
-                            onViewChanged: _setView,
-                            // 滚轮：瞬时围绕焦点缩放，跟手不飘
-                            onZoomRequest: (z, p) => _animateTo(z, p),
-                            onTap: _handleMapTap,
-                            mapType: _currentMapType,
-                            // 离线地图：缓存开关与「仅离线」模式（设置页可改）
-                            cacheEnabled: widget.state.tileCacheOn,
-                            offlineOnly: widget.state.offlineOnly,
-                          ),
+                  // 锁定地图中心时的「拖一下就解锁」：一拖就是要自己看，
+                  // 不该在下一帧被拽回中心（与沉浸页的跟随按钮同口径）。
+                  //
+                  // 用原始指针事件而不是手势回调：自绘瓦片底图的手势在
+                  // TileMapView 自己手里、矢量底图在 flutter_map 手里，两条
+                  // 路都得覆盖；`Listener` 只观察、不参与手势竞技，所以
+                  // 「点台站」「点地图选点」这些点击一个都不受影响。
+                  child: Listener(
+                    onPointerDown: (e) => _dragStart = e.position,
+                    onPointerMove: (e) {
+                      final start = _dragStart;
+                      if (!_followMe || start == null) return;
+                      // 6px 以内算「点」，不算拖 —— 手指按下去总会抖一点，
+                      // 用 0 阈值会把每一次点击都当成拖动。
+                      if ((e.position - start).distance < 6) return;
+                      _dragStart = null;
+                      // 自己拖地图：三态一起退回「关」，转角也随之回正北（也落盘）
+                      setState(() => widget.state.setMapFollowMode(0));
+                    },
+                    onPointerUp: (_) => _dragStart = null,
+                    onPointerCancel: (_) => _dragStart = null,
+                    child: MouseRegion(
+                      onHover: (e) => _hover.value = e.localPosition,
+                      onExit: (_) => _hover.value = null,
+                      child: _isVector
+                          ? VectorMapView(
+                              stations: _visible,
+                              styleUrl: vectorStyleUrlFor(_currentMapType.name),
+                              stationsVersion: widget.state.stationsVersion,
+                              myCall: widget.state.myFullCall,
+        showHeatmap: _showHeatmap,
+        heatLevel: widget.state.heatLevel,
+                              myHasFix: widget.state.myHasFix,
+                              myLat: widget.state.myLat,
+                              myLng: widget.state.myLng,
+                              myCourse: widget.state.myCourse,
+                              myTrack: widget.state.myTrack,
+                              selectedCall: _selected?.call,
+                              selectedTrack: _selected?.track ?? const [],
+                              selectedColor: _selected?.color,
+                              focusSeq: widget.state.mapFocusSeq,
+                              focusLat: widget.state.mapFocus?.lat,
+                              focusLng: widget.state.mapFocus?.lng,
+                              actionSeq: _mapActionSeq,
+                              action: _mapAction,
+                              showTracks: _showTracks,
+                              // 锁定地图中心：矢量底图的相机在 flutter_map 手里，
+                              // 由它自己跟（见 VectorMapView.follow）
+                              follow: _followMe,
+                              // 设置里可强制「无论密度/缩放都显示标签」
+                              showStationLabels: widget.state.mapLabelsAlways,
+                              onTap: _handleMapLatLng,
+                              onStationTap: (s) {
+                                _openDetail(s);
+                                _selected = s;
+                                // 这里照常同步脉冲：选中态要在屏幕上看得见。
+                                // 若此刻处于冻结（面板正在动），下一帧 build 会把
+                                // 它再停掉 —— 用户的点击反馈优先于省这一两帧。
+                                _syncPulse();
+                              },
+                            )
+                          : _mapCanvas(
+                              size,
+                              TileMapView(
+                                centerLat: _projBase.$1,
+                                centerLng: _projBase.$2,
+                                zoom: _zoom,
+                                pan: _pan,
+                                onPan: _panDelta,
+                                onViewChanged: _setView,
+                                // 滚轮：瞬时围绕焦点缩放，跟手不飘
+                                onZoomRequest: (z, p) => _animateTo(z, p),
+                                onTap: _handleMapTap,
+                                mapType: _currentMapType,
+                                // 离线地图：缓存开关与「仅离线」模式（设置页可改）
+                                cacheEnabled: widget.state.tileCacheOn,
+                                offlineOnly: widget.state.offlineOnly,
+                              ),
+                            ),
+                    ),
                   ),
                 ),
                 // 我的位置轨迹线（不挡手势）
@@ -538,12 +791,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     _showTracks &&
                     widget.state.myTrack.length > 1)
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _TrackOverlayPainter(
-                        points: widget.state.myTrack,
-                        color: C.blue,
-                        toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                    child: ClipRect(
+                      clipper: _ovClip,
+                      child: CustomPaint(
+                        size: size,
+                        painter: _TrackOverlayPainter(
+                          points: widget.state.myTrack,
+                          color: C.blue,
+                          toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                          rot: _rot,
+                        ),
                       ),
                     ),
                   ),
@@ -553,12 +810,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 // 间隔是否合预期），所以要画成独立符号而不是线上的节点。
                 if (!_usePluginMap && widget.state.beaconMarks.isNotEmpty)
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _BeaconMarkPainter(
-                        points: widget.state.beaconMarks,
-                        color: C.orange,
-                        toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                    child: ClipRect(
+                      clipper: _ovClip,
+                      child: CustomPaint(
+                        size: size,
+                        painter: _BeaconMarkPainter(
+                          points: widget.state.beaconMarks,
+                          color: C.orange,
+                          toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                          rot: _rot,
+                        ),
                       ),
                     ),
                   ),
@@ -567,12 +828,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     _selected != null &&
                     _selected!.track.length > 1)
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _TrackOverlayPainter(
-                        points: _selected!.track,
-                        color: _selected!.color,
-                        toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                    child: ClipRect(
+                      clipper: _ovClip,
+                      child: CustomPaint(
+                        size: size,
+                        painter: _TrackOverlayPainter(
+                          points: _selected!.track,
+                          color: _selected!.color,
+                          toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                          rot: _rot,
+                        ),
                       ),
                     ),
                   ),
@@ -586,24 +851,32 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     widget.state.myHasFix &&
                     widget.state.myAccuracy > 0)
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _MyAccuracyPainter(
-                        lat: widget.state.myLat!,
-                        lng: widget.state.myLng!,
-                        accuracyM: widget.state.myAccuracy,
-                        toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                    child: ClipRect(
+                      clipper: _ovClip,
+                      child: CustomPaint(
+                        size: size,
+                        painter: _MyAccuracyPainter(
+                          lat: widget.state.myLat!,
+                          lng: widget.state.myLng!,
+                          accuracyM: widget.state.myAccuracy,
+                          toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                        ),
                       ),
                     ),
                   ),
                 // 低缩放热力图（按网格统计台站密度，不改变标记本身）
                 if (_showHeatmap)
                   IgnorePointer(
-                    child: CustomPaint(
-                      size: size,
-                      painter: _HeatmapPainter(
-                        stations: _visible,
-                        toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                    child: ClipRect(
+                      clipper: _ovClip,
+                      child: CustomPaint(
+                        size: size,
+                        painter: _HeatmapPainter(
+                          stations: _visible,
+                          toScreen: (lat, lng) => _toScreen(lat, lng, size),
+                          level: widget.state.heatLevel,
+                          rot: _rot,
+                        ),
                       ),
                     ),
                   ),
@@ -626,11 +899,27 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 Positioned(
                   top: topBase,
                   left: 14 + widget.leftInset,
-                  right: 74,
+                  right: rightGutter + padRight,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 两条**一次性**提示排在这一列的最前面（选点 / 搜索命中）。
+                      //
+                      // 它们以前各自 `Positioned` 在**同一个 top** 上居中，于是
+                      // 三个东西会同时占着地图顶端：左边的心率/计数、中间的提示、
+                      // 右边的工具列 —— 提示一长（搜索词长、西语漏译）就往两边长，
+                      // 正好糊在左右两排控件上（用户报的「浮层工具挡在一起」）。
+                      // 进同一列顺序排，结构上就压不到别人；宽度也被这一列的
+                      // `right`（让开工具列）挡住。
+                      if (_pickMode) ...[
+                        _pickBanner(),
+                        const SizedBox(height: 8),
+                      ],
+                      if (searched) ...[
+                        _searchHint(vis.length),
+                        const SizedBox(height: 8),
+                      ],
                       // 心率放**最上面**：它是用户运动时最想一眼看到的东西，
                       // 而台站计数是「背景信息」（需求原话：「让心率显示在主屏幕上面」）。
                       _hrChip(),
@@ -641,57 +930,12 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     ],
                   ),
                 ),
-                // 选点提示
-                if (_pickMode)
-                  Positioned(
-                    top: topBase,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: C.orange,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: elev3(),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.gps_fixed_rounded,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              S.of(context).mapPickDesc,
-                              style: ts(
-                                12,
-                                c: Colors.white,
-                                w: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () {
-                                widget.state.finishPick();
-                                setState(() => _pickMode = false);
-                              },
-                              child: const Icon(
-                                Icons.close_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                // 焦点标记：从策略地图「导航」过来的目标点。
+                // 策略点不在 stations 里（是远端构造的合成台站），台站标记里
+                // 找不到它 —— 缺了这枚标记，用户落图后看不到「刚才要导的那个点」，
+                // 就会觉得「跳转导航用不了」。只在有焦点时画，改动焦点即更新。
+                // 与台站标记同口径：矢量图（插件）走原生渲染、坐标口径不同，只画瓦片图。
+                if (!_usePluginMap) _focusMarker(size),
                 // ── 地图小浮层的「共享底」：一簇浮层只让引擎采一次底 ──
                 //
                 // 这一簇（图例 / 工具列 8 颗按钮 / 上报横杠 / 底部坐标条）全是
@@ -707,24 +951,21 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 // ⚠ 只包**这一簇**，不包整页：共享 key 的语义是「后一个表面采样的
                 // 是第一个表面**之前**的那张底」，也就是说两者之间画的内容不会出现
                 // 在它的模糊里 —— 所以只有「连续绘制、互不重叠」的一簇能合并。
-                // 台站标记（里面还套着选中信息窗）与搜索提示条都留在组外，
-                // 正是这个原因。
+                // 台站标记（里面还套着选中信息窗）与左上那一列（心率 / 计数 /
+                // 选点提示 / 搜索命中）都留在组外，正是这个原因。
                 Positioned.fill(
                   child: BackdropGroup(
                     child: Stack(
                       children: [
-                        // 图例（矮横屏隐藏，减少遮挡）
-                        if (!shortWide)
-                          Positioned(top: topBase, right: 60, child: _legend()),
                         // ── 右侧工具列 ──
-                        // 此前用 14 / 58 / 102 / 146 四个硬编码 top 各自 Positioned，
-                        // 而 `_zoomCtrl()` 含 5 个按钮（放大/缩小/轨迹/热力图/定位，一直排到
-                        // 404），矮屏上必然打架。改成「单列顺序排布」后结构上不可能再重叠；
-                        // 手机横放时**再分两列**（见 `_rightToolbar`，否则最下面的「定位」会被裁掉）。
+                        // 以前是 14 / 58 / 102 / 146 四个硬编码 top 各自 Positioned，
+                        // 8 颗钮排到 448，矮屏上必然打架。现在是「一串按钮 + 按可用
+                        // 高度分列」（见 `_rightToolbar`），结构上不会再互相盖住，
+                        // 也不会被 Stack 裁掉最下面那颗 —— 位置由 toolbarCols 定。
                         Positioned(
-                          right: 14,
+                          right: 14 + padRight,
                           top: topBase,
-                          child: _rightToolbar(shortWide),
+                          child: _rightToolbar(toolbarCols),
                         ),
                         // 竖屏：底部通栏“上报通知”横杠（仅已连接+有定位时显示，横屏由侧边栏承担）
                         if (roomForBottom &&
@@ -732,7 +973,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                             widget.state.myHasFix)
                           Positioned(
                             left: 14 + widget.leftInset,
-                            right: 14,
+                            right: 14 + padRight,
                             bottom: 62 + MediaQuery.of(context).padding.bottom + widget.bottomInset,
                             // 「距下次上报 12 秒」是**秒级**字段：整页只在
                             // AppState 通知（有台站刷新 / 状态翻转）时重建，
@@ -749,52 +990,21 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         if (roomForBottom)
                           Positioned(
                             left: 14 + widget.leftInset,
-                            right: 14,
+                            right: 14 + padRight,
                             bottom: 14 + MediaQuery.of(context).padding.bottom + widget.bottomInset,
                             child: ValueListenableBuilder<Offset?>(
                               valueListenable: _hover,
                               builder: (_, hp, _) => _bottomControls(hp),
                             ),
                           ),
+                        // 屏幕正中的经纬度：手机没有鼠标悬停，只有这一圈能回答
+                        // 「正中这个点在哪」（见 [_centerCoord]）。
+                        if (widget.state.mapCenterCoord)
+                          Positioned.fill(child: _centerCoord(size)),
                       ],
                     ),
                   ),
                 ),
-                // 搜索提示
-                if (searched)
-                  Positioned(
-                    top: topBase,
-                    // 横屏时左侧被竖条占着：居中要相对**可见的地图区**，
-                    // 否则提示条会偏向左侧、压到卡片边缘
-                    left: widget.leftInset,
-                    right: 0,
-                    child: Center(
-                      child: MaterialSurface(
-                        radius: 12,
-                        blurSigma: C.chipBlur,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: C.chipFill,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: elev2(),
-                          ),
-                          child: Text(
-                            S
-                                .of(context)
-                                .foundStations(
-                                  vis.length,
-                                  widget.searchQuery.trim(),
-                                ),
-                            style: ts(12, w: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             );
           },
@@ -804,7 +1014,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   /// 视图初始化/焦点跳转，一次性执行，保证互不覆盖
-  void _handleViewFocus() {
+  /// 返回本次是否触发了「焦点跳转」（见 [AppState.focusOnMap]）。
+  bool _handleViewFocus() {
     final focus = widget.state.mapFocus;
     if (focus != null && widget.state.mapFocusSeq != _lastFocusSeq) {
       _lastFocusSeq = widget.state.mapFocusSeq;
@@ -813,9 +1024,19 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _selected = focus);
-        _animateTo(14.0, _panFor(focus.lat, focus.lng, 14.0));
+        // 直接落位，不走过渡动画。从策略地图点「导航」跳过来时，这一帧之后
+        // 地图很可能被覆盖/冻结，动画会在中途被打断，停在「飞了一半」的
+        // 中间态 —— 用户看到的就是「点了没反应/飘到半路」。瞬时落位才可靠。
+        _cancelAnim();
+        setState(() {
+          _zoom = 14.0;
+          _pan = _panFor(focus.lat, focus.lng, 14.0);
+          // 跳到某个台站 = 用户要看那个点，锁定随之解除：留着的话下一帧就被
+          // 「锁定地图中心」拽回我的位置，用户根本看不到刚聚焦的台站。
+          widget.state.setMapFollowMode(0);
+        });
       });
-      return;
+      return true;
     }
     if (!_didInitView) {
       _didInitView = true;
@@ -829,6 +1050,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         });
       }
     }
+    return false;
   }
 
   // ─── 标记 ───
@@ -842,13 +1064,20 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   String? _markerSelHash;
   List<Station>? _markerVisibleList; // 上次构建标记所用的可见台站列表（用同一性判断）
   bool _forceMarkerRebuild = false; // 脉冲动画停转后强制重建一次，移除残留圈
+  bool _markerLabelsAlways = false; // 上次构建标记时的「始终显示标签」设置（变化需重建）
 
   List<Widget> _stationMarkers(Size size) {
     final now = DateTime.now();
     final viewHash =
         (_zoom * 64).round() * 1000003 +
         _pan.dx.round() * 1009 +
-        _pan.dy.round();
+        _pan.dy.round() +
+        // 航向朝上时画布一直在转：转角和 pan/zoom 一样是**视图**的一部分，
+        // 不进缓存键的话标记会僵在旧角度上、从底图上滑开。
+        (_rot * 1000).round() * 4000037 +
+        // 卫星与街道的标记外观不同（符号光晕/标签配色）→ 必须进缓存键，
+        // 否则切底图后标记要等下一次拖拽才更新。
+        (_isSat ? 1 : 0) * 2000003;
     final selHash = _selected?.call ?? '';
     // 冻结（面板开着/正在动）时：**数据**变化不再重建标记，但**视图**变化必须
     // 跟随 —— 否则用户在这个状态下拖地图，标记会僵在原地（那是明显的错位）。
@@ -870,6 +1099,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         viewHash != _markerViewHash || selHash != _markerSelHash;
     final force = _forceMarkerRebuild;
     _forceMarkerRebuild = false;
+    // 设置里切换「始终显示标签」也要重建：否则缓存复用会让开关“点了没反应”。
+    final labelsAlways = widget.state.mapLabelsAlways;
+    final labelsAlwaysChanged = labelsAlways != _markerLabelsAlways;
     final sizeChanged = _markerCacheSize != size;
     final elapsed = now.difference(_markerCacheTime).inMilliseconds;
     final fresh =
@@ -877,6 +1109,7 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         !force &&
         !visChanged &&
         !viewChanged &&
+        !labelsAlwaysChanged &&
         (sizeChanged ? elapsed < 150 : true);
     if (fresh) return _markerCache!;
     _markerCacheTime = now;
@@ -884,12 +1117,18 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _markerViewHash = viewHash;
     _markerSelHash = selHash;
     _markerVisibleList = vis;
+    _markerLabelsAlways = labelsAlways;
     _markerCache = _buildMarkers(size);
     return _markerCache!;
   }
 
   List<Widget> _buildMarkers(Size size) {
     final stations = _visible;
+    // 台站密的时候（或缩得很小）不画呼号标签：文字排版是每个标记最贵的一步。
+    // 设置里可强制「无论密度/缩放都显示」（见 AppState.mapLabelsAlways）。
+    final showLabels = widget.state.mapLabelsAlways ||
+        stations.length <= 60 ||
+        _zoom >= 13;
     // 先滤掉屏幕外台站（含少量留白），避免为不可见台站创建 widget
     return stations.where((s) {
       final p = _toScreen(s.lat, s.lng, size);
@@ -898,17 +1137,33 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     }).map((s) {
       final pos = _toScreen(s.lat, s.lng, size);
       final sel = _selected?.call == s.call;
+      // 选中后那条小条（宽 196）的落点：以标记为中心，再夹进屏幕；
+      // 下方放不下（离底边近）就翻到标记上方，免得被屏幕边缘切掉。
+      final chipLeft = (pos.dx - 98)
+              .clamp(6.0, math.max(6.0, size.width - 202.0)) -
+          (pos.dx - 28);
+      final chipTop = pos.dy > size.height - 150 ? -78.0 : 34.0;
       final pulsing = s.effectiveStatus == St.moving || sel;
       final dx = pos.dx - 28;
       final dy = pos.dy - 28;
+      // key = 呼号：列表变化时按身份复用元素，而不是整段重建。
       return Positioned(
+        key: ValueKey(s.call),
         left: dx,
         top: dy,
         child: GestureDetector(
           onTapDown: (_) => setState(() => _selected = s),
           onDoubleTap: () => _openDetail(s),
-          onTap: () => _animateToStation(s),
-          behavior: HitTestBehavior.opaque,
+          // 单击只「选中并显示标签 / 信息窗」，不再把地图飞过去 ——
+          // 之前单击会直接动画平移到该台站并放大到 z14，地图一跳，
+          // 想连看几个相邻台站就得反复拖回来。需要详情走双击（或信息窗）。
+          onTap: () => setState(() => _selected = s),
+          // 长按信标：呼出快速消息面板（就近发一条短信，不必先进消息页）。
+          // 命中区本来就是这颗标记自身的 56×56 方框，不会抢地图的长按手势。
+          onLongPress: () => _showQuickMessage(s),
+          // **translucent**：标记与它身后的地图都收到这个指针，由手势竞技场裁决。
+          // 用 opaque 会把地图的手势挡掉 —— 手指正好落在台站上时就没法缩放/拖动了。
+          behavior: HitTestBehavior.translucent,
           child: RepaintBoundary(
             child: SizedBox(
               width: 56,
@@ -931,11 +1186,14 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         s.symbolTable,
                         size: sel ? 30 : 24,
                         grayscale: s.effectiveStatus == St.offline,
+                        // 卫星影像底图：给符号加一圈深色光晕，否则彩色/浅色
+                        // 符号压在明亮的航拍纹理上会「糊」进背景。
+                        halo: _isSat,
                       ),
                     ),
                   ),
-                  // 常驻呼号标签（仅未选中显示，避免与选中信息条重叠）
-                  if (!sel)
+                  // 常驻呼号标签（仅未选中、且台站不密时显示）
+                  if (!sel && showLabels)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -944,8 +1202,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                     ),
                   if (sel)
                     Positioned(
-                      top: 34,
-                      left: 0,
+                      top: chipTop,
+                      left: chipLeft,
                       child: GestureDetector(
                         onTap: () => _openDetail(s),
                         child: _infoWindow(s),
@@ -960,67 +1218,140 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     }).toList();
   }
 
-  /// 台站常驻呼号小标签（白底圆角，显示在图标下方）
+  /// 台站常驻呼号小标签。
+  ///
+  /// 街道图用「白底 + 台站色字」；卫星影像用「深底 + 白字」——
+  /// 白底小字压在明亮航拍纹理上会被背景吃掉，深底反而更跳。
   Widget _callLabel(Station s) {
+    final sat = _isSat;
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         constraints: const BoxConstraints(maxWidth: 120),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.92),
+          color: sat
+              ? const Color(0xD9101418)
+              : Colors.white.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: s.color.withValues(alpha: 0.5)),
+          border: Border.all(
+            color: sat
+                ? Colors.white.withValues(alpha: 0.28)
+                : s.color.withValues(alpha: 0.5),
+          ),
         ),
         child: Text(
           s.call,
           textAlign: TextAlign.center,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: ts(9, c: s.color, w: FontWeight.w700, h: 1.0),
+          style: ts(9, c: sat ? Colors.white : s.color, w: FontWeight.w700, h: 1.0),
         ),
       ),
     );
   }
 
-  /// 地图标记的信息窗（悬停/选中时跟着走的那张小浮窗）。
+  /// 单击台站后跟着标记走的那条小条（不是详情面板 —— 详情走双击）。
   ///
-  /// 显示「三个报文」里落在这个台站上的内容：
-  ///   * 状态 / 速度 / 距离 —— 原有信息；
-  ///   * **高度** —— 位置报文的 `/A=` 数据扩展（`s.alt` 由它解析而来）；
-  ///   * **位置备注** —— 位置报文里跟在符号后的注释（中继台的频点常在这里）；
-  ///   * **状态文本** —— 独立状态报文（DTI `>`）。（紫色，与台站详情一致）
+  /// 上一版是一段用 ` · ` 串起来的长文本：呼号、状态、速度、高度、距离、
+  /// 备注、状态报文、还有一句「点击查看」全挤在同一个 StringBuffer 里，
+  /// 换行位置全看字多不多 —— 窄屏上会拉成一长条，读起来要横着扫。
   ///
-  /// 为什么这四行要**按需出现**而不是常驻占位：这三个字段绝大多数台站都没有，
-  /// 常驻会给出两行 `--`，把「没有」和「没收到」显示成同一个样子。
+  /// 现在按「一层一件事」排：
+  ///   ① 呼号单独一行（右侧箭头示意可点）；
+  ///   ② 状态行：在线点 + 状态 + 距离；
+  ///   ③ 数字行：速度 / 高度 / 网格（有哪个写哪个，不占位 `--`）；
+  ///   ④ 备注（最多两行，网址照旧可点）；
+  ///   ⑤ 状态报文（紫色，独立一帧的东西，不与备注混行）。
+  ///
+  /// 固定宽度 + 在 [_buildMarkers] 里按屏幕边缘夹紧，手机上不会顶出画面。
   Widget _infoWindow(Station s) {
-    final st = localizedStatusLabel(context, s.effectiveStatus);
-    final info = StringBuffer(s.call)..write('  ·  $st');
-    if (s.speed != null) info.write('  ·  ${s.speedStr}');
-    if (s.alt != null) info.write('  ·  ${s.altStr}');
+    final online = s.effectiveStatus != St.offline;
     final my = widget.state.myStation;
-    if (my != null) {
-      info.write('  ·  ${s.distKm(my.lat, my.lng).toStringAsFixed(1)}km');
-    }
+    final dist = my == null
+        ? null
+        : '${s.distKm(my.lat, my.lng).toStringAsFixed(1)} km';
+    final nums = <String>[
+      if (s.speed != null) s.speedStr,
+      if (s.alt != null) s.altStr,
+      s.grid,
+    ];
     final comment = s.comment?.trim() ?? '';
-    if (comment.isNotEmpty) info.write('\n$comment');
     final statusText = s.statusText?.trim() ?? '';
-    if (statusText.isNotEmpty) info.write('\n$statusText');
-    info.write('  · ${S.of(context).tapToView}');
-    // blurSigma: 0：这是跟着鼠标走的小信息窗，原来自己带 12 的模糊 ——
-    // 每次悬停都要重算一层离屏模糊。小浮层不值得付这个代价（见 material.dart）。
+    // blurSigma: C.chipBlur —— 跟手的小浮层不值得自己再算一层 12 的离屏模糊
     return MaterialSurface(
       radius: 12,
       blurSigma: C.chipBlur,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        width: 196,
+        padding: const EdgeInsets.fromLTRB(10, 7, 8, 8),
         decoration: BoxDecoration(
           color: C.chipFill,
           borderRadius: BorderRadius.circular(12),
           boxShadow: elev2(),
         ),
-        child: Text(
-          info.toString(),
-          style: ts(11, c: s.color, w: FontWeight.w700),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ① 头行：呼号单独占一行（它永远不该被后面的状态/距离挤成省略号 ——
+            //    用户：「它呼号显示不全，呼号要单独一行」）
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    s.call,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: ts(13, c: s.color, w: FontWeight.w800, ls: 0.3),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 14, color: C.greyLight),
+              ],
+            ),
+            // ② 状态行：在线点 + 状态 + 距离
+            const SizedBox(height: 1),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: online ? C.green : C.greyLight,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  localizedStatusLabel(context, s.effectiveStatus),
+                  style: ts(9.5, c: C.grey),
+                ),
+                const Spacer(),
+                if (dist != null)
+                  Text(dist, style: ts(9.5, c: C.slate, w: FontWeight.w600)),
+              ],
+            ),
+            // ③ 数字行：只写在的
+            const SizedBox(height: 2),
+            Text(
+              nums.join('  ·  '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ts(10.5, c: C.slate, w: FontWeight.w600),
+            ),
+            // ④ 备注（中继频点 / 活动公告常在这里，网址可点）
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              StationNote(comment,
+                  maxLines: 2, style: ts(10, c: C.ink, h: 1.35)),
+            ],
+            // ⑤ 状态报文：与备注是两个字段，各自一行
+            if (statusText.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              StationNote(statusText,
+                  maxLines: 1, style: ts(10, c: C.purple, h: 1.35)),
+            ],
+          ],
         ),
       ),
     );
@@ -1055,6 +1386,19 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         color: C.blue.withValues(alpha: (1 - v) * 0.25),
                       ),
                     ),
+                  ),
+                  // 方位角「小角角」：朝航向伸出的三角箭头。
+                  // **放在圆点之前（其下层）**：三角底边藏进圆点、被圆点盖住，
+                  // 屏幕上只剩圆环外露出的尖角；与圆点同心叠放（放进圆点的 child
+                  // 会被圆形裁剪）。
+                  //
+                  // 航向朝上时画布已经转过 -航向，箭头要再叠上同一个角，屏幕上
+                  // 它才仍指着行进方向（与沉浸页同一口径）。
+                  HeadingCornerIndicator(
+                    course: widget.state.myCourse == null
+                        ? null
+                        : widget.state.myCourse! + _rot * 180 / math.pi,
+                    accent: C.blue,
                   ),
                   Container(
                     width: 26,
@@ -1096,6 +1440,83 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 ],
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 焦点标记：`AppState.focusOnMap` 指定的目标点（来自策略地图「导航」等）。
+  ///
+  /// 目标点往往**不在台站表里**（策略元素是远端合成出来的），台站标记画不到它，
+  /// 所以要单独画一枚。它随 `mapFocusSeq` 变化重建；[frozen] 冻结时仍会重绘
+  /// 一次（frozen 只节流台站标记，焦点标记是独立 Stack 项，不受标记缓存影响）。
+  Widget _focusMarker(Size size) {
+    final f = widget.state.mapFocus;
+    if (f == null || widget.state.mapFocusSeq == 0) {
+      return const SizedBox.shrink();
+    }
+    // 目标若是**真实台站**（台站列表现有项），台站标记已经会画它，
+    // 再叠一枚焦点标记只会糊成一团。只有「台站表里没有的点」（策略元素）
+    // 才需要这枚补画。用 _visible 而非 all stations：被筛选隐藏的台站
+    // 也该补上，否则用户看不到导航目标。
+    if (_visible.any((s) => s.call == f.call)) {
+      return const SizedBox.shrink();
+    }
+    final pos = _toScreen(f.lat, f.lng, size);
+    return Positioned(
+      left: pos.dx - 20,
+      top: pos.dy - 20,
+      child: IgnorePointer(
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              // 外圈脉冲底（静态，不接动画，避免与地图脉冲混淆）
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: C.orange.withValues(alpha: 0.22),
+                ),
+              ),
+              // 主体：橙色圆 + 白边
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: C.orange,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: elev2(),
+                ),
+                child: const Icon(Icons.place_rounded,
+                    size: 12, color: Colors.white),
+              ),
+              // 标签（策略元素名/ID），压在点上方
+              Positioned(
+                top: -18,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 140),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: C.black.withValues(alpha: 0.78),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    f.call,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: ts(9, c: Colors.white, w: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1149,7 +1570,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                           ),
                           Text(
                             localizedLocationStatus(context, st.locStatus),
-                            style: ts(11, c: st.myHasFix ? C.green : C.yellow),
+                            style: ts(11,
+                                c: st.myPositionReportable ? C.green : C.yellow),
                           ),
                         ],
                       ),
@@ -1171,13 +1593,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                       children: [
                         KV(
                           S.of(context).latitude,
-                          st.myLat?.toStringAsFixed(5) ?? '--',
+                          st.myLat == null
+                              ? '--'
+                              : fmtLat(st.myLat!, st.coordFmt),
                           icon: Icons.explore_rounded,
                         ),
                         const SizedBox(height: 8),
                         KV(
                           S.of(context).longitude,
-                          st.myLng?.toStringAsFixed(5) ?? '--',
+                          st.myLng == null
+                              ? '--'
+                              : fmtLng(st.myLng!, st.coordFmt),
                           icon: Icons.explore_rounded,
                         ),
                         // 定位精度：GPS 实测值（1σ）。以前它算而不报，用户无从
@@ -1212,9 +1638,13 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         const SizedBox(height: 8),
                         KV(
                           S.of(context).beaconIntervalLabel,
+                          // ⚠ 必须用 beaconIntervalNow（生效值）：纯网络模式下
+                          // 生效值是 beaconNetInterval，智能模式下是当前档位间隔；
+                          // 用 st.beaconInterval 会显示固定模式那个旧字段，与倒计时
+                          // （按 beaconIntervalNow 走）对不上。
                           st.smartBeaconEnabled
                               ? '智能 · ${S.of(context).secondsValue(st.beaconIntervalNow)}'
-                              : S.of(context).secondsValue(st.beaconInterval),
+                              : S.of(context).secondsValue(st.beaconIntervalNow),
                           icon: Icons.timer_rounded,
                         ),
                         const SizedBox(height: 8),
@@ -1241,14 +1671,16 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         onPressed: () {
                           Navigator.pop(context);
                           st.sendBeacon();
+                          // 上报闸（myPositionReportable）会挡住「还没本轮定位」的点；
+                          // 这里如实反馈，别弹一条假的「已发送」。
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(
-                                S.of(context).positionBeaconDetail(
-                                  st.myGrid,
-                                  st.beaconAttachedDetail,
-                                ),
-                              ),
+                              content: Text(st.myPositionReportable
+                                  ? S.of(context).positionBeaconDetail(
+                                      st.myGrid,
+                                      st.beaconAttachedDetail,
+                                    )
+                                  : S.of(context).beaconWaitingFix),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );
@@ -1296,7 +1728,13 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   void _handleMapTap(Offset pos) {
     if (_pickMode) {
       // 选点模式：点击地图设为我的位置
-      final (lat, lng) = _screenToLatLng(pos, _lastSize);
+      //
+      // `pos` 是**底图局部坐标**：航向朝上时底图在「对角线画布」里，要先
+      // 换算回页面坐标（[_canvasToPage]），再反算经纬度。（没转时原样。）
+      final (lat, lng) = _screenToLatLng(
+        _canvasToPage(pos, _lastSize),
+        _lastSize,
+      );
       widget.state.setMyPosition(lat, lng);
       widget.state.finishPick();
       setState(() {
@@ -1310,8 +1748,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 .of(context)
                 .pickedCoord(
                   maidenhead(lat, lng),
-                  lat.toStringAsFixed(5),
-                  lng.toStringAsFixed(5),
+                  fmtLat(lat, widget.state.coordFmt),
+                  fmtLng(lng, widget.state.coordFmt),
                 ),
           ),
           behavior: SnackBarBehavior.floating,
@@ -1339,8 +1777,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 .of(context)
                 .pickedCoord(
                   maidenhead(lat, lng),
-                  lat.toStringAsFixed(5),
-                  lng.toStringAsFixed(5),
+                  fmtLat(lat, widget.state.coordFmt),
+                  fmtLng(lng, widget.state.coordFmt),
                 ),
           ),
           behavior: SnackBarBehavior.floating,
@@ -1360,7 +1798,227 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
   }
 
+  /// 长按信标呼出的「快速消息」面板。
+  ///
+  /// 目标是从地图上直接给某个台站就近发一条短信，不用先进消息页再找会话。
+  /// - 输入框自动聚焦并带上收件人提示；
+  /// - 只有一个「发送」按钮，发送即调用 [AppState.sendMessage]（与消息页同一条路径，
+  ///   长度校验、翻译、待发队列等行为完全一致），不在此重复实现发送逻辑；
+  /// - 空白内容不允许发送，避免误触发出空报文。
+  void _showQuickMessage(Station s) {
+    final st = widget.state;
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: MaterialSurface(
+          radius: 24,
+          topOnly: true,
+          child: Container(
+            decoration: BoxDecoration(
+              color: C.sheetFill,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: s.color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: AprsSymbolImage(
+                            s.symbol,
+                            s.symbolTable,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              S.of(ctx).sendMessageTo(s.call),
+                              style: ts(14, w: FontWeight.w800),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              s.call,
+                              style: ts(11, c: C.slate),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        color: C.slate,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    textInputAction: TextInputAction.send,
+                    maxLines: 3,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: S.of(ctx).sendToCallHint(s.call),
+                      filled: true,
+                      fillColor: C.surfaceFill,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (v) {
+                      final text = v.trim();
+                      if (text.isEmpty) return;
+                      st.sendMessage(s.call, text);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: Text(
+                            S.of(ctx).cancel,
+                            style: ts(13, c: C.slate, w: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: C.blue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () {
+                            final text = ctrl.text.trim();
+                            if (text.isEmpty) return;
+                            st.sendMessage(s.call, text);
+                            Navigator.pop(ctx);
+                          },
+                          child: Text(
+                            S.of(ctx).send,
+                            style: ts(13, c: Colors.white, w: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── 覆盖控件 ───
+  /// 选点提示（地图进入「点一下选位置」模式时那一行）。
+  ///
+  /// 以前是单独 `Positioned` 在地图顶端居中，与左边的心率/计数、右边的工具列
+  /// 同一个 top —— 宽了就往两边长，把控件糊掉。现在它是左上那一列的**第一项**
+  /// （见 build），与其它控件顺序排，结构上不会重叠。
+  Widget _pickBanner() {
+    final s = S.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: C.orange,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: elev3(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.gps_fixed_rounded, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              s.mapPickDesc,
+              style: ts(12, c: Colors.white, w: FontWeight.w700),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            // 命中区给到 28×28：地图上那枚小叉原来只有 18，不好点
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              widget.state.finishPick();
+              setState(() => _pickMode = false);
+            },
+            child: const SizedBox(
+              width: 28,
+              height: 28,
+              child: Icon(Icons.close_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 搜索命中提示（「找到 N 个 XX」）。同样进了左上一列，理由见 [_pickBanner]。
+  Widget _searchHint(int found) {
+    return MaterialSurface(
+      radius: 12,
+      blurSigma: C.chipBlur,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: C.chipFill,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: elev2(),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_rounded, size: 14, color: C.blue),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                S
+                    .of(context)
+                    .foundStations(found, widget.searchQuery.trim()),
+                style: ts(12, w: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// 心率胶囊（主屏幕左上，最上面那一个）。
   ///
   /// **没有读数就整块不出现**（返回 `SizedBox.shrink()`，连 10px 间隙也由调用处
@@ -1501,7 +2159,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               Text(
                 group == '高德'
                     ? S.of(context).amapGroup
-                    : S.of(context).otherType,
+                    : group == '地形'
+                        ? S.of(context).terrainGroup
+                        : group == '天地图'
+                            ? S.of(context).tiandituGroup
+                            : S.of(context).otherType,
                 style: ts(10, c: color, w: FontWeight.w700),
               ),
             ],
@@ -1548,47 +2210,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _legend() {
-    return MaterialSurface(
-      radius: 12,
-      blurSigma: C.chipBlur,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: C.chipFill,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: elev1(),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _lg(C.green, S.of(context).online),
-            SizedBox(height: 5),
-            _lg(C.blue, S.of(context).moving),
-            SizedBox(height: 5),
-            _lg(C.yellow, S.of(context).stationary),
-            SizedBox(height: 5),
-            _lg(C.grey, S.of(context).offline),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _lg(Color c, String t) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 9,
-        height: 9,
-        decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-      ),
-      SizedBox(width: 6),
-      Text(t, style: ts(10, c: C.slate)),
-    ],
-  );
-
   /// 右侧工具列的单颗按钮（统一 38×38 / 圆角 12 / 柔和投影）。
   /// 抽出来是为了让工具列能写成单个 Column 顺序排布，
   /// 避免多个硬编码 top 的 Positioned 在矮屏上互相重叠。
@@ -1630,65 +2251,98 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
   }
 
-  /// 右侧工具列。
+  /// 右侧工具列：按钮摊平成一串，再按 [cols] 分列（[cols] 由可用高度算，见
+  /// [MapToolbar.columns]）。
   ///
-  /// 竖屏（及高度充裕的横屏）用**单列**；矮横屏（`shortWide`）必须换成**两列**。
-  ///
-  /// 为什么：单列共 8 个按钮 ≈ 346px（3 个工具钮 126 + 5 个缩放钮 214 + 间隙），
-  /// 而手机横放时可用高度常只有 300px 出头 —— 单列会被 Stack 裁掉（默认
-  /// `Clip.hardEdge`），而裁掉的恰好是最下面的「定位」：横屏看地图时最常用的
-  /// 那一个。横向空间在横屏是宽裕的，所以分两列是最直接的解法，
-  /// 分组也是现成的：左列「图层 / 轨迹分组 / 底图」，右列「缩放 / 轨迹 / 热力图 / 定位」。
-  ///
-  /// 两列都靠上对齐（`CrossAxisAlignment.start`），否则高的那列会把矮的推居中，
-  /// 上沿就不是齐的了。
-  Widget _rightToolbar(bool shortWide) {
-    final toolCol = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _toolBtn(
-          icon: Icons.layers_rounded,
-          onTap: () => _showLayerMenu(context),
-          // 用 surfaceTint 保留「选中变蓝 / 普通白」的语义，
-          // 只让通透程度跟着材质走（详见 material.dart）
-          bg: chipTint(_hiddenTypes.isNotEmpty ? C.blueBg : C.white),
-          fg: _hiddenTypes.isNotEmpty ? C.blue : C.slate,
-          border: _hiddenTypes.isNotEmpty ? C.blue : C.border,
+  /// 为什么摊平：按钮的**颗数**与**尺寸**是唯一真相（[MapToolbar.btn] / [MapToolbar.gap]），
+  /// 列高由它们算出来。以前是「单列固定多高 + 一个朝向判据」，每加一颗钮就得
+  /// 重新猜阈值，猜漏了的表现就是最下面那颗被裁掉、点不到。
+  Widget _rightToolbar(int cols) {
+    final btns = <Widget>[
+      _toolBtn(
+        icon: Icons.layers_rounded,
+        onTap: () => _showLayerMenu(context),
+        // 用 surfaceTint 保留「选中变蓝 / 普通白」的语义，
+        // 只让通透程度跟着材质走（详见 material.dart）
+        bg: chipTint(_hiddenTypes.isNotEmpty ? C.blueBg : C.white),
+        fg: _hiddenTypes.isNotEmpty ? C.blue : C.slate,
+        border: _hiddenTypes.isNotEmpty ? C.blue : C.border,
+      ),
+      _toolBtn(
+        icon: Icons.group_rounded,
+        onTap: () => showTrackGroupPicker(context, widget.state),
+        bg: C.orangeBg,
+        fg: C.orange,
+        border: C.orange.withValues(alpha: 0.4),
+      ),
+      _toolBtn(
+        icon: Icons.flag_rounded,
+        onTap: _openStrategyMap,
+        bg: C.green.withValues(alpha: 0.14),
+        fg: C.green,
+        border: C.green.withValues(alpha: 0.4),
+      ),
+      _toolBtn(
+        icon: Icons.map_rounded,
+        // ⚠ 必须带 ()：写成 `() => _showMapTypeMenu` 只是**返回这个函数本身**，
+        // 从不调用它 —— 点下去等于什么都不做（用户报的「底图选择面板弹不出来」）。
+        // 而 Dart 允许把 `void Function() Function()` 赋给 `VoidCallback`
+        // （返回值位置的 `void` 是顶类型），所以编译与 analyze **都不会报**。
+        onTap: () => _showMapTypeMenu(),
+        bg: chipTint(C.white),
+        fg: C.slate,
+        border: C.border,
+      ),
+      // 屏幕正中的经纬度读数：**默认关**，开关就摆在地图自己身上。
+      // 想看「正中这个点在哪」的人在图上点一下就开，不必绕进设置 → 显示；
+      // 状态本身持久化（AppState.mapCenterCoord），下次打开还是他选的那样。
+      _toolBtn(
+        icon: widget.state.mapCenterCoord
+            ? Icons.center_focus_strong_rounded
+            : Icons.center_focus_weak_rounded,
+        onTap: () => setState(
+          () => widget.state.setMapCenterCoord(!widget.state.mapCenterCoord),
         ),
-        const SizedBox(height: 6),
-        _toolBtn(
-          icon: Icons.group_rounded,
-          onTap: () => showTrackGroupPicker(context, widget.state),
-          bg: C.orangeBg,
-          fg: C.orange,
-          border: C.orange.withValues(alpha: 0.4),
-        ),
-        const SizedBox(height: 6),
-        _toolBtn(
-          icon: Icons.map_rounded,
-          // ⚠ 必须带 ()：写成 `() => _showMapTypeMenu` 只是**返回这个函数本身**，
-          // 从不调用它 —— 点下去等于什么都不做（用户报的「底图选择面板弹不出来」）。
-          // 而 Dart 允许把 `void Function() Function()` 赋给 `VoidCallback`
-          // （返回值位置的 `void` 是顶类型），所以编译与 analyze **都不会报**。
-          onTap: () => _showMapTypeMenu(),
-          bg: chipTint(C.white),
-          fg: C.slate,
-          border: C.border,
-        ),
-      ],
-    );
-    if (!shortWide) {
-      return Column(
+        bg: chipTint(widget.state.mapCenterCoord ? C.blueBg : C.white),
+        fg: widget.state.mapCenterCoord ? C.blue : C.slate,
+        border: widget.state.mapCenterCoord ? C.blue : C.border,
+      ),
+      ..._zoomBtns(),
+    ];
+    if (cols <= 1) {
+      return Column(mainAxisSize: MainAxisSize.min, children: _spaced(btns));
+    }
+    // 按算出来的列数均分：先排满一列再排下一列（从上到下、从左到右），
+    // 于是「读的顺序」始终就是按钮表本身的顺序，列数怎么变都不会前后颠倒。
+    // 工具列整体靠右（`right: 14`），所以最后一列贴着屏幕边。
+    final per = (btns.length + cols - 1) ~/ cols;
+    final columns = <Widget>[];
+    for (var i = 0; i < btns.length; i += per) {
+      final end = math.min(i + per, btns.length);
+      columns.add(Column(
         mainAxisSize: MainAxisSize.min,
-        children: [toolCol, const SizedBox(height: 6), _zoomCtrl()],
-      );
+        children: _spaced(btns.sublist(i, end)),
+      ));
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [toolCol, const SizedBox(width: 6), _zoomCtrl()],
+      children: [
+        for (var i = 0; i < columns.length; i++) ...[
+          if (i > 0) const SizedBox(width: MapToolbar.gap),
+          columns[i],
+        ],
+      ],
     );
   }
+
+  /// 按钮之间插 [MapToolbar.gap] 的竖间距（[MapToolbar.height] 的算式与它一一对应）
+  static List<Widget> _spaced(List<Widget> btns) => [
+        for (var i = 0; i < btns.length; i++) ...[
+          if (i > 0) const SizedBox(height: MapToolbar.gap),
+          btns[i],
+        ],
+      ];
 
   /// 沉浸地图入口（导航风格：以我为中心 / 航向朝上 / 四角 HUD）。
   ///
@@ -1722,9 +2376,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _zoomCtrl() {
-    return Column(
-      children: [
+  List<Widget> _zoomBtns() {
+    return [
         RoundIconBtn(
           Icons.add_rounded,
           onTap: () {
@@ -1736,7 +2389,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             _animateTo(z, _panForCenter(z));
           },
         ),
-        SizedBox(height: 6),
         RoundIconBtn(
           Icons.remove_rounded,
           onTap: () {
@@ -1748,14 +2400,12 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             _animateTo(z, _panForCenter(z));
           },
         ),
-        SizedBox(height: 6),
         RoundIconBtn(
           _showTracks ? Icons.route_rounded : Icons.route_outlined,
           tooltip: S.of(context).track,
           color: _showTracks ? C.green : C.slate,
           onTap: () => setState(() => _showTracks = !_showTracks),
         ),
-        SizedBox(height: 6),
         // 低缩放热力图开关
         RoundIconBtn(
           _heatEnabled
@@ -1765,7 +2415,6 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
           color: _heatEnabled ? C.orange : C.slate,
           onTap: () => setState(() => _heatEnabled = !_heatEnabled),
         ),
-        SizedBox(height: 6),
         RoundIconBtn(
           Icons.my_location_rounded,
           tooltip: S.of(context).locateMe,
@@ -1785,8 +2434,46 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
             }
           },
         ),
-      ],
-    );
+        // ── 锁定地图中心（三态）──
+        //
+        // 与上面那颗「定位」配成一对：定位是**跳一次**（还会把缩放拉到 15），
+        // 锁定是**一直跟着** —— 开了之后自己走动时地图持续把我的位置摆在中心，
+        // 缩放交给用户（锁定只管位置，不抢缩放）。
+        //
+        // 用户要求把这一颗改成切换，于是三态循环：
+        //   关（自由拖动）→ 锁定中心·正北朝上 → 锁定中心·航向朝上 → 关
+        // 图标用 gps_fixed / gps_not_fixed 这一对：它就是「定位是否锁在我身上」
+        // 的通用符号，比再画一颗准星更不容易被认成别的意思；航向朝上那态
+        // 换成指南针（explore），与沉浸页切航向的按钮同一套图标。
+        RoundIconBtn(
+          _followMode == 1
+              ? Icons.gps_fixed_rounded
+              : (_followMode == 2
+                    ? Icons.explore_rounded
+                    : Icons.gps_not_fixed_rounded),
+          // 提示语说的是**这一下按下去会切到哪**：
+          // 关 → 锁定中心 → 航向朝上 → 关（最后一态回到「取消锁定」）
+          tooltip: _followMode == 0
+              ? S.of(context).lockMapCenter
+              : (_followMode == 1
+                    ? S.of(context).headingUp
+                    : S.of(context).unlockMapCenter),
+          color: _followMe ? C.blue : C.slate,
+          onTap: () {
+            final st = widget.state;
+            final next = (_followMode + 1) % 3;
+            if (next > 0 &&
+                st.myHasFix &&
+                st.myLat != null &&
+                st.myLng != null) {
+              // 打开就立刻居中一次（不缩放），否则要等到下一个定位点才生效，
+              // 按下去像没反应。
+              _setView(_zoom, _panFor(st.myLat!, st.myLng!, _zoom));
+            }
+            setState(() => st.setMapFollowMode(next));
+          },
+        ),
+    ];
   }
 
   // ─── 插件地图（矢量）动作分发 ───
@@ -1835,6 +2522,132 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     overlay.insert(entry);
   }
 
+  /// 打开策略地图（先确定用哪个群）。
+  ///
+  /// 策略地图是**群维度**的功能：没有群就没法共享。有多个群时让用户选一个，
+  /// 只有一个群就直接进去，省一步点击。
+  void _openStrategyMap() {
+    final st = widget.state;
+    if (st.chatGroups.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.of(context).strategyNeedGroup),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    void open(ChatGroup g) => Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StrategyMapPage(
+          state: st,
+          groupCall: g.groupCall,
+          groupName: g.name,
+        ),
+      ),
+    );
+    if (st.chatGroups.length == 1) {
+      open(st.chatGroups.first);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MaterialSurface(
+        radius: 24,
+        topOnly: true,
+        child: Container(
+          decoration: BoxDecoration(
+            color: C.sheetFill,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(S.of(ctx).strategyPickGroup,
+                    style: ts(16, w: FontWeight.w800)),
+                const SizedBox(height: 10),
+                for (final g in st.chatGroups)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.groups_rounded),
+                    title: Text(g.name, style: ts(14, w: FontWeight.w700)),
+                    subtitle: Text(g.groupCall, style: ts(11, c: C.slate)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      open(g);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 处理「群聊消息 → 打开策略地图」请求。
+  ///
+  /// 消息页只能改状态（见 [AppState.openStrategyMap]），真正的外壳切页签由
+  /// HomeShell2/HomePage 做；这里在地图页驻留时补上 push。
+  ///
+  /// push 放在**本帧末尾**（addPostFrameCallback 不改 schedule）执行，而不是等
+  /// 下一帧：从策略地图点「导航」时先 `Navigator.pop` 再 `focusOnMap`，同一帧里
+  /// 既设了焦点又设了跳转请求。处理视图焦点的回调也排在帧末 —— 两者在同一批
+  /// 回调里按注册顺序跑完，焦点先落位、再 push，不会再出现「push 把焦点覆盖成
+  /// 空」的竞态。必须帧末的另一个原因：请求可能由本帧 build/通知改出来，
+  /// 此刻直接 push 会在 build 期间改导航栈。
+  void _handleStrategyJump() {
+    final seq = widget.state.strategyJumpSeq;
+    if (seq == _lastStrategyJumpSeq) return;
+    _lastStrategyJumpSeq = seq;
+    final gc = widget.state.strategyJumpGroupCall;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openStrategyMapGroup(gc);
+    });
+  }
+
+  /// 打开指定群的策略地图（呼号匹配不上时退回默认入口）。
+  void _openStrategyMapGroup(String groupCall) {
+    final st = widget.state;
+    if (st.chatGroups.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.of(context).strategyNeedGroup),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    ChatGroup? g;
+    final gc = groupCall.toUpperCase();
+    for (final x in st.chatGroups) {
+      if (x.groupCall.toUpperCase() == gc) {
+        g = x;
+        break;
+      }
+    }
+    if (g == null) {
+      _openStrategyMap();
+      return;
+    }
+    final grp = g;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StrategyMapPage(
+          state: st,
+          groupCall: grp.groupCall,
+          groupName: grp.name,
+        ),
+      ),
+    );
+  }
+
   /// 地图类型切换菜单
   void _showMapTypeMenu() {
     final overlay = Overlay.of(context);
@@ -1877,6 +2690,10 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         children: [
                           // 高德系列
                           _mapTypeGroup('高德', C.blue, () => entry.remove()),
+                          // 地形/等高线
+                          _mapTypeGroup('地形', C.green, () => entry.remove()),
+                          // 天地图（需 Key）
+                          _mapTypeGroup('天地图', C.cyan, () => entry.remove()),
                           // 其他地图
                           _mapTypeGroup('其他', C.slate, () => entry.remove()),
                         ],
@@ -1938,7 +2755,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 if (_hiddenTypes.isNotEmpty)
                   GestureDetector(
                     onTap: () {
-                      setMenuState(() => _hiddenTypes.clear());
+                      widget.state.clearMapHiddenTypes();
+                      setMenuState(() {});
                       setState(() {});
                     },
                     child: Container(
@@ -2036,13 +2854,8 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: GestureDetector(
                   onTap: () {
-                    setMenuState(() {
-                      if (_hiddenTypes.contains(t.$1)) {
-                        _hiddenTypes.remove(t.$1);
-                      } else {
-                        _hiddenTypes.add(t.$1);
-                      }
-                    });
+                    widget.state.toggleMapHiddenType(t.$1);
+                    setMenuState(() {});
                     setState(() {});
                   },
                   behavior: HitTestBehavior.opaque,
@@ -2111,45 +2924,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
   Widget _beaconBar() {
     final st = widget.state;
     final on = st.beaconEnabled;
-    // 文案**全部**由结构化的 beaconPhase 分派（不再拿中文字符串做 == 比较，
-    // 也不再在这里重算「会不会发射」的条件 —— 那必须与 state.dart 的
-    // canAutoBeacon 同源，否则又会回「倒计时走着却不发射」的老毛病）。
-    // 三种「不发射」都要如实说原因：信标关 / 射频信标没开 / 当前是粗定位。
-    final label = switch (st.beaconPhase) {
-      BeaconPhase.off => S.of(context).beaconOffChip,
-      BeaconPhase.rfDisabled => S.of(context).beaconRfBeaconOff,
-      BeaconPhase.coarseFix => S.of(context).beaconCoarseFix,
-      // 开了「强制接受网络定位自动上报」时它**会真的发射**，所以这一档跟的是
-      // 倒计时；但文案里必须点明「发的是网络定位（粗）」—— 见 [BeaconPhase.coarseForced]。
-      BeaconPhase.coarseForced =>
-        S.of(context).beaconCoarseForced(st.nextBeaconIn),
-      // 佳明档：把**来源**说清楚 + 心率（用户明确要「主屏能看到心率」）。
-      // 只写倒计时的话，用户会以为发的是手机定位（两者可能差几十公里）。
-      BeaconPhase.garmin => S.of(context).beaconGarminNext(
-        st.nextBeaconIn,
-        st.myHr == null ? '--' : '${st.myHr}',
-      ),
-      BeaconPhase.imminent => S.of(context).beaconImminent,
-      BeaconPhase.counting => S.of(context).beaconNextIn(st.nextBeaconIn),
-      BeaconPhase.disconnected => S.of(context).beaconNotConnected,
-      BeaconPhase.waitingFix => st.nextBeaconIn,
-    };
-    // 颜色：非绿 = 「现在这一发不能当作正常 GPS 上报看」。
-    //   * coarseFix / coarseForced → 橙（粗定位）；强制那档虽然是绿的语义
-    //     （会发射），但内容同样是粗点，用绿色会与正常 GPS 上报混为一谈；
-    //   * garmin → 红（发的是手表的位置，可能差几十公里）。
-    // 改成 switch 而不是嵌套三元：档位会继续长，三元叠到第四层就没法读了。
-    final c = !on
-        ? C.slate
-        : switch (st.beaconPhase) {
-            BeaconPhase.coarseFix => C.orange,
-            BeaconPhase.coarseForced => C.orange,
-            BeaconPhase.garmin => C.red,
-            _ => C.green,
-          };
+    // 文案与颜色都从 widgets.dart 的 beaconBarText / beaconBarColor 来：
+    // 精简模式的状态条用的是同一份，两处不再各写一套（见那两个函数的说明）。
+    final label = beaconBarText(context, st);
+    final c = beaconBarColor(st);
     return ClickCursor(
       child: GestureDetector(
         onTap: _showMyPanel,
+        // 长按呼出「电台身份」编辑面板（呼号 / SSID / 台站备注）。
+        // 这条横杠就是「现在这一发会发出什么」的读数牌，改呼号/备注正对着它；
+        // 为此要进设置 → 电台页太绕。
+        onLongPress: () => showStationIdentitySheet(context, st),
         child: MaterialSurface(
           radius: 12,
           blurSigma: C.chipBlur,
@@ -2167,6 +2952,36 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
               children: [
                 Row(
                   children: [
+                    // 详细档在**最左侧**摆当前真要发出去的那一枚信标符号。
+                    //
+                    // 为什么要摆：符号不总是「我的符号」—— 智能档按速度档给不同
+                    // 符号（`activeSmartTier.symbol`），纯网络定位还能单独指定一枚
+                    // （`networkSymbol`，见 `beaconSymbolNow`）。只看倒计时与档位，
+                    // 用户不知道这一发在地图上会长成什么样。
+                    //
+                    // 表字符固定 `/`：本应用的报文永远是主表
+                    // （`AprsFmt.position` 写的是 `!lat/lng$symbol`）。
+                    if (st.beaconBarDetailed)
+                      Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: c.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.withValues(alpha: 0.22)),
+                        ),
+                        // 官方符号表 PNG（与地图标记同一套资源），缺席时自己回退
+                        // Material 图标；`halo` 让彩色符号在这个半透明横杠上也
+                        // 分辨得出（与地图标记同一个理由）。
+                        child: AprsSymbolImage(
+                          st.beaconSymbolNow,
+                          '/',
+                          size: 18,
+                          halo: true,
+                        ),
+                      ),
                     Icon(
                       on ? Icons.send_rounded : Icons.notifications_off_rounded,
                       size: st.beaconBarDetailed ? 16 : 14,
@@ -2180,33 +2995,17 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                             c: C.ink, w: FontWeight.w600),
                       ),
                     ),
-                    // 立即上报（信标开时绿色；关时置灰仍可发一次）
-                    ClickCursor(
-                      child: GestureDetector(
-                        onTap: () {
-                          st.sendBeacon();
-                          _toastMsg(S.of(context).positionBeaconDetail(
-                            st.myGrid,
-                            st.beaconAttachedDetail,
-                          ));
-                        },
-                        child: Container(
-                          // **不能是 const**：里面的档位判断是运行期表达式
-                          // （CI 报 invalid_constant）。
-                          padding: EdgeInsets.symmetric(
-                              horizontal: st.beaconBarDetailed ? 14 : 12,
-                              vertical: st.beaconBarDetailed ? 7 : 5),
-                          decoration: BoxDecoration(
-                            color: C.blue,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            S.of(context).manualBeacon,
-                            style: ts(st.beaconBarDetailed ? 11 : 10,
-                                c: Colors.white, w: FontWeight.w700),
-                          ),
-                        ),
-                      ),
+                    // 上报动作组（切换自动上报 + 立即上报）——三处共用同一个
+                    // widgets.ReportActions，不再各写一份（见该 widget 说明）。
+                    //
+                    // ⚠ 用一层空手势把横杠自身的 onTap / onLongPress 挡住：否则点
+                    // 「立即上报」时外层也会抢手势（长按会弹身份面板），表现为
+                    // 「按钮有时没反应」。按钮自己更深，仍然优先触发。
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {},
+                      onLongPress: () {},
+                      child: ReportActions(state: st),
                     ),
                   ],
                 ),
@@ -2230,6 +3029,13 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                  ),
+                // 声卡链路在收的时候，最下面挂一条声压条（见 widgets.AudioLevelStrip）。
+                // 只占三个像素高、横跨整条，不挤文案与按钮。
+                if (showAudioLevel(st))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: AudioLevelStrip(level: st.audio.levelNotifier),
                   ),
               ],
             ),
@@ -2272,9 +3078,11 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
       default:
         // 不发射的阶段（未连接 / 等待定位 / 信标关 / 射频信标关 /
         // 网络定位暂不上报 / 佳明来源）：倒计时没有意义，因此不摆。
-        // 佳明那一档例外地要给来源，所以单独列出来。
+        // 佳明与「外接 GPS 模块」两档例外地要给来源，所以单独列出来。
         if (st.beaconPhase == BeaconPhase.garmin) {
           parts.add(s.beaconGarminSource);
+        } else if (st.beaconPhase == BeaconPhase.spp) {
+          parts.add(s.beaconSppSource);
         }
     }
 
@@ -2313,9 +3121,72 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
     return '${(m / 1000).toStringAsFixed(m >= 10000 ? 0 : 1)} km';
   }
 
-  void _toastMsg(String m) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), behavior: SnackBarBehavior.floating),
+  /// 屏幕正中那一圈：半透明小圈 + 下面一行经纬度读数。
+  ///
+  /// 手机上没地方悬停，底部那条读数只能说「离我多远」；用户要把地图拖到某个
+  /// 位置时想知道「我现在看的是哪里」。圈心就是地图中心（[_screenToLatLng]
+  /// 已经把经度收进 ±180），所以它同时是个准星。
+  ///
+  /// 只读不改，且整块 `IgnorePointer`：它坐在台站标记之上，但绝不能抢走
+  /// 「点台站 / 点地图选点」的点击。
+  Widget _centerCoord(Size size) {
+    final (lat, lng) = _screenToLatLng(size.center(Offset.zero), size);
+    return IgnorePointer(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 半透明圈：填得很浅，底图还看得见；描边给它在卫星图上也足够对比度
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: C.white.withValues(alpha: 0.14),
+              border: Border.all(
+                color: C.white.withValues(alpha: 0.85),
+                width: 1.4,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: C.black.withValues(alpha: 0.28),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: C.blue,
+                ),
+              ),
+            ),
+          ),
+          // 读数放在圈下面：圈心必须正好落在屏幕中心，不能被文字顶偏
+          Transform.translate(
+            offset: const Offset(0, 27),
+            child: MaterialSurface(
+              radius: 9,
+              blurSigma: C.chipBlur,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: C.chipFill,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: elev1(),
+                ),
+                child: Text(
+                  fmtLatLng(lat, lng, widget.state.coordFmt),
+                  style: mono(10, c: C.ink, w: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2331,8 +3202,9 @@ class _MapPageState extends State<MapPage> with TickerProviderStateMixin {
         ? S.of(context).datumWgs
         : S.of(context).datumGcj;
     if (hoverPos != null && hoverPos.dx > 0 && _lastSize.width > 0) {
-      final (lat, lng) = _screenToLatLng(hoverPos, _lastSize);
-      coord = '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}';
+      // 悬停点是**页面坐标**（MouseRegion 在旋转之外），转过之后要反旋回来
+      final (lat, lng) = _pageToLatLng(hoverPos, _lastSize);
+      coord = fmtLatLng(lat, lng, widget.state.coordFmt);
       grid = maidenhead(lat, lng);
     } else if (hasFix &&
         myLat != null &&
@@ -2468,10 +3340,15 @@ class _BeaconMarkPainter extends CustomPainter {
   final Color color;
   final Offset Function(double lat, double lng) toScreen;
 
+  /// 画布转角（航向朝上时为 -航向）。`toScreen` 已经把它算进结果，这里只
+  /// 用来让 `shouldRepaint` 认得「只转了一下也是变了」。
+  final double rot;
+
   const _BeaconMarkPainter({
     required this.points,
     required this.color,
     required this.toScreen,
+    this.rot = 0,
   });
 
   @override
@@ -2501,17 +3378,22 @@ class _BeaconMarkPainter extends CustomPainter {
   /// 时间不参与比较：该层只在点位列表变化时重画（`beaconMarks` 增删即换实例）。
   @override
   bool shouldRepaint(covariant _BeaconMarkPainter old) =>
-      !identical(old.points, points) || old.color != color;
+      !identical(old.points, points) || old.color != color || old.rot != rot;
 }
 
 class _TrackOverlayPainter extends CustomPainter {
   final List<TrackPt> points;
   final Color color;
   final Offset Function(double lat, double lng) toScreen;
+
+  /// 画布转角（见 [_BeaconMarkPainter] 里的说明）
+  final double rot;
+
   _TrackOverlayPainter({
     required this.points,
     required this.color,
     required this.toScreen,
+    this.rot = 0,
   });
 
   @override
@@ -2558,7 +3440,7 @@ class _TrackOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TrackOverlayPainter old) =>
-      old.points != points || old.color != color;
+      old.points != points || old.color != color || old.rot != rot;
 }
 
 /// 自己的定位精度圈：把 GPS **实测**精度如实画出来（`myAccuracy`）。
@@ -2625,13 +3507,25 @@ class _MyAccuracyPainter extends CustomPainter {
 class _HeatmapPainter extends CustomPainter {
   final List<Station> stations;
   final Offset Function(double lat, double lng) toScreen;
-  _HeatmapPainter({required this.stations, required this.toScreen});
+  _HeatmapPainter({
+    required this.stations,
+    required this.toScreen,
+    this.level = 1,
+    this.rot = 0,
+  });
+
+  /// 画布转角（见 [_BeaconMarkPainter] 里的说明）
+  final double rot;
+
+  /// 热力图档位 0/1/2（弱/中/强）：只缩放网格单元的半径，密度统计本身不变。
+  final int level;
+  double get _levelScale => level == 0 ? 0.7 : (level >= 2 ? 1.5 : 1.0);
 
   @override
   void paint(Canvas canvas, Size size) {
     if (stations.isEmpty || size.isEmpty) return;
     // 网格单元（px）：统计每个格子内台站数作为密度
-    const cell = 28.0;
+    final cell = 28.0 * _levelScale;
     final cols = (size.width / cell).ceil() + 1;
     final rows = (size.height / cell).ceil() + 1;
     final grid = List<int>.filled(cols * rows, 0);
@@ -2693,5 +3587,48 @@ class _HeatmapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HeatmapPainter old) =>
-      old.stations != stations;
+      old.stations != stations || old.rot != rot;
+}
+
+/// 把地图**画出来的**那几层裁到「可见地图区」的裁剪器。
+///
+/// 为什么需要（用户反馈）：「横屏地图界面上，蓝色历史轨迹线图层覆盖在了左侧定位
+/// 信息卡片和底部上报状态横条（『距下次上报 47s』那一块）之上，轨迹线穿透并压住了
+/// 这些 UI 浮层。」
+///
+/// 图层顺序本身是对的：轨迹层排在主 Stack 里所有浮层**之前**（见那里的注释），
+/// 画不到卡片上面。真正的原因是那些卡片**本身是磨砂半透明的** —— 2.0 外壳的
+/// 竖条 / 内容面板 / 顶栏 / 贴底浮层都悬在整屏铺满的地图之上，背后那张地图（连同
+/// 这条线）会从卡片里透出来。贴左控件早就按 [MapPage.leftInset] 让开了，画上去的
+/// 层却没让，表现就是「线穿过了卡片」。
+///
+/// 1.0 布局下地图与侧栏是并排的（传进来的几个 inset 都是 0），这个框就等于整屏，
+/// 什么都不裁，与旧版逐像素一致。
+class _OverlayInsetClipper extends CustomClipper<Rect> {
+  /// 左侧被外壳占用的宽度（竖条 + 展开时的内容面板）。
+  final double left;
+
+  /// 顶栏高度。
+  final double top;
+
+  /// 底部贴底浮层占用的高度（上报横杠或底部坐标条）。
+  final double bottom;
+
+  _OverlayInsetClipper({
+    required this.left,
+    required this.top,
+    required this.bottom,
+  });
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(
+        left.clamp(0.0, size.width),
+        top.clamp(0.0, size.height),
+        size.width,
+        (size.height - bottom).clamp(0.0, size.height),
+      );
+
+  @override
+  bool shouldReclip(covariant _OverlayInsetClipper old) =>
+      old.left != left || old.top != top || old.bottom != bottom;
 }

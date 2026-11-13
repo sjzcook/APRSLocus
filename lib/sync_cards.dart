@@ -1,0 +1,485 @@
+import 'package:flutter/material.dart';
+
+import 'cloud_sync.dart';
+import 'settings_widgets.dart';
+import 'state.dart';
+import 'theme.dart';
+import 'widgets.dart';
+
+/// ─── 云同步的几张卡（长在「APRSNETCN」链路页上）───
+///
+/// 用户先要「不要单独列成一页，归入服务器页」，又要「云端的东西都归到
+/// APRSNETCN 那一页」：数据存在哪台服务器上，就配在哪台服务器的页上，
+/// 换一台服务器本来也要重新登录（见 AppState.dropSyncSessionIfMoved）。
+///
+/// 这一组是可分离的：`AppFeature.cloudSync` 关掉之后整块不渲染，
+/// 定时同步与手动同步都不再发请求（见 AppState.cloudSyncOn）。
+///
+/// 三张卡各管一件事：①用谁的账号、同步什么、多久一次；②云端现在有多少；
+/// ③哪些设备登录着。云端备份的上传与取回留在「备份与恢复」页 —— 那边管
+/// 整份备份的预览与覆盖，两份东西放一个页面里只会让人分不清。
+class CloudSyncCards extends StatefulWidget {
+  final AppState state;
+  const CloudSyncCards({super.key, required this.state});
+
+  @override
+  State<CloudSyncCards> createState() => _CloudSyncCardsState();
+}
+
+class _CloudSyncCardsState extends State<CloudSyncCards> {
+  final _account = TextEditingController();
+  final _password = TextEditingController();
+  bool _busy = false;
+  String _err = '';
+  Map<String, dynamic>? _remote;
+
+  AppState get st => widget.state;
+
+  @override
+  void initState() {
+    super.initState();
+    _account.text = st.syncAccount;
+    if (st.syncToken.isNotEmpty) _refresh();
+  }
+
+  @override
+  void dispose() {
+    _account.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  /// 失败原因一律回原因码，文案在这一层选。
+  String _errText(S s, String code) {
+    if (code == 'need-login') return s.syncNeedLogin;
+    if (code == 'no-http') return s.syncNoWeb;
+    if (code == 'no-server') return s.syncNoServer;
+    if (code == 'busy') return s.syncBusy;
+    if (code == 'missing-account') return '${s.syncAccount} / ${s.syncPassword}';
+    return '${s.syncFailed}（$code）';
+  }
+
+  String _lastText(S s) {
+    final stamps = [st.syncMsgAt, st.syncPullAt, st.syncTrackAt]
+        .where((v) => v > 0)
+        .toList();
+    if (stamps.isEmpty) return s.syncNever;
+    final at = DateTime.fromMillisecondsSinceEpoch(
+        stamps.reduce((a, b) => a > b ? a : b));
+    final now = DateTime.now();
+    final hm =
+        '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    if (at.year == now.year && at.month == now.month && at.day == now.day) {
+      return hm;
+    }
+    return '${at.month.toString().padLeft(2, '0')}-'
+        '${at.day.toString().padLeft(2, '0')} $hm';
+  }
+
+  /// 服务端给的 ISO 时间（带偏移）→ `11-06 08:12` 这种短写法。
+  String _short(String? iso) {
+    if (iso == null || iso.length < 16) return '';
+    return '${iso.substring(5, 10)} ${iso.substring(11, 16)}';
+  }
+
+  Future<void> _refresh() async {
+    if (st.syncToken.isEmpty) return;
+    try {
+      final data = await st.syncState();
+      if (mounted) setState(() => _remote = data);
+    } on SyncException catch (error) {
+      if (mounted) setState(() => _err = error.code);
+    } catch (_) {
+      if (mounted) setState(() => _err = 'network');
+    }
+  }
+
+  Future<void> _login() async {
+    setState(() {
+      _busy = true;
+      _err = '';
+    });
+    st.setSyncAccount(_account.text);
+    st.setSyncPassword(_password.text);
+    final code = await st.syncLogin();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (code.isNotEmpty) {
+      setState(() => _err = code);
+      return;
+    }
+    _password.clear();
+    await _refresh();
+  }
+
+  Future<void> _logout() async {
+    setState(() => _busy = true);
+    await st.syncLogout();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _remote = null;
+    });
+  }
+
+  Future<void> _runNow() async {
+    final s = S.of(context);
+    setState(() {
+      _busy = true;
+      _err = '';
+    });
+    final code = await st.syncNow();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (code.isNotEmpty) {
+      setState(() => _err = code);
+      return;
+    }
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(s.syncRunDone), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Future<void> _clearCloud() async {
+    final s = S.of(context);
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.syncClear, style: T.h2),
+        content: Text(s.syncClearAsk, style: ts(12, c: C.slate, h: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.cancel, style: ts(13, c: C.slate)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: C.orange),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.syncClear, style: ts(13)),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    setState(() => _busy = true);
+    final code = await st.syncClearCloud();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (code.isNotEmpty) {
+      setState(() => _err = code);
+      return;
+    }
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(s.syncClearDone), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  /// 把某台设备踢掉：它下次同步就得重新登录。本机不在列表里给这个按钮。
+  Future<void> _removeDevice(S s, String id) async {
+    if (id.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await st.syncApi.dropDevice(id);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(s.syncDeviceRemoved),
+            behavior: SnackBarBehavior.floating),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _err = 'network';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = S.of(context);
+    return ListenableBuilder(
+      listenable: st,
+      builder: (context, _) => Column(children: [
+        _syncCard(s),
+        const SizedBox(height: 16),
+        _dataCard(s),
+        if (st.syncToken.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _devicesCard(s),
+        ],
+      ]),
+    );
+  }
+
+  /// ① 这一张：用谁的账号、同步什么、多久一次。
+  Widget _syncCard(S s) {
+    final logged = st.syncToken.isNotEmpty;
+    return SettingsSectionCard(
+      title: s.syncTitle,
+      subtitle: s.syncLead,
+      icon: Icons.cloud_sync_rounded,
+      color: C.blue,
+      children: [
+        // 地址跟着「APRSNETCN」链路走，写出来让人看得见数据发去了哪台。
+        // 链路页没填地址就写「未填」，不拿任何内置地址顶上去。
+        SettingsRow2(
+          s.syncServer,
+          st.syncBase.isEmpty ? s.oobeDoneUnset : st.syncBase,
+        ),
+        // 明文这一条必须留着：口令与报文都会经过网络，用户有权先知道
+        SettingsHint(s.syncPlainHint, color: C.orange),
+        if (logged)
+          SettingsRow2(
+            s.syncAccount,
+            st.syncCall.isEmpty ? s.syncLoggedIn('-') : s.syncLoggedIn(st.syncCall),
+          )
+        else ...[
+          SettingsInput(
+            s.syncAccount,
+            _account,
+            onChanged: st.setSyncAccount,
+            hint: s.syncAccount,
+          ),
+          _passwordRow(s),
+          SettingsHint(s.syncAccountHint),
+        ],
+        _loginRow(s, logged: logged),
+        SettingsChoice<String>(
+          s.syncMode,
+          value: st.syncMode,
+          options: const ['off', 'manual', 'auto'],
+          labelOf: (v) => switch (v) {
+            'auto' => s.syncModeAuto,
+            'manual' => s.syncModeManual,
+            _ => s.syncModeOff,
+          },
+          onChanged: st.setSyncMode,
+        ),
+        if (st.syncMode == 'auto')
+          SettingsChoice<int>(
+            s.syncAutoEvery,
+            value: st.syncAutoMinutes,
+            options: AppState.syncAutoChoices,
+            labelOf: (v) => s.syncEveryMin('$v'),
+            onChanged: st.setSyncAutoMinutes,
+          ),
+        SettingsHint(s.syncModeAutoHint),
+        SettingsSwitch(
+          s.syncMessages,
+          value: st.syncMessagesOn,
+          onChanged: st.setSyncMessagesOn,
+        ),
+        SettingsSwitch(
+          s.syncTracks,
+          value: st.syncTracksOn,
+          onChanged: st.setSyncTracksOn,
+        ),
+        SettingsHint(s.syncContentHint),
+      ],
+    );
+  }
+
+  /// 口令单独一行：`SettingsInput` 不带隐藏输入，而口令该遮着。
+  Widget _passwordRow(S s) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: C.border, width: 0.4))),
+        child: Row(
+          children: [
+            Text(s.syncPassword, style: ts(12, c: C.slate)),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: TextField(
+                controller: _password,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                textAlign: TextAlign.right,
+                style: ts(13, w: FontWeight.w600),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  hintText: '••••••',
+                  hintStyle: ts(12, c: C.greyLight, w: FontWeight.w400),
+                  filled: true,
+                  fillColor: C.bgSoft,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: C.border, width: 0.4),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: C.border, width: 0.4),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: C.blue, width: 0.8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _loginRow(S s, {required bool logged}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: logged ? C.slate : C.blue,
+                disabledBackgroundColor: C.greyBg,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+              ),
+              onPressed: _busy ? null : (logged ? _logout : _login),
+              child: Text(logged ? s.syncLogout : s.syncLogin, style: ts(13)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ② 这一张：云端现在有什么，两个动手的按钮。
+  Widget _dataCard(S s) {
+    final ready = st.syncToken.isNotEmpty;
+    final msgs = (_remote?['messages'] as Map?) ?? const {};
+    final tracks = (_remote?['tracks'] as Map?) ?? const {};
+    final backups = (_remote?['backups'] as List?) ?? const [];
+    final msgCount = (msgs['count'] as num?)?.toInt() ?? 0;
+    final days = (tracks['days'] as num?)?.toInt() ?? 0;
+    final points = (tracks['points'] as num?)?.toInt() ?? 0;
+    return SettingsSectionCard(
+      title: s.syncCloudData,
+      icon: Icons.cloud_done_rounded,
+      color: C.blue,
+      children: [
+        SettingsRow2(
+          s.syncMessages,
+          ready ? s.syncMsgSummary('$msgCount') : '—',
+        ),
+        SettingsRow2(
+          s.syncTracks,
+          ready ? s.syncTrackSummary('$days', '$points') : '—',
+        ),
+        SettingsRow2(
+          s.syncBackups,
+          ready ? s.syncBackupsCount('${backups.length}') : '—',
+        ),
+        SettingsRow2(s.syncLastAt, _lastText(s)),
+        if (_err.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
+            child: Text(_errText(s, _err), style: ts(12, c: C.red, h: 1.4)),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: C.blue,
+                    disabledBackgroundColor: C.greyBg,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  onPressed: (_busy || !st.syncReady) ? null : _runNow,
+                  icon: _busy
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: C.white,
+                          ),
+                        )
+                      : const Icon(Icons.sync_rounded, size: 16),
+                  label: Text(s.syncNow, style: ts(12)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    side: BorderSide(color: C.orange.withValues(alpha: 0.4)),
+                  ),
+                  onPressed: (_busy || !ready) ? null : _clearCloud,
+                  icon: Icon(Icons.delete_outline_rounded, size: 16, color: C.orange),
+                  label: Text(s.syncClear, style: ts(12, c: C.orange)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SettingsHint(s.syncClearHint),
+        SettingsHint(s.syncBackupElsewhere),
+      ],
+    );
+  }
+
+  /// ③ 这一张：哪些设备登录着。丢掉一台，它下次同步就得重新登录。
+  Widget _devicesCard(S s) {
+    final list = (_remote?['devices'] as List?) ?? const [];
+    return SettingsSectionCard(
+      title: s.syncDevicesTitle,
+      icon: Icons.devices_rounded,
+      color: C.purple,
+      children: [
+        SettingsHint(s.syncDeviceHint),
+        for (final row in list)
+          if (row is Map) _deviceRow(s, Map<String, dynamic>.from(row)),
+      ],
+    );
+  }
+
+  Widget _deviceRow(S s, Map<String, dynamic> row) {
+    final id = (row['device'] as String?) ?? '';
+    final ver = (row['ver'] as String?) ?? '';
+    final plat = (row['platform'] as String?) ?? '';
+    final last = _short(row['last'] as String?);
+    final mine = id.isNotEmpty && id == st.syncDeviceId;
+    final bits = [plat, ver].where((x) => x.isNotEmpty).join(' ');
+    final title = mine
+        ? '${bits.isEmpty ? id : bits} · ${s.syncDeviceThis}'
+        : (bits.isEmpty ? id : bits);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: ts(12, w: FontWeight.w600)),
+                if (last.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(last, style: ts(11, c: C.slate)),
+                  ),
+              ],
+            ),
+          ),
+          if (!mine)
+            TextButton(
+              onPressed: _busy ? null : () => _removeDevice(s, id),
+              child: Text(s.syncDeviceRemove, style: ts(12, c: C.orange)),
+            ),
+        ],
+      ),
+    );
+  }
+}

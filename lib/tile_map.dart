@@ -60,9 +60,61 @@ class TileMapView extends StatefulWidget {
 }
 
 class _TileMapViewState extends State<TileMapView> {
+  /// 手势进行中：拖动/捏合时**先压住新瓦片的加载**。
+  ///
+  /// 为什么：拖动的每一帧都会走父级 setState → 本 widget 与整片瓦片网格重建，滚进来的
+  /// 新瓦片会在**拖动过程中**就发起下载与解码，跟手指抢带宽和解码器 —— 这是瓦片地图
+  /// "不丝滑"的主因。地图类应用的做法都一样：拖动期间只用已有的图顶着（我们的
+  /// _FallbackPainter 矢量底图一直可见，所以看不出来），**手停了再加载**。
+  bool _gesturing = false;
+  Timer? _gestureTimer;
+
+  void _markGesturing() {
+    _gesturing = true;
+    _gestureTimer?.cancel();
+    _gestureTimer = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) setState(() => _gesturing = false);
+    });
+  }
+
   Offset _lastFocal = Offset.zero;
   Offset? _anchorWorld; // 手势开始时手指下的世界像素点（跟手锚点）
   double _startZoom = 11.0; // 手势起始 zoom（d.scale 是累计值，必须用起始值作基准）
+
+  /// ── 双击放大 ──
+  ///
+  /// 不注册 `GestureDetector.onDoubleTap`：一旦注册，**每一次**单击都要等
+  /// 一个双击判定窗口（~300ms）才发出去，点台站、点地图选点都会明显变慢
+  /// （下面 `build` 里那行注释记的就是这件事）。所以单击照旧立即生效，
+  /// 只是自己数两下：上一次点与这一次若在 320ms 内、且没跑出 40px，
+  /// 就当成双击，围绕那一点放大一级（与右下角「+」同一档，走同样的动画）。
+  DateTime? _lastTapAt;
+  Offset? _lastTapPos;
+  static const int _kDoubleTapMs = 320;
+  static const double _kDoubleTapSlop = 40;
+
+  void _handleTapUp(TapUpDetails d, Size size) {
+    final now = DateTime.now();
+    final prevAt = _lastTapAt;
+    final prev = _lastTapPos;
+    final isDouble = prevAt != null &&
+        prev != null &&
+        now.difference(prevAt).inMilliseconds <= _kDoubleTapMs &&
+        (d.localPosition - prev).distance <= _kDoubleTapSlop;
+    if (!isDouble) {
+      _lastTapAt = now;
+      _lastTapPos = d.localPosition;
+      widget.onTap(d.localPosition);
+      return;
+    }
+    // 双击成功：清掉计时，免得第三下又配成一次。
+    _lastTapAt = null;
+    _lastTapPos = null;
+    final newZoom =
+        (widget.zoom + 1).clamp(widget.minZoom, widget.maxZoom).toDouble();
+    if ((newZoom - widget.zoom).abs() < 0.001) return;
+    widget.onZoomRequest(newZoom, _panForFocus(d.localPosition, newZoom, size));
+  }
 
   /// 手指下的世界像素点
   Offset _worldAt(Offset screen, Size size) {
@@ -73,6 +125,7 @@ class _TileMapViewState extends State<TileMapView> {
   }
 
   void _handleScaleStart(ScaleStartDetails d, Size size) {
+    _markGesturing();
     _lastFocal = d.localFocalPoint;
     _startZoom = widget.zoom;
     _anchorWorld = _worldAt(d.localFocalPoint, size);
@@ -92,6 +145,7 @@ class _TileMapViewState extends State<TileMapView> {
   }
 
   void _handleScaleUpdate(ScaleUpdateDetails d, Size size) {
+    _markGesturing();
     // d.scale 是手势起始以来的累计缩放比 → 累计 zoom 增量
     final dz = math.log(d.scale) / math.ln2;
     // 缩放与平移同时处理：缩放时焦点移动也应跟手平移
@@ -137,7 +191,19 @@ class _TileMapViewState extends State<TileMapView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        final z = widget.zoom.floor().clamp(0, 19);
+        // 选层级用 round 而非 floor：用 floor 时整档 [z, z+1) 都取 z 级瓦片，
+        // 越靠近 z+1 被拉得越大（z=12.9 时 1.93x，dpr 再乘 2~3）。round 把放大
+        // 封顶在 √2≈1.41x，后半档改成缩小（0.71~1x），观感明显更锐。
+        // 代价：过半档会取到更高一级瓦片，请求量略增（地图级 z 不变，仍是 |Δ|≤1）。
+        final z = widget.zoom.round().clamp(0, 19);
+        // 屏幕像素密度 > 1 且图源支持 2× 时取高清瓦片（与选层级无关的另一层补偿）。
+        //
+        // 实测（curl 拉高德瓦片看像素）：只有高德街道的 wprd 主机 + scl=2 给
+        // 512px，其余所有图源（Carto/OSM/Esri/腾讯/高德卫星）都只给 256px，
+        // 没有 2× 变体 —— 所以「糊」的主因不在图源，而在上面 round 选的层级；
+        // 高清瓦片只是对高德街道多补一档，其它图源靠 round 这一处改善。
+        final dpr = MediaQuery.of(context).devicePixelRatio;
+        final hd = dpr > 1.01 && supportsHd(widget.mapType);
         final proj = projectionFor(widget.mapType);
         final centerPx =
             proj.latLngToPx(widget.centerLat, widget.centerLng, widget.zoom);
@@ -166,8 +232,10 @@ class _TileMapViewState extends State<TileMapView> {
               child: _Tile(
                   tx: wx, ty: ty, z: z, scale: scale,
                   mapType: widget.mapType,
+                  hd: hd,
                   cacheEnabled: widget.cacheEnabled,
-                  offlineOnly: widget.offlineOnly),
+                  offlineOnly: widget.offlineOnly,
+                  deferLoad: _gesturing),
             ));
           }
         }
@@ -179,8 +247,9 @@ class _TileMapViewState extends State<TileMapView> {
           child: GestureDetector(
             onScaleStart: (d) => _handleScaleStart(d, size),
             onScaleUpdate: (d) => _handleScaleUpdate(d, size),
-            onTapUp: (d) => widget.onTap(d.localPosition),
-            // 注意：不注册 onDoubleTapDown，否则单击需等待双击判定(~300ms)延迟
+            onTapUp: (d) => _handleTapUp(d, size),
+            // 注意：不注册 onDoubleTap/onDoubleTapDown —— 双击由 [_handleTapUp]
+            // 自己数两下（理由见那边注释：注册它会让每次单击都等双击判定）。
             behavior: HitTestBehavior.opaque,
             child: ClipRect(
               child: Stack(
@@ -370,11 +439,17 @@ class _Tile extends StatefulWidget {
   final double scale;
   final MapType mapType;
 
+  /// 取高清（512px）瓦片。由父级按屏幕像素密度决定（见 [_TileMapViewState.build]）。
+  final bool hd;
+
   /// 是否把在线瓦片写入磁盘缓存
   final bool cacheEnabled;
 
   /// 仅离线模式：完全不发网络请求（野外省流量）
   final bool offlineOnly;
+
+  /// 拖动/缩放进行中：**先不发起下载**（见 _TileMapViewState._markGesturing）
+  final bool deferLoad;
 
   const _Tile({
     required this.tx,
@@ -382,8 +457,10 @@ class _Tile extends StatefulWidget {
     required this.z,
     required this.scale,
     this.mapType = MapType.gaode,
+    this.hd = false,
     this.cacheEnabled = true,
     this.offlineOnly = false,
+    this.deferLoad = false,
   });
 
   @override
@@ -394,34 +471,162 @@ class _TileState extends State<_Tile> {
   /// 已解析到的像素。null = 还没解析出来 / 最终没有可用的图
   Uint8List? _bytes;
 
+  /// 注记叠加瓦片（天地图 cva/cia/cta 等透明底文字层）。null = 无注记 / 未解析出。
+  /// 与 [_bytes] 独立：底图加载失败不该拖累注记，反之亦然。
+  Uint8List? _annBytes;
+
   /// 0 = 本瓦片的原图；n>0 = 用向上 n 级的祖先瓦片放大顶替
   int _upSteps = 0;
 
   /// 顶替时本瓦片在祖先图内的象限位置（每格 = 1 个本瓦片边长）
   (int, int) _quad = (0, 0);
 
+  /// 注记层独立的一套「祖先放大」几何（与底图 [_upSteps]/[_quad] 无关，
+  /// 因为注记可能从不同图源/不同祖先解析出来）
+  int _annUpSteps = 0;
+  (int, int) _annQuad = (0, 0);
+
+  /// 本格由**更细一级的子瓦片拼出来**时，这些子瓦片的字节与行列。
+  ///
+  /// 缩放**缩小**时用：新一层（更粗）的瓦片此前没下过，而刚看的那层（更细）
+  /// 就在内存里 —— 拿子瓦片拼一次，手里有图、不必等网络。
+  List<({Uint8List bytes, int col, int row})>? _parts;
+  int _partsSteps = 0;
+
   /// 本次是否已尝试落盘：同一张瓦片被多次重建时不重复写
   bool _triedWrite = false;
+
+  /// 注记层的落盘去重（与 [_triedWrite] 分开）
+  bool _triedAnnWrite = false;
 
   @override
   void initState() {
     super.initState();
-    _resolve();
+    // 拖动期间新滚进来的瓦片先不**下载**（等手势停下，见 _TileMapViewState）。
+    // 但内存里的图（本格 / 祖先 / 子瓦片）照常同步取：捏合缩放时新一层的
+    // 每一格都欠着加载，统统留白就是「缩放白屏」。
+    _load(allowAsync: !widget.deferLoad);
+    if (!widget.deferLoad) _resolveAnnotation();
+  }
+
+  /// 取图入口：先看**内存缓存**（同步，缩放跨层级时就是靠它不闪），
+  /// 没有才走磁盘 / 网络 / 祖先放大那条异步链路。
+  ///
+  /// 内存命中时直接写字段而不走 setState：这个方法在 initState 与
+  /// didUpdateWidget 里调用，此刻本来就在重建，再 setState 只会多排一帧。
+  void _load({bool allowAsync = true}) {
+    final src = _src;
+    final hit = TileMem.get(src, widget.z, widget.tx, widget.ty);
+    if (hit != null) {
+      _bytes = hit;
+      _upSteps = 0;
+      _quad = (0, 0);
+      _parts = null;
+      return;
+    }
+    if (widget.hd) {
+      final lo = TileMem.get(widget.mapType.name, widget.z, widget.tx, widget.ty);
+      if (lo != null) {
+        _bytes = lo;
+        _upSteps = 0;
+        _quad = (0, 0);
+        _parts = null;
+        return;
+      }
+    }
+    // 内存里有更细一级的子瓦片（缩小）：先拼一张顶着，网络回来再换成原图。
+    final kids = _memChildren(2);
+    if (kids != null) {
+      _bytes = null;
+      _upSteps = 0;
+      _parts = kids.parts;
+      _partsSteps = kids.steps;
+      if (allowAsync) _resolve();
+      return;
+    }
+    // 内存里有祖先（放大）：放大顶上。
+    final up = _memAncestor();
+    if (up != null) {
+      _bytes = up.bytes;
+      _upSteps = up.upSteps;
+      _quad = up.quad;
+      _parts = null;
+      if (allowAsync) _resolve();
+      return;
+    }
+    if (allowAsync) _resolve();
+  }
+
+  /// 内存里同步找祖先瓦片（最多上 4 级）。只查内存、不碰磁盘 ——
+  /// 这个方法在 initState 与缩放动画的每一帧里被调用，必须便宜。
+  ({Uint8List bytes, int upSteps, (int, int) quad})? _memAncestor() {
+    final me = TileId(widget.z, widget.tx, widget.ty);
+    var cur = me.parent;
+    for (var steps = 1; steps <= 4 && cur != null; steps++) {
+      final hi = widget.hd
+          ? TileMem.get(hdSourceName(widget.mapType), cur.z, cur.x, cur.y)
+          : null;
+      if (hi != null) return (bytes: hi, upSteps: steps, quad: me.quadIn(cur));
+      final lo = TileMem.get(widget.mapType.name, cur.z, cur.x, cur.y);
+      if (lo != null) return (bytes: lo, upSteps: steps, quad: me.quadIn(cur));
+      cur = cur.parent;
+    }
+    return null;
+  }
+
+  /// 内存里同步找**下 n 级**的子瓦片：只有整块拼齐（4 格 / 16 格全在）才算数，
+  /// 缺一格就会缺一块地图 —— 那不是顶用，是画错。
+  ({List<({Uint8List bytes, int col, int row})> parts, int steps})?
+      _memChildren(int maxSteps) {
+    for (var steps = 1; steps <= maxSteps; steps++) {
+      final f = 1 << steps;
+      final cz = widget.z + steps;
+      if (cz > 19) return null;
+      final out = <({Uint8List bytes, int col, int row})>[];
+      var complete = true;
+      for (var row = 0; row < f && complete; row++) {
+        for (var col = 0; col < f && complete; col++) {
+          final x = (widget.tx << steps) + col;
+          final y = (widget.ty << steps) + row;
+          final b = (widget.hd
+                  ? TileMem.get(hdSourceName(widget.mapType), cz, x, y)
+                  : null) ??
+              TileMem.get(widget.mapType.name, cz, x, y);
+          if (b == null) {
+            complete = false;
+            break;
+          }
+          out.add((bytes: b, col: col, row: row));
+        }
+      }
+      if (complete && out.isNotEmpty) return (parts: out, steps: steps);
+    }
+    return null;
   }
 
   @override
   void didUpdateWidget(covariant _Tile old) {
     super.didUpdateWidget(old);
     if (old.mapType != widget.mapType ||
+        old.hd != widget.hd ||
         old.offlineOnly != widget.offlineOnly ||
         old.cacheEnabled != widget.cacheEnabled ||
         old.z != widget.z ||
         old.tx != widget.tx ||
         old.ty != widget.ty) {
       _bytes = null;
+      _annBytes = null;
       _upSteps = 0;
+      _parts = null;
       _triedWrite = false;
-      _resolve();
+      _triedAnnWrite = false;
+      _load(allowAsync: !widget.deferLoad);
+      if (!widget.deferLoad) _resolveAnnotation();
+    }
+    // 手势结束（deferLoad: true → false）：把拖动期间欠下的加载补上。
+    if (old.deferLoad && !widget.deferLoad) {
+      _load();
+      _resolveAnnotation();
     }
     // 只有 scale 变化（捏合/滚轮缩放）时**不重新解析**：图还是同一张，
     // 只是要按新的像素边长画。几何一律在 build() 里按当前 _px 现算 ——
@@ -448,6 +653,11 @@ class _TileState extends State<_Tile> {
 
   double get _px => 256.0 * widget.scale;
 
+  /// 本瓦片的缓存来源键。高清瓦片与 1× 分开存 —— 同一 z/x/y 的 256 与 512
+  /// 是两张不同的图，共用一份缓存会互相顶掉（切到高清后看到的是旧 1× 图）。
+  String get _src =>
+      widget.hd ? hdSourceName(widget.mapType) : widget.mapType.name;
+
   /// 记录解析结果。几何不在这里算 —— 见 [build] 与 [didUpdateWidget]。
   void _setBytes(Uint8List? b, {int upSteps = 0, (int, int) quad = (0, 0)}) {
     if (!mounted) return;
@@ -455,59 +665,80 @@ class _TileState extends State<_Tile> {
       _bytes = b;
       _upSteps = b == null ? 0 : upSteps;
       _quad = quad;
+      _parts = null;
     });
   }
 
-  /// 按**当前**缩放比现算尺寸的图像
-  Widget _tileImage() {
+  /// 记录注记层解析结果（几何与底图分开，见 [_annUpSteps]）
+  void _setAnnBytes(Uint8List? b, {int upSteps = 0, (int, int) quad = (0, 0)}) {
+    if (!mounted) return;
+    setState(() {
+      _annBytes = b;
+      _annUpSteps = b == null ? 0 : upSteps;
+      _annQuad = quad;
+    });
+  }
+
+  /// 按**当前**缩放比现算尺寸的图像（底图与注记通用）。
+  Widget _tileImageBytes(Uint8List bytes, int upSteps, (int, int) quad) {
     final px = _px;
-    final provider =
-        ResizeImage(MemoryImage(_bytes!), width: 256, allowUpscaling: true);
-    if (_upSteps == 0) {
-      return Image(
-        image: provider,
-        width: px,
-        height: px,
-        fit: BoxFit.fill,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-      );
-    }
+    if (upSteps == 0) return _imgBytes(bytes, px);
     // 祖先图有 f×f 个本瓦片那么大，只露出本瓦片所在的那一格
-    final f = 1 << _upSteps;
+    final f = 1 << upSteps;
     return ClipRect(
       child: OverflowBox(
         maxWidth: px * f,
         maxHeight: px * f,
         alignment: Alignment.topLeft,
         child: Transform.translate(
-          offset: Offset(-_quad.$1 * px, -_quad.$2 * px),
-          child: Image(
-            image: provider,
-            width: px * f,
-            height: px * f,
-            fit: BoxFit.fill,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-          ),
+          offset: Offset(-quad.$1 * px, -quad.$2 * px),
+          child: _imgBytes(bytes, px * f),
         ),
       ),
     );
   }
 
-  Future<void> _resolve() async {
-    final src = widget.mapType.name;
+  Widget _tileImage() => _tileImageBytes(_bytes!, _upSteps, _quad);
 
-    // 1) 本图源缓存
+  /// 单张瓦片（或它的祖先放大版 / 子瓦片）按给定边长画一格
+  Widget _imgBytes(Uint8List bytes, double size) => Image(
+        image: ResizeImage(MemoryImage(bytes), width: 256, allowUpscaling: true),
+        width: size,
+        height: size,
+        fit: BoxFit.fill,
+        gaplessPlayback: true,
+        // high（双三次）：瓦片在非整数 zoom / 高 dpr 下几乎总要被放大一点，
+        // medium（双线性）是放大时最糊的一档。贵不了多少，观感差别明显。
+        filterQuality: FilterQuality.high,
+      );
+
+  Future<void> _resolve() async {
+    final src = _src;
+
+    // 1) 本图源缓存（高清模式先找 512，再退到 1×）
     if (TileCache.available) {
       final hit = await TileCache.get(src, widget.z, widget.tx, widget.ty);
-      if (hit != null) return _setBytes(hit);
+      if (hit != null) {
+        TileMem.put(src, widget.z, widget.tx, widget.ty, hit);
+        return _setBytes(hit);
+      }
+      if (widget.hd) {
+        final lo = await TileCache.get(
+            widget.mapType.name, widget.z, widget.tx, widget.ty);
+        if (lo != null) {
+          TileMem.put(
+              widget.mapType.name, widget.z, widget.tx, widget.ty, lo);
+          return _setBytes(lo);
+        }
+      }
     }
 
     // 2) 在线
     if (!widget.offlineOnly) {
       for (final t in _onlineCandidates) {
-        final url = tileUrl(t, widget.tx, widget.ty, widget.z);
+        // 只有「本图源」才用高清：候选是 carto/osm，它们没有 2× 变体
+        final isHd = widget.hd && t == widget.mapType;
+        final url = tileUrl(t, widget.tx, widget.ty, widget.z, hd: isHd);
         if (url.isEmpty) continue;
         try {
           final bytes = await httpGetBytes(
@@ -516,11 +747,19 @@ class _TileState extends State<_Tile> {
             timeout: const Duration(seconds: 15),
           );
           if (!looksLikeImage(bytes)) continue;
+          // 内存里留一份：来回跨层级缩放时下一档能同步出图
+          TileMem.put(
+              isHd ? hdSourceName(t) : t.name, widget.z, widget.tx, widget.ty,
+              bytes);
           if (widget.cacheEnabled && !_triedWrite) {
             _triedWrite = true;
             // 落盘不阻塞显示：写盘失败（无权限/满盘）不该让瓦片显示不出来
-            unawaited(
-                TileCache.put(t.name, widget.z, widget.tx, widget.ty, bytes));
+            unawaited(TileCache.put(
+                isHd ? hdSourceName(t) : t.name,
+                widget.z,
+                widget.tx,
+                widget.ty,
+                bytes));
           }
           return _setBytes(bytes);
         } catch (_) {
@@ -535,17 +774,27 @@ class _TileState extends State<_Tile> {
       return _setBytes(up.bytes, upSteps: up.upSteps, quad: up.quad);
     }
 
-    // 4) 其它同坐标系图源的缓存（之前用别的图源浏览过这块区域）
+    // 4) 其它同坐标系图源的缓存（之前用别的图源浏览过这块区域）；高清模式下
+    //    也接受「本图源的 1× 缓存」——离线包是按 1× 下的，不能因此白屏。
     if (TileCache.available) {
+      if (widget.hd) {
+        final lo = await TileCache.get(
+            widget.mapType.name, widget.z, widget.tx, widget.ty);
+        if (lo != null) return _setBytes(lo);
+      }
       for (final t in MapType.values) {
         if (t == widget.mapType || !_sameDatum(t)) continue;
         final hit = await TileCache.get(t.name, widget.z, widget.tx, widget.ty);
-        if (hit != null) return _setBytes(hit);
+        if (hit != null) {
+          TileMem.put(t.name, widget.z, widget.tx, widget.ty, hit);
+          return _setBytes(hit);
+        }
       }
     }
 
-    // 5) 放弃：透出自绘底图
-    _setBytes(null);
+    // 5) 放弃：透出自绘底图。但**已经在画的**（祖先放大 / 子瓦片拼的）留着 ——
+    //    拆掉只会把好端端的一屏图变白，而它本来就是这张瓦片缺失时的兑底。
+    if (_bytes == null && _parts == null) _setBytes(null);
   }
 
   /// 取最近的（最多向上 4 级）祖先瓦片，按象限裁切放大顶替本瓦片。
@@ -557,12 +806,26 @@ class _TileState extends State<_Tile> {
   /// 尺寸必须留到 build 时按当前缩放比现算，理由见 [didUpdateWidget]。
   Future<({Uint8List bytes, int upSteps, (int, int) quad})?>
       _upscaleFromAncestor() async {
-    if (!TileCache.available) return null;
     final me = TileId(widget.z, widget.tx, widget.ty);
     var cur = me.parent;
     for (var steps = 1; steps <= 4 && cur != null; steps++) {
-      final hit =
-          await TileCache.get(widget.mapType.name, cur.z, cur.x, cur.y);
+      // 高清模式：先找高清祖先，再退到 1× 祖先（离线包只有 1×）
+      if (widget.hd) {
+        // 内存优先：刚放大一级时父级瓦片就在内存里，同步取到就不会闪
+        final hi = TileMem.get(
+                hdSourceName(widget.mapType), cur.z, cur.x, cur.y) ??
+            (TileCache.available
+                ? await TileCache.get(
+                    hdSourceName(widget.mapType), cur.z, cur.x, cur.y)
+                : null);
+        if (hi != null) {
+          return (bytes: hi, upSteps: steps, quad: me.quadIn(cur));
+        }
+      }
+      final hit = TileMem.get(widget.mapType.name, cur.z, cur.x, cur.y) ??
+          (TileCache.available
+              ? await TileCache.get(widget.mapType.name, cur.z, cur.x, cur.y)
+              : null);
       if (hit != null) {
         return (bytes: hit, upSteps: steps, quad: me.quadIn(cur));
       }
@@ -571,13 +834,112 @@ class _TileState extends State<_Tile> {
     return null;
   }
 
+  /// 解析注记叠加层（天地图 cva/cia/cta）。
+  ///
+  /// 只对带注记的图源做事，其余图源直接返回（无网络、无磁盘开销）。
+  /// 解析链与底图**独立**：缓存 → 在线 → 祖先放大 → 同注记层其它图源的缓存。
+  /// 注记是**透明底 PNG**，即使只拿到父级放大版，叠上去也只是文字略糊，**不会**
+  /// 盖住底图（这一点与底图有别 —— 底图放大错位会整片偏），所以这里大胆复用
+  /// 祖先兜底，不像底图那样严格。
+  Future<void> _resolveAnnotation() async {
+    final annLayer = annotationLayerOf(widget.mapType);
+    if (annLayer == null) {
+      if (_annBytes != null) _setAnnBytes(null);
+      return;
+    }
+    final key = annotationSourceName(widget.mapType);
+
+    // 1) 注记缓存
+    if (TileCache.available) {
+      final hit = await TileCache.get(key, widget.z, widget.tx, widget.ty);
+      if (hit != null) return _setAnnBytes(hit);
+    }
+
+    // 2) 在线（离线模式不发请求）
+    if (!widget.offlineOnly) {
+      final url = annotationUrl(widget.mapType, widget.tx, widget.ty, widget.z);
+      if (url.isNotEmpty) {
+        try {
+          final bytes = await httpGetBytes(
+            Uri.parse(url),
+            headers: tileHeaders,
+            timeout: const Duration(seconds: 15),
+          );
+          if (looksLikeImage(bytes)) {
+            if (widget.cacheEnabled && !_triedAnnWrite) {
+              _triedAnnWrite = true;
+              unawaited(
+                  TileCache.put(key, widget.z, widget.tx, widget.ty, bytes));
+            }
+            return _setAnnBytes(bytes);
+          }
+        } catch (_) {
+          // 落到祖先 / 同坐标系缓存
+        }
+      }
+    }
+
+    // 3) 祖先注记放大
+    if (TileCache.available) {
+      final me = TileId(widget.z, widget.tx, widget.ty);
+      var cur = me.parent;
+      for (var steps = 1; steps <= 4 && cur != null; steps++) {
+        final hit = await TileCache.get(key, cur.z, cur.x, cur.y);
+        if (hit != null) {
+          return _setAnnBytes(hit, upSteps: steps, quad: me.quadIn(cur));
+        }
+        cur = cur.parent;
+      }
+
+      // 4) 其它**使用同一注记层**的图源缓存（如从矢量切到影像注记层相同的情况不
+      //    存在，但同层不同图源仍可能命中）；按层名找，避免取到别层的注记。
+      for (final t in MapType.values) {
+        if (t == widget.mapType) continue;
+        if (annotationLayerOf(t) != annLayer) continue;
+        final hit =
+            await TileCache.get(annotationSourceName(t), widget.z, widget.tx, widget.ty);
+        if (hit != null) return _setAnnBytes(hit);
+      }
+    }
+
+    _setAnnBytes(null);
+  }
+
   @override
   Widget build(BuildContext context) {
     // 尺寸始终占住（避免 Stack 布局抖动）；几何按当前缩放比现算
-    return SizedBox(
-      width: _px,
-      height: _px,
-      child: _bytes == null ? const SizedBox.shrink() : _tileImage(),
+    final parts = _parts;
+    final hasBase = _bytes != null;
+    final hasAnn = _annBytes != null;
+    if (!hasBase && !hasAnn && parts == null) {
+      return SizedBox(width: _px, height: _px);
+    }
+    // 底图与注记各自盖住同一格；注记在上（透明底文字层盖住底图）
+    Widget stack = Stack(
+      fit: StackFit.passthrough,
+      children: [
+        if (parts != null) ..._composedParts(parts),
+        if (parts == null && hasBase) _tileImage(),
+        if (hasAnn) _tileImageBytes(_annBytes!, _annUpSteps, _annQuad),
+      ],
     );
+    return SizedBox(width: _px, height: _px, child: stack);
+  }
+
+  /// 子瓦片拼成的一格：n×n 张图按象限摆进本格
+  List<Widget> _composedParts(
+      List<({Uint8List bytes, int col, int row})> parts) {
+    final f = 1 << _partsSteps;
+    final cell = _px / f;
+    return [
+      for (final p in parts)
+        Positioned(
+          left: p.col * cell,
+          top: p.row * cell,
+          width: cell,
+          height: cell,
+          child: _imgBytes(p.bytes, cell),
+        ),
+    ];
   }
 }

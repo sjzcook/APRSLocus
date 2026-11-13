@@ -126,7 +126,6 @@ class _OfflineMapPageState extends State<OfflineMapPage> {
             }),
             SettingsHint(s.offlineCacheSwitchDesc, color: C.grey),
             SettingsSwitch(s.offlineOnlySwitch, value: st.offlineOnly, color: C.orange, onChanged: st.setOfflineOnly),
-            SettingsHint(s.offlineOnlySwitchDesc, color: C.grey),
           ]),
         ),
       ],
@@ -408,6 +407,7 @@ class _OfflineMapPageState extends State<OfflineMapPage> {
             onPressed: () async {
               Navigator.pop(ctx);
               await TileCache.clear();
+              TileMem.clear();
               for (final r in store.regions) {
                 r.done = 0;
                 r.bytes = 0;
@@ -675,7 +675,7 @@ class _OfflineRegionPickerPageState extends State<OfflineRegionPickerPage> {
                             border: Border.all(
                                 color: _type == t ? C.blue : C.border),
                           ),
-                          child: Text(t.label,
+                          child: Text(localizedMapTypeLabel(context, t.name),
                               style: ts(11,
                                   c: _type == t ? Colors.white : C.slate,
                                   w: FontWeight.w600)),

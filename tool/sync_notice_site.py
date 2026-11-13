@@ -22,12 +22,26 @@
 
     # 标题            → 不渲染（标题走 HEAD 配置，见下）
     ## / ### 小节      → 加粗段落
-    ---               → 忽略
+    ---               → 官网卡片到此为止（见下「只放最新一期」）
     **粗体**           → <b>
     [文字](链接)       → <a target=_blank rel=noopener>
     - 列表项           → <ul><li>…
     > 引用             → 引用块（同一段连续引用合并为一行，<br> 连接）
-    @video <URL>      → 内嵌 B 站播放器 iframe
+    @video <URL>      → 内嵌一块外部页面（iframe）。模板按 URL 选，写法只有这一种：
+                        视频给 16:9 的大框；网易云 outchain 那种音频小条给 330×86
+                        的小框，不被放大成一块黑边；OA 小件（aprsnet.cn/oa/embed.html）
+                        给一条 148 高的横条 —— 套进 16:9 会变成一块带黑边的空屏。
+                        小件自己穿活动页的白天那套（纸白底、墨字、赤红状态），不吃主题参数。
+
+## 只放最新一期
+
+md 是 app 与官网共用的，但两边要的不一样：app 里那一条是「公告全文」，
+往期一直往下排；官网首页那张卡片只放**最新一期**（用户：
+「官网只留信」—— 一封长信连同后面的活动、致歉、更新日志、问卷堆在一张卡里，
+手机上要滚十屏，整张卡糊成一团）。
+
+规则：md 里第一个 `---` 之前是最新一期，之后是往期，官网不渲染。
+app 读的是 md 原文，往期照旧在。
 
 ## 幂等
 
@@ -53,28 +67,37 @@ PAGES = [
 ]
 
 # 官网公告卡片的头部（kicker / 标题 / 英文小字 / 导语）。
-# 为什么不从 md 的 `#` 标题推：md 标题是「📡 APRSLocus 2.0 已上线 · TOUCH SKY」，
-# 而卡片标题要的是「TOUCH SKY」+ 右侧小字，推不出来（也不该推）。
+# 为什么不从 md 的 `#` 标题推：md 标题是横幅摘要那一行
+# （「清零通道已恢复」），
+# 而卡片标题要的是短标题 + 右侧小字 + 导语，推不出来（也不该推）。
+# ⚠ 换一期公告时这里必须一起改，否则会出现「正文是新的、标题还是上一期」。
 HEAD = {
     'zh': {
-        'kicker': '📡 2.0.9 已发布 · 生命守护测试上线',
-        'title': '生命守护「碰撞与摔倒检测」测试上线',
-        'en': 'v2.0.9 · crash & fall detection (beta)',
-        'sub': '用手机加速度判断「一次强烈冲击之后你一直没有动静」，检测到就弹提醒并推系统通知栏。它是测试功能、会误报 —— 请先读完注意事项，再决定要不要让它一直开着。',
+        'kicker': '✅ 安全公告',
+        'title': '审计完成：恢复更新（v2.2.0）',
+        'en': 'Audit complete · 12 Nov 2026',
+        'sub': '注入的构建流程从未执行，密钥未被读取。v2.2.0 已用新签名证书重建，可恢复更新；因签名变更需卸载重装。',
     },
     'zh_TW': {
-        'kicker': '📡 2.0.9 已發布 · 生命守護測試上線',
-        'title': '生命守護「碰撞與摔倒偵測」測試上線',
-        'en': 'v2.0.9 · crash & fall detection (beta)',
-        'sub': '用手機加速度判斷「一次強烈衝擊之後你一直沒有動靜」，偵測到就彈提醒並推系統通知列。它是測試功能、會誤報 —— 請先讀完注意事項，再決定要不要讓它一直開著。',
+        'kicker': '✅ 安全公告',
+        'title': '稽核完成：恢復更新（v2.2.0）',
+        'en': 'Audit complete · 12 Nov 2026',
+        'sub': '注入的建置流程從未執行，金鑰未被讀取。v2.2.0 已用新簽章憑證重建，可恢復更新；因簽章變更需解除安裝重裝。',
     },
     'en': {
-        'kicker': '📡 v2.0.9 released · Life guard beta',
-        'title': 'Life guard: crash & fall detection (beta)',
-        'en': 'v2.0.9 · crash & fall detection (beta)',
-        'sub': 'The phone accelerometer watches for "one sharp impact, then no movement from you" and raises an alert plus a system notification. It is a beta feature and it does false-alarm — please read the caveats before leaving it switched on.',
+        'kicker': '✅ Security notice',
+        'title': 'Audit complete: updates resumed (v2.2.0)',
+        'en': '12 Nov 2026',
+        'sub': 'The injected pipeline never ran and no secret was read. v2.2.0 is rebuilt with a new signing certificate; a clean install is required because the signature changed.',
     },
 }
+
+# 公告正文两层 wrapper 的缩进：页面里它在 .section-body 里（首页 section 统一收成
+# section-head + section-body 之后多了一层）。check_notice.py 也读这两个常量来比
+# 对页面，别在别处再抄一份缩进 —— 抄了就会漂。
+BODY_OPEN = '      <div class="announce-body">\n'
+BODY_CLOSE = '\n      </div>\n\n'
+
 
 VIDEO_TPL = (
     '<div style="position:relative;width:100%;max-width:760px;margin:6px auto;'
@@ -85,9 +108,38 @@ VIDEO_TPL = (
     '</div>'
 )
 
+# 音频小条（网易云 outchain 播放器）：它自己就是一条 330×86 的横条，套进上面的
+# 16:9 大框会被放大成一块带黑边的空屏，所以单给一个小框。
+AUDIO_URL_RE = re.compile(r'^https?://music\.163\.com/outchain/player\b')
+
+AUDIO_TPL = (
+    '<div style="width:100%;max-width:330px;margin:6px auto">\n'
+    '<iframe src="{url}" scrolling="no" border="0" frameborder="no" '
+    'framespacing="0" style="width:100%;height:86px;display:block"></iframe>\n'
+    '</div>'
+)
+
+# OA 小件（APRSNET.CN 的倒计时条）：自己就是一条矮横条，和音频小条同理，
+# 套进 16:9 只会得到一块空屏。宽也跟正文那一列对齐（满宽、不居中，小件里不留
+# 左右内边距），左边就和段落同一根线；底色用它的纸白，切深浅色时都不跳。
+EMBED_URL_RE = re.compile(r'^https?://aprsnet\.cn/oa/(?:en/)?embed\.html\b')
+
+EMBED_TPL = (
+    '<div style="width:100%;margin:6px 0">\n'
+    '<iframe class="oa-embed" src="{url}" title="APRSNETCN OA" scrolling="no" '
+    'border="0" frameborder="no" framespacing="0" loading="lazy" '
+    'style="display:block;width:100%;height:148px;border:0;border-radius:14px;'
+    'background:#f2f0ea"></iframe>\n'
+    '</div>'
+)
+
 
 def read(rel):
-    return io.open(os.path.join(ROOT, rel), encoding='utf-8', newline='').read()
+    # 归一成 LF：Windows 下 git（core.autocrlf）会把工作区检出成 CRLF，而本脚本与
+    # 兄弟脚本（sync_site_content.py）的锚点都按 LF 写。不归一就会一边 CRLF 一边 LF，
+    # 锚点找不到、或输出整文件换行翻转。
+    return (io.open(os.path.join(ROOT, rel), encoding='utf-8', newline='')
+            .read().replace('\r\n', '\n').replace('\r', '\n'))
 
 
 def write(rel, text):
@@ -109,15 +161,15 @@ def inline(s):
 
 def render_head(lang):
     h = HEAD[lang]
-    return ('    <header class="announce-head">\n'
-            '      <p class="announce-kicker">%s</p>\n'
-            '      <h2 class="announce-title">%s<span class="announce-en">%s</span></h2>\n'
-            '      <p class="announce-sub">%s</p>\n'
-            '    </header>' % (esc(h['kicker']), esc(h['title']), esc(h['en']), esc(h['sub'])))
+    return ('      <header class="announce-head">\n'
+            '        <p class="announce-kicker">%s</p>\n'
+            '        <h2 class="announce-title">%s<span class="announce-en">%s</span></h2>\n'
+            '        <p class="announce-sub">%s</p>\n'
+            '      </header>' % (esc(h['kicker']), esc(h['title']), esc(h['en']), esc(h['sub'])))
 
 
 def render_body(md_text):
-    """公告 Markdown → 卡片正文 HTML（缩进 6 空格，与页面既有排版一致）。"""
+    """公告 Markdown → 卡片正文 HTML（缩进 8 空格，与页面既有排版一致）。"""
     lines = md_text.replace('\r\n', '\n').split('\n')
     out = []
     i = 0
@@ -135,12 +187,17 @@ def render_body(md_text):
             out.append('<p><b>%s</b></p>' % inline(s.lstrip('#').strip()))
             i += 1
             continue
-        if s == '---':
-            i += 1
-            continue
+        if s == '---':          # 第一个分隔线之后是往期：官网卡片到此为止
+            break
         if s.startswith('@video '):
             url = s[len('@video '):].strip()
-            out.append(VIDEO_TPL.format(url=esc(url)))
+            if AUDIO_URL_RE.match(url):
+                tpl = AUDIO_TPL
+            elif EMBED_URL_RE.match(url):
+                tpl = EMBED_TPL
+            else:
+                tpl = VIDEO_TPL
+            out.append(tpl.replace('{url}', esc(url)))
             i += 1
             continue
         if s.startswith('>'):
@@ -159,8 +216,8 @@ def render_body(md_text):
             continue
         out.append('<p>%s</p>' % inline(s))
         i += 1
-    # 每个块整体缩进 6 空格（多行块逐行加，避免只缩进首行）
-    return '\n'.join('\n'.join('      ' + ln for ln in b.split('\n')) for b in out)
+    # 每个块整体缩进 8 空格（多行块逐行加，避免只缩进首行）
+    return '\n'.join('\n'.join('        ' + ln for ln in b.split('\n')) for b in out)
 
 
 # 旧版简中页曾有过 2.0 倒计时脚本：公告改为「已上线」后不再需要，同步时顺手清掉。
@@ -189,8 +246,7 @@ def sync_page(lang, page_rel, md_rel):
     b1 = page.index('<div class="announce-actions">')
     av = page.rfind('\n', 0, b1) + 1
     body = render_body(md_text)
-    page = (page[:bs] + '    <div class="announce-body">\n' + body
-            + '\n    </div>\n\n' + page[av:])
+    page = (page[:bs] + BODY_OPEN + body + BODY_CLOSE + page[av:])
 
     # 3) 清掉旧倒计时脚本（幂等：没有就什么都不做）
     page = _COUNTDOWN_RE.sub('', page)

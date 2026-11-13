@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'theme.dart';
 import 'guide.dart';
+import 'input_history.dart';
 import 'models.dart';
 import 'state.dart';
 import 'widgets.dart';
@@ -22,6 +23,23 @@ class _PacketsPageState extends State<PacketsPage> {
   bool _raw = false;
   final _tx = TextEditingController();
   final _search = TextEditingController();
+
+  /// 搜索框的焦点：**离开时**把这次搜的词记进历史。
+  ///
+  /// 不在 onChanged 里记：那就成了逐字母记录（「B」「BG」「BG7」…）。
+  /// 也不在打开面板时才记 —— 用户真正想重用的往往是上一次搜完就删掉的那个。
+  final _searchFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(_onSearchFocus);
+  }
+
+  void _onSearchFocus() {
+    if (_searchFocus.hasFocus) return;
+    widget.state.rememberInput(InputHistory.packetSearch, _search.text);
+  }
 
   List<Packet> _list(AppState st) {
     var p = st.packets;
@@ -71,8 +89,47 @@ class _PacketsPageState extends State<PacketsPage> {
     }
   }
 
+  /// 来源 id → 短标签（数据包页把「从哪条链路上来」标在每一条上）。
+  String _sn(BuildContext context, String s) {
+    final l = S.of(context);
+    switch (s) {
+      case AppState.srcAprsIs:
+        return l.packetSrcAprsIs;
+      case AppState.srcTnc:
+        return l.packetSrcTnc;
+      case AppState.srcAudio:
+        return l.packetSrcAudio;
+      case AppState.srcPkwdwpl:
+        return l.packetSrcPkwdwpl;
+      case AppState.srcAcn:
+        return l.packetSrcAcn;
+      default:
+        return l.packetSrcLocal;
+    }
+  }
+
+  /// 来源 id → 标签颜色（与数据来源页的配色一致，便于一眼分辨）。
+  Color _sc(String s) {
+    switch (s) {
+      case AppState.srcAprsIs:
+        return C.blue;
+      case AppState.srcTnc:
+        return C.green;
+      case AppState.srcAudio:
+        return C.orange;
+      case AppState.srcPkwdwpl:
+        return C.purple;
+      case AppState.srcAcn:
+        return C.cyan;
+      default:
+        return C.slate;
+    }
+  }
+
   @override
   void dispose() {
+    _searchFocus.removeListener(_onSearchFocus);
+    _searchFocus.dispose();
     _tx.dispose();
     _search.dispose();
     super.dispose();
@@ -242,7 +299,12 @@ class _PacketsPageState extends State<PacketsPage> {
               // 搜索
               TextField(
                 controller: _search,
+                focusNode: _searchFocus,
                 onChanged: (_) => setState(() {}),
+                onSubmitted: (v) {
+                  widget.state.rememberInput(InputHistory.packetSearch, v);
+                },
+                textInputAction: TextInputAction.search,
                 style: ts(13),
                 decoration: InputDecoration(
                   hintText: S.of(context).searchPacket,
@@ -252,19 +314,42 @@ class _PacketsPageState extends State<PacketsPage> {
                     size: 18,
                     color: C.grey,
                   ),
-                  suffixIcon: _search.text.isNotEmpty
-                      ? GestureDetector(
-                          onTap: () {
-                            _search.clear();
-                            setState(() {});
-                          },
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 16,
-                            color: C.grey,
-                          ),
-                        )
-                      : null,
+                  // 右侧两个小按钮：历史（没历史时不显示）+ 清空
+                  suffixIconConstraints:
+                      const BoxConstraints(minWidth: 0, minHeight: 0),
+                  suffixIcon: (widget.state.packetSearchHistory.isEmpty &&
+                          _search.text.isEmpty)
+                      ? null
+                      : Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child:
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                            HistoryButton(
+                              entries: widget.state.packetSearchHistory,
+                              title: S.of(context).searchHistoryTitle,
+                              onPick: (v) => setState(() => _search.text = v),
+                              onDelete: (v) => widget.state
+                                  .forgetInput(InputHistory.packetSearch, v),
+                              onClear: () => widget.state
+                                  .clearInputHistory(InputHistory.packetSearch),
+                            ),
+                            if (_search.text.isNotEmpty)
+                              GestureDetector(
+                                onTap: () {
+                                  _search.clear();
+                                  setState(() {});
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 16,
+                                    color: C.grey,
+                                  ),
+                                ),
+                              ),
+                          ]),
+                        ),
                   filled: true,
                   fillColor: C.white,
                   isDense: true,
@@ -396,11 +481,11 @@ class _PacketsPageState extends State<PacketsPage> {
       itemBuilder: (_, i) {
         final p = list[i];
         final tc = _tc(p.type);
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: Duration(milliseconds: 220 + i * 15),
-          curve: Curves.easeOutCubic,
-          builder: (_, v, child) => Opacity(opacity: v, child: child),
+        // 淡入**只在元素创建时播一次**（见 _FadeInOnce）。原写法把 TweenAnimationBuilder
+        // 放在 itemBuilder 里、且时长随行号无限增长（第 1000 行要 15 秒），ListView 每次
+        // 重建 / 回收元素都会重播 —— 一屏行逐帧重绘，正是这个页面卡顿的主因。
+        return _FadeInOnce(
+          delayMs: (i % 8) * 18,
           child: SoftCard(
             padding: const EdgeInsets.all(12),
             child: Material(
@@ -437,28 +522,71 @@ class _PacketsPageState extends State<PacketsPage> {
                             style: ts(9, c: tc, w: FontWeight.w700, ls: 0.5),
                           ),
                         ),
-                        SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            p.src,
-                            style: ts(12, c: C.blue, w: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(' → ', style: ts(12, c: C.greyLight)),
-                        Flexible(
-                          child: Text(
-                            p.dest,
-                            style: ts(12, c: C.slate),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
                         SizedBox(width: 6),
+                        // 来源徽标：一眼看出这条报文是从 APRS-IS 还是射频
+                        // （TNC / 声卡）来的 —— 排查链路问题时最关键的一条信息。
+                        Tooltip(
+                          message: S.of(context).packetSource,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _sc(p.source).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _sc(p.source),
+                                  ),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  _sn(context, p.source),
+                                  style: ts(9,
+                                      c: _sc(p.source), w: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
                         Text(_fmt(p.time), style: ts(10, c: C.grey)),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    // 呼号 → 目标单独一行：原来和徽标、时间挤在同一行，窄屏上
+                    // src/dest 会被省略号吃掉，反而看不清「谁发给谁」。
+                    Row(children: [
+                      Flexible(
+                        child: Text(
+                          p.src,
+                          style: ts(13, c: C.blue, w: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Icon(Icons.arrow_forward_rounded,
+                            size: 13, color: C.greyLight),
+                      ),
+                      Flexible(
+                        child: Text(
+                          p.dest,
+                          style: ts(13, c: C.slate),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ]),
                     if (p.info != null) ...[
                       SizedBox(height: 8),
                       Container(
@@ -509,13 +637,20 @@ class _PacketsPageState extends State<PacketsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_fts(p.time), style: mono(10, c: C.greyLight)),
+                SizedBox(width: 8),
+                // 原始模式下也标来源：排查时常常只看这一屏。
+                Text(
+                  _sn(context, p.source),
+                  style: mono(10, c: _sc(p.source)),
+                ),
                 SizedBox(width: 10),
                 Expanded(
+                  // 原始报文**完整可读**：以前截到两行加省略号，正好把报文的
+                  // 关键尾巴（路径 / 数据扩展 / 备注）吃掉 —— 这是「原始模式」
+                  // 存在的意义，不能省略。长报文换行显示，长按复制。
                   child: Text(
                     p.raw,
                     style: mono(11, c: C.green),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -562,4 +697,38 @@ class _PacketsPageState extends State<PacketsPage> {
 
   String _fts(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
+}
+
+/// 让子树**只淡入一次**（元素创建时），而不是每次 rebuild 重播。
+///
+/// 为什么不用 TweenAnimationBuilder：它在 build 里被调用一次就重启动画一次，
+/// 而 ListView 的元素在滚动中会反复 build / 回收 —— 于是整屏行一直在逐帧重绘。
+class _FadeInOnce extends StatefulWidget {
+  final Widget child;
+  final int delayMs;
+  const _FadeInOnce({required this.child, this.delayMs = 0});
+
+  @override
+  State<_FadeInOnce> createState() => _FadeInOnceState();
+}
+
+class _FadeInOnceState extends State<_FadeInOnce> {
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 交错一点点，让新到的一批报文是"刷出来"的；但封顶，不随行号增长。
+    Future<void>.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (mounted) setState(() => _shown = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+        opacity: _shown ? 1 : 0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        child: widget.child,
+      );
 }

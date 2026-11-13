@@ -13,9 +13,21 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Android 16 的实时更新（Live Updates）：把常驻通知提到状态栏药丸里显示。
+         用户不用它也没关系，提不上去时就是普通常驻通知。 -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
+    <!-- 生命守护「强提醒」需要震动（issue #32）：手机放兜里时只有震动+响铃能被察觉。 -->
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- 导出文件（ADIF / GPX / 备份）要落到**公共**的「下载」目录，文件管理器与
+         其它应用才看得到。Android 10（API 29）起走 MediaStore，不需要这个权限；
+         24~28 上写公共目录必须要它，所以限 maxSdkVersion=28 —— 不让新系统
+         白白多出一条权限提示。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
 
     <!-- 蓝牙：经典蓝牙 SPP（TNC / PKWDWPL）+ BLE 心率带（标准心率服务 0x180D）。
          Android 12（API 31）起蓝牙权限拆分为运行时权限 BLUETOOTH_CONNECT / _SCAN；

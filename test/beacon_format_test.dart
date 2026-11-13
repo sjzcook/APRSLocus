@@ -29,6 +29,22 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  /// 把「本轮已重新拿到定位」摆齐。
+  ///
+  /// 位置上报闸 `myPositionReportable = myHasFix && !_pendingSavedPos`，缺一不可。
+  /// 给坐标是因为置 `myHasFix` 后 `_updateNotification → myGrid` 会走
+  /// `myLat!/myLng!`，只置标志会抛空断言。
+  AppState located(AppState st) {
+    st.myHasFix = true;
+    st.myLat = 39.9075;
+    st.myLng = 116.3972;
+    st.debugSetFreshFix();
+    // 用户协议 V2.0 附件一的上传/发射单独同意：本文件测的是报文格式与
+    // 「会不会发射」，与同意那张纸无关，摆成已签。
+    st.debugGrantConsent();
+    return st;
+  }
+
   group('信标报文格式（第三方兼容性）', () {
     test('注释必须紧跟符号，中间不得有空格', () {
       final raw = AprsFmt.position(
@@ -119,6 +135,24 @@ void main() {
           reason: '射频路径不能带 IP 网关才有的 TCPIP*');
     });
 
+    // issue #35 回归：WLAN 电台直连属于「音频」来源（source == icomLan），
+    // 它的射频中继路径与声卡音频共用 audio.config.path。此前「WLAN 电台
+    // 直连」子页没有这个输入框，用户抱怨「改了中继路径不生效」。
+    // 这里把「音频来源的 txPath 由 audio.config.path 决定」钉死：只要
+    // 页面把输入写进 c.path，发射路径就必须跟着变。
+    test('音频/WLAN 来源：txPath 跟随 audio.config.path（中继路径可改）', () {
+      final st = AppState()..dataSource = AppState.srcAudio;
+      st.audio.config.path = 'WIDE1-1,WIDE2-1';
+      expect(st.txPath, 'APALOC,WIDE1-1,WIDE2-1');
+      // 用户在 WLAN 页把中继路径改成别的（或清空）
+      st.audio.config.path = 'WIDE2-2';
+      expect(st.txPath, 'APALOC,WIDE2-2',
+          reason: 'WLAN 直连与声卡音频同源，改 audio.config.path 必须改变发射路径');
+      st.audio.config.path = '';
+      expect(st.txPath, 'APALOC',
+          reason: '留空 = 不指定中继（不应出现 APALOC, 或 APALOC,,）');
+    });
+
     // ─── 「倒计时走了但没发射」回归（v1.6.105）───────────────────────────
     //
     // 事故：射频来源（TNC / 音频）的自动发射被 canAutoBeacon 门控在
@@ -130,7 +164,7 @@ void main() {
     // 自动发射都用它。下面把这条不变量钉死：只要不会发射，就绝不能
     // 报告 counting/imminent。
     test('射频信标未开启时：不得报告倒计时（必须报 rfDisabled）', () {
-      final st = AppState()..dataSource = AppState.srcAudio;
+      final st = located(AppState()..dataSource = AppState.srcAudio);
       st.beaconEnabled = true;
       st.connected = true;
       st.audio.config.rfBeacon = false;
@@ -144,9 +178,12 @@ void main() {
     });
 
     test('打开射频信标后：同一状态才开始倒计时', () async {
-      final st = AppState()..dataSource = AppState.srcAudio;
+      final st = located(AppState()..dataSource = AppState.srcAudio);
       st.beaconEnabled = true;
       st.connected = true;
+      // 本用例只关心「射频信标开关」这一档，把连接内的上报确认直接摆成已确认
+      // （默认关：连上后要用户点一下「开始上报」）
+      st.beaconArmed = true;
       expect(st.beaconPhase, BeaconPhase.rfDisabled);
       await st.enableRfBeacon();
       expect(st.audio.config.rfBeacon, isTrue, reason: '一键开启要落到当前来源的配置');
@@ -157,7 +194,7 @@ void main() {
     });
 
     test('TNC 与音频的射频信标开关互相独立', () async {
-      final st = AppState()..dataSource = AppState.srcTnc;
+      final st = located(AppState()..dataSource = AppState.srcTnc);
       st.beaconEnabled = true;
       st.connected = true;
       await st.enableRfBeacon();
@@ -262,15 +299,19 @@ void main() {
       final st = AppState()
         ..smartBeaconEnabled = false
         ..myCall = 'BI7KZM'
-        ..mySsid = 13
+        ..mySsid = '13'
         ..mySymbol = 'r'
         ..myLat = 22 + 16.45 / 60
         ..myLng = 111 + 13.90 / 60
         ..myHasFix = true
+        ..debugSetFreshFix()
         ..beaconPowerW = 25
         ..beaconAntennaHeightFt = 5120
         ..beaconGainDb = 5
-        ..beaconAltOverrideM = 12; // 让 /A= 也出现，验证两者的先后
+        ..beaconAltOverrideM = 12 // 让 /A= 也出现，验证两者的先后
+        // 上传/发射的单独同意（用户协议 V2.0 附件一）：本文件测报文格式，
+        // 与同意那张纸无关，摆成已签。
+        ..debugGrantConsent();
       st.sendBeacon();
       final raw = st.packets.map((p) => p.raw).firstWhere(
             (r) => r.contains('PHG'),
@@ -321,6 +362,8 @@ void main() {
         ..myLat = 39.1
         ..myLng = 116.4
         ..myHasFix = true
+        ..debugSetFreshFix()
+        ..debugGrantConsent()
         ..debugSetLinkUp(AppState.srcAprsIs, true);
       st.sendBeacon();
       expect(st.connInfo, contains('位置'));
@@ -347,7 +390,7 @@ void main() {
       final st = AppState()
         ..myCall = 'BG7LZG'
         ..beaconPowerW = 25; // 有 PHG，但 myHasFix 仍为 false
-      st.sendBeacon(); // 内部被 !myHasFix 挡回
+      st.sendBeacon(); // 内部被 !myPositionReportable 挡回
       st.sendStatus();
       expect(st.packets.where((p) => p.type == 'position'), isEmpty,
           reason: '没有定位不能发位置包');
@@ -381,17 +424,19 @@ void main() {
     /// 手填海拔 10.0584 m（→ `/A=000033`）。
     AppState userSetup() => AppState()
       ..myCall = 'BG7LZQ'
-      ..mySsid = 2
+      ..mySsid = '2'
       ..mySymbol = 'b'
       ..myLat = 21 + 55.17 / 60
       ..myLng = 110 + 52.40 / 60
       ..myHasFix = true
+      ..debugSetFreshFix()
       ..beaconPowerW = 4
       ..beaconAntennaHeightFt = 20
       ..beaconGainDb = 3
       ..beaconAltOverrideM = 10.0584
       ..beaconIncludeBattery = false
-      ..myComment = 'E4[中国人能飞]';
+      ..myComment = 'E4[中国人能飞]'
+      ..debugGrantConsent();
 
     String sentRaw(AppState st) => st.packets
         .map((p) => p.raw)
@@ -515,5 +560,221 @@ void main() {
       }
     });
   });
-}
 
+  // ─── 信标里的卫星数（`SAT=nn`，用户 2026-10-14 要求）───
+  //
+  // 三条要钉住的行为（都不是样式问题，而是「报了个假数据」的问题）：
+  //   ① 开关关着时**一个字都不发**（与其它非标准字段一样）；
+  //   ② 来源不说（mySats == null）时**不发**，而不是发 `SAT=0`
+  //      —— 收端分不出「没有卫星」与「这个平台不报卫星」；
+  //   ③ 真没星（0）时也不发，理由同上。
+  group('信标带上卫星数（SAT=nn）', () {
+    AppState base() => AppState()
+      ..myCall = 'BG7LZQ'
+      ..mySsid = '2'
+      ..mySymbol = 'b'
+      ..myLat = 39.9075
+      ..myLng = 116.3972
+      ..myHasFix = true
+      ..debugSetFreshFix()
+      ..beaconIncludeBattery = false
+      ..beaconIncludeSpeed = false
+      ..beaconIncludeCourse = false
+      ..myComment = ''
+      ..debugGrantConsent();
+
+    String posRaw(AppState st) {
+      final hits = st.packets.where((p) => p.type == 'position');
+      return hits.isEmpty ? '' : hits.first.raw;
+    }
+
+    test('开着 + 有颗数：SAT=nn 拼在注释里，且紧贴符号', () {
+      final st = base()
+        ..beaconIncludeSats = true
+        ..mySats = 9;
+      st.sendBeacon();
+      final raw = posRaw(st);
+      expect(raw, endsWith('SAT=9'),
+          reason: '卫星数是非标准备注字段，拼在注释里');
+      // 注释必须**紧贴符号**（APRS101：注释紧跟位置字段，中间无分隔符）——
+      // 插一个空格，第三方解析器就再也认不出注释的开头
+      // （与 PHG 那个坑同源，见上一组用例）。
+      expect(raw.contains(' SAT='), isFalse,
+          reason: '注释与符号之间被插了空格：第三方会把整段当普通备注文字');
+      st.dispose();
+    });
+
+    test('带数据扩展时：SAT=nn 排在扩展块之后，不挤进扩展块', () {
+      final st = base()
+        ..beaconIncludeSats = true
+        ..mySats = 12
+        ..beaconAltOverrideM = 10.0584;
+      st.sendBeacon();
+      final info = posRaw(st);
+      final toks = info.substring(info.indexOf(':') + 1).split(' ');
+      expect(toks.first, endsWith('/A=000033'),
+          reason: '数据扩展必须整块紧贴符号（中间不能有空格）');
+      expect(toks.last, 'SAT=12',
+          reason: 'SAT= 是备注字段，排在扩展块之后；挤进去会让第三方把 /A= 也当文字');
+      st.dispose();
+    });
+
+    test('开关关着：即使有颗数也不发', () {
+      final st = base()
+        ..beaconIncludeSats = false
+        ..mySats = 12;
+      st.sendBeacon();
+      expect(posRaw(st).contains('SAT='), isFalse);
+      st.dispose();
+    });
+
+    test('来源不说（null）与真没星（0）：都不发，不能写成 SAT=0', () {
+      for (final int? v in [null, 0]) {
+        final st = base()
+          ..beaconIncludeSats = true
+          ..mySats = v;
+        st.sendBeacon();
+        expect(posRaw(st).contains('SAT='), isFalse,
+            reason: 'mySats=$v 时发 SAT=0，收端会读成「一颗星都没有」');
+        st.dispose();
+      }
+    });
+  });
+
+  // ─── 定位模糊（APRS101 第 8 章的位置模糊）───
+  //
+  // 只改**发出去的那一包**：最低位的几个数字换成空格，收端看到一片方格。
+  // 三条要钉住的：
+  //   ① 小数点与 N/S/E/W 原地保留（少一个字符就整包解析不出位置）；
+  //   ② 位数与格子对得上（1 位 = 0.1 分，2 位 = 1 分，3 位 = 10 分）；
+  //   ③ 本机自己的坐标与轨迹不受影响 —— 模糊是给别人的。
+  group('定位模糊', () {
+    AppState base() => AppState()
+      ..myCall = 'BG7LZQ'
+      ..mySsid = '2'
+      ..mySymbol = 'b'
+      ..myLat = 39.9075
+      ..myLng = 116.3972
+      ..myHasFix = true
+      ..debugSetFreshFix()
+      ..beaconIncludeBattery = false
+      ..beaconIncludeSpeed = false
+      ..beaconIncludeCourse = false
+      ..myComment = ''
+      ..debugGrantConsent();
+
+    String posRaw(AppState st) {
+      final hits = st.packets.where((p) => p.type == 'position');
+      return hits.isEmpty ? '' : hits.first.raw;
+    }
+
+    test('0 位模糊：与不带这个参数逐字节相同', () {
+      final a = AprsFmt.position('BG7LZQ-9', 39.070833, 116.407333, '>');
+      final b = AprsFmt.position('BG7LZQ-9', 39.070833, 116.407333, '>',
+          ambiguity: 0);
+      expect(b, a);
+      expect(a.endsWith(':!3904.25N/11624.44E>'), isTrue, reason: a);
+    });
+
+    test('逐位模糊：小数点与方向字母都留着，空位只落在数字上', () {
+      String at(int n) => AprsFmt.position(
+          'BG7LZQ-9', 39.070833, 116.407333, '>',
+          ambiguity: n);
+      expect(at(1), endsWith(':!3904.2 N/11624.4 E>'));
+      expect(at(2), endsWith(':!3904.  N/11624.  E>'));
+      expect(at(3), endsWith(':!390 .  N/1162 .  E>'));
+    });
+
+    test('发报时按档位模糊，本机坐标不动', () {
+      final st = base()..beaconAmbiguity = 2;
+      st.sendBeacon();
+      final raw = posRaw(st);
+      expect(raw, 'BG7LZQ-2>APALOC,TCPIP*:!3954.  N/11623.  Eb');
+      expect(st.myLat, 39.9075, reason: '模糊只作用于报文，本机仍按真实坐标画');
+      expect(st.myLng, 116.3972);
+      // 自己的解析器读自己发的包：认出 2 位模糊，且落回那一格里。
+      final p = parseAprsPosition(raw.substring(raw.indexOf(':') + 1));
+      expect(p, isNotNull);
+      expect(p!.posAmbiguity, 2);
+      expect((p.lat - 39.9075).abs() <= 1 / 60, isTrue, reason: 'lat=${p.lat}');
+      expect((p.lng - 116.3972).abs() <= 1 / 60, isTrue,
+          reason: 'lng=${p.lng}');
+      st.dispose();
+    });
+
+    test('档位夹在 0..3：越界不会把整个分钟位擦空', () {
+      final st = base();
+      st.setBeaconAmbiguity(9);
+      expect(st.beaconAmbiguity, 3);
+      st.setBeaconAmbiguity(-2);
+      expect(st.beaconAmbiguity, 0);
+      st.dispose();
+    });
+  });
+
+  // ─── 每条链路各用自己的报头路径 ───
+  //
+  // 事故（2026-10-27 用户日志）：开了音频链路、位置报文又同时发一份互联网，
+  // 日志里音频那一行写成 `BD1FLM-7>APALOC,TCPIP*:!…` —— 报头路径按「主发射
+  // 链路」算一次、逐条链路照抄。射频上 `TCPIP*` 会被 Ax25 剔掉，而它当时是
+  // 唯一一项，于是中继路径整段消失；反过来那份互联网报文则会带上 `WIDE1-1`。
+  // 现在按链路重算（AppState.pathFor / lineForLink），四条要钉住：
+  //   ① 射频链路不带 TCPIP*、用该链路自己的中继；
+  //   ② 互联网链路一律 `APALOC,TCPIP*`；
+  //   ③ 消息走消息链路（dataSourceMsg）的路径；
+  //   ④ 不是自己组的报文（网关转递 / 手写）一个字都不改。
+  group('每条链路用自己的报头路径', () {
+    AppState base() => AppState()
+      ..myCall = 'BG7LZQ'
+      ..mySsid = '2'
+      ..mySymbol = 'b';
+
+    test('位置同发射频与互联网：两边路径不同，且互不串味', () {
+      final st = base()..dataSource = AppState.srcAprsIs;
+      st.audio.config.path = 'WIDE1-1';
+      st.posTxExtra = [AppState.srcAudio];
+      final raw = AprsFmt.position(
+          st.myFullCall, 39.070833, 116.407333, 'b', path: st.txPath);
+      final isLine = st.lineForLink(AppState.srcAprsIs, raw);
+      final rfLine = st.lineForLink(AppState.srcAudio, raw);
+      expect(isLine, startsWith('${st.myFullCall}>APALOC,TCPIP*:'));
+      expect(rfLine, startsWith('${st.myFullCall}>APALOC,WIDE1-1:'));
+      expect(rfLine.toUpperCase(), isNot(contains('TCPIP')),
+          reason: '射频上不能带 APRS-IS 专有的 TCPIP*');
+      st.dispose();
+    });
+
+    test('主链路是射频时，另发的互联网那一份回到 APALOC,TCPIP*', () {
+      final st = base()..dataSource = AppState.srcTnc;
+      st.tnc.config.path = 'WIDE2-1';
+      final raw = AprsFmt.position(
+          st.myFullCall, 39.070833, 116.407333, 'b', path: st.txPath);
+      expect(st.lineForLink(AppState.srcTnc, raw),
+          startsWith('${st.myFullCall}>APALOC,WIDE2-1:'));
+      expect(st.lineForLink(AppState.srcAprsIs, raw),
+          startsWith('${st.myFullCall}>APALOC,TCPIP*:'));
+      st.dispose();
+    });
+
+    test('消息走消息链路自己的路径', () {
+      final st = base();
+      st.dataSourceMsg = AppState.srcAudio;
+      st.audio.config.path = '';
+      expect(st.txPath, 'APALOC,TCPIP*');
+      expect(st.txPathMsg, 'APALOC', reason: '中继留空 = 只写目的呼号');
+      final raw = AprsFmt.message(st.myFullCall, 'BG7LZZ-9', 'hi', '01',
+          path: st.txPathMsg);
+      expect(st.lineForLink(AppState.srcAudio, raw),
+          startsWith('${st.myFullCall}>APALOC:'));
+      st.dispose();
+    });
+
+    test('不是自己组的报文，路径原样保留', () {
+      final st = base()..dataSource = AppState.srcAudio;
+      const foreign = 'BG7LZZ-9>APRS,WIDE1-1,qAR,BG7LZQ-2:>hello';
+      expect(st.lineForLink(AppState.srcAudio, foreign), foreign);
+      expect(st.lineForLink(AppState.srcAprsIs, foreign), foreign);
+      st.dispose();
+    });
+  });
+}

@@ -51,8 +51,8 @@ def main() -> int:
     # accuracy 从原生接回 Dart（以前原生算了、Dart 侧没读，等于白算）
     need('lib/services.dart', "(event['accuracy'] as num?)?.toDouble()",
          '原生上报的 accuracy 没被解析（精度信息在传输途中丢掉了）')
-    need('lib/services.dart', "String source)? onFix;",
-         'onFix 回调签名缺 source（定位来源）参数')
+    need('lib/services.dart', "String source, int? satellites)? onFix;",
+         'onFix 回调签名缺 source / satellites 参数')
     need('lib/services.dart', "(event['provider'] as String?) ?? ''",
          "原生发的 provider 没被解析 —— 上层就分不出「GPS 实测」和「基站/Wi-Fi "
          '粗定位」，用户报的「网络让定位飞来飞去」会原样回来')
@@ -62,6 +62,80 @@ def main() -> int:
          'myAccuracy 没有区分粗定位（会照抄系统那个过于乐观的 accuracy）')
     need('lib/state.dart', 'myFixCoarse = coarse;',
          'myFixCoarse 没落库 —— 界面无法区分粗定位与 GPS')
+
+    # 卫星数（用户要求「定位上报里带上识别的卫星数」）：同样要**两条路都接回 Dart**，
+    # 与 accuracy / source 是同一类漏接 —— 原生算了、模组发了，Dart 侧没读就白算。
+    need('lib/services.dart', "(event['satellites'] as num?)?.toInt()",
+         '原生上报的 satellites 没被解析（卫星数在传输途中丢掉了）')
+    need('android/app/src/main/kotlin/com/aprslocus/aprslocus/LocationService.kt',
+         '"satellites" to',
+         'Android 侧没有把卫星数发上来（机型 extras 缺失时还要回退 GnssStatus）')
+    need('lib/state.dart', 'if (!lastKnown) mySats = satellites;',
+         '_onFix 没有接住原生给的卫星数（缓存点的颗数不算）')
+    need('lib/state.dart', 'satellites: fix.satellites,',
+         '外接 GPS 模组 GGA 的卫星数没有传给 _ingestExternalFix')
+    need('lib/state.dart',
+         'if (beaconIncludeSats && (mySats ?? 0) > 0) {\n'
+         '      parts.add(\'SAT=$mySats\');',
+         '信标里没有把卫星数带上 —— 或者写成了「发 SAT=0」（收端会读成「一颗星都没有」）')
+
+    # 外置 GPS 接管手机定位：只能「待机」（切原生模式），**不能停服务**。
+    #
+    # 用户报的「断开外置 GPS 后自动上报停了、手动上报只有报文没有位置」：
+    # `LocService.stop()` 会把前台服务、WakeLock 与定位事件订阅一起拆掉，退到后台
+    # 之后系统随即冻结 Dart 隔离区 —— APRS-IS 连接静默死掉、信标定时器停摆，
+    # 而界面上的「已连接」还亮着。这几条断言编译与 analyze 都过得去，错了只会
+    # 表现成「后台悄悄不发了」，只能靠 CI 钉住。
+    need('lib/state.dart', 'unawaited(loc.pauseForExternal());',
+         '外置 GPS 接管时没有用「待机」—— 停了前台服务就会丢掉后台生存能力')
+    need('lib/state.dart', '? await loc.resumeFromExternal()',
+         '外置 GPS 失效后没有把手机采样接回来（服务一直在，不用重启）')
+    need('lib/state.dart', 'await startTracking();',
+         '外置 GPS 失效后没有兵分两路：服务已经不在了必须真的起一遍')
+    need('lib/services.dart', "'setLocationMode', {'mode': 'keepalive'}",
+         'pauseForExternal 没把原生模式切成 keepalive（就停不了采样）')
+    forbid('lib/state.dart', '_phoneGpsPaused = true;\n      loc.stop();',
+           '外置 GPS 接管时还在停前台服务 —— 后台连接与信标定时器会静默失效')
+
+    # 启动自动定位**不许**依赖一个固定延时：`_loadPrefs()` 慢过它就静默失效，
+    # 界面永远停在「已保存位置」，只有手动切一次模拟位置再切回来才恢复。
+    # 用户报的就是这个，而且它不报错、不告警 —— 只能钉在这里。
+    need('lib/state.dart', 'await _waitInitialized();',
+         '启动自动定位没有等初始化落地 —— 加载慢过固定延时就会整条失效')
+    forbid('lib/state.dart', 'if (_disposed || !initialized) return;',
+         '启动自动定位又退回「按固定延时判一次初始化」—— 加载慢就永远停在已保存位置')
+    need('lib/state.dart', 'Future<void> _waitInitialized() async {',
+         '缺少 _waitInitialized：没有「等初始化落地」的实现')
+
+    # GPS 采样间隔（用户要求：「定位上报，用户可自调 GPS 采样率」）：
+    # 这条链有三段 —— 偏好 → 定位服务 → 原生 requestLocationUpdates。
+    # 少任何一段都变成「能选、但不生效」，而界面上完全看不出来。
+    # 2026-11-01：省电模式会把间隔压到不低于 30 秒，所以这里落的是**生效值**
+    # （`effectiveGpsIntervalSec`），不再是用户自己选的那一档。判据仍钉着「偏好
+    # 里的采样间隔必须交给定位服务」这件事，只是现在多了一层省电换算。
+    need('lib/state.dart', 'loc.samplingMs = effectiveGpsIntervalSec * 1000;',
+         '偏好里的采样间隔没交给定位服务（启动时仍是默认 1 秒）')
+    need('lib/state.dart', 'int get effectiveGpsIntervalSec =>',
+         '没有 effectiveGpsIntervalSec —— 省电模式对采样间隔的换算没有单一口径')
+    need('lib/state.dart', 'unawaited(loc.setSampling(effectiveGpsIntervalSec * 1000));',
+         '改采样档位时没有走生效值（省电模式下不生效）')
+    need('lib/services.dart', "'intervalMs': samplingMs",
+         'startService 没把采样间隔带上 —— 原生侧会退回写死的 1 秒')
+    need('lib/services.dart', "'setSampling', {'intervalMs': ms}",
+         '运行中改采样间隔没有通道入口（要重启定位才生效）')
+    need('android/app/src/main/kotlin/com/aprslocus/aprslocus/LocationService.kt',
+         'LocationManager.GPS_PROVIDER, gpsIntervalMs, 5f',
+         '原生侧又用回写死的采样间隔 —— 用户选的那一档不生效')
+    need('android/app/src/main/kotlin/com/aprslocus/aprslocus/LocationService.kt',
+         'fun setSamplingStatic(ms: Int)',
+         '原生侧没有运行中调采样间隔的入口')
+    need('lib/app_widget.dart',
+         'unawaited(widget.state.ensureLocationRunning());',
+         '回到前台没有补一次定位检查 —— 漏掉一次启动就再也恢复不了')
+    # 外接 GPS 模块**启用着但早已断流**时，不准再拿它当挡粗点的理由：
+    # 室内/纯网络模式下那等于永远没有位置（同一个用户报告的另一半）。
+    forbid('lib/state.dart', 'if (coarse && nmeaGpsOn) return;',
+           '模块只要启用就挡掉所有网络定位 —— 断流之后位置再也回不来')
 
     # 粗定位（网络/基站）的两道闸：缺任何一道，标记都会在 GPS 一闪一断时横跳。
     #
@@ -149,6 +223,115 @@ def main() -> int:
     if "coarse ? '网络定位（粗）'" not in state:
         errors.append('粗定位时没有如实的 locStatus —— 用户会以为 GPS 坏了')
 
+    # ── 上报闸：只有**本轮重新拿到**的定位才允许上报（本次改动）──
+    #
+    # 背景（用户要求）：系统（GPS 或网络定位）**每次启动都会把上一次的位置
+    # 默认交回来**，磁盘上还存着上次的 myLat/myLng —— 于是「定位根本没开」时
+    # myHasFix 就已经是 true、坐标是旧的。拿它上报，等于在没有任何新定位的
+    # 情况下向全网宣告一个错坐标（用户报的正是这个）。
+    #
+    # 所以必须有一个「本轮是否已重新拿到定位」的闸，**自动与手动上报都要过它**：
+    # 只加在自动那条上是不够的 —— 用户点「立即上报」时那个旧坐标照样会发出去。
+    need('lib/state.dart', 'bool get myPositionReportable =>',
+         '没有「本轮已重新定位」的上报闸（myPositionReportable）—— '
+         '会把上次保存的位置当成现在的位置发出去（用户报的正是这个）')
+    need('lib/state.dart', 'bool _pendingSavedPos = false;',
+         '「只是上次保存的位置」这一位没了（见 _pendingSavedPos）')
+    need('lib/state.dart',
+         "_pendingSavedPos = true;\n        locStatus = '已保存位置';",
+         '「已保存位置」没有标记为「本轮尚未定位」—— 上报闸会误开')
+    # 模拟位置（手动定位）模式：保存的坐标**就是**用户选定的坐标，不是
+    # 「上一次的实时定位」。启动时若照搬上面那套「先关着上报闸」，而 GPS 自动
+    # 定位路径又会被 useSimLocation 挡掉，上报闸就永远开不了 —— 界面一直显示
+    # 「等待定位」，用户必须再点一次「应用坐标」才恢复（用户报的正是这个）。
+    need('lib/state.dart',
+         'if (useSimLocation && savedLat != null && savedLng != null) {\n'
+         '        _pendingSavedPos = false;\n'
+         "        locStatus = '模拟位置';",
+         '启动时没有为模拟位置放行保存的坐标 —— 手动定位必须再点一次'
+         '「应用坐标」才会生效（用户报的正是这个）')
+    need('lib/state.dart', 'if (!lastKnown) _pendingSavedPos = false;',
+         '_onFix 没有在本轮真实定位时打开上报闸（lastKnown 缓存点不算）')
+    need('lib/state.dart',
+         'bool get canAutoBeacon => connected &&\n      beaconEnabled &&\n'
+         '      myPositionReportable &&',
+         'canAutoBeacon 没用 myPositionReportable —— '
+         '「上次保存的位置」也会被自动发出')
+    need('lib/state.dart',
+         'if (!myPositionReportable) return;\n    if (!force && !beaconEnabled) return;',
+         '手动「立即上报」没有过 myPositionReportable —— 会发出一个错位置'
+         '（这正是用户报的「定位没开却报出错误位置」）')
+    need('lib/state.dart',
+         'if (!myPositionReportable) return BeaconPhase.waitingFix;',
+         'beaconPhase 没有把「还没本轮定位」报成等待定位 —— '
+         '界面会显示一个照走的倒计时，到点却什么都不发')
+    need('lib/state.dart', 'if (canAutoBeacon && myPositionReportable) {',
+         'tick 里的自动上报没有再过一次 myPositionReportable')
+    # 手动上报的老闸是 `myHasFix`，**不许**退回去（它就是漏洞本身）
+    forbid('lib/state.dart', 'if (!myHasFix) return;\n    if (!force',
+           '手动上报又退回按 myHasFix 放行 —— 上次保存的位置会被发出去')
+    # UI 侧：按钮必须与上报闸同源，否则会弹一条假的「已发送」。
+    need('lib/my_panel.dart', 'final fix = state.myPositionReportable;',
+         '主页按钮没有按上报闸显示 —— 只有保存位置时会显示「立即上报」'
+         '并弹「已发送」，其实什么都没发')
+
+    # ── 连接后手动确认才上报（本次改动）──
+    #
+    # 用户要求：无论用哪种方式定位，**连上服务器后不要自动上报**，必须由用户
+    # 手动点一下正式的「开始上报」按钮、确认坐标有效之后才开始。否则一连上就
+    # 抢在用户看清坐标之前把位置发出去。
+    need('lib/state.dart', 'bool beaconArmed = false;',
+         '没有「本次连接已确认开始上报」的闸（beaconArmed）—— '
+         '连上后会自动上报，用户要求手动确认后才开始')
+    need('lib/state.dart', '  bool get canAutoBeacon => connected &&\n'
+         '      beaconEnabled &&\n'
+         '      myPositionReportable &&\n'
+         '      beaconArmed &&',
+         'canAutoBeacon 没有过 beaconArmed —— 连上后未确认就会自动上报')
+    # 作废确认只认「计划内」的连接变动（用户自己的连接/断开/恢复出厂）；
+    # **计划外**的掉线自愈必须保留确认 —— 用户 2026-10-14：
+    # 「如果是计划外断开，可以直接重连」。
+    need('lib/state.dart',
+         'void _plannedLinkChange({required bool disconnecting}) {\n'
+         '    _userDisconnected = disconnecting;\n'
+         '    beaconArmed = false;',
+         '没有 _plannedLinkChange —— 用户自己点连接/断开时不会作废上报确认，'
+         '新连接会继承上一次的确认，又变成「连上就自动上报」')
+    need('lib/state.dart', '    _plannedLinkChange(disconnecting: true);\n'
+         '      _reconnectAttempt = 0; // 手动断开，重置重试计数',
+         'toggleConnect 的断开分支没走 _plannedLinkChange —— 手动断开后确认还留着')
+    need('lib/state.dart', '    _plannedLinkChange(disconnecting: false);\n'
+         '    await _connect();',
+         'toggleConnect 的连接分支没走 _plannedLinkChange —— 用户自己发起连接'
+         '会继承上一次的确认，变成「连上就自动上报」')
+    # 老写法：connected 一翻转就复位 —— 计划外的掉线自愈（链路抖动、自动重连、
+    # 换发射来源）会抹掉用户已做的确认，界面与常驻通知于是反复跳回
+    # 「待确认上报」（用户报的 bug）。不许回来。
+    forbid('lib/state.dart', 'if (connected != wasConnected) {\n'
+           '      beaconArmed = false;',
+           '_setLinkUp 又在连接翻转时复位 beaconArmed —— 计划外断开会把用户'
+           '已做的确认抹掉，「反复弹出待确认上报」会回来')
+    need('lib/state.dart', 'if (!beaconArmed) return BeaconPhase.needConfirm;',
+         'beaconPhase 没有把「还没点开始上报」报成 needConfirm —— '
+         '界面会显示一个照走的倒计时，到点却什么都不发')
+    need('lib/state.dart', 'void beginReporting() {',
+         '没有 beginReporting —— 「开始上报」按钮没有入口')
+    need('lib/state.dart', '  needConfirm,\n  /// 当前是**粗定位',
+         'BeaconPhase 少了 needConfirm 这一档')
+    # UI 侧：正式按钮必须真的出现，且与 beaconArmed 同源。
+    #
+    # 2026-10-24 改：它不再整块取代模式开关（那样首页会有一段时间看不到
+    # 自动/单次），而是与开关并排；判据改为一对（连着 + 本次还没确认 + 自动开着）。
+    need('lib/widgets.dart',
+         'state.connected && !state.beaconArmed && state.beaconEnabled;',
+         'ReportActions 没有「开始上报」按钮 —— 用户无处确认上报')
+    need('lib/widgets.dart',
+         'children: [toggle, const SizedBox(width: 6), action],',
+         'ReportActions 把模式开关从动作按钮旁边摘掉了 —— 首页又会只剩一个'
+         '「立即上报」，想再开自动就得回设置页')
+    need('lib/widgets.dart', 'state.beginReporting();',
+         '「开始上报」按钮没有调用 beginReporting')
+
     # 静止防抖
     need('lib/state.dart', '_selfFilter.feed(', '静止防抖滤波器没接上')
     need('lib/state.dart', 'final SelfFixFilter _selfFilter',
@@ -158,6 +341,16 @@ def main() -> int:
 
     # 轨迹抽稀：自己用自适应门限（固定 20m 在步行时太粗、高速时太细）
     need('lib/state.dart', 'PosQuality.trackMinDistM(', '自己轨迹没按速度自适应抽稀')
+
+    # 弱信号下的轨迹（用户要求）：卫星少 / 精度差时把点放稀，差到没法用就不记，
+    # 等下一次有效定位；开了「强制网络上报」则照记不误。
+    need('lib/pos_quality.dart',
+         'static bool weakFix({int? sats, required double accuracyM})',
+         '弱信号判据（PosQuality.weakFix）没了 —— 卫星弱时轨迹又会堆成一坨')
+    need('lib/state.dart', 'final weakGate = weak && !beaconForceCoarse;',
+         '弱信号轨迹门限没接上，或者没尊重「强制网络上报」这个开关')
+    need('lib/state.dart', 'PosQuality.weakSkipAccuracyM',
+         '精度差到没法用时没有跳过落点（会画出方向都错的轨迹）')
     forbid('lib/state.dart', 'haversine(last.lat, last.lng, lat, lng) > 0.02',
            '自己轨迹的固定 20m 门限又回来了（应改为按速度自适应）')
 

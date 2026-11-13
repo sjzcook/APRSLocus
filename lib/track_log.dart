@@ -226,6 +226,9 @@ class TrackLogStore {
   /// 1Hz × 24h = 86400，取 40000 仍然富余（10 秒一个点也能存 4.6 天）。
   static const int maxPointsPerDay = 40000;
 
+  /// 合法日期档名（`YYYY-MM-DD`）。导入备份时用它挡掉可疑键名。
+  static final RegExp _dayRe = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
   Directory? _dir;
   bool get available => _dir != null;
 
@@ -380,6 +383,28 @@ class TrackLogStore {
     return out;
   }
 
+  /// 本机有哪些天 —— 只看档名，不读内容。
+  ///
+  /// 云同步用它回答「这一天到底在不在本地」：同步记号（`syncServerSig`）会随备份
+  /// 搬家，换台机器后它可能说「已经拉过了」而本地一天都没有，那时靠读文件才有真相。
+  /// 目录里列一遍比逐天 `loadDay` 便宜得多（一天一个文件，不是一天一次解码）。
+  Future<Set<String>> dayKeys() async {
+    final out = <String>{};
+    final today = _today;
+    if (today != null && !today.isEmpty) out.add(today.day);
+    final d = _dir;
+    if (d == null) return out;
+    try {
+      if (!await d.exists()) return out;
+      await for (final e in d.list()) {
+        if (e is! File || !e.path.endsWith('.json')) continue;
+        final day = _basename(e.path);
+        if (_dayRe.hasMatch(day)) out.add(day);
+      }
+    } catch (_) {}
+    return out;
+  }
+
   /// 删除某一天
   Future<void> deleteDay(String day) async {
     if (_today?.day == day) _today = null;
@@ -390,6 +415,171 @@ class TrackLogStore {
       final tmp = File('${f.path}.tmp');
       if (await tmp.exists()) await tmp.delete();
     } catch (_) {}
+  }
+
+  /// 导出所有历史天的**原始 JSON**（`day → DayTrack.toJson()`），供备份携带。
+  ///
+  /// 不做任何解码再编码：读进来什么就带出去什么。解码↔编码会引入
+  /// 「未来版本写的字段被旧版本丢掉」这类静默损失，而备份是搬运工，
+  /// 不该对内容有意见。坏文件跳过（与 [loadAll] 的容错口径一致）。
+  Future<Map<String, Object?>> exportRawDays() async {
+    await flush();
+    final out = <String, Object?>{};
+    final d = _dir;
+    if (d == null) {
+      final t = _today;
+      if (t != null && !t.isEmpty) out[t.day] = t.toJson();
+      return out;
+    }
+    try {
+      if (!await d.exists()) return out;
+      await for (final e in d.list()) {
+        if (e is! File || !e.path.endsWith('.json')) continue;
+        final day = _basename(e.path);
+        try {
+          final raw = jsonDecode(await e.readAsString());
+          if (raw is Map) out[day] = raw;
+        } catch (_) {
+          // 单个坏文件只丢这一天
+        }
+      }
+    } catch (_) {}
+    return out;
+  }
+
+  /// 把备份里携带的历史轨迹写回 `tracklog/`。
+  ///
+  /// 以**天**为单位合并：备份里有的天整档覆盖，备份里没有的天原样保留。
+  /// 这样「导入一份旧备份」不会把本地更新的天抹掉，也正好对应导入页
+  /// 「导入以组为单位整组覆盖」的口径。
+  ///
+  /// 关键：把 [raw] 里的点再做一次裁剪——备份文件是用户可以手工编辑的，
+  /// 不能因为一段乱写的 JSON 就让某天的点数爆掉或时间戳溢出。
+  /// 返回写入（或替换）的天数；存储未就绪时返回 0。
+  Future<int> importRawDays(Map<String, Object?> raw) async {
+    final d = _dir;
+    if (d == null || raw.isEmpty) return 0;
+    try {
+      if (!await d.exists()) await d.create(recursive: true);
+    } catch (_) {
+      return 0;
+    }
+    var written = 0;
+    for (final entry in raw.entries) {
+      final day = entry.key;
+      if (!_dayRe.hasMatch(day)) continue; // 文件名形状必须像一天
+      final value = entry.value;
+      if (value is! Map) continue;
+      final dayTrack = DayTrack.fromJson(value);
+      if (dayTrack == null || dayTrack.points.isEmpty) continue;
+      final f = _fileFor(day);
+      if (f == null) continue;
+      try {
+        final tmp = File('${f.path}.importtmp');
+        await tmp.writeAsString(jsonEncode(dayTrack.toJson()), flush: true);
+        await tmp.rename(f.path);
+        written++;
+      } catch (_) {
+        // 单天写失败不影响其余天
+      }
+    }
+    // 内存里的「今天」若被这次导入覆盖，重新读回，避免下一次 flush 又把它写回旧值。
+    await _loadToday();
+    return written;
+  }
+
+  /// 读某一天（没有就返回空的那一天）。
+  Future<DayTrack?> loadDay(String day) async {
+    if (!_dayRe.hasMatch(day)) return null;
+    await flush();
+    if (_today?.day == day) return _today;
+    final f = _fileFor(day);
+    if (f == null) return null;
+    try {
+      if (!await f.exists()) return null;
+      return DayTrack.fromJson(jsonDecode(await f.readAsString()));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 云同步拉回来的那一天：与本地那一天**并集**，谁也不覆盖谁。
+  ///
+  /// 与 [importRawDays] 的区别：备份导入是「整档覆盖」（那是一份完整快照），
+  /// 云同步是两台设备各记了一半，任何一边都不该被抹掉。
+  ///
+  /// 同一位置的点（3 秒内且 50 米内）只留一个：两台手机同时记录同一趟路时，
+  /// 不这样会画成两条重叠的线。留下的那条优先带心率的。
+  /// 返回真正新增的点数。
+  Future<int> mergeDayPoints(
+      String day, List<Map<String, dynamic>> incoming) async {
+    if (!available || !_dayRe.hasMatch(day) || incoming.isEmpty) return 0;
+    final local = (await loadDay(day))?.points ?? const <TrackLogPoint>[];
+    final fresh = <TrackLogPoint>[];
+    for (final raw in incoming) {
+      final point = TrackLogPoint.fromJson(raw);
+      if (point != null) fresh.add(point);
+    }
+    if (fresh.isEmpty) return 0;
+    fresh.sort((a, b) => a.time.compareTo(b.time));
+
+    final out = <TrackLogPoint>[];
+    var added = 0;
+    void take(TrackLogPoint point, bool fromCloud) {
+      if (out.isNotEmpty && _sameSpot(out.last, point)) {
+        // 同一位置：本地没有心率而云端有，就换成云端那条
+        if (fromCloud && out.last.hr == null && point.hr != null) {
+          out[out.length - 1] = point;
+        }
+        return;
+      }
+      out.add(point);
+      if (fromCloud) added++;
+    }
+
+    var i = 0;
+    var j = 0;
+    while (i < local.length && j < fresh.length) {
+      if (!local[i].time.isAfter(fresh[j].time)) {
+        take(local[i++], false);
+      } else {
+        take(fresh[j++], true);
+      }
+    }
+    while (i < local.length) {
+      take(local[i++], false);
+    }
+    while (j < fresh.length) {
+      take(fresh[j++], true);
+    }
+    if (added == 0) return 0;
+
+    final merged = DayTrack(day, out);
+    final f = _fileFor(day);
+    if (f == null) return 0;
+    try {
+      final tmp = File('${f.path}.synctmp');
+      await tmp.writeAsString(jsonEncode(merged.toJson()), flush: true);
+      await tmp.rename(f.path);
+    } catch (_) {
+      return 0;
+    }
+    // 内存里的今天也要接上新点，否则下一次 flush 又把它写回旧值。
+    if (_today?.day == day) _today = merged;
+    return added;
+  }
+
+  /// 两台设备里同一次定位的判据：3 秒内且 50 米内（与服务端合并口径一致）。
+  static bool _sameSpot(TrackLogPoint a, TrackLogPoint b) {
+    if (a.time.difference(b.time).inMilliseconds.abs() > 3000) return false;
+    return haversine(a.lat, a.lng, b.lat, b.lng) * 1000 <= 50;
+  }
+
+  static String _basename(String path) {
+    var s = path.replaceAll('\\', '/');
+    final i = s.lastIndexOf('/');
+    if (i >= 0) s = s.substring(i + 1);
+    return s.endsWith('.json') ? s.substring(0, s.length - 5) : s;
   }
 
   /// 清空全部历史

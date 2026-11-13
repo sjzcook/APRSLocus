@@ -1,0 +1,252 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Hero：3D 星球直接长在 hero 上 + 首屏一个累计报文数字（三语首页共用）
+   ──────────────────────────────────────────────────────────────────────
+   为什么单独一个文件：style.css 被 46 个页面以 ?v=8 引用，动它就得全站改
+   版本号；这块只有三语首页 hero 用到，独立文件 + 独立 ?v 更省事。
+
+   这一版的关键点：星球不是"面板"，而是一层**透明**的全幅画布
+   （js/planet-3d.js 里 clearColor 的 alpha = 0）。所以这里不写底色、不写
+   边框、不写内边距 —— 画布上除了点什么都没有，边缘自然消失，出界的环带
+   交给 hero 自己的 overflow 裁掉。浅色主题下点是彩色墨点，深色主题下同一
+   份几何切成加色混合变霓虹辉光（见脚本里的 MODES）。
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 装饰层 ──
+   网格 / 星尘 / 星球 / 没有 WebGL 时的静态球，以前是 hero 的四个平级子元素，
+   现在收进同一层：hero 的直接子元素只剩 装饰层 → 文案(hero-inner) → 向下箭头。
+   整层都不吃指针事件 —— 星球是**只看不摸**的（不能拖动旋转），这一层没有例外。
+   定位还是相对 .hero 的 inset:0 —— 里面四个子层的坐标一个没动。 */
+.hero-decor {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+}
+
+/* ── 星球层 ── */
+.planet-canvas {
+  /* 只铺满**第一屏**：hero 现在比一屏高（下载那块在下面等着滚出来），画布要是
+     跟着 hero 一起长，取景半径 h 会跟着变大，星球就被动地变大、变低。 */
+  position: absolute; top: 0; left: 0; z-index: 1;
+  width: 100%; height: 100vh; height: 100svh; display: block;
+  pointer-events: none;           /* 这层是画面不是控件：不接指针、不接焦点 */
+  /* 这里不做 CSS 入场动画：「聚成球 + 机位退定」由 planet-3d.js 在 WebGL 里
+     做（否则 CSS 的 transform 会盖掉滚动视差）。这一层只负责往下拉页面时
+     慢慢退开 —— 位移 / 缩放 / 透明度都读 .hero 上的变量，脚本里每帧写一次；
+     没有脚本时这几个变量取默认值，也就是稳稳待在取景位。
+     反面教材：上一版在这里写 animation + opacity:0，遮罩因为任何原因没收到
+     .loaded（比如外链资源没加载完），星球就永远隐形，整层白给。 */
+  transform: translate3d(0, var(--hero-3d-y, 0px), 0) scale(var(--hero-3d-scale, 1));
+  opacity: var(--hero-3d-fade, 1);
+  will-change: transform, opacity;
+}
+/* 文案在最上层。hero-inner 自己不拦指针事件（整个 hero 只剩文案要接事件），
+   只有文案栏恢复接收：链接、选中文字照常。 */
+.hero-inner { grid-template-columns: minmax(0, 1fr); pointer-events: none; }
+
+/* ── 首屏高度的基准：只定义一次 ──
+   hero 的顶部留白（原来硬写在 style.css 的 padding: 140px … 里）在这里收成
+   一个变量，首屏高度 = 一屏（svh，手机地址栏收起也不会溢出）减去它。
+   以前是“140px 的内边距”和下面那个 min-height: calc(100vh - 150px) 两个数
+   各说各话 —— 内边距一改，那个 150 就静静地错了。 */
+.hero { --hero-pad-top: 140px; padding-top: var(--hero-pad-top); }
+/* ── 第一屏只摆那个数字 ──
+   进来第一眼应该是一个数，不是一段自我介绍。所以第一屏就是"一屏减去 hero 顶部
+   留白"这么高的盒子（两个数都从 --hero-pad-top 来，见上面），数字在盒子里垂直
+   居中；说明与下载都在它下面，要滚上来。 */
+.hero-copy {
+  pointer-events: auto; position: relative; max-width: 620px;
+  min-height: calc(100vh - var(--hero-pad-top));
+  min-height: calc(100svh - var(--hero-pad-top));
+  display: flex; align-items: center; justify-content: flex-start;
+  /* 往下拉：数字比星球走得快一点、先淡掉、再轻缩一档，hero 交给下一屏。
+     位移 / 缩放 / 透明度都是脚本按"缓动后的滚动量"每帧写进来的变量 ——
+     缓动在 JS 里做，所以这里不写 transition（两套缓动叠一起会发涩）。 */
+  transform: translate3d(0, var(--hero-3d-copy, 0px), 0) scale(var(--hero-3d-copy-scale, 1));
+  opacity: var(--hero-3d-copy-fade, 1);
+  will-change: transform, opacity;
+}
+
+/* ── 折线之下：这是什么（说明）→ 真正要动手的那一块 ──
+   这两块**不放在 .hero-copy 里面**。滚动退场的淡出只该作用在首屏那个数字上 ——
+   老版把下载块和读数放在同一个会淡出的盒子里，滚过 0.8 屏之后整块只剩 12%
+   不透明度（因为一直没人滚到那儿，这个坑没被发现）。 */
+.hero-copy-next {
+  pointer-events: auto; position: relative; max-width: 620px;
+  padding-top: clamp(16px, 5vh, 64px);
+  /* 也吃一点滚动量：比页面慢一点点地升上来，接住上面退场的数字 */
+  transform: translate3d(0, var(--hero-3d-next, 0px), 0);
+}
+
+/* 文案底下铺一层很淡的同色晕，长句子压在点云上也读得清（不出边框感）。
+   两套值分别贴着 --bg-1 的白 / 深空黑，换了底色记得跟着改这里。 */
+.hero { --hero-veil: rgba(244, 247, 253, .9); }
+:root[data-theme="dark"] .hero { --hero-veil: rgba(10, 14, 18, .86); }
+.hero-copy::before, .hero-copy-next::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  inset: -18% -34%;
+  background: radial-gradient(46% 46% at 38% 50%, var(--hero-veil), transparent 74%);
+}
+
+/* ── 读数之上的一句邀请：说清「这个数字是什么」，语气是邀请不是参数表。
+      无边框无底色，只是排一行字 —— 竖线 / 卡片都会把它拉回「仪表盘」。 ── */
+.hero-invite {
+  margin: 30px 0 0; max-width: 560px;
+  font-size: clamp(14px, 1.5vw, 16px); line-height: 1.95;
+  color: var(--text-dim); letter-spacing: .01em;
+}
+.hero-invite .hi-mark { color: var(--cyan); margin-right: 8px; }
+/* ── 累计报文读数：竖排三级 —— 标签在上 / 数字在中 / 一行小注收尾。
+      为什么不再横着排一行：标签、数字、频率挤在同一条基线上，字号又小，整块
+      看上去像页脚的一行注释，压不住这一屏；竖排之后数字自己成一个体量，
+      "这是什么"（标签）也终于排在数字**前面**而不是后面小字里。 ── */
+.hero-stat {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  margin: 0;
+}
+/* 标签：这个数字是**谁的、是什么**。首屏只有数字加这一行小字，没有它就只剩
+   一个来路不明的计数器 —— 所以品牌名必须留在这里，不许省成"累计报文总量"。 */
+.hero-stat .hs-label {
+  font-size: 12px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.hero-stat .tl-value {
+  display: block;
+  /* 站点正文那一族字（不是等宽）：摆得进 hero 的字形体系，但数字必须
+     tabular —— 每三秒换一位数字时，整块不能跟着抖。 */
+  font-size: clamp(64px, 11vw, 148px);
+  font-weight: 800; line-height: .92;
+  letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+   /* 不上渐变、不上彩：就是铝白 / 墨色。跳动靠"抬起 + 换成数据那一支冷蓝再退回来"，
+     整条读数里只有这一处强调色，不会跟旁边的按钮抢色。 */
+  color: var(--text);
+  filter: drop-shadow(0 10px 24px var(--shadow-color));
+}
+/* 每跳一格：数字轻轻上浮一下、辉光一闪、渐变扫过一整轮 —— 看上去是「亮了一下」，
+   而不是「换了一张图」。 */
+.tl-value.bump { animation: tlBump .62s var(--ease); }
+@keyframes tlBump {
+  /* 起手与收尾都停在静止态：跳完不留色差，看不出是从哪一帧接上的 —— 只记得它亮过 */
+  0% {
+    transform: translateY(-3px) scale(1.035);
+    color: var(--cyan);
+    filter: drop-shadow(0 0 16px var(--shadow-cool));
+  }
+  55% { transform: translateY(0) scale(1); }
+  100% {
+    transform: none;
+    color: var(--text);
+    filter: drop-shadow(0 10px 24px var(--shadow-color));
+  }
+}
+
+/* ── 往下滑才出现的那一块：真正要动手的东西（版本卡 + 下载按钮 + 来源）。
+      hero 上面只负责说清"这是什么、这个数字是什么"；动手的部分等在下面，
+      滚到位才淡上来。.reveal 是站点本来就有的机制（风格与其它 section 一致），
+      这里只把它从 hero 的依次登场里摘出来 —— 否则遮罩一走开它就自己演完了，
+      也就不用"往下滑"了。 ── */
+.hero-copy-next .hero-cta { margin-top: clamp(40px, 9vh, 96px); }
+
+/* ── 版本卡：一行状态 + 一个去下载的入口 ──
+   这几个值以前是以 8 条 inline style 写在三个语言页的同一个标签上（hero 里
+   最后一处 inline 样式，也是全站样式里最散的一处）—— 页数一多必然走样。
+   现在挪到这里；页面那边只留 class。 */
+.hero-release {
+  display: inline-flex; align-items: center; gap: 12px;
+  margin: 8px 0 6px; padding: 12px 18px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--line);
+  box-shadow: 0 12px 30px rgba(45,70,120,.14); backdrop-filter: blur(14px);
+}
+.hero-release .hr-icon { font-size: 20px; }
+.hero-release .hr-name { font-size: 14px; }
+.hero-release .hr-state { color: var(--cyan); }
+.hero-release .hr-note { display: block; font-size: 12.5px; color: var(--text-faint); }
+.hero-release .hr-link { color: var(--cyan); font-weight: 700; }
+/* 按钮里的桌面图标带自己的尺寸（原来写在标签上）：居中一个 20px 的方块 */
+.hero-actions .fa-desktop { width: 20px; height: 20px; }
+
+/* hero 背景那层网（main.js 画的）压一档：这一屏的主角是星球，不是噪点 */
+.hero-canvas { opacity: .5; }
+
+/* ── 没有 WebGL：退回纯 CSS 星球，位置与脚本里的取景对齐（偏右 / 窄屏居中） ── */
+.planet-fallback { display: none; }
+.hero.no-3d .planet-canvas { display: none; }
+.hero.no-3d .planet-fallback {
+  display: block; position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none;
+  width: 100%; height: 100vh; height: 100svh;
+  /* 跟画布同一套变量：降级成纯 CSS 星球时，往下拉也一样退开 */
+  transform: translate3d(0, var(--hero-3d-y, 0px), 0) scale(var(--hero-3d-scale, 1));
+  opacity: var(--hero-3d-fade, 1);
+}
+.planet-fallback .pf-globe {
+  position: absolute; left: 71.5%; top: 47.5%; width: 65vh; aspect-ratio: 1;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  /* 降级星球也只用那一族蓝：亮面 → 冷蓝 → 深空黑的地平线 */
+  background:
+    radial-gradient(circle at 36% 32%, var(--cyan-bright) 0%, var(--cyan) 26%, var(--cyan-deep) 62%, var(--bg-1) 100%);
+  box-shadow: 0 0 140px var(--shadow-cool);
+  opacity: .92;
+}
+.planet-fallback .pf-ring {
+  position: absolute; left: 71.5%; top: 47.5%; width: 116vh; height: 40vh;
+  transform: translate(-50%, -50%) rotate(-13deg); border-radius: 50%;
+  border: 2px solid var(--line-cool);
+  box-shadow: 0 0 40px var(--shadow-cool);
+}
+
+/* ── 底部的「往下拉」提示：一根渐隐的细线 + 一颗往下走的点。没有圆环、没有
+      箭头图标、没有盒子 —— 它就是一条线，接住「继续往下看」这个动作；
+      真的往下拉之后，星球与文案的退场动画接上，提示自己也就随 hero 走掉了。 ── */
+.hero-scroll {
+  display: block; position: absolute; left: 50%; top: calc(100vh - 76px); top: calc(100svh - 76px); z-index: 3;
+  width: 26px; height: 52px; margin-left: -13px;
+  opacity: .62; transition: opacity .4s var(--ease);
+  animation: heroCueFloat 2.8s var(--ease) infinite;
+}
+.hero-scroll:hover, .hero-scroll:focus-visible { opacity: 1; }
+.hero-scroll span {
+  position: absolute; left: 50%; top: 0; width: 1.5px; height: 100%;
+  margin-left: -.75px; border-radius: 2px;
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0), rgba(77, 163, 255, .55) 45%, rgba(77, 163, 255, 0));
+}
+.hero-scroll span::after {
+  content: ""; position: absolute; left: 50%; top: 0; width: 6px; height: 6px;
+  margin-left: -3px; border-radius: 50%; background: var(--cyan);
+  box-shadow: 0 0 14px rgba(77, 163, 255, .55);
+  animation: heroCueDrop 2.8s var(--ease) infinite;
+}
+@keyframes heroCueFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+@keyframes heroCueDrop {
+  0% { top: 0; opacity: 0; }
+  18% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { top: 34px; opacity: 0; }
+}
+
+/* ── 响应式：窄屏文案居中，星球挪到上三分之一（与脚本里的取景分支一致） ── */
+@media (max-width: 1024px) {
+  .planet-fallback .pf-globe { left: 50%; top: 30%; width: 68vw; }
+  .planet-fallback .pf-ring { left: 50%; top: 30%; width: 124vw; height: 44vw; }
+  .hero-copy, .hero-copy-next { max-width: 640px; margin: 0 auto; text-align: center; }
+  .hero-badge, .hero-actions, .hero-meta, .hero-stat { justify-content: center; }
+  .hero-stat { display: flex; align-items: center; }
+  .hero-sub, .hero-invite { margin-left: auto; margin-right: auto; }
+  .hero-copy::before, .hero-copy-next::before {
+    inset: -10% -8%;
+    background: radial-gradient(58% 58% at 50% 46%, var(--hero-veil), transparent 78%);
+  }
+}
+@media (max-width: 620px) {
+  /* 手机上更不把数字缩回小字：这一屏就是它 */
+  .hero-stat { gap: 12px; margin-top: 0; }
+  .hero-stat .hs-label { font-size: 11px; letter-spacing: .2em; }
+  .hero-stat .tl-value { font-size: clamp(54px, 19vw, 88px); }
+  .hero-invite { font-size: 13.5px; line-height: 1.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* style.css 里整站 animation:none !important；动画被关掉后必须把这些收回来，
+     否则星球那一层永远是隐形的。脚本那边也不会写滚动变量，所以这里直接归位。 */
+  .planet-canvas, .planet-fallback, .hero-copy, .hero-copy-next { opacity: 1; transform: none; }
+  .hero-scroll { display: none; }
+}

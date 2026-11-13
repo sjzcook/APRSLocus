@@ -9,6 +9,7 @@ import 'widgets.dart';
 // honorLangOf：荣誉/成就/赞助共用同一套语言回落（ja/id → 英文）
 import 'early_member.dart';
 import 'material.dart';
+import 'settings_widgets.dart';
 
 /// 赞助与鸣谢页面（赞助名单从官网 sponsors.json 在线更新，离线用内置兜底）
 const String kSponsorsUrl = 'https://aprslocus.theez.top/sponsors.json';
@@ -132,6 +133,96 @@ class _SponsorPageState extends State<SponsorPage> {
       descs: const {
         'zh-TW': '贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音',
         'en': 'Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG2WX',
+      names: const {},
+      desc: '赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音',
+        'en': 'Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG7LZQ',
+      names: const {},
+      desc: '赠我以琼琚 · 承君厚赠，藏之于心；唯有砥砺，以报清音',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 承君厚贈，藏之於心；唯有砥礪，以報清音',
+        'en': 'Gifted with jade — your kindness is treasured in my heart; the only return I can offer is to strive, and answer with good work.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BD4TYW',
+      names: const {},
+      desc: '赠我以琼琚 · 投我琼琚，报以长波',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 投我瓊琚，報以長波',
+        'en': 'Gifted with jade — you gave jade, and are answered with the long wave.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BH2WIX',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚有价，清音无价',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚有價，清音無價',
+        'en': 'Gifted with jade — jade has a price, but a clear tone is priceless.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG7QZC',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚虽微，长波可寄',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚雖微，長波可寄',
+        'en': 'Gifted with jade — small as it is, the long wave carries it far.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BH4HGA',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚在手，回响不息',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚在手，回響不息',
+        'en': 'Gifted with jade — jade in hand, the echo goes on.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG2GNI',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚一片，回声不散',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚一片，回聲不散',
+        'en': 'Gifted with jade — one piece of jade, an echo that lingers.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG5AON',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚在手，长路有灯',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚在手，長路有燈',
+        'en': 'Gifted with jade — jade in hand, a light along the road.',
+      },
+    ),
+    (
+      kind: 'jade',
+      name: 'BG5WRY',
+      names: const {},
+      desc: '赠我以琼琚 · 琼琚在握，长波有应',
+      descs: const {
+        'zh-TW': '贈我以瓊琚 · 瓊琚在握，長波有應',
+        'en': 'Gifted with jade — jade in hand, the long wave answers.',
       },
     ),
     (
@@ -315,6 +406,11 @@ class _SponsorPageState extends State<SponsorPage> {
             C.green,
           ),
           const SizedBox(height: 8),
+          // 赞赏声明（与用户协议 9.4 同一口径）：自愿、不换取功能、不退费、
+          // 未成年人需监护人同意。**放在二维码之前** —— 用户真要掏钱的地方就该
+          // 看到它，而不是只写在协议第九节里。
+          SettingsHint(S.of(context).donateNotice, color: C.grey),
+          const SizedBox(height: 4),
           SoftCard(
             padding: EdgeInsets.zero,
             child: Column(

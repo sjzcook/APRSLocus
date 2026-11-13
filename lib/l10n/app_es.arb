@@ -129,6 +129,14 @@
   "mapTypeOsm": "OSM estándar",
   "mapTypeOsmHot": "OSM humanitario",
   "mapTypeOpenTopo": "OpenTopo terreno",
+  "terrainGroup": "Terreno",
+  "mapTypeEsriTopo": "Esri topo (curvas)",
+  "mapTypeEsriRelief": "Esri relieve sombreado",
+  "mapTypeEsriHillshade": "Esri sombreado",
+  "tiandituGroup": "Tianditu",
+  "mapTypeTianditu": "Tianditu vectorial",
+  "mapTypeTiandituImg": "Tianditu imágenes",
+  "mapTypeTiandituTer": "Tianditu terreno",
   "mapTypeEsriStreet": "Esri calles",
   "mapTypeEsriSat": "Esri imágenes",
   "simulatedKeepAlive": "Ubicación simulada · keep-alive",
@@ -261,7 +269,7 @@
   "oobeWelcomeIs": "Conexión APRS-IS",
   "oobeCallTitle": "Tu indicativo",
   "oobeSymbolTitle": "Elegir símbolo de estación",
-  "oobeServerTitle": "Conectar al servidor APRS-IS",
+  "oobeServerTitle": "Servidor (opcional)",
   "weatherData": "Datos meteorológicos",
   "fmoInfo": "Información FMO",
   "aprslocusInfo": "Información de APRSlocus",
@@ -283,13 +291,13 @@
   "invalidCoords": "Introduce latitud, longitud y radio válidos",
   "filterSaved": "Filtro guardado y aplicado",
   "stationsShown": "Estaciones",
-  "settingsDesc": "Configura estación, ubicación y conexión",
+  "settingsDesc": "Estación, ubicación, enlaces y datos",
   "radioCat": "Estación",
   "radioCatDesc": "Indicativo · SSID · Símbolo",
   "beaconCat": "Balizamiento",
   "beaconCatDesc": "GPS · Baliza · Posición manual",
-  "connectionCat": "Conexión",
-  "connectionCatDesc": "Servidor · Filtro de rango",
+  "connectionCat": "Servidores",
+  "connectionCatDesc": "Dos enlaces · filtro de rango",
   "displayCat": "Pantalla",
   "displayCatDesc": "Coordenadas · Tema",
   "chatCat": "Chat",
@@ -306,13 +314,13 @@
   "oobeWelcomeDesc": "Empieza a configurar tu estación APRS",
   "oobeCallDesc": "Introduce tu indicativo",
   "oobeSymbolDesc": "El símbolo representa el tipo de estación y se envía con las balizas de posición",
-  "oobeServerDesc": "Conéctate para recibir datos de estaciones APRS de todo el mundo. La configuración predeterminada funciona tal cual.",
+  "oobeServerDesc": "Déjalo vacío para no conectarte a ningún servidor: la app funcionará solo en local. Este software no proporciona ni recomienda ninguna dirección de servidor; si quieres conectarte, introduce un servidor y puerto que te merezcan confianza.",
   "wizard": "Asistente de configuración",
   "setStep": "Paso",
   "chooseSymbol": "Elegir símbolo de estación",
   "settingsSubtitle": "Coordenadas del mapa y preferencias de pantalla",
   "stationSettingsSubtitle": "Indicativo, símbolo y baliza",
-  "connectionSettingsSubtitle": "Servidor APRS-IS y rango de recepción",
+  "connectionSettingsSubtitle": "Los dos enlaces pueden estar en línea a la vez y cada uno recibe su copia de cada paquete.",
   "chatSettingsSubtitle": "Historial de mensajes y contactos",
   "dataSettingsSubtitle": "Gestión de datos locales",
   "advancedSettingsSubtitle": "Laboratorio y herramientas de desarrollo",
@@ -328,11 +336,350 @@
   "showTrails": "Mostrar rastros",
   "showStations": "Mostrar estaciones",
   "aboutTitle": "Acerca de",
-  "aboutSubtitle": "Seguimiento y mapas APRS",
+  "aboutSubtitle": "Cliente APRS · seguimiento y mapa",
   "author": "Autor",
   "codeContributions": "Contribuciones de código",
   "codeContributionI18n": "Internacionalización / interfaz en inglés",
   "codeContributionZhTw": "Interfaz en chino tradicional",
+  "@icomLinkConnected": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomBindHint": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectRadio": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomSwitchTitle": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomCardActive": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingTo": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectTitle": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomConnectingSub": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      },
+      "tnc": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescHost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "@icomDescRadio": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "icomTitleSubtitle": "Radio Icom por LAN directa (IC-705 / IC-9700 / IC-7610 / IC-905): audio PCM de 12 kHz y control CI-V",
+  "icomLinkStatusTitle": "Estado del enlace",
+  "icomLinkConnected": "Enlace LAN establecido con {model}",
+  "icomLinkHandshaking": "Sin conexión o negociando",
+  "icomBindHint": "Al activarlo, la fuente de audio APRS se enlaza a la conexión LAN del {model}",
+  "icomLinkPhase": "Fase del enlace",
+  "icomRfStats": "Estadísticas RF",
+  "icomAudioFmt": "12000 Hz (LPCM 16 bits mono)",
+  "icomProcessing": "Procesando...",
+  "icomDisconnectRadio": "Desconectar radio",
+  "icomConnectRadio": "Conectar {model} ahora",
+  "icomNetworkTitle": "Parámetros de red",
+  "icomNetworkSubtitle": "Elige un preset de radio y configura la IP y las credenciales Network User",
+  "icomModelPreset": "Preset de radio",
+  "icomIpHint": "Dirección IP del radio",
+  "icomUserHint": "Nombre de Network User del radio",
+  "icomPassHint": "Contraseña de Network User del radio",
+  "icomCredHint": "Nota: el usuario y la contraseña deben coincidir exactamente con el Network User Setting del radio.",
+  "icomCivTitle": "Control CI-V y transmisión",
+  "icomCivSubtitle": "Control automático de PTT, retardo de TX y baliza",
+  "icomRfBeaconHint": "Permite que el radio balice automáticamente por RF (semidúplex: se silencia la escucha al transmitir).",
+  "icomTxDelayLabel": "Retardo de preámbulo TX (TX Delay, ms)",
+  "icomCivAddrLabel": "Dirección CI-V del radio (hex)",
+  "icomControllerAddr": "Dirección del controlador",
+  "icomControllerAddrValue": "0xE0 (predeterminado)",
+  "icomGuideTitle": "Guía de configuración del radio",
+  "icomGuideSubtitle": "Pasos necesarios en el radio Icom",
+  "icomGuide1Title": "Conexión de red",
+  "icomGuide1Body": "En el IC-705, elige Connect to Network en MENU → SET → WLAN Set para unirte a la Wi-Fi del router, o Access Point para crear un punto de acceso para el teléfono; los IC-9700 / IC-7610 / IC-905 pueden conectarse a un puerto LAN del router o entrar por un puente inalámbrico.",
+  "icomGuide2Title": "Añadir un Network User",
+  "icomGuide2Body": "Entra en WLAN Set / Network Set → Network User Setting, añade un usuario (con usuario y contraseña) y permite la conexión.",
+  "icomGuide3Title": "Confirma la dirección y el puerto CI-V",
+  "icomGuide3Body": "Entra en MENU → SET → Connectors → CI-V y confirma la CI-V Address y el puerto de control.",
+  "icomGuide4Title": "Configura modo y frecuencia",
+  "icomGuide4Body": "Ajusta el modo del radio en esa banda a FM-D.",
+  "icomLogTitle": "Registro de diagnóstico",
+  "icomLogSubtitle": "Consulta los paquetes de control LAN de Icom y el tráfico CI-V",
+  "icomLogEmpty": "Todavía no hay registro",
+  "icomPhaseOpeningSockets": "Abriendo puertos…",
+  "icomPhaseDiscovering": "Buscando el radio…",
+  "icomPhaseAuthenticating": "Iniciando sesión en el radio…",
+  "icomPhaseNegotiating": "Negociando el flujo de audio…",
+  "icomPhaseOpeningStreams": "Abriendo flujos…",
+  "icomPhaseReady": "Conectado (esperando audio)",
+  "icomPhaseReceiving": "Conectado (recibiendo)",
+  "icomPhaseReconnect": "Enlace perdido: reconectando…",
+  "icomPhaseFailed": "Conexión fallida",
+  "icomPhaseUnsupported": "Esta plataforma no admite la conexión LAN del IC-705",
+  "icomSwitchTitle": "Radio WLAN ({model})",
+  "icomLanAddr": "Dirección del radio",
+  "icomCardActive": "El enlace LAN directo con {model} está activo ahora.",
+  "icomConnectingTo": "Conectando con {radio}",
+  "icomConnectTitle": "Conectar radio {radio}",
+  "icomConnectingSub": "Conectando con {radio} ({tnc})…",
+  "icomDescHost": "{host} · RX/TX por LAN directa y control CI-V",
+  "icomDescRadio": "Envía/recibe y controla el {radio} por LAN directa",
+  "modelIc705Desc": "Radio QRP portátil multimodo (Wi-Fi AP / STA integrado)",
+  "modelIc9700Desc": "Base multimodo VHF/UHF/1.2 GHz (Ethernet LAN / Wi-Fi)",
+  "modelIc7610Desc": "Base SDR de doble receptor HF/50 MHz (Ethernet LAN)",
+  "modelIc905Desc": "Radio de microondas multimodo 144 MHz–10 GHz (Ethernet LAN)",
+  "modelCustomName": "Personalizado / otro",
+  "modelCustomDesc": "Dirección y puerto CI-V personalizados",
+  "assetWindowsPackage": "Instalador de Windows",
+  "assetApkPackage": "Paquete APK",
+  "honorTagPerseverance": "Bienestar",
+  "@agentTestOk": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentError": {
+    "placeholders": {
+      "msg": {
+        "type": "String"
+      }
+    }
+  },
+  "@agentToolCalling": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "agentMode": "Modo agente",
+  "agentModeDesc": "Muestra un chat de IA que puede cambiar ajustes, enviar mensajes y buscar estaciones (con tu propia clave de API)",
+  "agentSettings": "Ajustes del agente",
+  "agentSettingsDesc": "URL base / clave / modelo de la API y qué acciones puede realizar el agente",
+  "agentEnabled": "Activar agente",
+  "agentBaseUrl": "URL base de la API",
+  "agentApiKey": "Clave de API",
+  "agentModel": "Modelo",
+  "agentPreset": "Preajuste",
+  "agentPresetCustom": "Personalizado",
+  "agentSystemPrompt": "Prompt del sistema (opcional)",
+  "agentAllowSend": "Permitir enviar mensajes",
+  "agentAllowSendDesc": "Permite al agente enviar mensajes directos, de grupo y balizas",
+  "agentAllowSettings": "Permitir cambiar ajustes",
+  "agentAllowSettingsDesc": "Permite al agente cambiar ajustes (desactivado = solo lectura)",
+  "agentTest": "Probar conexión",
+  "agentTesting": "Probando…",
+  "agentTestOk": "Conexión correcta: {model}",
+  "agentNeedConfig": "Rellena la URL base, la clave y el modelo de la API",
+  "agentChatTitle": "Asistente de IA",
+  "agentInputHint": "Dile al agente qué hacer…",
+  "agentSend": "Enviar",
+  "agentClear": "Borrar chat",
+  "agentClearConfirm": "¿Borrar esta conversación?",
+  "agentWelcome": "Hola, soy el asistente de IA de APRSLocus. Pídeme cambiar ajustes, enviar mensajes o buscar estaciones. Configura tu clave de API en «Ajustes del agente».",
+  "agentThinking": "Pensando…",
+  "agentError": "Error: {msg}",
+  "agentConfirmTitle": "El agente quiere ejecutar una acción",
+  "agentConfirmRun": "Permitir",
+  "agentConfirmDeny": "Denegar",
+  "agentDenied": "Acción denegada",
+  "agentExecuted": "Hecho",
+  "agentToolResult": "Resultado",
+  "agentStopped": "Detenido",
+  "agentStop": "Detener",
+  "agentOpenSettings": "Ajustes del agente",
+  "agentNeedsEnable": "Activa «Modo agente» en Funciones de laboratorio primero",
+  "agentToolCalling": "Ejecutando: {name}",
+  "agentMinimize": "Minimizar",
+  "agentApiKeyTip": "La clave se guarda solo en este dispositivo y nunca se envía a los servidores de APRSlocus.",
+  "agentPresetHint": "Rellena rápidamente la URL y el modelo",
+  "agentInterfaceSection": "Configuración de la API",
+  "agentPermissions": "Permisos",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentMemory": "Memoria a largo plazo",
+  "agentMemoryDesc": "Permite al agente recordar tus preferencias entre chats",
+  "agentMemoryOn": "Activar memoria a largo plazo",
+  "agentMemoryHint": "El agente puede usar las herramientas de recordar/olvidar, o basta con decir «recuerda…». Solo en este dispositivo.",
+  "agentMemoryEmpty": "Aún no hay memorias. Dile al agente «recuerda…» para añadir una.",
+  "agentMemoryClear": "Borrar todas las memorias",
+  "agentMemoryClearConfirm": "¿Borrar todas las memorias? No se puede deshacer.",
+  "agentCompress": "Compresión de conversación",
+  "agentCompressDesc": "Pliega turnos antiguos en un resumen cuando crece el historial",
+  "agentCompressOn": "Activar compresión automática",
+  "agentCompressHint": "Comprime a partir de ~40 mensajes. El resumen queda en el prompt del sistema.",
+  "agentCompressNow": "Comprimir ahora",
+  "agentCompressNothing": "Nada que comprimir",
+  "agentCompressDone": "Conversación comprimida",
+  "agentAllowNetwork": "Permitir solicitudes de red",
+  "agentAllowNetworkDesc": "Permite al agente hacer solicitudes HTTP (GET / POST / PUT / DELETE…). Desactivado por defecto; cada solicitud te pregunta antes.",
+  "agentNoFinalAnswer": "Se alcanzó el límite de acciones por turno y no se pudo dar una conclusión. Envía «continúa» para que siga.",
+  "agentTool_http_request": "Hacer una solicitud de red",
+  "agentTool_save_memory": "Recordar un dato",
+  "agentTool_list_memories": "Ver memorias",
+  "agentTool_forget_memory": "Olvidar un dato",
+  "huangyanTitle": "Isla Huangyan",
+  "huangyanBadge": "Estación oculta · territorio de China",
+  "huangyanTagline": "Un atolón en el este de las islas Zhongsha, mar de China Meridional — territorio de China",
+  "huangyanShort": "Territorio de China · atolón en el este de las islas Zhongsha, mar de China Meridional",
+  "huangyanGrid": "OL98gd",
+  "huangyanGeoHead": "Geografía",
+  "huangyanGeoBody": "La isla Huangyan (también conocida como arrecife Scarborough) se encuentra en el este de las islas Zhongsha, en el mar de China Meridional. Es un gran atolón de forma casi triangular isósceles, con un perímetro de unos 55 km y una superficie de arrecife de unos 150 km², que encierra una laguna de unos 15 km de largo. La mayor parte del borde está sumergida; parte emerge en marea baja, lo que lo convierte en el único elemento de las islas Zhongsha que aflora.",
+  "huangyanHistoryHead": "Historia",
+  "huangyanHistory1": "China posee registros históricos de la isla Huangyan desde hace siglos. En 1297 el astrónomo de la dinastía Yuan Guo Shoujing estableció un punto de observación en estas aguas durante el «levantamiento de los cuatro mares»; los mapas oficiales y documentos náuticos posteriores la situaron de forma constante dentro del territorio chino, y los pescadores de Hainan y Guangdong faenan estas aguas desde generaciones con el nombre de «Huangyan». Las cartas occidentales adoptaron después el nombre de arrecife Scarborough.",
+  "huangyanHistory2": "En la época moderna, el Gobierno chino ha ejercido de forma continua su soberanía y jurisdicción sobre la isla Huangyan y sus aguas adyacentes. En 1983, el Comité de Nombres Geográficos de China publicó oficialmente el nombre estándar «isla Huangyan».",
+  "huangyanHamHead": "Radioafición",
+  "huangyanHamBody": "En radioafición, la isla Huangyan es conocida por el prefijo de entidad DXCC BS7. En 1995 aficionados chinos e internacionales realizaron la expedición BS7H, poniendo el atolón en el aire por primera vez y ganándose la reputación de destino DX raro y codiciado.",
+  "huangyanLegal": "El material de esta tarjeta se ofrece únicamente con fines divulgativos sobre radioafición. La isla Huangyan es territorio chino, sobre el que China tiene soberanía indiscutible, al igual que sobre sus aguas adyacentes.",
+  "huangyanTagReef": "Atolón de coral",
+  "huangyanTagDxcc": "DXCC BS7",
+  "huangyanTagAxis": "Islas Zhongsha",
+  "huangyanFootNote": "Recopilado de fuentes geográficas e históricas públicas solo como referencia.",
+  "huangyanOpen": "Abrir la introducción",
+  "agentTabConnection": "Conexión",
+  "agentTabPermissions": "Permisos",
+  "agentTabAutomation": "Automatización",
+  "agentSystemPromptHint": "Déjalo vacío para usar el prompt integrado",
+  "agentAlwaysAllow": "Permitir siempre",
+  "agentAlwaysAllowDesc": "Estas herramientas se ejecutan sin preguntar. Pulsa «Permitir siempre» para añadir una.",
+  "agentAlwaysAllowEmpty": "Ninguna aún. Pulsa «Permitir siempre» en una barra de confirmación.",
+  "agentAlwaysAllowClear": "Borrar todo",
+  "agentAutoReply": "Respuesta automática",
+  "agentAutoReplyDesc": "El agente responde solo a los mensajes nuevos (experimental)",
+  "agentAutoReplyOn": "Activar respuesta automática",
+  "agentAutoReplyHint": "Solo mensajes directos; sujeto a horas de silencio y enfriamiento; requiere «Permitir enviar mensajes».",
+  "agentReplyGroups": "Responder también en grupos",
+  "agentReplyGroupsDesc": "Hablar automáticamente en grupos es más arriesgado; desactivado por defecto",
+  "agentQuietHours": "Horas de silencio",
+  "agentQuietHoursDesc": "p. ej. 23:00-07:00; vacío = sin límite. No responde en esa franja.",
+  "agentTasks": "Tareas programadas",
+  "agentTasksDesc": "Ejecuta una instrucción más tarde automáticamente",
+  "agentTasksEmpty": "Aún no hay tareas programadas",
+  "agentTaskNew": "Nueva tarea programada",
+  "agentTaskPrompt": "Instrucción",
+  "agentTaskPromptHint": "p. ej. resume las estaciones de la última hora",
+  "agentTaskInterval": "Intervalo (minutos)",
+  "agentTaskIntervalHint": "0 = una vez; repetir mínimo 1 min",
+  "agentTaskCreate": "Crear",
+  "agentTaskDelete": "Eliminar",
+  "agentTaskEvery": "Cada {n} min",
+  "agentTaskOnce": "Una vez",
+  "agentAutoReplyPrompt": "[Respuesta automática] {from} te escribió: {text}\nPuedes usar herramientas de solo lectura (estaciones, mensajes…) para obtener datos, pero no cambies ajustes ni envíes nada. Escribe solo el mensaje a responder.",
+  "agentTool_get_app_state": "Leer estado de la app",
+  "agentTool_list_groups": "Listar grupos",
+  "agentTool_search_stations": "Buscar estaciones",
+  "agentTool_list_stations": "Listar estaciones",
+  "agentTool_station_detail": "Detalles de estación",
+  "agentTool_read_messages": "Leer mensajes",
+  "agentTool_send_message": "Enviar mensaje",
+  "agentTool_send_beacon_now": "Enviar baliza ahora",
+  "agentTool_set_preferences": "Cambiar preferencias",
+  "agentTool_set_station_filters": "Cambiar filtros de estaciones",
+  "agentTool_set_nickname": "Cambiar datos de indicativo",
+  "agentTool_navigate": "Cambiar de pantalla",
+  "agentTool_create_task": "Crear tarea programada",
+  "agentTool_list_tasks": "Listar tareas programadas",
+  "agentTool_cancel_task": "Cancelar tarea programada",
+  "agentTool_set_connection_server": "Cambiar servidor",
+  "agentTool_set_connection_source": "Cambiar fuente de conexión",
+  "agentTool_connect": "Conectar",
+  "agentTool_disconnect": "Desconectar",
+  "agentTool_nearby_stations": "Estaciones cercanas",
+  "agentTool_reply_message": "Responder mensaje",
+  "agentTool_send_group_message": "Enviar a grupo",
+  "agentTool_create_group": "Crear grupo",
+  "agentTool_set_task_enabled": "Pausar/reanudar tarea",
+  "agentTool_list_strategy": "Listar capa de estrategia",
+  "agentTool_strategy_add_point": "Añadir marca",
+  "agentTool_strategy_add_rally": "Añadir punto de reunión",
+  "agentTool_strategy_add_circle": "Añadir círculo",
+  "agentTool_strategy_add_line": "Añadir línea",
+  "agentTool_strategy_update": "Editar elemento de estrategia",
+  "agentTool_strategy_delete": "Eliminar elemento de estrategia",
+  "agentTool_strategy_clear": "Borrar capa de estrategia",
+  "agentTool_strategy_request_snapshot": "Pedir reenvío del mapa",
+  "agentTool_unknown": "Ejecutar acción",
+  "agentMessageTasks": "Disparadores por mensaje",
+  "agentMessageTasksDesc": "Ejecuta una instrucción al recibir un mensaje nuevo",
+  "agentMessageTasksEmpty": "Aún no hay disparadores por mensaje",
+  "agentMessageTaskNew": "Nuevo disparador por mensaje",
+  "agentMessageTaskPromptHint": "p. ej. anota la ubicación de este mensaje",
+  "agentMessageTaskEvery": "Al recibir un mensaje",
+  "agentMessageTaskRunPrompt": "[Disparador por mensaje] Se activó tu tarea disparadora n.º {n}.\nInstrucción: {task}\nMensaje entrante de {from}: {text}\nEjecuta la instrucción y muestra solo el resultado o la conclusión, no este aviso.",
+  "agentNoticeTitle": "Aviso sobre el agente de IA",
+  "agentNoticeAccept": "Aceptar y activar",
+  "agentNoticeDecline": "Ahora no",
+  "agentNoticeBody": "El agente envía tu conversación y los datos locales que lee (estaciones, ubicación, mensajes, ajustes…) al servicio de modelo de terceros que configures (p. ej. OpenAI, DeepSeek, un endpoint propio) para su procesamiento. No compartas secretos de Estado, secretos comerciales, privacidad personal ni ubicaciones sensibles en el chat.\n\nEres responsable de confirmar que el servicio de modelo que elijas sea lícito y cumpla la normativa, y asumes las consecuencias de cualquier transferencia transfronteriza de datos o tratamiento de datos personales. No operamos dicho servicio ni tenemos afiliación, agencia o sociedad con él.\n\nPor defecto el agente solo puede leer datos; las acciones con efectos (enviar mensajes, cambiar ajustes) requieren tu autorización por separado y confirmación en cada caso, y puedes desactivar el agente cuando quieras.\n\nAl pulsar «Aceptar y activar» declaras haber leído, entendido y aceptado lo anterior.",
+  "@agentTaskEvery": {"placeholders": {"n": {"type": "int"}}},
+  "@agentAutoReplyPrompt": {"placeholders": {"from": {"type": "String"}, "text": {"type": "String"}}},
+  "@agentMessageTaskRunPrompt": {"placeholders": {"n": {"type": "int"}, "task": {"type": "String"}, "from": {"type": "String"}, "text": {"type": "String"}}},
+  "agentStreamReply": "Respuesta progresiva",
+  "agentStreamReplyDesc": "Muestra el texto mientras el modelo lo escribe. Si el backend no admite streaming, se muestra la respuesta completa de una vez (nunca menos respuestas).",
+  "agentToolHistory": "Historial de herramientas",
+  "agentToolHistoryEmpty": "Aún no hay actividad de herramientas. Pídele algo al agente y cada llamada aparecerá aquí.",
+  "agentToolWorking": "En curso: {tool}",
+  "agentToolDenied": "Denegado",
+  "agentToolFailed": "Falló",
+  "@agentToolWorking": {"placeholders": {"tool": {"type": "String"}}},
   "codeContributionTranslation": "Traducción",
   "dataSourceTxHint": "Puedes activar varios enlaces para recibir, pero **solo uno transmite** (el punto a la derecha). Enviar el mismo indicativo por dos enlaces duplicaría paquetes.",
   "dataSourceTxBadge": "TX",
@@ -365,13 +712,58 @@
   "grpNameTooLong": "El nombre del grupo se limita a {max} caracteres (más largo hace que la invitación supere el límite de APRS)",
   "grpInviteSent": "Invitación enviada a {n} miembro(s)",
   "grpSelfPending": "Esperando al propietario",
-  "@grpSysJoined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysLeft": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysJoinReq": {"placeholders": {"call": {"type": "String"}}},
-  "@grpSysDeclined": {"placeholders": {"call": {"type": "String"}}},
-  "@grpInviteBody": {"placeholders": {"from": {"type": "String"}, "name": {"type": "String"}}},
-  "@grpNameTooLong": {"placeholders": {"max": {"type": "int"}}},
-  "@grpInviteSent": {"placeholders": {"n": {"type": "int"}}},
+  "@grpSysJoined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysLeft": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysJoinReq": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpSysDeclined": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpInviteBody": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@grpNameTooLong": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "@grpInviteSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "deviceOverviewTitle": "Dispositivos",
   "deviceOverviewSubtitle": "Fuente de datos, estado del enlace y autodiagnóstico",
   "deviceCurrentLink": "Enlace actual",
@@ -400,18 +792,60 @@
   "tncTxTestOk": "Escrito en el TNC ({n} tramas en total). Si la radio sigue sin transmitir, el problema está en el TNC: prueba la cadena de inicio o revisa TxDelay.",
   "tncTxTestFail": "No escrito: {err}",
   "tncNeedConnected": "Conecta primero el TNC",
-  "@tncInitSent": {"placeholders": {"n": {"type": "int"}}},
-  "@tncTxTestOk": {"placeholders": {"n": {"type": "String"}}},
-  "@tncTxTestFail": {"placeholders": {"err": {"type": "String"}}},
+  "@tncInitSent": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@tncTxTestOk": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncTxTestFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "msgLenCounter": "{chars}/67 caracteres · {bytes}/512 bytes en total",
   "msgOverSpecAsk": "Este mensaje tiene {chars} caracteres y supera el límite de 67 de la especificación APRS. La mayoría de los clientes aún lo mostrará, pero algunos clientes/pasarelas lo truncan o rechazan, así que la otra estación podría no poder interpretarlo. ¿Enviar igualmente?",
   "msgOverServerLimit": "El paquete tiene {bytes} bytes y supera el límite de 512 bytes por línea de APRS-IS. El servidor podría descartarlo por completo (ni siquiera llegaría la cabecera). Acorta unos {over} bytes.",
   "msgSendAnyway": "Enviar igualmente",
   "msgSpecLimitHint": "La especificación APRS recomienda mensajes de menos de 67 caracteres: el texto más largo puede truncarse o no interpretarse en algunos clientes.",
   "msgBlockedTooLong": "Envío bloqueado: el paquete supera el límite de APRS-IS",
-  "@msgLenCounter": {"placeholders": {"chars": {"type": "int"}, "bytes": {"type": "int"}}},
-  "@msgOverSpecAsk": {"placeholders": {"chars": {"type": "int"}}},
-  "@msgOverServerLimit": {"placeholders": {"bytes": {"type": "int"}, "over": {"type": "int"}}},
+  "@msgLenCounter": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      },
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverSpecAsk": {
+    "placeholders": {
+      "chars": {
+        "type": "int"
+      }
+    }
+  },
+  "@msgOverServerLimit": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "over": {
+        "type": "int"
+      }
+    }
+  },
   "beaconRfBeaconOff": "Baliza RF desactivada",
   "beaconRfEnableHint": "La transmisión automática en una fuente de RF requiere activar «Baliza RF». Hasta entonces no se transmite la posición automáticamente (ni corre la cuenta atrás).",
   "beaconRfEnableAction": "Activar baliza RF",
@@ -474,22 +908,124 @@
   "audioRestart": "Reiniciar enlace de audio",
   "audioTxDisabled": "\"Permitir transmisión\" desactivado: solo recepción",
   "audioLoopbackHint": "La autocomprobación hace una ida y vuelta real de modulación→demodulación; en Android el micrófono se pausa al transmitir (semidúplex)",
-  "@diagPassed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagFailed": {"placeholders": {"n": {"type": "int"}}},
-  "@diagAx25Mismatch": {"placeholders": {"got": {"type": "String"}}},
-  "@diagTncLoopbackOk": {"placeholders": {"len": {"type": "int"}}},
-  "@diagAfskLoopbackOk": {"placeholders": {"samples": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagAfskLoopbackFail": {"placeholders": {"n": {"type": "int"}}},
-  "@diagPlatformOk": {"placeholders": {"name": {"type": "String"}}},
-  "@diagCaptureOk": {"placeholders": {"bytes": {"type": "int"}, "rate": {"type": "int"}}},
-  "@diagCaptureFailed": {"placeholders": {"err": {"type": "String"}}},
-  "@diagSpeakerFail": {"placeholders": {"err": {"type": "String"}}},
-  "@diagFileIoOk": {"placeholders": {"rate": {"type": "int"}}},
-  "@diagFileWriteFail": {"placeholders": {"err": {"type": "String"}}},
-  "@testTxFail": {"placeholders": {"err": {"type": "String"}}},
-  "@audioStatRx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatTx": {"placeholders": {"n": {"type": "int"}}},
-  "@audioStatDrop": {"placeholders": {"n": {"type": "int"}}},
+  "@diagPassed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFailed": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAx25Mismatch": {
+    "placeholders": {
+      "got": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagTncLoopbackOk": {
+    "placeholders": {
+      "len": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackOk": {
+    "placeholders": {
+      "samples": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagAfskLoopbackFail": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagPlatformOk": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagCaptureOk": {
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagCaptureFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagSpeakerFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@diagFileIoOk": {
+    "placeholders": {
+      "rate": {
+        "type": "int"
+      }
+    }
+  },
+  "@diagFileWriteFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@testTxFail": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioStatRx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatTx": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioStatDrop": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "notifAudioConnected": "Enlace de audio en línea",
   "notifAudioDisconnected": "Enlace de audio desconectado",
   "connConnectingAudio": "Abriendo audio ({name})…",
@@ -543,16 +1079,79 @@
   "audioWavFound": "{n} paquete(s) decodificado(s)",
   "audioWavWritten": "Guardado en {path}",
   "audioWavFailed": "Fallo de E/S: {err}",
-  "@connConnectingAudio": {"placeholders": {"name": {"type": "String"}}},
-  "@connAudioConnected": {"placeholders": {"rate": {"type": "String"}}},
-  "@connRetryAudio": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connRetryAudioDetail": {"placeholders": {"detail": {"type": "String"}, "seconds": {"type": "int"}}},
-  "@connAudioLinkLost": {"placeholders": {"seconds": {"type": "int"}}},
-  "@connAudioPositionSent": {"placeholders": {"call": {"type": "String"}}},
-  "@audioBadFrames": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavFound": {"placeholders": {"n": {"type": "int"}}},
-  "@audioWavWritten": {"placeholders": {"path": {"type": "String"}}},
-  "@audioWavFailed": {"placeholders": {"err": {"type": "String"}}},
+  "@connConnectingAudio": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioConnected": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryAudio": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryAudioDetail": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioLinkLost": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@connAudioPositionSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioBadFrames": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavFound": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@audioWavWritten": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "@audioWavFailed": {
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
+  },
   "connTncConnected": "TNC conectado · {arg}",
   "connTncPositionSent": "TNC conectado · posición enviada ({arg})",
   "connRetryTnc": "Falló la conexión TNC · reintentando en {n}s…",
@@ -663,23 +1262,143 @@
   "translateNotNeeded": "Aquí no hay nada que traducir (números / símbolos / indicativos)",
   "translateBubbleCount": "{n} traducidos",
   "translatePrivacyNote": "La traducción envía el texto de los mensajes al proveedor externo que elijas; valora la privacidad",
-  "@connTncConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@connTncPositionSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connRetryTnc": {"placeholders": {"n": {"type": "int"}}},
-  "@connRetryTncDetail": {"placeholders": {"e": {"type": "String"}, "n": {"type": "int"}}},
-  "@connTncLinkLost": {"placeholders": {"n": {"type": "int"}}},
-  "@translateCustomBodyTip": {"placeholders": {"text": {"type": "String"}, "from": {"type": "String"}, "to": {"type": "String"}}},
-  "@translateFreeFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateAutoAllFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateOutPreview": {"placeholders": {"text": {"type": "String"}}},
-  "@translateOutPreviewHint": {"placeholders": {"lang": {"type": "String"}}},
-  "@translateSentAs": {"placeholders": {"text": {"type": "String"}}},
-  "@translateTooLongAfter": {"placeholders": {"n": {"type": "int"}}},
-  "@translateTestOk": {"placeholders": {"text": {"type": "String"}}},
-  "@translateFailed": {"placeholders": {"e": {"type": "String"}}},
-  "@translateBubbleCount": {"placeholders": {"n": {"type": "int"}}},
-  "@dateDividerFull": {"placeholders": {"y": {"type": "int"}, "m": {"type": "int"}, "d": {"type": "int"}, "w": {"type": "String"}}},
-  "@dateWeekday": {"placeholders": {"d": {"type": "String"}}},
+  "@connTncConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncPositionSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connRetryTnc": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connRetryTncDetail": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@connTncLinkLost": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateCustomBodyTip": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFreeFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateAutoAllFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreview": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateOutPreviewHint": {
+    "placeholders": {
+      "lang": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateSentAs": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateTooLongAfter": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@translateTestOk": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateFailed": {
+    "placeholders": {
+      "e": {
+        "type": "String"
+      }
+    }
+  },
+  "@translateBubbleCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "@dateDividerFull": {
+    "placeholders": {
+      "y": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      },
+      "d": {
+        "type": "int"
+      },
+      "w": {
+        "type": "String"
+      }
+    }
+  },
+  "@dateWeekday": {
+    "placeholders": {
+      "d": {
+        "type": "String"
+      }
+    }
+  },
   "notifTncConnected": "TNC conectado",
   "notifTncDisconnected": "TNC desconectado",
   "dataSourceTitle": "Fuente de datos",
@@ -689,6 +1408,96 @@
   "dataSourceTnc": "TNC",
   "dataSourceTncDesc": "Envía y recibe por radio mediante un TNC Bluetooth o serie",
   "dataSourceSwitchHint": "Cambiar la fuente de datos desconecta el enlace actual",
+  "honorResetRow": "Borrar distinciones leídas",
+  "honorResetTitle": "¿Borrar distinciones leídas?",
+  "honorResetConfirm": "Borra el registro de “leídas” para que todas las distinciones que ya tienes vuelvan a mostrarse la próxima vez.",
+  "honorResetButton": "Borrar",
+  "honorResetDone": "Distinciones leídas borradas",
+  "heatLevel": "Nivel del mapa de calor",
+  "heatLevelLow": "Suave",
+  "heatLevelMid": "Medio",
+  "heatLevelHigh": "Fuerte",
+  "mapLabelsAlways": "Mostrar siempre etiquetas del mapa",
+  "mapLabelsAlwaysDesc": "Muestra la etiqueta de indicativo de cada estación en el mapa sin importar la cantidad de estaciones ni el zoom.",
+  "startFromFavorites": "Empezar desde una estación favorita",
+  "boxConnectAction": "Conectar caja",
+  "boxLinkUnsupported": "El enlace de la caja no es compatible en esta plataforma (requiere Bluetooth o serie USB)",
+  "boxNoDevicePaired": "No se encontró ningún dispositivo: empareja la caja en los ajustes de Bluetooth del sistema o conecta un cable serie USB (OTG)",
+  "dataNoticeTitle": "Aviso de datos y red",
+  "dataNoticeBody": "Conectarte a un servidor APRS de terceros es tu propia decisión. Este software no proporciona, opera ni recomienda ninguna dirección de servidor.\n\nUna vez conectado, tu indicativo, posición, mensajes y otros contenidos viajan por ese servidor y la red APRS-IS, y pueden ser recibidos, almacenados o archivados públicamente por terceros. APRS es texto plano: no envíes secretos de Estado, secretos comerciales, datos personales ni información de ubicación sensible.\n\nDebes confirmar que el servidor al que te conectas y tu uso del mismo son lícitos, y asumes la responsabilidad derivada de la transferencia transfronteriza de datos, el tratamiento de datos personales y la normativa de radio. No operamos ningún servidor ni tenemos afiliación, agencia o cooperación con servidores de terceros.\n\nAl pulsar \"Aceptar y conectar\" confirmas que has leído, entendido y aceptado lo anterior (véanse las cláusulas 2.4, 2.5 y 4.8 de los Términos de uso).",
+  "dataNoticeAccept": "Aceptar y conectar",
+  "dataNoticeDecline": "Ahora no",
+  "blTitle": "Este dispositivo ha sido bloqueado",
+  "agentAuthTitle": "El agente requiere autorización",
+  "agentAuthBody": "El agente no está abierto a usuarios comunes. Descarga y completa la carta de compromiso y envíala a la dirección de abajo. Una vez aprobada, tu indicativo se añade a la lista de autorización, que la app obtiene del sitio oficial.",
+  "agentAuthCallLabel": "Indicativo de este dispositivo",
+  "agentAuthStep1Title": "Descarga la carta",
+  "agentAuthStep1Desc": "Toca \"Descargar la carta\" abajo para abrir la carta oficial en el navegador.",
+  "agentAuthStep2Title": "Completa y envía",
+  "agentAuthStep2Desc": "Tras completarla con veracidad, envíala por correo a:",
+  "agentAuthStep3Title": "Espera la revisión y vuelve a comprobar",
+  "agentAuthStep3Desc": "Una vez aprobada, toca \"Comprobar de nuevo\" para activarlo. La lista usa la misma arquitectura que la lista de bloqueo y se obtiene del sitio oficial.",
+  "agentAuthDownload": "Descargar la carta",
+  "agentAuthEmail": "Enviar por correo",
+  "agentAuthMailTo": "Solicitar a:",
+  "agentAuthMailSubject": "Solicitud de autorización del agente",
+  "agentAuthMailBody": "Hola, quiero usar la función de agente de APRSLocus. He completado la carta de compromiso con veracidad y acepto sus términos. Mi indicativo:",
+  "agentAuthRecheck": "Comprobar autorización de nuevo",
+  "agentAuthChecking": "Comprobando…",
+  "agentAuthBack": "Ahora no",
+  "agentAuthGranted": "Autorización confirmada: el agente ya está activado",
+  "agentAuthStillPending": "Aún no se encuentra autorización; tu solicitud puede seguir en revisión",
+  "agentAuthHint": "La función de agente requiere autorización; este indicativo no está en la lista de autorización.",
+  "blBody": "Según la sección 8.2 de los Términos de uso, podemos restringir, suspender o terminar el uso de quien incumpla el acuerdo. Este dispositivo (indicativo o ID de instalación) figura en la lista de restricción, por lo que la app ya no puede utilizarse.",
+  "blReason": "Motivo",
+  "blMatched": "Entrada coincidente",
+  "blId": "ID de instalación",
+  "blContact": "Si crees que es un error, abre un Issue en el repositorio de GitHub e incluye el ID de instalación de arriba: es lo único con lo que podemos comparar.",
+  "blRetry": "Comprobar de nuevo",
+  "blChecking": "Comprobando…",
+  "donateNotice": "Las donaciones son totalmente voluntarias: no compran ninguna función, soporte prioritario ni compromiso de servicio, y no son reembolsables. Los menores deben pedir permiso a su tutor.",
+  "boxDeviceTitle": "APRSlocusBOX",
+  "boxDeviceDesc": "La caja: conéctala para cambiar su configuración, darle posición y lanzar un beacon",
+  "boxBindTitle": "Conexión de la caja",
+  "boxModeTip": "El Bluetooth solo funciona si el modo enlace de la caja es bt o both; en modo wifi usa un cable serie USB. link y bt se aplican tras reiniciar la caja.",
+  "boxBtLinkWarn": "La caja está en link = wifi: la gestión por Bluetooth no funcionará. Cámbialo a bt/both y reinicia, o usa un cable serie USB.",
+  "boxBaud": "Velocidad serie (USB / escritorio)",
+  "boxStatTitle": "Estado de la caja",
+  "boxStatLinkMode": "Modo de enlace",
+  "boxStatBeacon": "Beacon automático",
+  "boxStatHost": "Servidor APRS-IS",
+  "boxStatGps": "Baudios del GPS",
+  "boxStatEvents": "Recuento de eventos",
+  "boxLastEvent": "Último evento",
+  "boxNoEventYet": "Aún no hay eventos",
+  "boxCfgTitle": "Configuración de la caja",
+  "boxCfgSubtitle": "Los nombres de clave coinciden con la documentación; toca un elemento para cambiarlo",
+  "boxCfgRead": "Leer configuración",
+  "boxCfgEmpty": "Aún no se ha leído la configuración — conecta primero y toca Leer configuración",
+  "boxCfgRebootHint": "link y bt son ajustes de arranque: reinicia la caja para aplicarlos",
+  "boxCfgSent": "Enviado a la caja",
+  "boxCfgEditTitle": "Cambiar ajuste",
+  "boxCfgEditHint": "Envía CFG clave=valor; déjalo vacío para borrar el valor",
+  "boxCfgMasked": "Las contraseñas no se muestran: déjalo vacío para no cambiarla o escribe un valor nuevo",
+  "boxCfgNoChange": "Sin cambios (la contraseña no se muestra)",
+  "boxFeedTitle": "Enviar posición a la caja",
+  "boxFeedSubtitle": "Úsalo si la caja no tiene GPS; la posición enviada vale 60 segundos",
+  "boxFeedAuto": "Enviar automáticamente (cada 30 s)",
+  "boxFeedSend": "Enviar posición actual",
+  "boxFeedStop": "Dejar de enviar",
+  "boxFeedNoFix": "El teléfono aún no tiene posición — consíguela primero en la página principal",
+  "boxActTitle": "Acciones de la caja",
+  "boxActBeacon": "Beacon ahora",
+  "boxActStatus": "Paquete de estado",
+  "boxActNet": "Reconectar APRS-IS",
+  "boxActClear": "Borrar estaciones",
+  "boxActTest": "Autoprueba de formato",
+  "boxActReboot": "Reiniciar la caja",
+  "boxPushTitle": "Estado del teléfono a la caja",
+  "boxPushStatus": "Enviar estado en vivo (pulso / velocidad / cuenta atrás / distancia)",
+  "boxPushHint": "La página PHONE de la caja muestra esto; solo se dibuja en la pantalla de la caja, nunca sale al aire. Es distinto de enviar una posición.",
+  "boxPassHint": "El passcode APRS-IS de la caja es -1 (**solo recepción**): para transmitir, cambia `pass` abajo por tu passcode - el del **indicativo base** (sin el -SSID)",
+  "boxEvtTitle": "Eventos de la caja",
   "dataSourcePkwdwpl": "PKWDWPL (puntos de ruta Kenwood)",
   "dataSourcePkwdwplDesc": "Lee las sentencias Kenwood $PKWDWPL que emite el equipo por Bluetooth o serie (solo recepción)",
   "dataSourcePkwdwplHint": "PKWDWPL es un enlace de **solo recepción**: recibe estaciones pero nunca transmite (para transmitir usa APRS-IS / TNC / audio)",
@@ -705,7 +1514,13 @@
   "deviceInUseByTnc": "En uso por TNC — no se puede vincular de nuevo",
   "deviceInUseByPkwdwpl": "En uso por PKWDWPL — no se puede vincular de nuevo",
   "rxOnlyBanner": "{arg} conectado · solo recepción (la fuente de transmisión está desconectada)",
-  "@rxOnlyBanner": {"placeholders": {"arg": {"type": "String"}}},
+  "@rxOnlyBanner": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
   "pkwdwplTip": "Configura el formato de salida del puerto PC / GPS del equipo como \"$PKWDWPL\" (normalmente 4800 8N1). Este enlace es de solo lectura y no transmite nada.",
   "pkwdwplStrictChecksum": "Suma de comprobación estricta (descarta si no coincide)",
   "pkwdwplStrictChecksumTip": "Desactivado por defecto: una discrepancia se marca y se registra en lugar de descartarse, porque en un cable local suele significar que el formato del firmware difiere del manual. Descartar todo dejaría la pantalla vacía y dificultaría mucho el diagnóstico.",
@@ -716,9 +1531,27 @@
   "pkwdwplStatMismatch": "Discrepancias de suma",
   "pkwdwplStatIgnored": "Otras sentencias NMEA (ignoradas)",
   "pkwdwplLogEmpty": "Aún no hay registro de PKWDWPL",
-  "@connConnectingPkwdwpl": {"placeholders": {"arg": {"type": "String"}}},
-  "@connPkwdwplConnected": {"placeholders": {"arg": {"type": "String"}}},
-  "@pkwdwplStats": {"placeholders": {"rx": {"type": "String"}}},
+  "@connConnectingPkwdwpl": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connPkwdwplConnected": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@pkwdwplStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      }
+    }
+  },
   "tncBindTitle": "TNC Bluetooth",
   "tncBindSubtitle": "Empareja y conecta el TNC de tu radio",
   "tncBoundDevice": "Dispositivo emparejado",
@@ -775,9 +1608,30 @@
   "tncGroupDisabled": "Las difusiones de grupo no están disponibles en modo radio",
   "tncMsgLimitHint": "{n} caracteres por mensaje (norma APRS)",
   "tncMsgTooLong": "Supera el límite de longitud de mensaje en modo radio",
-  "@tncStats": {"placeholders": {"rx": {"type": "String"}, "tx": {"type": "String"}}},
-  "@connectingToTnc": {"placeholders": {"name": {"type": "String"}}},
-  "@tncMsgLimitHint": {"placeholders": {"n": {"type": "String"}}},
+  "@tncStats": {
+    "placeholders": {
+      "rx": {
+        "type": "String"
+      },
+      "tx": {
+        "type": "String"
+      }
+    }
+  },
+  "@connectingToTnc": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "@tncMsgLimitHint": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "licenseSection": "Licencia",
   "licenseName": "GNU GPL v3",
   "licenseStatement": "Este software se publica bajo la licencia GNU GPL v3. Puedes ejecutarlo, estudiarlo, modificarlo y redistribuirlo conforme a los términos de la licencia; las versiones modificadas y redistribuidas deben cumplir las obligaciones aplicables de la GPL v3. Este software se ofrece sin garantía alguna.",
@@ -795,8 +1649,9 @@
   "features": "Funciones",
   "openSource": "Agradecimientos de código abierto",
   "feedback": "Comentarios",
+  "feedbackEntryDesc": "Abrir un issue",
+  "openLinkFailed": "No se pudo abrir el enlace",
   "officialWebsite": "Sitio web oficial",
-  "qqGroup": "Grupo de QQ",
   "projectRepo": "Repositorio",
   "testMembers": "Colaboradores de prueba",
   "aiSupport": "Apoyo de cómputo con IA",
@@ -817,9 +1672,9 @@
   "chatSettings2": "Ajustes del chat",
   "dataSettings2": "Ajustes de datos",
   "advancedSettings2": "Ajustes avanzados",
-  "connectionSettings2": "Ajustes de conexión",
+  "connectionSettings2": "Servidores",
   "myCallsign": "Mi indicativo",
-  "beaconEnabled": "Activar baliza de posición",
+  "beaconEnabled": "Reporte automático",
   "smartBeacon": "SmartBeacon (por velocidad)",
   "packetConsole": "Consola de paquetes",
   "rawMode": "Modo sin procesar",
@@ -1155,8 +2010,8 @@
   "disconnect": "Desconectar",
   "connectAprsIs": "Conectar APRS-IS",
   "packetsReceived": "RX",
-  "passcodeUnverified": "Passcode sin verificar",
-  "passcodeWarning": "Es posible que el passcode de acceso sea incorrecto; los mensajes podrían no funcionar",
+  "passcodeUnverified": "Acceso sin verificar",
+  "passcodeWarning": "Es posible que el passcode o la contraseña de la cuenta sean incorrectos; los mensajes podrían no funcionar",
   "goSettings": "Ajustes",
   "connectingServer": "Conectando al servidor…",
   "notConnectedAprsServer": "Sin conexión al servidor APRS-IS",
@@ -1165,7 +2020,6 @@
   "connectAction": "Conectar",
   "backgroundRunTip": "Ejecución en segundo plano: para mantener el balizamiento activo, permite que APRSlocus se ejecute en segundo plano, desactiva la optimización de batería y permite el inicio automático.",
   "connectedAprsIs": "Conectado a APRS-IS",
-  "qqGroupDesc": "APRSlocus · Comentarios y dudas",
   "reselectPoint": "Elegir de nuevo",
   "disableClustering": "Desactivar agrupación",
   "enableClustering": "Activar agrupación",
@@ -1221,11 +2075,11 @@
   "nameLabel": "Nombre",
   "viewSponsorDetails": "Ver detalles del autor y patrocinadores →",
   "thanks": "Gracias",
-  "qqSoftwareName": "APRSlocus",
   "usageNotice": "Solo para aprendizaje e intercambio entre radioaficionados\nCumple la normativa local de radio",
   "licenseNotice": "Licencia GNU GPL v3 · Copyright © BG7LZQ",
   "appInfoText": "APRSlocus v{version}\nAutor: BG7LZQ (Darion)\nWeb: Theez.top",
   "eggBg7lzq": "Oye, ¿qué haces?~",
+  "eggCuriosityWorld": "Mantén tu curiosidad, sigue explorando el mundo.",
   "eggBg7pgw": "¿En serio?",
   "eggBg7lmw": "Silencio absoluto...",
   "eggBg7osl": "Tienes mucho morro",
@@ -1353,7 +2207,7 @@
   "locModeNetwork": "Solo red",
   "locModeNetworkDesc": "Solo red móvil / Wi-Fi, precisión de cientos de metros; el más eficiente, para dispositivos sin GPS",
   "locModeNetworkHint": "En modo solo red la posición viene solo de la red móvil / Wi-Fi: puede desviarse cientos de metros y **nunca** se guarda en la ruta ni el historial. No enviará balizas automáticamente salvo que actives «forzar reporte automático con posición aproximada».",
-  "beaconingSection": "Balizamiento",
+  "beaconingSection": "Reporte automático",
   "beaconIntervalTip": "Intervalo de envío de la baliza de posición; mínimo 5 segundos",
   "beaconNetInterval": "Intervalo solo red (s)",
   "beaconNetIntervalTip": "En modo solo red se usa un intervalo fijo; las posiciones de red móvil / Wi-Fi no tienen velocidad fiable, así que no se usa el balizamiento inteligente (velocidad / distancia / giro)",
@@ -1481,6 +2335,7 @@
   "vectorMapLoadFailed": "Error al cargar el mapa vectorial\n{error}",
   "loadingVectorMap": "Cargando mapa vectorial…",
   "updateChannel": "Canal de actualización",
+  "updateChannelQinglingHint": "Canal espejo propio (清零)",
   "serverReturned": "El servidor devolvió {code}",
   "invalidResponseData": "Formato de respuesta no válido",
   "noVersionsFound": "No se encontraron versiones",
@@ -1528,7 +2383,7 @@
   "settingsStationIdentitySubtitle": "Indicativo, SSID y comentario",
   "settingsDisplayInfoSubtitle": "Mi símbolo y posición actual",
   "settingsLocSourceSubtitle": "Elegir fuente de posición",
-  "settingsBeaconSubtitle": "Intervalo de envío y contenido",
+  "settingsBeaconSubtitle": "Interruptor, intervalo y contenido",
   "settingsManualLocSubtitle": "Entrada manual o punto en el mapa cuando no hay posición",
   "settingsManualLocHint": "Cuando la ubicación automática no esté disponible, introduce coordenadas o elige un punto en el mapa para las balizas y el cálculo de distancias.",
   "settingsConnStatusSubtitle": "Estado e información de conexión",
@@ -1737,7 +2592,7 @@
   "chatRecords": "Historial de chat",
   "chatRecordsCleared": "Historial de chat borrado",
   "deviceCat": "Dispositivo",
-  "deviceCatDesc": "Equipos de radio · próximamente",
+  "deviceCatDesc": "Fuentes · enlaces · iGate",
   "deviceSettings2": "Ajustes del dispositivo",
   "deviceSettingsSubtitle": "Conecta tu equipo de radio",
   "underConstruction": "En obras — aún no disponible",
@@ -1765,6 +2620,8 @@
   "achievementsProgress": "{n}/{m} logros",
   "beaconNotConnected": "Sin conexión",
   "beaconWaitingFix": "Esperando posición",
+  "beaconNeedConfirm": "Confirma el envío",
+  "reportStartNow": "Iniciar reporte",
   "beaconSoon": "Ahora",
   "beaconNextIn": "Próximo informe en {s}",
   "beaconImminent": "Informando…",
@@ -2032,19 +2889,35 @@
   "sysLinkOff": "Desactivado",
   "sysRx": "Rx {n}",
   "@sysRx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysTx": "Tx {n}",
   "@sysTx": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysBeacon": "Baliza {t}",
   "@sysBeacon": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "sysStations": "Estaciones {n}",
   "@sysStations": {
-    "placeholders": {"n": {"type": "String"}}
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
   },
   "sysFixOk": "Ubicado",
   "sysLinkAudio": "Audio",
@@ -2062,10 +2935,14 @@
   "backupCopyDone": "Copia copiada al portapapeles",
   "backupSavedTo": "Guardado en: {path}",
   "@backupSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "backupCatSettings": "Ajustes",
-  "backupCatSettingsDesc": "Estación, baliza, mapa, filtros, fuentes, servidor",
+  "backupCatSettingsDesc": "Estación, baliza, mapa, filtros, fuentes, servidor, historial de rutas",
   "backupCatStations": "Estaciones y contactos",
   "backupCatStationsDesc": "Favoritos, contactos manuales y sus notas",
   "backupCatMessages": "Mensajes",
@@ -2078,7 +2955,11 @@
   "backupCatHonorsDesc": "Desbloqueos, contadores y insignia predeterminada",
   "backupItems": "{n} elementos",
   "@backupItems": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSelectAll": "Seleccionar todo",
   "backupNoSelection": "Selecciona al menos un grupo",
@@ -2090,22 +2971,38 @@
   "backupPreview": "Contenido de la copia",
   "backupFromVersion": "Versión de origen {v}",
   "@backupFromVersion": {
-    "placeholders": {"v": {"type": "String"}}
+    "placeholders": {
+      "v": {
+        "type": "String"
+      }
+    }
   },
   "backupExportedAt": "Exportado {t}",
   "@backupExportedAt": {
-    "placeholders": {"t": {"type": "String"}}
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
   },
   "backupImportSelected": "Importar selección",
   "backupImportConfirmTitle": "¿Importar la copia?",
   "backupImportConfirm": "Los grupos seleccionados se sobrescribirán y no se puede deshacer. Se recomienda exportar antes una copia de los datos actuales.",
   "backupImported": "Se importaron {n} elementos",
   "@backupImported": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupSkipped": "Se omitieron {n} entradas desconocidas",
   "@backupSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupImportNothing": "La copia no tiene datos de los grupos seleccionados",
   "backupRestartTitle": "Importación completada",
@@ -2148,7 +3045,11 @@
   "themeDelete": "Eliminar tema",
   "themeDeleteConfirm": "¿Eliminar el tema «{name}»? No se puede deshacer.",
   "@themeDeleteConfirm": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeReset": "Restablecer",
   "themeResetAll": "Restablecer este tema",
@@ -2163,7 +3064,11 @@
   "themeIconImportHint": "PNG/JPG/WebP/GIF/BMP/SVG, hasta 2 MB",
   "themeIconImportDone": "Icono importado: {name}",
   "@themeIconImportDone": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "themeIconWebHint": "En la web no se pueden importar imágenes: usa la biblioteca integrada",
   "themeIconErrFormat": "Formato de imagen no admitido (PNG/JPG/WebP/GIF/BMP/SVG)",
@@ -2178,7 +3083,11 @@
   "themeImportPaste": "Importar del portapapeles",
   "themeImportDone": "Se importaron {n} temas",
   "@themeImportDone": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "themeErrNotJson": "El archivo no es JSON válido",
   "themeErrNotTheme": "No es un archivo de tema de APRSlocus",
@@ -2218,13 +3127,21 @@
   "themeExportWithImages": "Incluir imágenes al exportar",
   "themeExportWithImagesHint": "La exportación incluirá las imágenes (unos {size}), así que quien la reciba verá el mismo fondo e iconos. El archivo deja de ser editable a mano.",
   "@themeExportWithImagesHint": {
-    "placeholders": {"size": {"type": "String"}}
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
   },
   "themeExportNoImages": "Este tema no usa imágenes: la exportación solo lleva colores y texto",
   "themeExportClipboardTooBig": "Las imágenes son demasiado grandes para el portapapeles: usa «Exportar todos los temas» para guardarlas en un archivo",
   "themeImportImagesSkipped": "No se importaron {n} imagen(es) (demasiado grandes o no admitidas)",
   "@themeImportImagesSkipped": {
-    "placeholders": {"n": {"type": "int"}}
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "backupThemeImagesHint": "La copia incluirá las imágenes que usan tus temas. Sin ellas, al restaurar el tema vuelve a los iconos integrados.",
   "backupThemeImagesOff": "Sin imágenes: copia más pequeña, pero al restaurar el tema le faltarán el fondo y los iconos personalizados",
@@ -2280,7 +3197,11 @@
   "audioWavExportToDownloads": "Exportar a Descargas",
   "audioWavSavedTo": "Guardado en {path}",
   "@audioWavSavedTo": {
-    "placeholders": {"path": {"type": "String"}}
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "audioWavCopyPath": "Copiar ruta",
   "audioWavPathCopied": "Ruta copiada",
@@ -2292,27 +3213,56 @@
   "audioTxLevelTip": "Antes de transmitir se sube el volumen al máximo y se pausa el micrófono; un pico demasiado bajo o recortado impide decodificar al otro lado",
   "audioTxPeak": "Pico {p}% · {sec}s · preámbulo {flags} flags",
   "@audioTxPeak": {
-    "placeholders": {"p": {"type": "int"}, "sec": {"type": "String"}, "flags": {"type": "int"}}
+    "placeholders": {
+      "p": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "String"
+      },
+      "flags": {
+        "type": "int"
+      }
+    }
   },
   "audioTxLevelClip": "Recortado: baja la amplitud por debajo de 0.8 (genera armónicos)",
   "audioTxLevelLow": "Nivel bajo: puede que no lo decodifiquen — sube amplitud y volumen",
   "audioWiringHint": "Usa un cable de audio hacia la radio (salida de auriculares → conector de datos/micrófono). El altavoz del móvil atenúa mucho a 2200 Hz, así que por aire casi nunca decodifica. Si el otro extremo es Direwolf, verifica primero con el WAV exportado: si eso decodifica, el problema es el audio, no el protocolo",
   "packetLimitRf": "Paquete {bytes} B · límite de trama RF {max} B",
   "@packetLimitRf": {
-    "placeholders": {"bytes": {"type": "int"}, "max": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
   },
   "packetLimitIs": "Paquete {bytes} B · límite de línea APRS-IS 512 B",
   "@packetLimitIs": {
-    "placeholders": {"bytes": {"type": "int"}}
+    "placeholders": {
+      "bytes": {
+        "type": "int"
+      }
+    }
   },
   "packetTcpipWarning": "Contiene TCPIP*: se elimina en RF (esa ruta es de APRS-IS)",
   "packetSent": "Entregado al enlace: {line}",
   "@packetSent": {
-    "placeholders": {"line": {"type": "String"}}
+    "placeholders": {
+      "line": {
+        "type": "String"
+      }
+    }
   },
   "packetSendFailed": "No enviado: {err}",
   "@packetSendFailed": {
-    "placeholders": {"err": {"type": "String"}}
+    "placeholders": {
+      "err": {
+        "type": "String"
+      }
+    }
   },
   "tncSerialBaud": "Velocidad en baudios (bd)",
   "tncSerialBaudTip": "El cable serie USB y el puerto de datos de la radio deben usar la misma velocidad; si no, no pasa ni un byte. Valores habituales: 9600 / 19200 / 38400 / 57600 / 115200. Bluetooth SPP no tiene velocidad en baudios, así que se ignora en dispositivos Bluetooth.",
@@ -2337,7 +3287,7 @@
   "uiLayoutSheetDesc": "El mapa ocupa toda la pantalla; estaciones / mensajes / paquetes / ajustes van en una tarjeta deslizable abajo: desliza hacia arriba o toca el asa para expandirla",
   "uiLayoutHint": "Se aplica al instante; cada diseño conserva sus propios ajustes. Los controles del mapa suben solos al plegarse la tarjeta",
   "linkNotConnected": "Sin conexión",
-  "linkTapForSettings": "Toca para abrir los ajustes de conexión",
+  "linkTapForSettings": "Toca para abrir los ajustes del servidor",
   "uiMaterialGlassFull": "Cristal esmerilado intenso",
   "uiMaterialGlassFullDesc": "Lo más transparente y con más desenfoque, **incluidos los widgets pequeños** (botones del mapa, leyenda, avisos): el aspecto más marcado y también el más exigente para la GPU",
   "posAccuracy": "Precisión de la posición",
@@ -2367,11 +3317,23 @@
   "tierMinDist": "Distancia (m)",
   "tierMinDistHint": "También reporta tras desplazarse esta distancia desde el último envío; 0 = desactivado (solo intervalo)",
   "orMoveM": "o {dist} m",
-  "@orMoveM": {"placeholders": {"dist": {"type": "String"}}},
+  "@orMoveM": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "tierMinTurn": "Giro (grados)",
   "tierMinTurnHint": "Reporta tras girar este ángulo (10–180); 0 = desactivado. Solo en movimiento (parado, el rumbo es ruido)",
   "orTurnDeg": "o {deg}°",
-  "@orTurnDeg": {"placeholders": {"deg": {"type": "String"}}},
+  "@orTurnDeg": {
+    "placeholders": {
+      "deg": {
+        "type": "String"
+      }
+    }
+  },
   "inputTapHint": "Toca para escribir",
   "callCommentEmpty": "Sin definir · toca para escribir",
   "noticeTitle": "Avisos",
@@ -2379,9 +3341,21 @@
   "noticeLoading": "Cargando…",
   "noticeReadMore": "Leer más",
   "noticeCached": "En caché · {ago}",
-  "@noticeCached": {"placeholders": {"ago": {"type": "String"}}},
+  "@noticeCached": {
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
   "noticeOfflineCache": "Copia sin conexión · {time} (se actualiza al recuperar la red)",
-  "@noticeOfflineCache": {"placeholders": {"time": {"type": "String"}}},
+  "@noticeOfflineCache": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "timeJustNow": "ahora mismo",
   "refresh": "Actualizar",
   "noticeEntryDesc": "Consulta los últimos avisos de la web",
@@ -2468,31 +3442,67 @@
   "garminUrlHint": "livetrack.garmin.com/session/…/token/…",
   "beaconGarminSource": "Balizando desde Garmin LiveTrack",
   "beaconGarminNext": "Garmin · {s} · ❤{hr}",
-  "@beaconGarminNext": {"placeholders": {"s": {"type": "String"}, "hr": {"type": "String"}}},
+  "@beaconGarminNext": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      },
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceLabel": "Fuente de posición",
   "hrSourceLabel": "Fuente de pulso",
   "ownSourcePhoneGps": "GPS del teléfono",
   "positionBeaconDetail": "Baliza de posición · Cuadrícula {grid} · {detail}",
   "beaconAttachedHr": "pulso {hr}",
   "beaconAttachedNone": "sin pulso",
-  "@positionBeaconDetail": {"placeholders": {"grid": {"type": "String"}, "detail": {"type": "String"}}},
-  "@beaconAttachedHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@positionBeaconDetail": {
+    "placeholders": {
+      "grid": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "@beaconAttachedHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "posSourceIdle": "Sin seguimiento (ubicación desactivada)",
   "ownSourceGarminLive": "Siguiendo (el GPS del teléfono cedió)",
   "ownSourceGarminStale": "Enlace configurado, pero Garmin no tiene puntos nuevos",
   "ownSourceHrIdle": "Sin conectar (toca para conectar)",
   "hrLineHr": "pulso {hr}",
-  "@hrLineHr": {"placeholders": {"hr": {"type": "String"}}},
+  "@hrLineHr": {
+    "placeholders": {
+      "hr": {
+        "type": "String"
+      }
+    }
+  },
   "garminShareNoLink": "No se encontró ningún enlace de Garmin LiveTrack",
   "hrFromGarmin": "Pulso desde Garmin LiveTrack (reloj)",
-  "sourceMovedHint": "Para activar o cambiar fuentes de datos (enlaces), ve a Ajustes → Dispositivos",
-  "posSourcePrecedence": "Prioridad cuando hay varias fuentes: simulada/manual › Garmin (mientras el reloj tenga datos en vivo) › GPS del teléfono",
+  "sourceMovedHint": "Los enlaces de radio (TNC, radio WLAN, audio) se activan en Ajustes → Dispositivos",
+  "posSourcePrecedence": "Prioridad cuando hay varias fuentes: simulada/manual › módulo GPS externo › Garmin (mientras el reloj tenga datos en vivo) › GPS del teléfono",
   "posSourceUsing": "En uso ahora: {src}",
   "posSrcSim": "simulada/manual",
   "posSrcGarmin": "Garmin LiveTrack",
   "posSrcPhone": "GPS del teléfono",
   "posSrcNone": "sin posición",
-  "@posSourceUsing": {"placeholders": {"src": {"type": "String"}}},
+  "@posSourceUsing": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
   "garminNotStarted": "Sin seguimiento",
   "garminAutoFilled": "Enlace rellenado automáticamente",
   "garminLinkOk": "Enlace válido",
@@ -2500,7 +3510,13 @@
   "beaconForceCoarseHint": "Desactivado por defecto: la posición de red (celda / Wi-Fi) suele fallar cientos de metros, así que balizarla anuncia una coordenada errónea a todos. Actívalo solo si el dispositivo no tiene GPS (tableta, solo red). El mapa y la traza siguen filtrando los puntos gruesos como siempre, así que no se vuelven inestables. El \"balizar ahora\" manual no se ve afectado.",
   "beaconCoarseForced": "Posición de red (gruesa) · {s}",
   "beaconCoarseForcedNote": "Balizando con posición de red (gruesa)",
-  "@beaconCoarseForced": {"placeholders": {"s": {"type": "String"}}},
+  "@beaconCoarseForced": {
+    "placeholders": {
+      "s": {
+        "type": "String"
+      }
+    }
+  },
   "advancedMenu": "Avanzado",
   "aprsStatus": "Paquete de estado independiente",
   "aprsStatusHint": "Esto envia un paquete de estado independiente (empieza por `>`, sin coordenadas y sin moverte en aprs.fi): un tipo de paquete APRS distinto del comentario de arriba. Si se deja vacio se envia la trama de presencia integrada de APRSlocus.",
@@ -2511,22 +3527,64 @@
   "beaconAntHeightLabel": "Altura de antena (pies)",
   "beaconGainLabel": "Ganancia (dB)",
   "beaconPhgPreview": "El paquete incluira: {phg}",
-  "@beaconPhgPreview": {"placeholders": {"phg": {"type": "String"}}},
+  "@beaconPhgPreview": {
+    "placeholders": {
+      "phg": {
+        "type": "String"
+      }
+    }
+  },
   "beaconPhgTip": "Potencia, altura de antena y ganancia comparten una extension PHG: al rellenar cualquiera se codifican y envian las tres (la norma lo define como un campo fijo de 7 bytes). La potencia toma el escalon mayor que no supere el valor real: 25 W informa 25, y 30 W tambien, porque sobreinformar infla tu circulo de cobertura. La altura de antena se mide sobre el terreno medio local, una magnitud distinta de la altitud /A= que se envia automaticamente arriba.",
+  "phgTitle": "Antena PHG",
+  "phgPower": "Potencia",
+  "phgHeight": "Altura",
+  "phgGain": "Ganancia",
+  "phgDirection": "Dirección",
+  "phgOmni": "Omni",
   "beaconPowerLabel": "Potencia (W)",
   "txButton": "Transmitir",
   "txPartPosition": "paquete de posicion",
   "txPartStatus": "paquete de estado",
   "txSent": "Transmitido: {parts}",
-  "@txSent": {"placeholders": {"parts": {"type": "String"}}},
+  "@txSent": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
   "txNoFixKeptStatus": "Enviado: {parts} (sin posición todavía: el paquete de posición con PHG no se envió)",
   "connStatusSent": "Conectado · paquete de estado enviado ({call})",
   "connTncStatusSent": "TNC conectado · paquete de estado enviado ({arg})",
   "connAudioStatusSent": "Enviado por audio · paquete de estado enviado ({call})",
-  "@txNoFixKeptStatus": {"placeholders": {"parts": {"type": "String"}}},
-  "@connStatusSent": {"placeholders": {"call": {"type": "String"}}},
-  "@connTncStatusSent": {"placeholders": {"arg": {"type": "String"}}},
-  "@connAudioStatusSent": {"placeholders": {"call": {"type": "String"}}},
+  "@txNoFixKeptStatus": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "@connStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@connTncStatusSent": {
+    "placeholders": {
+      "arg": {
+        "type": "String"
+      }
+    }
+  },
+  "@connAudioStatusSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
   "codeContribution": "Contribución de código",
   "historyCharts": "Gráficas",
   "historyChartsShow": "Mostrar gráficas",
@@ -2548,18 +3606,57 @@
   "beaconBarTierNetwork": "Posición por red · intervalo fijo",
   "beaconBarTierSmart": "Nivel inteligente",
   "beaconBarTierSmartFrom": "Nivel inteligente · ≥{speed} km/h",
-  "@beaconBarTierSmartFrom": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTierSmartFrom": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTierFixed": "Intervalo fijo",
   "beaconBarTimeLeft": "Tiempo {time}",
-  "@beaconBarTimeLeft": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTimeLeft": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarDistLeft": "Distancia {dist}",
-  "@beaconBarDistLeft": {"placeholders": {"dist": {"type": "String"}}},
+  "@beaconBarDistLeft": {
+    "placeholders": {
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLeft": "Giro {cur}° / {need}°",
-  "@beaconBarTurnLeft": {"placeholders": {"cur": {"type": "String"}, "need": {"type": "String"}}},
+  "@beaconBarTurnLeft": {
+    "placeholders": {
+      "cur": {
+        "type": "String"
+      },
+      "need": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnLowSpeed": "Giro en espera · requiere ≥{speed} km/h",
-  "@beaconBarTurnLowSpeed": {"placeholders": {"speed": {"type": "String"}}},
+  "@beaconBarTurnLowSpeed": {
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
   "beaconBarTurnWait": "Giro en espera · listo en {time}",
-  "@beaconBarTurnWait": {"placeholders": {"time": {"type": "String"}}},
+  "@beaconBarTurnWait": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "netSymbol": "Icono de estación con posición por red",
   "netSymbolHint": "Las posiciones por red pueden desviarse cientos de metros o kilómetros; un icono distinto deja claro que la posición vino de la red. Por defecto sigue tu símbolo.",
   "netSymbolFollow": "Seguir mi símbolo",
@@ -2582,7 +3679,19 @@
   "hrAlarmTelTip": "El número que se marca desde la alarma; por defecto 120. Cámbialo a 112 o al de un compañero según necesites.",
   "hrAlarmTitle": "Frecuencia cardíaca anormal",
   "hrAlarmBody": "La frecuencia {bpm} bpm está fuera de tu rango {low}–{high}.\n\nSi te sientes mal, llama ya a emergencias. También puedes enviar un mensaje de ayuda a las estaciones en 100 km.",
-  "@hrAlarmBody": {"placeholders": {"bpm": {"type": "String"}, "low": {"type": "String"}, "high": {"type": "String"}}},
+  "@hrAlarmBody": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      },
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmDismiss": "Estoy bien",
   "hrAlarmCall": "Llamar a emergencias",
   "hrAlarmSendNearby": "Pedir ayuda a estaciones cercanas",
@@ -2590,11 +3699,32 @@
   "hrAlarmNoNearby": "No hay estaciones conocidas en 100 km",
   "hrAlarmSendConfirmTitle": "¿Enviar la petición?",
   "hrAlarmSendConfirmBody": "Se enviará un mensaje a cada una de las {n} estaciones más cercanas:\n{calls}\n\nAparecerán en sus dispositivos; confirma antes de enviar.",
-  "@hrAlarmSendConfirmBody": {"placeholders": {"n": {"type": "String"}, "calls": {"type": "String"}}},
+  "@hrAlarmSendConfirmBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "calls": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmSent": "Petición de ayuda enviada a {n} estación(es)",
-  "@hrAlarmSent": {"placeholders": {"n": {"type": "String"}}},
+  "@hrAlarmSent": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "hrAlarmNotif": "FC anormal {bpm} bpm",
-  "@hrAlarmNotif": {"placeholders": {"bpm": {"type": "String"}}},
+  "@hrAlarmNotif": {
+    "placeholders": {
+      "bpm": {
+        "type": "String"
+      }
+    }
+  },
   "locExtGpsActive": "GPS externo activo · GPS del teléfono en espera",
   "locExtGpsLost": "GPS externo perdido · usando el del teléfono",
   "locPhoneGpsActive": "El GPS del teléfono tomó el control",
@@ -2616,7 +3746,13 @@
   "beaconIncludeSteps": "Pasos",
   "stepsTodayLabel": "Pasos de hoy",
   "stepsCount": "{n} pasos",
-  "@stepsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@stepsCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "stepsUnsupported": "Este dispositivo no tiene podómetro",
   "stepsNeedPermission": "Falta permiso",
   "stepsGrant": "Conceder permiso de actividad",
@@ -2641,7 +3777,16 @@
   "downloadCanceled": "Descarga cancelada",
   "downloadBackgroundHint": "Puedes salir de esta página o poner la app en segundo plano: la descarga continúa (el progreso también aparece en la notificación). Se detiene si el sistema mata el proceso.",
   "notifUpdateDownload": "Descargando actualización {tag} · {pct}%",
-  "@notifUpdateDownload": {"placeholders": {"tag": {"type": "String"}, "pct": {"type": "String"}}},
+  "@notifUpdateDownload": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "pct": {
+        "type": "String"
+      }
+    }
+  },
   "notifUpdateReady": "Actualización descargada · abre la página de actualización",
   "notifUpdateFailed": "Fallo al descargar la actualización",
   "sportRankGateNoSensor": "Este dispositivo no tiene podómetro, así que activarlo **no enviará pasos reales** (no hay ninguno que enviar). Solo desbloquea la tabla: ves a los demás porque aceptaste la misma regla mutua.",
@@ -2649,11 +3794,752 @@
   "crashCard": "Detección de choque y caída",
   "crashCardSub": "Se juzga con el acelerómetro del teléfono y avisa al detectarlo (beta)",
   "crashEnabled": "Activar avisos de choque/caída",
-  "crashHowItWorks": "La prueba es **en dos etapas**: (1) un pico brusco de aceleración (tanto choques como caídas lo producen); (2) después, casi sin movimiento durante 12 segundos. Deben cumplirse las dos.\n\nPor qué la segunda: con solo el pico, **un badén, el móvil cayéndose en la mesa o agitarlo** ya cuentan, y un aviso que suena varias veces al día se ignora. El coste es que **un impacto leve (si aún puedes moverte) no avisa** — esto es para \"no puedo moverme\", no para \"hubo un golpe\".",
+  "crashHowItWorks": "Hay dos criterios. Una **caída** necesita ① una caída libre previa (ingravidez — aceleración total cercana a 0), ② un impacto de aterrizaje y ③ ~12 s sin movimiento después. Un **choque** no tiene ingravidez en que apoyarse, así que exige un impacto **mucho más fuerte** (unas dos veces el umbral de sensibilidad) y la misma quietud de ~12 s.\n\n¿Por qué tanto? Con un solo pico, **dejar el teléfono un poco fuerte, un badén, sacudirlo** cuentan todos, y una alerta que suena varias veces al día es una que nadie mira. Separar «caída (con ingravidez)» de «choque (sin ingravidez, más fuerte)» es justo lo que evita que acciones cotidianas como dejar el teléfono la disparen. El coste es que **una colisión leve no avisa** — esta función apunta a «la persona ya no puede moverse», no a «hubo un impacto».",
   "crashNoSensor": "Este dispositivo no tiene acelerómetro; no se puede detectar",
   "crashPending": "Impacto detectado — observando",
   "crashFalsePositive": "**Puede dar falsas alarmas**: pasar un badén y luego estar quieto 12 segundos (en un semáforo) cumple ambas etapas. El primer botón del aviso es \"Estoy bien\": descártalo y nada más se ve afectado.",
   "crashAlarmTitle": "Posible choque o caída detectado",
-  "crashAlarmBody": "El teléfono detectó un impacto fuerte y después ningún movimiento significativo (unos 12 segundos).\n\nSi estás bien, pulsa \"Estoy bien\". Si te encuentras mal o no puedes moverte, llama ya a emergencias o envía un mensaje de ayuda a las estaciones en 100 km.\n\n**Es una heurística, no detección de choques de nivel ingenieril**: un badén o dejar caer el móvil pueden activarla.",
-  "crashNotif": "Guardián vital: posible choque"
+  "crashAlarmBody": "El teléfono detectó un impacto fuerte y no ha habido movimiento claro durante unos 12 segundos.\n\nSi estás bien, pulsa «Estoy bien». Si te encuentras mal o no puedes moverte, llama ya a emergencias, o envía un mensaje de ayuda a las estaciones en 100 km.\n\n**Esto es un juicio heurístico, no detección de choques de nivel ingenieril**.",
+  "crashNotif": "Guardián vital: posible choque",
+  "icomLanTitle": "IC-705 Wi-Fi (radio direct)",
+  "icomLanEnable": "Enable IC-705 LAN link",
+  "icomLanHost": "Radio IP",
+  "icomLanPort": "Control port",
+  "icomLanUsername": "Username (Network User)",
+  "icomLanPassword": "Password (Network User)",
+  "icomLanHint": "Enable remote control in the radio WLAN settings, set the Network User name/password, and keep the phone on the same subnet. IC-705 LAN audio is fixed at 12000 Hz.",
+  "codeContributionIcomLan": "IC-705 radio link",
+  "honorCelebrateTitle": "Nueva distinción desbloqueada",
+  "honorCelebrateOk": "Genial",
+  "confirmSendToGroup": "¿Enviar a {group}?",
+  "@confirmSendToGroup": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmInviteMember": "¿Invitar a {call} al chat grupal?",
+  "@confirmInviteMember": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmCreateGroup": "¿Crear el grupo e invitar a {n} miembro(s)?",
+  "@confirmCreateGroup": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "choosePackage": "Elegir paquete",
+  "pkgRecommended": "Recomendado",
+  "choosePackageHint": "El paquete de 64 bits sirve para casi todos los teléfonos (es el que descarga la actualización integrada); _armeabi-v7a es para equipos antiguos de 32 bits; _x86_64 solo para emuladores / Chromebooks. Toca una fila para abrir la descarga de ese paquete.",
+  "lifeGuardStrongHint": "Las alarmas también emiten una **notificación de sistema de alta prioridad** (sonido / vibración / aviso en pantalla de bloqueo), no solo un diálogo dentro de la app: un diálogo es invisible con el teléfono en el bolsillo. Permite las notificaciones de la app y mantén este canal fuera de No molestar.",
+  "crashSensitivity": "Sensibilidad de detección",
+  "crashSensGentle": "Sensible",
+  "crashSensStandard": "Estándar",
+  "crashSensFirm": "Firme",
+  "crashSensHint": "La sensibilidad decide qué impacto cuenta: una caída usa este umbral, un choque exige unas dos veces más. En bici con el teléfono en el bolsillo usa Firme; igual con soporte de manillar. Por defecto, Estándar. La sensibilidad solo afecta a la **detección** (qué impacto cuenta), no a lo que hace la alerta.",
+  "crashFallAlarmTitle": "Posible caída detectada",
+  "crashFallAlarmBody": "El teléfono cayó libremente, luego recibió un impacto de aterrizaje y desde entonces no muestra movimiento claro durante unos 12 segundos — la firma de aceleración típica de una caída.\n\nSi estás bien, pulsa «Estoy bien». Si te encuentras mal o no puedes moverte, llama ya a emergencias, o envía un mensaje de ayuda a las estaciones en 100 km.\n\n**Esto es un juicio heurístico, no detección de nivel ingenieril**.",
+  "crashKindHint": "Distingue un **choque** de una **caída**: una caída casi siempre empieza con una caída libre (ingravidez — aceleración total cercana a 0) antes del impacto de aterrizaje, mientras que un choque de vehículo no. La regla es: con ingravidez, «caída» (usa el umbral de sensibilidad); sin ella, «choque» y exige un impacto de unas dos veces el umbral (así acciones como dejar el teléfono no se disparan). Esto solo hace más preciso el texto: ambos se tratan igual (estoy bien / llamar / pedir ayuda).",
+  "stationRetention": "Retención de estaciones (días)",
+  "stationRetentionTip": "Las estaciones sin recibir durante más de estos días se eliminan automáticamente al iniciar. 0 = desactivado (la limpieza manual sigue disponible). Los favoritos, los contactos manuales y tu propia estación nunca se eliminan.",
+  "pruneOldData": "Limpiar estaciones obsoletas",
+  "pruneOldDataDesc": "Elimina las estaciones sin recibir desde hace tiempo y conserva las útiles",
+  "pruneHint": "Solo se eliminan estaciones normales; los favoritos y contactos manuales se conservan. No se puede deshacer.",
+  "pruneNone": "No hay nada que limpiar",
+  "pruneConfirm": "Se eliminarán {m} estación(es) sin recibir en {n} días (los favoritos / contactos manuales se conservan). No se puede deshacer.",
+  "pruneDone": "Se eliminaron {n} estación(es) obsoletas",
+  "retentionOff": "La limpieza automática está desactivada (retención 0); limpia manualmente o define un número de días primero",
+  "@pruneConfirm": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@pruneDone": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "prunePreview": "Se eliminarán {n}",
+  "@prunePreview": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "nDays": "{n} días",
+  "retentionDaysOff": "Desactivado (sin limpieza automática)",
+  "pruneWithin": "Limpiar estaciones anteriores a",
+  "pruneWithinTip": "Días que usa la limpieza manual, **independientes** de la retención automática de arriba: solo se eliminan las estaciones normales sin recibir durante esos días.",
+  "prunePickDays": "Elige primero un número de días",
+  "factoryReset": "Borrar todos los datos y reiniciar",
+  "factoryResetDesc": "Borra también el indicativo y todos los ajustes, y reinicia el asistente inicial",
+  "factoryResetIntro": "Restaura la app al estado de recién instalada:",
+  "factoryResetCallsign": "Indicativo y SSID",
+  "factoryResetSettings": "Todos los ajustes: servidor, baliza, interfaz, etc.",
+  "factoryResetWarn": "No se puede deshacer y el asistente inicial volverá a ejecutarse. Exporta antes una copia de seguridad.",
+  "factoryResetButton": "Borrar todo y reiniciar",
+  "factoryResetConfirm": "Se borrarán **todos los ajustes** (indicativo, servidor, baliza, interfaz) y **todos los datos** (estaciones, mensajes, registros, trazas), y se reiniciará el asistente inicial. **No se puede deshacer**. ¿Continuar?",
+  "@nDays": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "reportActions": "Reportar",
+  "reportNow": "Reportar ahora",
+  "reportAutoStart": "Iniciar auto",
+  "reportAutoStop": "Detener auto",
+  "reportTagAuto": "AUTO",
+  "reportTagOnce": "ÚNICA",
+  "reportStatusAuto": "Reporte automático",
+  "reportStatusOnce": "Reporte único",
+  "reportToggleHint": "Toca para cambiar: Auto = transmite por intervalo / distancia / giro; Única = solo al pulsar «Reportar ahora». En ambos puedes enviar una manual.",
+  "reportRfEnabledToast": "Baliza RF activada: reporte automático iniciado",
+  "reportEnabledToast": "Reporte automático activado",
+  "reportDisabledToast": "Reporte automático desactivado: solo única",
+  "autoReportEntryHint": "Puedes cambiarlo en cualquier momento desde la pantalla principal: toca el botón «AUTO / ÚNICA» del mapa (abajo-izquierda / barra inferior) para alternar, y «Reportar ahora» para enviar ya.",
+  "backupTracks": "Incluye {n} días de historial de rutas",
+  "@backupTracks": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sendPositionBeacon": "Transmitir baliza de posición",
+  "strategyMap": "Mapa táctico",
+  "strategyMapHint": "Comparte puntos, rutas y puntos de reunión con tu grupo mediante mensajes APRS",
+  "strategyPickGroup": "Elegir grupo",
+  "strategyNeedGroup": "Únete o elige un grupo primero",
+  "strategyNoGroup": "Únete a un grupo para usar el mapa táctico",
+  "strategyAddPoint": "Punto",
+  "strategyAddLine": "Línea",
+  "strategyAddCircle": "Círculo",
+  "strategyAddRally": "Punto de reunión",
+  "strategyNavigate": "Navegar",
+  "strategyEditInfo": "Editar datos",
+  "strategyDeleteItem": "Eliminar",
+  "strategyClearAll": "Vaciar capa",
+  "strategyClearConfirm": "¿Vaciar todos los puntos, rutas y puntos de reunión compartidos del grupo? Se sincroniza con todo el equipo.",
+  "strategyLabel": "Nombre",
+  "strategyLabelHint": "Pon un nombre a este punto (opcional)",
+  "strategyRadius": "Radio (m)",
+  "strategyRadiusHint": "Radio en metros, p. ej. 800",
+  "strategySend": "Compartir",
+  "strategyShared": "Compartido al grupo",
+  "strategyEmpty": "La capa está vacía: usa las herramientas de abajo para poner un punto o un punto de reunión",
+  "strategySnapshot": "Sincronizar",
+  "strategyLineHint": "Toca puntos en el mapa (mínimo 2), pulsa Listo para terminar",
+  "strategyNeedTwoPoints": "Una línea necesita al menos dos puntos",
+  "strategyItemOf": "Compartido por {call}",
+  "@strategyItemOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyPan": "Mover",
+  "strategySendFailed": "Mostrado localmente, pero no enviado (revisa la conexión)",
+  "strategyTeammates": "Posición de compañeros",
+  "strategyTeammateOf": "Posición de {call}",
+  "strategyColor": "Color",
+  "strategyColorDefault": "Predeterminado",
+  "strategySeeInMap": "Toca para ver en el mapa estratégico",
+  "strategySharedItem": "{call} compartió un {kind}",
+  "@strategyTeammateOf": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategySharedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "strategyRetry": "Reenviar sin confirmar",
+  "strategyRetryAll": "Reenviar todo",
+  "strategyAckPending": "{n} trama(s) sin confirmar: reenvía si se perdieron por RF",
+  "strategyAckOk": "Un compañero confirmó la recepción",
+  "strategyRetryNone": "Nada sin confirmar",
+  "@strategyAckPending": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "groupRfNotice": "Modo RF: el chat de grupo y las tramas de estrategia se emiten por difusión; los compañeros que escuchan el mismo canal las reciben. Las tramas requieren acuse de recibo; reenvíalas si se pierden.",
+  "chatNeedConnect": "Sin conexión al servidor: no se puede enviar. Conecta primero una fuente de datos.",
+  "strategyUpdatedItem": "{call} actualizó un {kind}",
+  "strategyDeletedItem": "{call} eliminó un {kind}",
+  "strategyClearedMsg": "{call} vació la capa compartida",
+  "@strategyUpdatedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyDeletedItem": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "@strategyClearedMsg": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "sendLocation": "Enviar ubicación",
+  "needFixToSendLocation": "Aún sin posición: no se puede enviar la ubicación",
+  "msgLocation": "Ubicación",
+  "locationTapToView": "Toca para ver en el mapa",
+  "locationPickTitle": "Elige un punto para enviar",
+  "locationPickHint": "Toca el mapa para elegir la coordenada",
+  "locationMyPos": "Mi posición",
+  "locationSendTo": "Enviar a {call}",
+  "@locationSendTo": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMore": "Más",
+  "stationTapToView": "Toca para ver la estación",
+  "locationPickStations": "Elegir estación",
+  "locationSearchHint": "Buscar indicativo / alias",
+  "locationNoStation": "Ninguna estación coincide",
+  "locationPrevPage": "Ant.",
+  "locationNextPage": "Sig.",
+  "shareStation": "Compartir estación",
+  "shareStationPick": "¿A qué chat enviar?",
+  "shareStationSent": "{call} compartida",
+  "locationPageInfo": "Página {n} / {m}",
+  "@locationPageInfo": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "m": {
+        "type": "String"
+      }
+    }
+  },
+  "@shareStationSent": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "packetSource": "Origen",
+  "packetSrcLocal": "Local",
+  "packetSrcAprsIs": "APRS-IS",
+  "packetSrcTnc": "TNC",
+  "packetSrcAudio": "Tarjeta de sonido",
+  "packetSrcPkwdwpl": "Kenwood",
+  "audioTxAmplitude": "Amplitud de salida (0.05–1.0)",
+  "audioTxAmplitudeTip": "Amplitud relativa de la onda TX. El recorte (≥99%) genera armónicos y destruye el espectro FSK; un nivel muy bajo deja al receptor sin SNR. El valor 0.6 deja ~4 dB de margen; empieza en 0.5–0.7 hacia un equipo y observa el pico en el diagnóstico de TX.",
+  "audioTxSourceRow": "Fuente TX",
+  "audioTxSourceYes": "Este enlace",
+  "audioTxNotSourceWarn": "El enlace de audio está activo, pero no es la fuente TX actual: los mensajes y balizas salen por \"{src}\". Para transmitir por audio, selecciónalo como fuente TX en Ajustes → Dispositivos.",
+  "@audioTxNotSourceWarn": {
+    "placeholders": {
+      "src": {
+        "type": "String"
+      }
+    }
+  },
+  "audioTxPttHint": "El enlace de audio nunca acciona el PTT del equipo: solo reproduce audio AFSK. Para que el equipo transmita de verdad, debe ser el propio equipo quien se active: configúralo en VOX, o usa un cable que accione el PTT desde el puerto de audio/datos. Si el equipo no transmite, revisa esto primero.",
+  "updateChannelAliyunHint": "⚠️ Lo paga el equipo de desarrollo: úsalo con moderación 🙏",
+  "connectingAliyun": "Buscando actualizaciones vía Aliyun OSS ☁️",
+  "icomAudioSampleRate": "Frecuencia de muestreo de audio",
+  "icomAudioFmtValue": "12000 Hz (LPCM 16 bits mono)",
+  "icomLanHotspotRoutingHint": "Al unirte al punto de acceso de la radio, el tráfico de la radio se ata a esa Wi-Fi y los datos móviles siguen para APRS-IS. Si el sistema toma el punto de acceso como ruta de internet predeterminada, desactiva \"cambio automático de red\" en los ajustes avanzados de esa Wi-Fi.",
+  "posSrcSpp": "módulo GPS externo",
+  "locationExtGps": "GPS externo (Bluetooth)",
+  "dataSourceNmeaGps": "GPS externo (Bluetooth)",
+  "dataSourceNmeaGpsDesc": "Lee las sentencias de posición NMEA 0183 de un módulo GPS y las usa como posición de este dispositivo (solo recepción)",
+  "dataSourceNmeaGpsHint": "Este enlace aporta tu propia posición (no los paquetes de otras estaciones): pasa a tener prioridad al conectar, y el GPS del teléfono vuelve a asumir 30 segundos después de que el módulo deje de enviar",
+  "extGpsDeviceTitle": "GPS externo",
+  "extGpsDeviceDesc": "Fuente de posición NMEA 0183 por Bluetooth SPP o serie",
+  "extGpsBindTitle": "Dispositivo y conexión",
+  "extGpsBindSubtitle": "Escanea dispositivos emparejados y vincula uno (el permiso de Bluetooth se comparte con los demás enlaces)",
+  "extGpsTip": "Al conectar, la posición sale primero del módulo (suele ir en el techo o junto a una ventana, así que es más preciso que el teléfono y el reloj); el GPS del teléfono vuelve a asumir 30 segundos después de la última posición.",
+  "extGpsReadOnly": "Solo recepción: el módulo solo emite posición y nunca transmite",
+  "extGpsStatTitle": "Recepción de posición",
+  "extGpsStats": "{rx} posiciones recibidas",
+  "extGpsStatNoFix": "Sentencias válidas sin posición",
+  "extGpsStatMismatch": "Discrepancias de suma",
+  "extGpsStatRejected": "Sentencias descartadas o inválidas",
+  "extGpsStatIgnored": "Otras sentencias NMEA (ignoradas)",
+  "extGpsSatellites": "Satélites",
+  "extGpsAccuracy": "Precisión",
+  "extGpsWaitingFix": "Conectado, buscando satélites (aún sin posición utilizable)",
+  "extGpsSilent": "Conectado pero sin ninguna sentencia (comprueba la alimentación y si otra aplicación ocupa el dispositivo)",
+  "extGpsLogEmpty": "Aún no hay registro del GPS externo",
+  "ownSourceExtGpsLive": "El módulo aporta la posición (el GPS del teléfono se aparta)",
+  "deviceInUseByOther": "Ya lo usa otro enlace, no se puede vincular dos veces",
+  "extGpsStrictChecksum": "Suma de verificación estricta (descartar discrepancias)",
+  "extGpsStrictChecksumTip": "Activado por defecto: un módulo GPS envía sentencias estándar, así que una discrepancia de suma casi siempre significa ruido en la línea: se descarta la sentencia para que un solo byte defectuoso no desvíe la posición. Algunos módulos baratos sí envían una suma incorrecta; desactívalo en ese caso (el contador de descartes y el registro siguen visibles).",
+  "beaconSppSource": "Balizando desde GPS externo",
+  "beaconSppNext": "GPS externo · {s}",
+  "linkScanAction": "Buscar dispositivos",
+  "linkConnectAction": "Conectar dispositivo",
+  "linkBoundDevice": "Dispositivo vinculado",
+  "linkNotBound": "Sin dispositivo vinculado",
+  "linkNoPaired": "No se encontró ningún dispositivo: empareja primero en los ajustes de Bluetooth del sistema, o conecta el cable serie USB (OTG)",
+  "beaconIncludeSats": "Satélites",
+  "beaconSatsNow": "Satélites ahora",
+  "beaconSatsHint": "El número de satélites procede de la fuente que está aportando la posición: el GPS del teléfono (Android) o el módulo GPS externo (sentencia GGA). SAT=nn es un campo de comentario no estándar (como STEPS=) que los mapas de terceros solo muestran como texto; si la fuente no lo aporta, no se envía nada en lugar de un cero.",
+  "extGpsFixTitle": "Posición actual",
+  "extGpsFixSubtitle": "La última posición que reportó el módulo: la posición y la antigüedad son los dos datos que conviene mirar aquí",
+  "extGpsFixAge": "Última posición",
+  "extGpsFixType": "Tipo de posición",
+  "extGpsFixType2d": "Posición 2D",
+  "extGpsFixType3d": "Posición 3D",
+  "extGpsFixTypeNoFix": "Sin posición (según GSA)",
+  "extGpsFixTypeNone": "No lo informa (sin GSA)",
+  "extGpsFixUtc": "Hora del módulo (UTC)",
+  "extGpsFixSource": "Sentencia que lo produjo",
+  "extGpsFixRaw": "Última sentencia",
+  "extGpsFixHint": "La precisión se estima a partir del HDOP (unos HDOP x 5 m), no es una medida; el tipo de posición viene de la sentencia GSA, así que un módulo que solo envía RMC/GGA no tiene esa línea; la hora del módulo viene de los satélites y puede que aún no esté sincronizada.",
+  "beaconSatsUnknown": "La fuente actual no proporciona el número de satélites: la ubicación por red (celda / Wi-Fi) no tiene satélites, y algunos dispositivos o ROM de Android no informan del dato.",
+  "lockMapCenter": "Bloquear el centro del mapa",
+  "unlockMapCenter": "Desbloquear el centro del mapa",
+  "partners": "Socios",
+  "partnerAprsnetCnDesc": "El balizamiento no se detiene, el eco no se apaga",
+  "serverMissing": "Sin configurar",
+  "serverMissingWarning": "Falta la dirección del servidor · no se puede conectar a APRS-IS, escribe una antes de conectar",
+  "historyExportGpx": "Exportar GPX",
+  "gpxRangeTitle": "Elige el intervalo",
+  "gpxRangeToday": "Hoy",
+  "gpxRangeWeek": "Últimos 7 días",
+  "gpxRangeMonth": "Últimos 30 días",
+  "gpxRangeYear": "Último año",
+  "gpxRangeCustom": "Intervalo personalizado",
+  "gpxRangeEmpty": "No hay puntos de traza en este intervalo.",
+  "gpxExported": "Exportados {days} día(s), {points} punto(s)",
+  "gpxExportFailed": "Falló la exportación: revisa el permiso de almacenamiento o el espacio libre.",
+  "gpxSavedTo": "Guardado en: {path}",
+  "@gpxExported": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@gpxSavedTo": {"placeholders": {"path": {"type": "String"}}},
+  "permCheckTitle": "Hay permisos desactivados",
+  "permCheckLocation": "El permiso de ubicación está desactivado: el mapa no puede mostrar tu posición y no se puede balizar.",
+  "permCheckNotify": "El permiso de notificaciones está desactivado: no se verán los avisos ni la alarma de vida.",
+  "searchHistoryTitle": "Búsquedas recientes",
+  "serverHistoryTitle": "Servidores recientes",
+  "serverAccountTitle": "Cuenta",
+  "serverAccountHint": "La cuenta que te dio el servidor",
+  "serverPasswordTitle": "Contraseña",
+  "serverPasswordHint": "La contraseña que te dio el servidor",
+  "serverAccountNote": "Solo servidores como APRSNETCN los necesitan. En un APRS-IS normal déjalos vacíos.",
+  "acnSyncTitle": "Sincronizar estaciones 24 h",
+  "acnSyncLast": "Última sincronización",
+  "acnSyncDone": "El servidor tenía {total} estaciones, {added} nuevas aquí",
+  "acnSyncNoAccount": "Rellena la cuenta y la contraseña para sincronizar.",
+  "@acnSyncDone": {"placeholders": {"total": {"type": "String"}, "added": {"type": "String"}}},
+  "stationSource": "Origen",
+  "acnCardTitle": "APRSNETCN SERVER",
+  "acnCardSubtitle": "Servidor basado en el protocolo APRSNETCN SERVER. Lleva tráfico en los dos sentidos.",
+  "acnLinkSwitch": "APRSNETCN",
+  "acnLinkStatus": "Estado del enlace",
+  "acnLinkNote": "Los mensajes salen por el enlace marcado en su tarjeta. Las estaciones recibidas aquí se marcan como del servidor y no se reenvían.",
+  "acnAccountNote": "Cuenta y contraseña que emite el servidor. Si se dejan vacías, se recibe solo con el passcode.",
+  "packetSrcAcn": "APRSNETCN",
+  "acnLoginTitle": "Acceso",
+  "acnLoginOk": "Verificado",
+  "acnLoginRejected": "Cuenta o contraseña incorrectos",
+  "acnSyncNow": "Sincronizar ahora",
+  "acnSyncing": "Sincronizando…",
+  "acnSyncHint": "Solo se descarga al pulsar el botón. Conectar no descarga nada.",
+  "sourceGroupInternet": "Enlaces de internet",
+  "sourceGroupRadio": "Enlaces de radio",
+  "acnPageLead": "Un servidor APRS-IS basado en el protocolo APRSNETCN SERVER. Su dirección va en Ajustes → Servidores, y el enlace sirve para enviar y recibir. Los dos enlaces pueden estar en línea a la vez, cada uno con su propio flujo.",
+  "acnServerProto": "Protocolo del servidor",
+  "acnServerRetention": "Posiciones {hours} h",
+  "acnDefaultFilter": "Suscripción por defecto",
+  "acnAllPackets": "Todos los paquetes",
+  "acnOpenMap": "Mapa de estaciones",
+  "@acnServerRetention": {"placeholders": {"hours": {"type": "String"}}},
+  "channelsSubtitle": "Los dos servidores pueden estar en línea a la vez; cada uno recibe su copia.",
+  "acnOpenSettings": "Dirección y cuenta",
+  "acnFilterTitle": "Filtro",
+  "acnFilterSubtitle": "Estaciones dentro del radio, más los indicativos que añadas.",
+  "acnFilterRadius": "Radio (km)",
+  "acnFilterCalls": "También estos indicativos",
+  "acnFilterCallsHint": "Indicativo, pulsa enter",
+  "txChannel": "Canal de envío",
+  "txChannelHint": "Los paquetes salen solo por este enlace.",
+  "translateProviderBili": "Bilibili Index-Translate",
+  "translateProviderBiliDesc": "Sin clave y gratis. Modelo público de traducción de Bilibili; sin garantía de disponibilidad.",
+  "translateBiliUrl": "Endpoint",
+  "translateBiliModel": "Modelo",
+  "translateBiliTip": "El punto público puede limitar el uso. Si tienes tu propio despliegue, pon ahí la dirección y el modelo.",
+  "txSourcePick": "Enviar por este enlace",
+  "acnPasscodeHint": "Déjalo vacío para usar el passcode del enlace APRS-IS",
+  "aprsIsServerTitle": "Servidor APRS-IS",
+  "aprsIsServerLead": "La dirección, el puerto y el passcode van aquí.",
+  "aprsIsCardSubtitle": "Datos de acceso y estado de la conexión",
+  "aprsIsEntryDesc": "Dirección, puerto y passcode",
+  "txKindPosition": "Paquetes de posición y estado",
+  "notifLiveTitle": "Actualizaciones en vivo",
+  "notifLiveHint": "En Android 16 la notificación permanente pasa a la píldora de la barra de estado; en iPhone aparece en la Dynamic Island y en la pantalla bloqueada. Abajo eliges qué muestra. Si el sistema no lo admite, sigue siendo una notificación normal.",
+  "notifTitle": "Notificaciones",
+  "notifStyleTitle": "Estilo de notificación",
+  "notifStylePlain": "Notificación permanente normal",
+  "notifStylePlainDesc": "Una notificación permanente en la barra; al expandirla se lee todo.",
+  "notifStyleLive": "Actualizaciones en vivo",
+  "notifDiag": "Comprobación de notificaciones",
+  "notifDiagDesc": "Muestra qué admite este teléfono para actualizaciones en vivo y notificaciones de foco.",
+  "notifStyleFocus": "Notificación de foco de Xiaomi",
+  "notifStyleFocusDesc": "En Xiaomi, Redmi y POCO prueba la notificación de foco (superisla). Sin permiso del fabricante vuelve a actualizaciones en vivo o a una notificación normal.",
+  "notifLiveTextTitle": "Texto de la actualización en vivo",
+  "notifLiveTextDefault": "Predeterminado",
+  "notifLiveTextCounts": "Enviados / recibidos",
+  "notifLiveTextGrid": "Cuadrícula",
+  "notifLiveTextCourse": "Rumbo",
+  "notifLiveTextBeacon": "Cuenta atrás del beacon",
+  "notifLiveOff": "En pausa por ahora: en algunos sistemas hace desaparecer la notificación permanente. Se publica como notificación normal.",
+  "notifLiveTextMsgs": "Mensajes sin leer",
+  "notifLiveTextNear": "Estaciones cercanas",
+  "notifLiveTextSpeed": "Velocidad",
+  "notifLiveTextAlt": "Altitud",
+  "notifLiveTextHr": "Frecuencia cardíaca",
+  "notifLiveTextBatt": "Batería",
+  "notifLiveTextTrip": "Distancia del viaje",
+  "notifLiveNearShort": "{n} est",
+  "@notifLiveNearShort": {"placeholders": {"n": {"type": "String"}}},
+  "consentTitle": "Consentimiento separado para subir y transmitir",
+  "consentLead": "Antes de activar cualquier función de subida o envío, confirma estos tres puntos.",
+  "consentNatureTitle": "Qué son los datos",
+  "consentNatureBody": "Lo que vas a subir contiene trayectos de desplazamiento, que son datos personales sensibles según la ley china de protección de la información personal.",
+  "consentNeedTitle": "Por qué es necesario",
+  "consentNeedBody": "APRS funciona enviando tu posición a una red pública. No hay forma de lograr lo mismo sin subirla.",
+  "consentImpactTitle": "Impacto en tus derechos",
+  "consentImpactBody": "Los datos que entran en APRS-IS los guardan servidores de terceros, y algunos servidores públicos conservan las posiciones 180 días o más. Una vez que los datos están en una red pública no se pueden retirar ni borrar.",
+  "consentAgree": "Acepto",
+  "consentScopeInternet": "Subida de balizas a APRS-IS",
+  "consentScopeRf": "Envío de balizas por radio",
+  "consentScopeIgate": "Reenvío con iGate",
+  "consentAccept": "Aceptar y activar",
+  "consentCancel": "Ahora no",
+  "consentPickOne": "Marca al menos una función.",
+  "consentPickAgree": "Marca primero \"Acepto\".",
+  "consentSection": "Consentimiento separado",
+  "consentSectionHint": "Si desactivas una, esa función deja de enviar datos nuevos de inmediato. Lo ya enviado no se puede recuperar.",
+  "consentLogTitle": "Registro de consentimiento",
+  "consentLogEmpty": "Todavía no hay registros.",
+  "consentLogClear": "Borrar el registro",
+  "consentLogClearHint": "Solo borra el registro. Los consentimientos ya dados no cambian.",
+  "consentLogCleared": "Registro borrado",
+  "consentActGrant": "aceptado",
+  "consentActRevoke": "retirado",
+  "autoStartTitle": "Al abrir la app",
+  "autoStartNone": "No hacer nada",
+  "autoStartConnect": "Conexión automática",
+  "autoStartReport": "Reporte automático",
+  "autoStartNoneHint": "Al abrir la app no pasa nada.",
+  "autoStartConnectHint": "Al abrir la app se conecta al servidor. El reporte sigue esperando tu toque.",
+  "autoStartReportHint": "Al abrir la app se conecta al servidor y empieza a reportar la posición.",
+  "autoStartAskTitle": "¿Activarlo?",
+  "autoStartAskConnect": "Desde ahora la app se conecta al servidor cada vez que la abres.",
+  "autoStartAskReport": "Desde ahora la app se conecta al servidor y empieza a reportar cada vez que la abres.",
+  "autoStartAskOk": "Activar",
+  "autoStartAskCancel": "Cancelar",
+  "mvTitle": "Actualización necesaria",
+  "mvBody": "Esta versión ya no tiene soporte. Actualiza a {min} o posterior para seguir usándola.",
+  "mvCurrent": "Versión actual",
+  "mvRequired": "Versión mínima",
+  "mvReason": "Nota",
+  "mvUpdate": "Actualizar",
+  "mvExit": "Salir",
+  "mvChecking": "Comprobando…",
+  "@mvBody": {"placeholders": {"min": {"type": "String"}}},
+  "featureCat": "Funciones",
+  "featureCatDesc": "Módulos y modo ligero",
+  "featureLite": "Modo ligero",
+  "featureLiteDesc": "Deja solo el envío y la recepción de APRS, con una interfaz mínima.",
+  "featureModules": "Módulos",
+  "featureLiteBlocks": "En modo ligero los módulos están apagados. Desactívalo para elegirlos.",
+  "featureWeather": "Tiempo",
+  "featureTranslate": "Traducción",
+  "manualTitle": "Manual",
+  "ssidCustom": "Sufijo propio",
+  "ssidCustomHint": "1-2 dígitos o letras",
+  "ssidInvalid": "El sufijo debe ser 1-2 dígitos o letras",
+  "ssidUse": "Usar este",
+  "icomTxTailLabel": "Retardo posterior TX (ms)",
+  "cracCertTitle": "Consulta de certificado",
+  "cracCertName": "Nombre",
+  "cracCertNumber": "N.º de certificado",
+  "cracCertId": "N.º de identidad",
+  "cracCertPrivacy": "El nombre y el número de certificado se usan solo para esta consulta. Ni el servidor ni la aplicación los recogen, y el resultado queda en este dispositivo.",
+  "cracCertQuery": "Consultar",
+  "cracCertQuerying": "Consultando…",
+  "cracCertResult": "Resultado",
+  "cracCertNeedName": "Escribe un nombre primero",
+  "cracCertNeedKey": "Rellena el n.º de certificado",
+  "cracCertNotFound": "No se encontró ningún registro",
+  "cracCertFailed": "Error en la consulta: ",
+  "cracCertSaved": "Guardado para {call}",
+  "cracCertOtherCall": "Este registro es de {call}, no de tu indicativo",
+  "cracCertType": "Clase",
+  "cracCertCall": "Indicativo",
+  "cracCertPassDate": "Aprobado el",
+  "cracCertIssueDate": "Emitido el",
+  "cracCertRegion": "Lugar",
+  "cracCertValid": "Válido hasta",
+  "cracCertBadge": "Licencia clase {type}",
+  "@cracCertSaved": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertOtherCall": {"placeholders": {"call": {"type": "String"}}},
+  "@cracCertBadge": {"placeholders": {"type": {"type": "String"}}},
+  "cracCertInfo": "Certificado",
+  "cracCertChecked": "Consulta",
+  "cracCertClear": "Borrar certificado",
+  "cracCertClearAsk": "Esta página dejará de mostrar el certificado. Puedes consultarlo otra vez cuando quieras.",
+  "cracCertClearDone": "Certificado borrado",
+  "devLockTitle": "Código de desarrollador",
+  "devLockTip": "Bloqueado. Mantén pulsado e introduce el código.",
+  "devLockWrong": "Código incorrecto",
+  "cracCertVerified": "Verificado",
+  "gpsSampleTitle": "Muestreo GPS",
+  "gpsSampleSec": "{s} s",
+  "@gpsSampleSec": {"placeholders": {"s": {"type": "String"}}},
+  "historyRecord": "Registrar historial",
+  "historyEmptyOff": "La grabación está desactivada. Actívala arriba para empezar.",
+  "cracCertClosed": "Aún no disponible",
+  "cracCertWhyRequired": "El protocolo APRS-IS pone en el desarrollador del software el deber de verificar que los usuarios sean radioaficionados.",
+  "cracCertEntry": "Verificación de licencia",
+  "cracCertVoluntary": "La verificación es voluntaria. La app funciona igual sin ella.",
+  "cracCertLocal": "La comprobación la hace el programa, sin revisión humana. El resultado vuelve solo a este dispositivo y guarda únicamente si pasó y la clase.",
+  "oobeCallInvalid": "Ese indicativo no parece correcto. Formatos habituales: BG7LZQ o JA1AA.",
+  "oobeSsidInvalid": "El SSID puede ser una o dos letras o cifras.",
+  "oobeFinishLocal": "Terminar",
+  "oobeDoneTitle": "Configuración lista",
+  "oobeDoneLocalNote": "Sin dirección, la app funciona solo en local. Para conectarte, pon un servidor en ajustes.",
+  "oobeDoneConnectNote": "Al terminar se conectará a {link}.",
+  "oobeDoneSymbolLabel": "Símbolo",
+  "oobeDoneUnset": "Sin rellenar",
+  "oobeDoneMap": "Estaciones",
+  "oobeDoneMapDesc": "Las estaciones cercanas están en las pestañas de mapa y estaciones.",
+  "oobeDoneBeacon": "Enviar baliza",
+  "oobeDoneBeaconDesc": "Al conectar, el botón de inicio aparece abajo en la página del mapa.",
+  "oobeDoneManualDesc": "En ajustes está el manual. Explica cómo conectar un equipo y qué revisar cuando no se envía.",
+  "@oobeDoneConnectNote": {"placeholders": {"link": {"type": "String"}}},
+  "oobeRestore": "Restaurar desde una copia",
+  "trayCloseToTray": "Minimizar a la bandeja al cerrar",
+  "trayMenuShow": "Mostrar ventana",
+  "trayMenuHide": "Ocultar en la bandeja",
+  "trayMenuQuit": "Salir de APRSLocus",
+  "beaconFuzz": "Difuminar ubicación",
+  "beaconFuzzOff": "Desactivado",
+  "beaconFuzz200m": "~200 m",
+  "beaconFuzz2km": "~2 km",
+  "beaconFuzz20km": "~20 km",
+  "subsTitle": "Suscripciones",
+  "subsLead": "Sigue una estación, un digipeater o una palabra del paquete. Las coincidencias quedan abajo.",
+  "subsAdd": "Añadir",
+  "subsKindStation": "Estación",
+  "subsKindDigi": "Digipeater",
+  "subsKindKeyword": "Palabra",
+  "subsFieldStation": "Indicativo, SSID opcional",
+  "subsFieldDigi": "Indicativo del digipeater o gateway",
+  "subsFieldKeyword": "Una palabra del paquete",
+  "subsEmpty": "Aún no hay suscripciones",
+  "subsEmptyNote": "Añade una y los paquetes coincidentes aparecerán aquí.",
+  "subsHitsTitle": "Coincidencias",
+  "subsNoHits": "Aún sin coincidencias.",
+  "subsHitsCount": "{n} coincidencias",
+  "subsClear": "Borrar",
+  "subsAdded": "Siguiendo {v}",
+  "subsExists": "{v} ya se está siguiendo",
+  "subsRemoved": "Dejó de seguir",
+  "subsMenuOn": "Seguir esta estación",
+  "subsMenuOff": "Dejar de seguir",
+  "subsCopied": "Paquete copiado",
+  "@subsHitsCount": {"placeholders": {"n": {"type": "String"}}},
+  "@subsAdded": {"placeholders": {"v": {"type": "String"}}},
+  "@subsExists": {"placeholders": {"v": {"type": "String"}}},
+  "msgSendId": "Enviar como",
+  "msgOtherSsid": "Este mensaje llegó para otro SSID. Puedes responder como {to} o como este equipo.",
+  "@msgOtherSsid": {"placeholders": {"to": {"type": "String"}}},
+  "beaconIncludeLoad": "CPU y memoria del equipo",
+  "myOtherSsidLabel": "Mis otros SSID",
+  "ssidCmdActivate": "Activar",
+  "ssidCmdBeacon": "Enviar baliza",
+  "ssidCmdStop": "Detener envío",
+  "ssidCmdSent": "Enviado a {call}: {cmd}",
+  "ssidCmdNoLink": "No hay enlace activo, así que el comando no sale",
+  "@ssidCmdSent": {"placeholders": {"call": {"type": "String"}, "cmd": {"type": "String"}}},
+  "msgRecvTitle": "Recepción de mensajes",
+  "msgRecvSsid": "Recibir también mensajes de mis otros SSID",
+  "subsRoleTitle": "Qué hace",
+  "subsRoleSource": "Enviado por sí mismo",
+  "subsRolePath": "Retransmitido por él",
+  "subsPacketTitle": "Paquetes",
+  "subsPacketAll": "Todo",
+  "subsPacketBeacon": "Balizas",
+  "subsPacketMessage": "Mensajes",
+  "subsHitSource": "enviado",
+  "subsHitPath": "retransmitido",
+  "myOtherSsidNone": "Aún no se ha oído otro SSID de tu indicativo",
+  "subsEdit": "Editar suscripción",
+  "subsNotify": "Notificaciones",
+  "subsNotifyTitle": "Coincidencia · {value}",
+  "subsNotifyMore": "+{n} más",
+  "@subsNotifyTitle": {"placeholders": {"value": {"type": "String"}}},
+  "@subsNotifyMore": {"placeholders": {"n": {"type": "String"}}},
+  "coordFormat": "Formato de coordenadas",
+  "coordFormatDec": "Decimal",
+  "coordFormatDm": "Grados y min",
+  "coordFormatDms": "Grados-min-seg",
+  "mapCenterCoord": "Coordenadas del centro",
+  "oobeServerSkip": "Saltar, lo pongo luego en ajustes",
+  "advChannels": "Envío por enlace",
+  "codeContributionEncoding": "Codificación china",
+  "oobeFeatureTitle": "Qué extras quieres",
+  "oobeFeatureDesc": "Un módulo apagado desaparece de los ajustes. Puedes cambiarlo en Ajustes → Funciones.",
+  "historyOverlay": "Capas de rutas",
+  "historyOverlayShare": "Compartir imagen",
+  "historyOverlayExport": "Exportar imagen",
+  "historyOverlayExportFailed": "No se pudo exportar la imagen",
+  "historyOverlayEmpty": "Aún no hay rutas que superponer.",
+  "historyOverlayAll": "Mostrar todo",
+  "historyOverlaySummary": "{days}/{total} días · {km}",
+  "@historyOverlaySummary": {"placeholders": {"days": {"type": "String"}, "total": {"type": "String"}, "km": {"type": "String"}}},
+  "powerSave": "Ahorro de energía",
+  "powerSaveTip": "El GPS toma una posición cada 30 s y las animaciones del mapa se detienen.",
+  "lowBatteryWarn": "Batería al {level}%. ¿Activar el ahorro de energía?",
+  "@lowBatteryWarn": {"placeholders": {"level": {"type": "String"}}},
+  "syncTitle": "Sincronización",
+  "syncLead": "Los mensajes y el historial se guardan en el servidor y vuelven al cambiar de equipo.",
+  "syncAccount": "Cuenta",
+  "syncPassword": "Contraseña",
+  "syncLogin": "Entrar",
+  "syncLogout": "Salir",
+  "syncLoggedIn": "Sesión de {call}",
+  "syncNeedLogin": "Inicia sesión primero",
+  "syncMode": "Modo",
+  "syncModeOff": "Apagado",
+  "syncModeManual": "Manual",
+  "syncModeAuto": "Automático",
+  "syncModeAutoHint": "El modo automático trae una vez al arrancar y luego usa el intervalo de arriba.",
+  "syncMessages": "Mensajes",
+  "syncTracks": "Historial",
+  "syncNow": "Sincronizar",
+  "syncRunDone": "Sincronizado",
+  "syncClear": "Borrar datos en la nube",
+  "syncClearHint": "Borra del servidor los mensajes, el historial y las copias de este indicativo. En el equipo no cambia nada.",
+  "syncClearAsk": "¿Borrar los datos en la nube?",
+  "syncClearDone": "Datos en la nube borrados",
+  "syncPlainHint": "La conexión es HTTP sin cifrar; la contraseña y el contenido no van cifrados.",
+  "syncLastAt": "Última sincronización",
+  "syncNever": "Aún no se ha sincronizado",
+  "syncFailed": "Error de sincronización",
+  "syncTrackSummary": "{days} días · {points} puntos",
+  "syncMsgSummary": "{n} mensajes",
+  "syncBackupElsewhere": "Las copias en la nube se suben y se recuperan en la página de copias.",
+  "syncNoWeb": "No disponible en la web",
+  "syncBusy": "Sincronizando",
+  "backupCloud": "Copia en la nube",
+  "backupCloudUpload": "Subir",
+  "backupCloudRestore": "Recuperar",
+  "backupCloudHint": "Las copias en la nube no incluyen el historial; la sincronización lo guarda aparte.",
+  "backupCloudDone": "Subido",
+  "backupCloudEmpty": "Aún no hay copias en la nube",
+  "backupCloudFailed": "Error en la operación en la nube",
+  "@syncLoggedIn": {"placeholders": {"call": {"type": "String"}}},
+  "@syncTrackSummary": {"placeholders": {"days": {"type": "String"}, "points": {"type": "String"}}},
+  "@syncMsgSummary": {"placeholders": {"n": {"type": "String"}}},
+  "syncServer": "Servidor",
+  "syncServerNow": "Dirección en uso",
+  "syncServerHint": "Cambiar la dirección cierra la sesión. Los datos del servidor anterior no se mueven.",
+  "syncCloudData": "Datos en el servidor",
+  "syncAccountHint": "La cuenta es la de la lista de acceso del servidor, la misma que usa la página de la conexión APRSNETCN.",
+  "syncContent": "Qué se sincroniza",
+  "syncContentHint": "Con ambos apagados solo se inicia sesión, sin enviar ni traer nada.",
+  "syncAutoEvery": "Sincronizar cada",
+  "syncEveryMin": "{n} min",
+  "syncDevicesTitle": "Dispositivos con sesión",
+  "syncDeviceThis": "Este dispositivo",
+  "syncDeviceRemove": "Quitar",
+  "syncDeviceRemoved": "Eliminado. Ese dispositivo tendrá que iniciar sesión otra vez.",
+  "syncBackups": "Copias en la nube",
+  "syncBackupsCount": "{n} en total",
+  "syncDeviceHint": "Estos son los dispositivos con sesión en este servidor. Si quitas uno, tendrá que iniciar sesión otra vez.",
+  "@syncEveryMin": {"placeholders": {"n": {"type": "String"}}},
+  "@syncBackupsCount": {"placeholders": {"n": {"type": "String"}}},
+  "syncNoServer": "Primero rellena arriba la dirección del servidor APRSNETCN.",
+  "acnHttpPort": "Puerto HTTP",
+  "updatePkgWelcomeTitle": "Bienvenido a {v}",
+  "updatePkgWelcomeBody": "La nueva versión ya está instalada. El paquete sigue en la carpeta Descargas. Consérvalo para otro dispositivo o bórralo para liberar espacio.",
+  "updatePkgInDownloads": "En Descargas",
+  "updatePkgRemember": "Hacerlo siempre así",
+  "updatePkgDelete": "Borrar el paquete",
+  "updatePkgKeep": "Conservarlo",
+  "updatePkgKept": "El paquete queda en Descargas",
+  "updatePkgSigOk": "Firma verificada",
+  "updatePkgSigBad": "La firma del paquete no coincide con la de este dispositivo, así que se borró. Descárgalo otra vez desde un canal oficial.",
+  "updatePkgSigUnknown": "No se pudo leer la firma del paquete, así que se borró. Vuelve a descargarlo.",
+  "updatePkgNoFile": "Ese paquete ya no está en Descargas. Descárgalo otra vez.",
+  "updatePkgAction": "Paquete de actualización",
+  "updatePkgAfterUpdate": "Tras actualizar",
+  "updatePkgActionAsk": "Preguntar cada vez",
+  "updatePkgActionDelete": "Borrarlo",
+  "updatePkgActionKeep": "Conservar siempre",
+  "@updatePkgWelcomeTitle": {"placeholders": {"v": {"type": "String"}}},
+  "updatePkgSigChecking": "Comprobando la firma",
+  "updatePkgSigMismatch": "La firma no coincide con este dispositivo",
+  "updatePkgSigUnchecked": "No se pudo leer la firma",
+  "connectingChannel": "Conectando con {name}",
+  "@connectingChannel": {"placeholders": {"name": {"type": "String"}}},
+  "updateCheckChecking": "Comprobando en línea",
+  "updateCheckOk": "Comprobado en línea: versión, resumen y firma coinciden",
+  "updateCheckOffline": "Sin conexión: no se puede comprobar la versión",
+  "updateCheckNotFound": "No hay resumen de esta versión en el repositorio: no se puede comprobar",
+  "updateCheckVersion": "La versión dentro del paquete no coincide con esta entrega",
+  "updateCheckSha": "El resumen no coincide con el archivo del repositorio",
+  "updatePkgWhatsNew": "Novedades de esta versión",
+  "updatePkgWelcomeHello": "La nueva versión ya está instalada.",
+  "updatePkgDeleteTitle": "¿Conservar el instalador?",
+  "updatePkgUnverifiedTitle": "No se pudo verificar este paquete",
+  "updatePkgUnverifiedBody": "O no hay conexión, o la entrega no trae un resumen con el que comparar. Instalar de todos modos corre por tu cuenta.",
+  "installAnyway": "Instalar igualmente",
+  "updatePkgUnreadable": "No se puede leer este paquete"
 }

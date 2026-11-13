@@ -3,21 +3,28 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:url_launcher/url_launcher.dart';
 
+import 'crac_cert.dart';
+import 'entrance.dart';
+import 'feature_page.dart';
+import 'manual_page.dart';
+import 'features.dart';
 import 'notice.dart';
 import 'notice_banner.dart';
 import 'theme.dart';
 import 'sponsor_page.dart';
 import 'sport_rank_page.dart';
 import 'guide.dart';
+import 'tnc_page.dart';
 import 'state.dart';
-import 'models.dart';
 import 'widgets.dart';
+import 'settings_widgets.dart';
 import 'about_page.dart';
 import 'check_update_page.dart';
 import 'exit_app.dart';
 import 'early_member.dart';
 import 'honor_wall_page.dart';
 import 'settings_pages.dart';
+import 'subscriptions_page.dart';
 import 'life_guard_page.dart';
 import 'translate_page.dart';
 import 'export_adif_page.dart';
@@ -29,7 +36,12 @@ import 'theme_text.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppState state;
-  const SettingsPage({super.key, required this.state});
+
+  /// 当前页签是不是本页（三套外壳都是 `IndexedStack` 常驻子页，见 [RiseIn.play]）。
+  /// 默认 true：单独推入这个页面的地方不用管它。
+  final bool isActive;
+
+  const SettingsPage({super.key, required this.state, this.isActive = true});
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -60,8 +72,11 @@ class _SettingsPageState extends State<SettingsPage> {
         return Padding(
           padding: const EdgeInsets.all(20),
           child: SingleChildScrollView(
-            child: Column(
+            // 卡片逐条淡入上移（`Column` 的替身，见 lib/entrance.dart）：
+            // 只改这一行，下面两百多行 children 一个字节不动。
+            child: StaggerColumn(
               crossAxisAlignment: CrossAxisAlignment.start,
+              play: widget.isActive,
               children: [
                 // 页面标题：顶部栏已显示“设置”，这里用问候语（早上好，呼号）避免重复
                 Row(
@@ -78,9 +93,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         symbol: widget.state.mySymbol),
                   ],
                 ),
-                SizedBox(height: 4),
-                Text(S.of(context).settingsDesc, style: ts(13, c: C.slate)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 // 功能引导（首次进入显示；看过后不占位置）
                 GuideTipCard(
                   guideId: 'settings',
@@ -88,6 +101,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   margin: EdgeInsets.zero,
                 ),
                 const SizedBox(height: 20),
+                // 操作证书那一小块：已认证 + 类别，姓名与证书编号打码
+                _certChip(),
                 // 连接状态横幅
                 _connBanner(),
                 SizedBox(height: 16),
@@ -101,7 +116,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catRadio',
                           color: C.blue,
                           title: Tx.of(context).byKey('radioCat'),
-                          desc: S.of(context).radioCatDesc,
                           onTap: () => _push(StationSettingsPage(state: st)),
                         ),
                       ),
@@ -112,7 +126,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catBeacon',
                           color: C.green,
                           title: Tx.of(context).byKey('beaconCat'),
-                          desc: S.of(context).beaconCatDesc,
                           onTap: () => _push(BeaconSettingsPage(state: st)),
                         ),
                       ),
@@ -129,7 +142,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catConnection',
                           color: C.purple,
                           title: Tx.of(context).byKey('connectionCat'),
-                          desc: S.of(context).connectionCatDesc,
                           onTap: () => _push(ConnectionSettingsPage(state: st)),
                         ),
                       ),
@@ -140,7 +152,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catDisplay',
                           color: C.cyan,
                           title: Tx.of(context).byKey('displayCat'),
-                          desc: S.of(context).displayCatDesc,
                           onTap: () => _push(DisplaySettingsPage(state: st)),
                         ),
                       ),
@@ -158,7 +169,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catDevice',
                           color: C.indigo,
                           title: Tx.of(context).byKey('deviceCat'),
-                          desc: S.of(context).deviceCatDesc,
                           onTap: () => _push(DeviceSettingsPage(state: st)),
                         ),
                       ),
@@ -169,7 +179,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catData',
                           color: C.red,
                           title: Tx.of(context).byKey('dataCat'),
-                          desc: S.of(context).dataCatDesc,
                           onTap: () => _push(DataSettingsPage(state: st)),
                         ),
                       ),
@@ -186,7 +195,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catAdvanced',
                           color: C.slate,
                           title: Tx.of(context).byKey('advancedCat'),
-                          desc: S.of(context).advancedCatDesc,
                           onTap: () => _push(AdvancedSettingsPage(state: st)),
                         ),
                       ),
@@ -197,7 +205,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           slot: 'catUpdate',
                           color: const Color(0xFF0EA5A4),
                           title: Tx.of(context).byKey('updateCat'),
-                          desc: S.of(context).updateCatDesc,
                           onTap: () => _push(CheckUpdatePage(state: st)),
                         ),
                       ),
@@ -205,350 +212,95 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 SizedBox(height: 16),
+                // 功能启用：自选模块 + 精简模式。**永远显示** —— 精简模式就是
+                // 从这里关掉的，它自己不能跟着模块一起消失。
+                SettingsEntryTile(
+                  icon: Icons.tune_rounded,
+                  fallback: const [Color(0xFF475569), Color(0xFF1E293B)],
+                  title: S.of(context).featureCat,
+                  onTap: () => _push(FeaturePage(state: st)),
+                ),
+                SizedBox(height: 12),
                 // 运动排行榜（issue #22-3：用户要求加在荣誉墙**上方**）
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => SportRankPage(state: widget.state)),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [
-                              Color(0xFF16A34A),
-                              Color(0xFF0B7A37),
-                            ],
-                          ),
-                          child: const Icon(Icons.leaderboard_rounded,
-                              color: Colors.white, size: 17),
-                        ),
-                        SizedBox(width: 10),
-                        Flexible(
-                          flex: 2,
-                          child: Text(
-                            S.of(context).sportRank,
-                            style: ts(13, w: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            S.of(context).sportRankEntryDesc,
-                            style: const TextStyle(
-                                fontSize: 10, color: Color(0xFF98A2B8)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
+                if (st.featureEnabled(AppFeature.rank))
+                  SettingsEntryTile(
+                    icon: Icons.leaderboard_rounded,
+                    fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
+                    title: S.of(context).sportRank,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => SportRankPage(state: widget.state)),
                     ),
                   ),
-                ),
                 SizedBox(height: 12),
                 // 荣誉墙（徽章墙 / 成就墙 / FIRST FIX）
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => HonorWallPage(widget.state.myFullCall,
-                            symbol: widget.state.mySymbol,
-                            symbolTable: '/')),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFFC9A227), Color(0xFF8A6D1F)],
-                            ),
-                          child: const Icon(Icons.emoji_events_rounded,
-                              color: Colors.white, size: 17),
-                        ),
-                        SizedBox(width: 10),
-                        // 标题短、副标题长（且各语言长度差很大）：标题限份额，
-                        // 副标题用 Expanded 把剩余全吃掉 —— 不用 Spacer，因为
-                        // Spacer 也是弹性子项，会把副标题的可用宽度再切一刀。
-                        Flexible(
-                          flex: 2,
-                          child: Text(
-                            Tx.of(context).byKey('honorWall'),
-                            style: ts(13, w: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            S.of(context).myBadgesAndAchievements,
-                            style: const TextStyle(
-                                fontSize: 10, color: Color(0xFF98A2B8)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded,
-                            color: C.grey, size: 20),
-                      ],
+                if (st.featureEnabled(AppFeature.honor))
+                  SettingsEntryTile(
+                    icon: Icons.emoji_events_rounded,
+                    fallback: const [Color(0xFFC9A227), Color(0xFF8A6D1F)],
+                    title: Tx.of(context).byKey('honorWall'),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => HonorWallPage(widget.state.myFullCall,
+                              symbol: widget.state.mySymbol,
+                              symbolTable: '/')),
                     ),
                   ),
-                ),
-                SizedBox(height: 12),
-                // QQ 交流群
-                _qqBanner(),
                 SizedBox(height: 12),
                 // 翻译设置
-                GestureDetector(
-                  onTap: () => _push(TranslateSettingsPage(state: st)),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFF0E7490), Color(0xFF155E75)],
-                            ),
-                          child: const Icon(Icons.translate_rounded,
-                              color: Colors.white, size: 17),
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(Tx.of(context).byKey('translateSettings'),
-                                  style: ts(13, w: FontWeight.w700)),
-                              SizedBox(height: 2),
-                              Text(S.of(context).translateSettingsSubtitle,
-                                  style: ts(10, c: C.grey),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded,
-                            color: C.grey, size: 20),
-                      ],
-                    ),
+                if (st.featureEnabled(AppFeature.translate))
+                  SettingsEntryTile(
+                    icon: Icons.translate_rounded,
+                    fallback: const [Color(0xFF0E7490), Color(0xFF155E75)],
+                    title: Tx.of(context).byKey('translateSettings'),
+                    onTap: () => _push(TranslateSettingsPage(state: st)),
                   ),
-                ),
                 SizedBox(height: 12),
                 // 导出 ADIF（按需求置于「关于」上方）
-                GestureDetector(
-                  onTap: () => _push(ExportAdifPage(state: widget.state)),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
-                            ),
-                          child: const Icon(
-                            Icons.file_download_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          Tx.of(context).byKey('exportAdif'),
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).adifLogFile,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF98A2B8),
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
-                    ),
+                if (st.featureEnabled(AppFeature.adif))
+                  SettingsEntryTile(
+                    icon: Icons.file_download_rounded,
+                    fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
+                    title: Tx.of(context).byKey('exportAdif'),
+                    onTap: () => _push(ExportAdifPage(state: widget.state)),
                   ),
-                ),
                 SizedBox(height: 12),
                 // 主题（自定义颜色 / 图标 / 文字）
-                GestureDetector(
+                SettingsEntryTile(
+                  icon: Icons.brush_rounded,
+                  fallback: const [Color(0xFFDB2777), Color(0xFF9D174D)],
+                  title: S.of(context).themeTitle,
                   onTap: () => _push(ThemePage(state: widget.state)),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFFDB2777), Color(0xFF9D174D)],
-                            ),
-                          child: const Icon(
-                            Icons.brush_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          S.of(context).themeTitle,
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).themeEntryDesc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF98A2B8),
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 SizedBox(height: 12),
                 // 历史轨迹（个人按天台账：里程 / 速度 / 时长）
-                GestureDetector(
-                  onTap: () => _push(TrackHistoryPage(state: st)),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
-                            ),
-                          child: const Icon(
-                            Icons.route_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          S.of(context).historyTracks,
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).historyTracksDesc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF98A2B8),
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
-                    ),
+                if (st.featureEnabled(AppFeature.tracks))
+                  SettingsEntryTile(
+                    icon: Icons.route_rounded,
+                    fallback: const [Color(0xFF16A34A), Color(0xFF0B7A37)],
+                    title: S.of(context).historyTracks,
+                    onTap: () => _push(TrackHistoryPage(state: st)),
                   ),
+                SizedBox(height: 12),
+                // 订阅：盯住某个台站 / 中继 / 关键词，命中记在那一页
+                SettingsEntryTile(
+                  icon: Icons.notifications_active_rounded,
+                  fallback: const [Color(0xFFEA580C), Color(0xFF9A3412)],
+                  title: S.of(context).subsTitle,
+                  desc: st.subUnread > 0
+                      ? S.of(context).subsHitsCount('${st.subUnread}')
+                      : null,
+                  onTap: () => _push(SubscriptionsPage(state: st)),
                 ),
                 SizedBox(height: 12),
                 // 备份与恢复（与 ADIF 导出并列的数据出入口）
-                GestureDetector(
+                SettingsEntryTile(
+                  icon: Icons.settings_backup_restore_rounded,
+                  fallback: const [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                  title: Tx.of(context).byKey('backupTitle'),
                   onTap: () => _push(BackupPage(state: widget.state)),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFF7C3AED), Color(0xFF5B21B6)],
-                            ),
-                          child: const Icon(
-                            Icons.settings_backup_restore_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          Tx.of(context).byKey('backupTitle'),
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).backupEntryDesc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF98A2B8),
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 SizedBox(height: 12),
                 // 公告：**主动查看**的入口（用户：「在设置主页底下添加一个公告进入
@@ -568,147 +320,59 @@ class _SettingsPageState extends State<SettingsPage> {
                 // 赞助与鸣谢（issue #21-7：用户要求把入口从「关于」里挪到设置页
                 // **关于之上**，并把它当成一个正经入口 —— 支持的渠道要看得见，
                 // 而不是藏在关于页的第二屏）。
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SponsorPage()),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [
-                              Color(0xFFF59E0B),
-                              Color(0xFFB45309),
-                            ],
-                          ),
-                          child: const Icon(Icons.favorite_rounded,
-                              color: Colors.white, size: 17),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          S.of(context).sponsorEntry,
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).sponsorEntryDesc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF98A2B8),
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
+                if (st.featureEnabled(AppFeature.sponsor))
+                  SettingsEntryTile(
+                    icon: Icons.favorite_rounded,
+                    fallback: const [Color(0xFFF59E0B), Color(0xFFB45309)],
+                    title: S.of(context).sponsorEntry,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SponsorPage()),
                     ),
                   ),
+                SizedBox(height: 12),
+                // 手册：设备怎么接、报文怎么写、发不出去怎么查，都在官网那六章里。
+                // 精简模式下也保留 —— 它是「东西不会用」时唯一的去处，不属于附加模块。
+                SettingsEntryTile(
+                  icon: Icons.menu_book_rounded,
+                  fallback: const [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                  title: S.of(context).manualTitle,
+                  onTap: () => openManual(context),
                 ),
                 SizedBox(height: 12),
                 // 关于
-                GestureDetector(
+                SettingsEntryTile(
+                  icon: Icons.info_rounded,
+                  fallback: const [Color(0xFF0A5CFF), Color(0xFF003D99)],
+                  title: Tx.of(context).byKey('about'),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const AboutPage()),
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [Color(0xFF0A5CFF), Color(0xFF003D99)],
-                            ),
-                          child: const Icon(
-                            Icons.info_rounded,
-                            color: Colors.white,
-                            size: 17,
-                          ),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          Tx.of(context).byKey('about'),
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        Spacer(),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-                  ),
+                ),
+                SizedBox(height: 12),
+                // 反馈（用户要求）：直接开仓库 Issue 列表，省得在关于页里翻。
+                SettingsEntryTile(
+                  icon: Icons.feedback_rounded,
+                  fallback: const [Color(0xFF0EA5E9), Color(0xFF0369A1)],
+                  title: S.of(context).feedback,
+                  onTap: _openIssues,
                 ),
                 SizedBox(height: 12),
                 // 生命守护（issue #22-4）：用户要求「在设置页底下添加一个生命守护页面」。
                 // 放在「关于」之后、退出应用之前 —— 它是设置页最底下的一项，
                 // 与「关于」并列而不是塞进某个业务分组里（它不属于任何一类设置）。
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => LifeGuardPage(state: widget.state)),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: cardDeco(),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: C.accentDeco(
-                            radius: 8,
-                            fallback: const [
-                              Color(0xFFEF4444),
-                              Color(0xFF991B1B),
-                            ],
-                          ),
-                          child: const Icon(Icons.health_and_safety_rounded,
-                              color: Colors.white, size: 17),
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          S.of(context).lifeGuard,
-                          style: ts(13, w: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            S.of(context).lifeGuardEntryDesc,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 10, color: Color(0xFF98A2B8)),
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: C.grey,
-                          size: 20,
-                        ),
-                      ],
+                if (st.featureEnabled(AppFeature.lifeGuard))
+                  SettingsEntryTile(
+                    icon: Icons.health_and_safety_rounded,
+                    fallback: const [Color(0xFFEF4444), Color(0xFF991B1B)],
+                    title: S.of(context).lifeGuard,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => LifeGuardPage(state: widget.state)),
                     ),
                   ),
-                ),
                 if (defaultTargetPlatform != TargetPlatform.windows) ...[
                   SizedBox(height: 16),
                   Container(
@@ -757,6 +421,22 @@ class _SettingsPageState extends State<SettingsPage> {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 
+  /// 反馈入口：打开仓库的 Issue 列表（用户要求「添加一个反馈链接，路由到仓库的
+  /// ISSUE」）。用外链而不是应用内 WebView —— 反馈往往要附截图/日志、也要能
+  /// 登录 GitHub，外部浏览器/App 更顺手。
+  Future<void> _openIssues() async {
+    const url = 'https://github.com/dariondong/APRSLocus/issues';
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.of(context).openLinkFailed)),
+      );
+    }
+  }
+
   /// 公告入口：点一下**当场去取**（先网络、失败退缓存），拿到了就弹底部弹层。
   ///
   /// 取不到就如实说「暂无公告」，不留白也不假装成功 —— 与横幅那条的
@@ -803,12 +483,18 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             SizedBox(width: 10),
-            Text(
-              S.of(context).noticeTitle,
-              style: ts(13, w: FontWeight.w700),
+            Expanded(
+              flex: 2,
+              child: Text(
+                S.of(context).noticeTitle,
+                style: ts(13, w: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             const SizedBox(width: 6),
             Expanded(
+              flex: 3,
               child: Text(
                 S.of(context).noticeEntryDesc,
                 maxLines: 1,
@@ -835,7 +521,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Icon(
                 Icons.chevron_right_rounded,
                 color: C.grey,
-                size: 20,
+                size: 18,
               ),
           ],
         ),
@@ -847,7 +533,9 @@ class _SettingsPageState extends State<SettingsPage> {
     required IconData icon,
     required Color color,
     required String title,
-    required String desc,
+    /// 卡片上的一句话说明。给了就显示，不给就只剩标题 —— 设置主页那几张
+    /// 卡片现在都没给：标题（连接、信标、显示…）已经说清了，多一行灰字只是噪声。
+    String? desc,
     required VoidCallback onTap,
     /// 主题图标插槽 id。给了它，这张卡片的图标就能被主题替换；
     /// 没给则永远用 [icon]（保持旧行为，不必为了接入主题改一圈调用点）。
@@ -861,17 +549,17 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: slot == null
-                  ? Icon(icon, color: color, size: 20)
+                  ? Icon(icon, color: color, size: 17)
                   : ThemeController.instance.buildSlotIcon(
                       slot,
-                      size: 20,
+                      size: 17,
                       color: color,
                       fallbackIcon: icon,
                     ),
@@ -888,13 +576,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 2),
-                  Text(
-                    desc,
-                    style: ts(10, c: C.grey),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  if (desc != null) ...[
+                    SizedBox(height: 2),
+                    Text(
+                      desc!,
+                      style: ts(10, c: C.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -902,6 +592,54 @@ class _SettingsPageState extends State<SettingsPage> {
             Icon(Icons.chevron_right_rounded, color: C.grey, size: 18),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 操作证书的小框：连接状态条上方一行，左边是「已认证 + 类别」，
+  /// 右边是打码的姓名与证书编号。
+  ///
+  /// 为什么要打码：这一页很容易被截图发出去，姓名只留首字，编号只留开头几位。
+  /// 没有记录、或记录不是当前呼号的，整块不出现。
+  Widget _certChip() {
+    final info = st.cracCert;
+    if (info == null || info.call != st.myBaseCall) {
+      return const SizedBox.shrink();
+    }
+    final s = S.of(context);
+    final masked = [maskCracName(info.name), maskCracCertNo(info.certNo)]
+        .where((t) => t.isNotEmpty)
+        .join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: C.greenBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: C.green.withValues(alpha: 0.35)),
+        ),
+        child: Row(children: [
+          Icon(Icons.verified_rounded, size: 13, color: C.green),
+          const SizedBox(width: 4),
+          Text(
+            info.typeLabel.isEmpty
+                ? s.cracCertVerified
+                : '${s.cracCertVerified} · ${info.typeLabel}',
+            style: ts(11, c: C.green, w: FontWeight.w700),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              masked,
+              style: ts(10, c: C.slate),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -922,46 +660,58 @@ class _SettingsPageState extends State<SettingsPage> {
         : st.connecting
         ? Icons.sync_rounded
         : Icons.cloud_off_rounded;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: col, size: 20),
-          SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  st.connected
-                      ? S.of(context).connectedAprsIs
-                      : st.connecting
-                      ? S.of(context).connecting
-                      : S.of(context).disconnected,
-                  style: ts(13, c: col, w: FontWeight.w700),
-                ),
-                Text(
-                  localizedConnectionInfo(context, st.connInfo),
-                  style: ts(11, c: col.withValues(alpha: 0.8)),
-                ),
-              ],
+    // 连接状态面板：**整块可点** → 弹出「链路方式」浮动面板（数据来源快捷切换）。
+    // 右侧那个播放/停止按钮仍是它自己的点击目标（InkWell 抢不走）。
+    return InkWell(
+      onTap: () => showLinkSheet(context, st),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: col, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    st.connected
+                        ? S.of(context).connectedAprsIs
+                        : st.connecting
+                        ? S.of(context).connecting
+                        : S.of(context).disconnected,
+                    style: ts(13, c: col, w: FontWeight.w700),
+                  ),
+                  Text(
+                    localizedConnectionInfo(context, st.connInfo),
+                    style: ts(11, c: col.withValues(alpha: 0.8)),
+                  ),
+                ],
+              ),
             ),
-          ),
-          SizedBox(width: 8),
-          IconButton(
-            icon: Icon(
-              st.connected
-                  ? Icons.stop_circle_outlined
-                  : Icons.play_circle_outline,
-              color: st.connected ? C.red : C.green,
+            SizedBox(width: 8),
+            // 可点的视觉提示：向下的小箭头 = 会展开一块面板
+            Icon(
+              Icons.expand_more_rounded,
+              size: 18,
+              color: col.withValues(alpha: 0.7),
             ),
-            onPressed: st.toggleConnect,
-          ),
-        ],
+            IconButton(
+              icon: Icon(
+                st.connected
+                    ? Icons.stop_circle_outlined
+                    : Icons.play_circle_outline,
+                color: st.connected ? C.red : C.green,
+              ),
+              onPressed: st.toggleConnect,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1020,53 +770,4 @@ class _SettingsPageState extends State<SettingsPage> {
     await exitApplication();
   }
 
-  Widget _qqBanner() {
-    return GestureDetector(
-      onTap: () => launchUrl(
-        Uri.parse('https://qm.qq.com/q/8pL6vc5YA0'),
-        mode: LaunchMode.externalApplication,
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: C.blueBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: C.blue.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: C.blue,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.forum_rounded,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    S.of(context).qqGroup,
-                    style: ts(13, w: FontWeight.w700),
-                  ),
-                  SizedBox(height: 2),
-                  Text(S.of(context).qqGroupDesc, style: ts(11, c: C.slate)),
-                ],
-              ),
-            ),
-            SizedBox(width: 8),
-            Icon(Icons.chevron_right_rounded, size: 18, color: C.blue),
-          ],
-        ),
-      ),
-    );
-  }
 }
