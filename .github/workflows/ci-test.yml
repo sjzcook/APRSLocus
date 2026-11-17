@@ -381,11 +381,6 @@ jobs:
       - name: Test update channels
         run: flutter test test/update_channels_test.dart
 
-      # 安装包的联网校验（版本号 / 仓库里那份的 sha256 / 签名）与
-      # 装完欢迎卡要用的「这一版改了什么」摘要。
-      - name: Test update package verify
-        run: flutter test test/update_verify_test.dart
-
       # 强提醒的解析与「这一次该不该弹」（语言退化 / 过期 / 已弹过 / every）。
       - name: Test strong notice
         run: flutter test test/strong_notice_test.dart
@@ -582,6 +577,20 @@ jobs:
       # 「模组拔了还以为在供位」，都不报编译错，只能靠这份测试钉住。
       - name: Test external GPS link
         run: flutter test test/nmea_gps_test.dart
+
+      # 消息重发：编号必须沿用、次数用完要停、回执到了要取消、断线期间不计次。
+      # 四件都是「编译能过、analyze 全绿」的纯逻辑，错了的表现是射频上同一句
+      # 话发两遍、或者没信号时一直重发把频道刷满。
+      - name: Test message resend
+        run: flutter test test/msg_resend_test.dart
+
+      # 安装标识的空中宣告：第一次连上服务器时报一次、只报一次、正文不超
+      # 状态字段上限；错了的表现是「压根没报」或「每帧保活都带着一串十六进制」。
+      - name: Test install mark
+        run: flutter test test/install_mark_test.dart
+
+      - name: Test embed box
+        run: flutter test test/embed_box_test.dart
 
       - name: Analyze (tolerate known vector_map false positive)
         shell: bash

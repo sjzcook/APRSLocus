@@ -582,45 +582,6 @@ KEYS = {
     'updatePkgActionKeep': (
         '一直保留', '一直保留', 'Always keep',
         '常に残す', 'Conservar siempre', 'Selalu simpan'),
-    # ── 联网校验安装包（版本号 + 仓库里那份的 sha256 + 签名）──
-    'updateCheckChecking': (
-        '正在联网校验', '正在連網校驗', 'Checking online',
-        'オンラインで確認中', 'Comprobando en línea', 'Memeriksa daring'),
-    'updateCheckOk': (
-        '联网校验通过，版本号、摘要、签名都一致',
-        '連網校驗通過，版本號、摘要、簽章都一致',
-        'Checked online: version, digest and signature all match',
-        'オンライン確認済み。バージョン・ダイジェスト・署名が一致',
-        'Comprobado en línea: versión, resumen y firma coinciden',
-        'Terverifikasi daring: versi, digest, dan tanda tangan cocok'),
-    'updateCheckOffline': (
-        '没有联网，无法校验版本号是否一致',
-        '沒有連網，無法校驗版本號是否一致',
-        'Offline: cannot verify the version matches',
-        'オンラインでないため、バージョンの一致を確認できません',
-        'Sin conexión: no se puede comprobar la versión',
-        'Tidak daring: versi tidak dapat diperiksa'),
-    'updateCheckNotFound': (
-        '仓库里查不到这一版的摘要，无法校验',
-        '倉庫裡查不到這一版的摘要，無法校驗',
-        'No digest for this version in the repository: cannot verify',
-        'このバージョンのダイジェストが見つからず、確認できません',
-        'No hay resumen de esta versión en el repositorio: no se puede comprobar',
-        'Digest versi ini tidak ada di repositori: tidak dapat diperiksa'),
-    'updateCheckVersion': (
-        '包里的版本号与仓库这一版不一致',
-        '包裡的版本號與倉庫這一版不一致',
-        'The version inside does not match this release',
-        'パッケージ内のバージョンがこのリリースと違います',
-        'La versión dentro del paquete no coincide con esta entrega',
-        'Versi di dalam paket tidak sama dengan rilis ini'),
-    'updateCheckSha': (
-        '包的摘要与仓库里那份不一致',
-        '包的摘要與倉庫裡那份不一致',
-        'The digest does not match the file in the repository',
-        'パッケージのダイジェストがリポジトリのものと違います',
-        'El resumen no coincide con el archivo del repositorio',
-        'Digest tidak cocok dengan berkas di repositori'),
     'updatePkgWelcomeHello': (
         '新版本已经装好了。', '新版本已經裝好了。',
         'The new version is installed.',
@@ -633,39 +594,91 @@ KEYS = {
         'インストーラーを残しますか',
         '¿Conservar el instalador?',
         'Simpan pemasang?'),
-    # ── 无法校验时的确认（用户要求：无法校验要用户进一步确认）──
-    'updatePkgUnverifiedTitle': (
-        '无法校验这个安装包', '無法校驗這個安裝包',
-        'This package could not be verified',
-        'このパッケージは確認できませんでした',
-        'No se pudo verificar este paquete',
-        'Paket ini tidak dapat diverifikasi'),
-    'updatePkgUnverifiedBody': (
-        '没联网、或者仓库里查不到这一版，版本号、摘要与签名对不上。'
-        '继续安装的话，风险自负。',
-        '沒連網、或者倉庫裡查不到這一版，版本號、摘要與簽章對不上。'
-        '繼續安裝的話，風險自負。',
-        'Either there is no network, or the release has no digest to compare. '
-        'Installing anyway is at your own risk.',
-        'オンラインでないか、リリースに比較できるダイジェストがありません。'
-        'それでもインストールする場合は自己責任です。',
-        'O no hay conexión, o la entrega no trae un resumen con el que comparar. '
-        'Instalar de todos modos corre por tu cuenta.',
-        'Tidak ada koneksi, atau rilis ini tidak membawa digest untuk dibandingkan. '
-        'Memasang tetap menjadi risiko Anda.'),
-    'updatePkgUnreadable': (
-        '读不出这个安装包', '讀不出這個安裝包', 'Cannot read this package',
-        'このパッケージを読み取れません', 'No se puede leer este paquete',
-        'Paket ini tidak dapat dibaca'),
-    'installAnyway': (
-        '继续安装', '繼續安裝', 'Install anyway',
-        'このままインストール', 'Instalar igualmente', 'Tetap pasang'),
     # ── 装上新版后的欢迎卡：这一版改了什么──
     'updatePkgWhatsNew': (
         '这一版改了什么', '這一版改了什麼',
         "What's new in this version",
         'このバージョンの変更点',
         'Novedades de esta versión', 'Yang berubah di versi ini'),
+    # ── 省电模式在界面上的提示（可以关掉）──
+    'powerSaveOn': (
+        '省电模式已开启', '省電模式已開啟', 'Power saver is on',
+        '省電モードがオンです', 'El ahorro de energía está activo',
+        'Hemat daya aktif'),
+    'powerSaveTurnOff': (
+        '关掉省电模式', '關掉省電模式', 'Turn off power saver',
+        '省電モードをオフ', 'Desactivar el ahorro', 'Matikan hemat daya'),
+    'powerSaveNotice': (
+        '在界面上提示', '在介面上提示', 'Show it on screen',
+        '画面に表示する', 'Mostrarlo en pantalla', 'Tampilkan di layar'),
+    'lowBatteryAsk': (
+        '电量低时提示开启', '電量低時提示開啟', 'Ask when the battery is low',
+        'バッテリー低下時に確認', 'Preguntar con batería baja',
+        'Tanya saat baterai lemah'),
+    # ── 消息重发（没收到回执时按设定重试）──
+    'msgResend': (
+        '消息重发', '訊息重發', 'Resend messages',
+        'メッセージの再送', 'Reenviar mensajes', 'Kirim ulang pesan'),
+    'msgResendTip': (
+        '对方没回执时按下面的间隔重发。',
+        '對方沒回執時按下面的間隔重發。',
+        'It goes again if no receipt comes back.',
+        '相手から受領通知が来ないときに再送します。',
+        'Se reenvía si no llega acuse.',
+        'Dikirim ulang bila tidak ada konfirmasi.'),
+    'msgResendGap': (
+        '重发间隔', '重發間隔', 'Resend every',
+        '再送の間隔', 'Reenviar cada', 'Kirim ulang tiap'),
+    'msgResendTimes': (
+        '重发次数', '重發次數', 'Resend attempts',
+        '再送の回数', 'Intentos', 'Jumlah kirim ulang'),
+    'msgResendSeconds': (
+        '每 {n} 秒', '每 {n} 秒', 'Every {n} s',
+        '{n} 秒ごと', 'Cada {n} s', 'Tiap {n} dtk'),
+    'msgResendCount': (
+        '{n} 次', '{n} 次', '{n}×',
+        '{n} 回', '{n} veces', '{n} kali'),
+    'msgResendPlan': (
+        '每 {gap} 秒重发 · 最多 {max} 次',
+        '每 {gap} 秒重發 · 最多 {max} 次',
+        'Resent every {gap} s · up to {max}×',
+        '{gap} 秒ごとに再送 · 最大 {max} 回',
+        'Se reenvía cada {gap} s · máx. {max}',
+        'Dikirim ulang tiap {gap} dtk · maks {max}'),
+    'msgResendWaiting': (
+        '{s} 秒后重发 · 已重发 {done}/{max} 次',
+        '{s} 秒後重發 · 已重發 {done}/{max} 次',
+        'Resends in {s} s · {done}/{max} sent',
+        '{s} 秒後に再送 · 再送済み {done}/{max}',
+        'Reenvía en {s} s · {done}/{max} hechos',
+        'Kirim ulang dalam {s} dtk · {done}/{max}'),
+    'msgResendFailed': (
+        '已重发 {max} 次，未收到回执',
+        '已重發 {max} 次，未收到回執',
+        'Resent {max}× and still no receipt',
+        '{max} 回再送したが受領通知なし',
+        'Reenviado {max} veces sin acuse',
+        'Sudah {max}× kirim ulang, belum ada konfirmasi'),
+    'msgResendOk': (
+        '重发 {times} 次后收到回执',
+        '重發 {times} 次後收到回執',
+        'Receipt came after {times}× resend',
+        '{times} 回の再送で受領通知',
+        'Acuse tras {times} reenvío(s)',
+        'Konfirmasi masuk setelah {times}× kirim ulang'),
+    'msgResendTapRetry': (
+        '点一下再发', '點一下再發', 'tap to send again',
+        'タップで再送', 'toca para reenviar', 'ketuk untuk kirim lagi'),
+    'msgResendNoLink': (
+        '现在没有可用的链路，发不出去。',
+        '現在沒有可用的鏈路，發不出去。',
+        'No link is up right now, so it cannot go out.',
+        '使える回線がないため送れません。',
+        'Ahora no hay enlace disponible, así que no puede salir.',
+        'Tidak ada tautan aktif, jadi tidak bisa terkirim.'),
+    'msgResendStopped': (
+        '已取消重发', '已取消重發', 'Resend cancelled', '再送を中止',
+        'Reenvío cancelado', 'Kirim ulang dibatalkan'),
 }
 
 META = {
@@ -709,6 +722,12 @@ META = {
     'locationPageInfo':
         '{"placeholders": {"n": {"type": "String"}, "m": {"type": "String"}}}',
     'shareStationSent': '{"placeholders": {"call": {"type": "String"}}}',
+    'msgResendSeconds': '{"placeholders": {"n": {"type": "String"}}}',
+    'msgResendCount': '{"placeholders": {"n": {"type": "String"}}}',
+    'msgResendPlan': '{"placeholders": {"gap": {"type": "String"}, "max": {"type": "String"}}}',
+    'msgResendWaiting': '{"placeholders": {"s": {"type": "String"}, "done": {"type": "String"}, "max": {"type": "String"}}}',
+    'msgResendFailed': '{"placeholders": {"max": {"type": "String"}}}',
+    'msgResendOk': '{"placeholders": {"times": {"type": "String"}}}',
 }
 
 

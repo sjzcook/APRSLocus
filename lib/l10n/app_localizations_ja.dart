@@ -10244,22 +10244,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String connectingChannel(String name) => "$name に接続しています";
 
   @override
-  String get updateCheckChecking => "オンラインで確認中";
 
   @override
-  String get updateCheckOk => "オンライン確認済み。バージョン・ダイジェスト・署名が一致";
 
   @override
-  String get updateCheckOffline => "オンラインでないため、バージョンの一致を確認できません";
 
   @override
-  String get updateCheckNotFound => "このバージョンのダイジェストが見つからず、確認できません";
 
   @override
-  String get updateCheckVersion => "パッケージ内のバージョンがこのリリースと違います";
 
   @override
-  String get updateCheckSha => "パッケージのダイジェストがリポジトリのものと違います";
 
   @override
   String get updatePkgWhatsNew => "このバージョンの変更点";
@@ -10271,15 +10265,62 @@ class AppLocalizationsJa extends AppLocalizations {
   String get updatePkgDeleteTitle => "インストーラーを残しますか";
 
   @override
-  String get updatePkgUnverifiedTitle => "このパッケージは確認できませんでした";
 
   @override
-  String get updatePkgUnverifiedBody => "オンラインでないか、リリースに比較できるダイジェストがありません。それでもインストールする場合は自己責任です。";
 
   @override
-  String get installAnyway => "このままインストール";
 
   @override
-  String get updatePkgUnreadable => "このパッケージを読み取れません";
+
+  @override
+  String get powerSaveOn => "省電モードがオンです";
+
+  @override
+  String get powerSaveTurnOff => "省電モードをオフ";
+
+  @override
+  String get powerSaveNotice => "画面に表示する";
+
+  @override
+  String get msgResend => "メッセージの再送";
+
+  @override
+  String get msgResendTip => "相手から受領通知が来ないときに再送します。";
+
+  @override
+  String get msgResendGap => "再送の間隔";
+
+  @override
+  String get msgResendTimes => "再送の回数";
+
+  @override
+  String msgResendSeconds(String n) => "$n 秒ごと";
+
+  @override
+  String msgResendCount(String n) => "$n 回";
+
+  @override
+  String msgResendPlan(String gap, String max) => "$gap 秒ごとに再送 · 最大 $max 回";
+
+  @override
+  String msgResendWaiting(String s, String done, String max) => "$s 秒後に再送 · 再送済み $done/$max";
+
+  @override
+  String msgResendFailed(String max) => "$max 回再送したが受領通知なし";
+
+  @override
+  String msgResendOk(String times) => "$times 回の再送で受領通知";
+
+  @override
+  String get lowBatteryAsk => "バッテリー低下時に確認";
+
+  @override
+  String get msgResendTapRetry => "タップで再送";
+
+  @override
+  String get msgResendNoLink => "使える回線がないため送れません。";
+
+  @override
+  String get msgResendStopped => "再送を中止";
 
 }

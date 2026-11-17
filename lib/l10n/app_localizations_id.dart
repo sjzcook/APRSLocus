@@ -10533,22 +10533,16 @@ class AppLocalizationsId extends AppLocalizations {
   String connectingChannel(String name) => "Menghubungkan ke $name";
 
   @override
-  String get updateCheckChecking => "Memeriksa daring";
 
   @override
-  String get updateCheckOk => "Terverifikasi daring: versi, digest, dan tanda tangan cocok";
 
   @override
-  String get updateCheckOffline => "Tidak daring: versi tidak dapat diperiksa";
 
   @override
-  String get updateCheckNotFound => "Digest versi ini tidak ada di repositori: tidak dapat diperiksa";
 
   @override
-  String get updateCheckVersion => "Versi di dalam paket tidak sama dengan rilis ini";
 
   @override
-  String get updateCheckSha => "Digest tidak cocok dengan berkas di repositori";
 
   @override
   String get updatePkgWhatsNew => "Yang berubah di versi ini";
@@ -10560,15 +10554,62 @@ class AppLocalizationsId extends AppLocalizations {
   String get updatePkgDeleteTitle => "Simpan pemasang?";
 
   @override
-  String get updatePkgUnverifiedTitle => "Paket ini tidak dapat diverifikasi";
 
   @override
-  String get updatePkgUnverifiedBody => "Tidak ada koneksi, atau rilis ini tidak membawa digest untuk dibandingkan. Memasang tetap menjadi risiko Anda.";
 
   @override
-  String get installAnyway => "Tetap pasang";
 
   @override
-  String get updatePkgUnreadable => "Paket ini tidak dapat dibaca";
+
+  @override
+  String get powerSaveOn => "Hemat daya aktif";
+
+  @override
+  String get powerSaveTurnOff => "Matikan hemat daya";
+
+  @override
+  String get powerSaveNotice => "Tampilkan di layar";
+
+  @override
+  String get msgResend => "Kirim ulang pesan";
+
+  @override
+  String get msgResendTip => "Dikirim ulang bila tidak ada konfirmasi.";
+
+  @override
+  String get msgResendGap => "Kirim ulang tiap";
+
+  @override
+  String get msgResendTimes => "Jumlah kirim ulang";
+
+  @override
+  String msgResendSeconds(String n) => "Tiap $n dtk";
+
+  @override
+  String msgResendCount(String n) => "$n kali";
+
+  @override
+  String msgResendPlan(String gap, String max) => "Dikirim ulang tiap $gap dtk · maks $max";
+
+  @override
+  String msgResendWaiting(String s, String done, String max) => "Kirim ulang dalam $s dtk · $done/$max";
+
+  @override
+  String msgResendFailed(String max) => "Sudah $max× kirim ulang, belum ada konfirmasi";
+
+  @override
+  String msgResendOk(String times) => "Konfirmasi masuk setelah $times× kirim ulang";
+
+  @override
+  String get lowBatteryAsk => "Tanya saat baterai lemah";
+
+  @override
+  String get msgResendTapRetry => "ketuk untuk kirim lagi";
+
+  @override
+  String get msgResendNoLink => "Tidak ada tautan aktif, jadi tidak bisa terkirim.";
+
+  @override
+  String get msgResendStopped => "Kirim ulang dibatalkan";
 
 }

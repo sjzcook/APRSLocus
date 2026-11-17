@@ -18641,41 +18641,11 @@ abstract class AppLocalizations {
   /// **'正在连 {name}'**
   String connectingChannel(String name);
 
-  /// No description provided for @updateCheckChecking.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在联网校验'**
-  String get updateCheckChecking;
 
-  /// No description provided for @updateCheckOk.
-  ///
-  /// In zh, this message translates to:
-  /// **'联网校验通过，版本号、摘要、签名都一致'**
-  String get updateCheckOk;
 
-  /// No description provided for @updateCheckOffline.
-  ///
-  /// In zh, this message translates to:
-  /// **'没有联网，无法校验版本号是否一致'**
-  String get updateCheckOffline;
 
-  /// No description provided for @updateCheckNotFound.
-  ///
-  /// In zh, this message translates to:
-  /// **'仓库里查不到这一版的摘要，无法校验'**
-  String get updateCheckNotFound;
 
-  /// No description provided for @updateCheckVersion.
-  ///
-  /// In zh, this message translates to:
-  /// **'包里的版本号与仓库这一版不一致'**
-  String get updateCheckVersion;
 
-  /// No description provided for @updateCheckSha.
-  ///
-  /// In zh, this message translates to:
-  /// **'包的摘要与仓库里那份不一致'**
-  String get updateCheckSha;
 
   /// No description provided for @updatePkgWhatsNew.
   ///
@@ -18695,29 +18665,111 @@ abstract class AppLocalizations {
   /// **'安装包还要不要留'**
   String get updatePkgDeleteTitle;
 
-  /// No description provided for @updatePkgUnverifiedTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'无法校验这个安装包'**
-  String get updatePkgUnverifiedTitle;
 
-  /// No description provided for @updatePkgUnverifiedBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'没联网、或者仓库里查不到这一版，版本号、摘要与签名对不上。继续安装的话，风险自负。'**
-  String get updatePkgUnverifiedBody;
 
-  /// No description provided for @installAnyway.
-  ///
-  /// In zh, this message translates to:
-  /// **'继续安装'**
-  String get installAnyway;
 
-  /// No description provided for @updatePkgUnreadable.
+
+  /// No description provided for @powerSaveOn.
   ///
   /// In zh, this message translates to:
-  /// **'读不出这个安装包'**
-  String get updatePkgUnreadable;
+  /// **'省电模式已开启'**
+  String get powerSaveOn;
+
+  /// No description provided for @powerSaveTurnOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'关掉省电模式'**
+  String get powerSaveTurnOff;
+
+  /// No description provided for @powerSaveNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'在界面上提示'**
+  String get powerSaveNotice;
+
+  /// No description provided for @msgResend.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息重发'**
+  String get msgResend;
+
+  /// No description provided for @msgResendTip.
+  ///
+  /// In zh, this message translates to:
+  /// **'对方没回执时按下面的间隔重发。'**
+  String get msgResendTip;
+
+  /// No description provided for @msgResendGap.
+  ///
+  /// In zh, this message translates to:
+  /// **'重发间隔'**
+  String get msgResendGap;
+
+  /// No description provided for @msgResendTimes.
+  ///
+  /// In zh, this message translates to:
+  /// **'重发次数'**
+  String get msgResendTimes;
+
+  /// No description provided for @msgResendSeconds.
+  ///
+  /// In zh, this message translates to:
+  /// **'每 {n} 秒'**
+  String msgResendSeconds(String n);
+
+  /// No description provided for @msgResendCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 次'**
+  String msgResendCount(String n);
+
+  /// No description provided for @msgResendPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'每 {gap} 秒重发 · 最多 {max} 次'**
+  String msgResendPlan(String gap, String max);
+
+  /// No description provided for @msgResendWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'{s} 秒后重发 · 已重发 {done}/{max} 次'**
+  String msgResendWaiting(String s, String done, String max);
+
+  /// No description provided for @msgResendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已重发 {max} 次，未收到回执'**
+  String msgResendFailed(String max);
+
+  /// No description provided for @msgResendOk.
+  ///
+  /// In zh, this message translates to:
+  /// **'重发 {times} 次后收到回执'**
+  String msgResendOk(String times);
+
+  /// No description provided for @lowBatteryAsk.
+  ///
+  /// In zh, this message translates to:
+  /// **'电量低时提示开启'**
+  String get lowBatteryAsk;
+
+  /// No description provided for @msgResendTapRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'点一下再发'**
+  String get msgResendTapRetry;
+
+  /// No description provided for @msgResendNoLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在没有可用的链路，发不出去。'**
+  String get msgResendNoLink;
+
+  /// No description provided for @msgResendStopped.
+  ///
+  /// In zh, this message translates to:
+  /// **'已取消重发'**
+  String get msgResendStopped;
 
 }
 

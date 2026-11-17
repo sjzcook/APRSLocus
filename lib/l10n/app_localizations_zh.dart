@@ -10144,22 +10144,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String connectingChannel(String name) => "正在连 $name";
 
   @override
-  String get updateCheckChecking => "正在联网校验";
 
   @override
-  String get updateCheckOk => "联网校验通过，版本号、摘要、签名都一致";
 
   @override
-  String get updateCheckOffline => "没有联网，无法校验版本号是否一致";
 
   @override
-  String get updateCheckNotFound => "仓库里查不到这一版的摘要，无法校验";
 
   @override
-  String get updateCheckVersion => "包里的版本号与仓库这一版不一致";
 
   @override
-  String get updateCheckSha => "包的摘要与仓库里那份不一致";
 
   @override
   String get updatePkgWhatsNew => "这一版改了什么";
@@ -10171,16 +10165,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updatePkgDeleteTitle => "安装包还要不要留";
 
   @override
-  String get updatePkgUnverifiedTitle => "无法校验这个安装包";
 
   @override
-  String get updatePkgUnverifiedBody => "没联网、或者仓库里查不到这一版，版本号、摘要与签名对不上。继续安装的话，风险自负。";
 
   @override
-  String get installAnyway => "继续安装";
 
   @override
-  String get updatePkgUnreadable => "读不出这个安装包";
+
+  @override
+  String get powerSaveOn => "省电模式已开启";
+
+  @override
+  String get powerSaveTurnOff => "关掉省电模式";
+
+  @override
+  String get powerSaveNotice => "在界面上提示";
+
+  @override
+  String get msgResend => "消息重发";
+
+  @override
+  String get msgResendTip => "对方没回执时按下面的间隔重发。";
+
+  @override
+  String get msgResendGap => "重发间隔";
+
+  @override
+  String get msgResendTimes => "重发次数";
+
+  @override
+  String msgResendSeconds(String n) => "每 $n 秒";
+
+  @override
+  String msgResendCount(String n) => "$n 次";
+
+  @override
+  String msgResendPlan(String gap, String max) => "每 $gap 秒重发 · 最多 $max 次";
+
+  @override
+  String msgResendWaiting(String s, String done, String max) => "$s 秒后重发 · 已重发 $done/$max 次";
+
+  @override
+  String msgResendFailed(String max) => "已重发 $max 次，未收到回执";
+
+  @override
+  String msgResendOk(String times) => "重发 $times 次后收到回执";
+
+  @override
+  String get lowBatteryAsk => "电量低时提示开启";
+
+  @override
+  String get msgResendTapRetry => "点一下再发";
+
+  @override
+  String get msgResendNoLink => "现在没有可用的链路，发不出去。";
+
+  @override
+  String get msgResendStopped => "已取消重发";
 
 }
 
@@ -20323,22 +20364,16 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String connectingChannel(String name) => "正在連 $name";
 
   @override
-  String get updateCheckChecking => "正在連網校驗";
 
   @override
-  String get updateCheckOk => "連網校驗通過，版本號、摘要、簽章都一致";
 
   @override
-  String get updateCheckOffline => "沒有連網，無法校驗版本號是否一致";
 
   @override
-  String get updateCheckNotFound => "倉庫裡查不到這一版的摘要，無法校驗";
 
   @override
-  String get updateCheckVersion => "包裡的版本號與倉庫這一版不一致";
 
   @override
-  String get updateCheckSha => "包的摘要與倉庫裡那份不一致";
 
   @override
   String get updatePkgWhatsNew => "這一版改了什麼";
@@ -20350,15 +20385,62 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get updatePkgDeleteTitle => "安裝包還要不要留";
 
   @override
-  String get updatePkgUnverifiedTitle => "無法校驗這個安裝包";
 
   @override
-  String get updatePkgUnverifiedBody => "沒連網、或者倉庫裡查不到這一版，版本號、摘要與簽章對不上。繼續安裝的話，風險自負。";
 
   @override
-  String get installAnyway => "繼續安裝";
 
   @override
-  String get updatePkgUnreadable => "讀不出這個安裝包";
+
+  @override
+  String get powerSaveOn => "省電模式已開啟";
+
+  @override
+  String get powerSaveTurnOff => "關掉省電模式";
+
+  @override
+  String get powerSaveNotice => "在介面上提示";
+
+  @override
+  String get msgResend => "訊息重發";
+
+  @override
+  String get msgResendTip => "對方沒回執時按下面的間隔重發。";
+
+  @override
+  String get msgResendGap => "重發間隔";
+
+  @override
+  String get msgResendTimes => "重發次數";
+
+  @override
+  String msgResendSeconds(String n) => "每 $n 秒";
+
+  @override
+  String msgResendCount(String n) => "$n 次";
+
+  @override
+  String msgResendPlan(String gap, String max) => "每 $gap 秒重發 · 最多 $max 次";
+
+  @override
+  String msgResendWaiting(String s, String done, String max) => "$s 秒後重發 · 已重發 $done/$max 次";
+
+  @override
+  String msgResendFailed(String max) => "已重發 $max 次，未收到回執";
+
+  @override
+  String msgResendOk(String times) => "重發 $times 次後收到回執";
+
+  @override
+  String get lowBatteryAsk => "電量低時提示開啟";
+
+  @override
+  String get msgResendTapRetry => "點一下再發";
+
+  @override
+  String get msgResendNoLink => "現在沒有可用的鏈路，發不出去。";
+
+  @override
+  String get msgResendStopped => "已取消重發";
 
 }

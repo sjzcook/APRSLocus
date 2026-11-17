@@ -1597,6 +1597,18 @@ class _BeaconSettingsPageState extends State<BeaconSettingsPage> {
                 color: C.green,
                 onChanged: st.setPowerSave),
             SettingsHint(S.of(context).powerSaveTip),
+            // 用户要的「省电模式可禁用提示」：关掉后省电照旧生效，只是顶栏
+            // 不再冒出那颗胶囊。
+            SettingsSwitch(S.of(context).powerSaveNotice,
+                value: st.powerSaveNotice,
+                color: C.green,
+                onChanged: st.setPowerSaveNotice),
+            // 用户 2026-11-13：「省电模式可禁用提示，如果电量低的时候不再提示
+            // 它是否要开启省电」—— 这一项管的就是那句低电量弹句。
+            SettingsSwitch(S.of(context).lowBatteryAsk,
+                value: st.lowBatteryAsk,
+                color: C.green,
+                onChanged: st.setLowBatteryAsk),
             SizedBox(height: 10),
           ],
         ),
@@ -2567,6 +2579,38 @@ class _ConnectionSettingsPageState extends State<ConnectionSettingsPage> {
                     value: st.acceptOtherSsidMsgs,
                     color: C.purple,
                     onChanged: st.setAcceptOtherSsidMsgs),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // 消息重发：没收到回执时按设定间隔与次数重发。用户要求可以开或关，
+            // 所以总开关放在最上面，隔多长、重几次在它开着时才出现。
+            SettingsSectionCard(
+              title: S.of(context).msgResend,
+              icon: Icons.sync_rounded,
+              color: C.blue,
+              children: [
+                SettingsSwitch(S.of(context).msgResend,
+                    value: st.msgResend,
+                    color: C.blue,
+                    onChanged: st.setMsgResend),
+                SettingsHint(S.of(context).msgResendTip),
+                if (st.msgResend) ...[
+                  SettingsChoice<int>(
+                    S.of(context).msgResendGap,
+                    value: st.msgResendGapSec,
+                    options: AppState.msgResendGapChoices,
+                    labelOf: (v) =>
+                        S.of(context).msgResendSeconds('$v'),
+                    onChanged: st.setMsgResendGap,
+                  ),
+                  SettingsChoice<int>(
+                    S.of(context).msgResendTimes,
+                    value: st.msgResendTimes,
+                    options: AppState.msgResendTimesChoices,
+                    labelOf: (v) => S.of(context).msgResendCount('$v'),
+                    onChanged: st.setMsgResendTimes,
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),

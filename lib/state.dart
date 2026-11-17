@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'install_mark.dart';
 import 'cloud_sync.dart';
 import 'coord_format.dart';
 import 'update_channels.dart';
@@ -135,9 +136,36 @@ class SmartBeaconTier {
       );
 }
 
+/// 一条正在等回执的私聊（见 `AppState` 的消息重发）。
+///
+/// 存的是**当时那一帧的原文**（含它自己的 `{编号`）：重发必须用同一个编号，
+/// 否则对方会当成新消息，射频上就是真重复了。
+class MsgResend {
+  MsgResend(this.id, this.raw, this.to, this.dueAt);
+
+  /// 报文编号（`{XXXX`），也是这张表的键。
+  final String id;
+
+  /// 要重发的完整报文行（`SRC>DST:payload`，不含报头路径 —— 路径由
+  /// `lineForLink` 按当前链路重算，换链路后依然是对的）。
+  final String raw;
+
+  /// 收件人，只用来写日志和气泡。
+  final String to;
+
+  /// 下一次重发的时刻。
+  DateTime dueAt;
+
+  /// 排上队的时刻：链路久久不回来时不能让任务永远挂着（见 `_tickMsgResend`）。
+  final DateTime startedAt = DateTime.now();
+
+  /// 已经重发过几次。
+  int tries = 0;
+}
+
 class AppState extends ChangeNotifier {
   /// 应用版本（用于信标备注、APRSlocus 识别）
-  static const appVersion = '2.2.8';
+  static const appVersion = '2.2.10';
   // 我的电台
   String myCall = 'BV2AAA';
 
@@ -197,6 +225,15 @@ class AppState extends ChangeNotifier {
   /// 状态报文的文本上限（字符，APRS101 规定状态信息字段最长 62 个字符）。
   /// 这里按 60 留 2 个字符余量，且截断在**发送时**做，输入框不硬拦。
   static const int statusMaxLen = 60;
+
+  /// 装好后**第一次**连上 APRS 服务器时，状态报文里报过本机安装标识没有。
+  ///
+  /// 报的就是那一次：之后的每次上线、每帧保活都不再重复（用户 2026-11-13：
+  /// 「当 aprslocus 第一次连接到 APRS 服务器广播自身安装标识」）。
+  /// 它跟着**这一次安装**走：重装/清数据会重新变成 false（见 [factoryReset]），
+  /// 而换手机恢复备份**不**带它 —— 新机是新的安装，该报自己那一条
+  /// （见 tool/check_backup_keys.py 的 EXCLUDE）。
+  bool installMarkSent = false;
 
   /// 在线判定时长（分钟）：台站最后上报距今超过该值即视为离线。
   /// 原先是写死的 5 分钟，现改为用户可配置（步进见设置页）。
@@ -1467,6 +1504,8 @@ class AppState extends ChangeNotifier {
   /// 低电量提醒：20% / 10% / 5% 各提一次，满足任一条件就不提 ——
   /// 在充电、已经开着省电模式、电量回到 25% 以上（阈值留 5 个点避开抖动）。
   void _checkLowBattery() {
+    // 用户关掉了「电量低时问要不要开省电」：到此为止，弹窗与提示都不再出。
+    if (!lowBatteryAsk) return;
     final level = _battery;
     if (level < 0) return;
     if (_charging == true || powerSave || level > 25) {
@@ -4354,6 +4393,36 @@ class AppState extends ChangeNotifier {
   /// 低电量时外壳会提示一次「要不要开省电模式」，开关本身在这里。
   bool powerSave = false;
 
+  /// 省电模式在界面上提示（用户要求：「省电模式可禁用提示」）。
+  ///
+  /// 开着省电模式时，三套外壳的顶栏会有一颗小胶囊写着它；把这颗关掉，
+  /// 界面就回到干净的样子，省电本身照旧生效。
+  bool powerSaveNotice = true;
+
+  /// 电量低时问一句「要不要开省电模式」（默认问）。
+  ///
+  /// 用户 2026-11-13 的原话：「省电模式可禁用提示，如果电量低的时候不再
+  /// 提示它是否要开启省电」—— 要的是这条**低电量弹句**能关掉。关掉之后
+  /// 电量低就低着，不弹、不追问，省电开不开全由他自己在设置里说了算。
+  bool lowBatteryAsk = true;
+
+  void setLowBatteryAsk(bool v) {
+    if (lowBatteryAsk == v) return;
+    lowBatteryAsk = v;
+    // 重新打开时把「已问过哪一档」清掉：否则从 20% 掉到 10% 才问，
+    // 而用户刚打开这一项时已经在 10% 以下，就永远等不到下一次提醒。
+    if (v) _lowBatteryWarned = -1;
+    persist();
+    _notify();
+  }
+
+  void setPowerSaveNotice(bool v) {
+    if (powerSaveNotice == v) return;
+    powerSaveNotice = v;
+    persist();
+    _notify();
+  }
+
   /// 实际生效的 GPS 采样间隔（省电模式下不低于 [powerSaveGpsSec]）。
   int get effectiveGpsIntervalSec =>
       powerSave && gpsIntervalSec < powerSaveGpsSec
@@ -5494,6 +5563,12 @@ class AppState extends ChangeNotifier {
     beaconIncludeSats = false;
     beaconIncludeDeskLoad = false;
     acceptOtherSsidMsgs = true;
+    msgResend = true;
+    msgResendGapSec = 30;
+    msgResendTimes = 2;
+    _msgResend.clear();
+    _msgResendStopped.clear();
+    installMarkSent = false;
     subsNotify = true;
     beaconAmbiguity = 0;
     notifStyle = 'plain';
@@ -5548,6 +5623,8 @@ class AppState extends ChangeNotifier {
     loc.mode = locationMode;
     gpsIntervalSec = 1;
     powerSave = false;
+    powerSaveNotice = true;
+    lowBatteryAsk = true;
     // 云同步是这台设备自己的登录，出厂复位就断开；云端数据不跟着删
     syncMode = 'off';
     syncAccount = '';
@@ -6090,6 +6167,12 @@ class AppState extends ChangeNotifier {
       autoStartMode = (p.getInt('autoStartMode') ?? autoStartMode).clamp(0, 2);
       acceptOtherSsidMsgs =
           p.getBool('acceptOtherSsidMsgs') ?? acceptOtherSsidMsgs;
+      msgResend = p.getBool('msgResend') ?? msgResend;
+      msgResendGapSec = p.getInt('msgResendGapSec') ?? msgResendGapSec;
+      installMarkSent = p.getBool('installMarkSent') ?? installMarkSent;
+      if (!msgResendGapChoices.contains(msgResendGapSec)) msgResendGapSec = 30;
+      msgResendTimes = p.getInt('msgResendTimes') ?? msgResendTimes;
+      if (!msgResendTimesChoices.contains(msgResendTimes)) msgResendTimes = 2;
       subsNotify = p.getBool('subsNotify') ?? subsNotify;
       bleHrId = p.getString('bleHrId') ?? bleHrId;
       bleHrName = p.getString('bleHrName') ?? bleHrName;
@@ -6156,6 +6239,8 @@ class AppState extends ChangeNotifier {
       // 省电模式必须在算采样间隔**之前**读回来，否则冷启那一瞬间会按
       // 用户原来的档位去注册 GPS，下一次 tick 才纠正
       powerSave = p.getBool('powerSave') ?? powerSave;
+      powerSaveNotice = p.getBool('powerSaveNotice') ?? powerSaveNotice;
+      lowBatteryAsk = p.getBool('lowBatteryAsk') ?? lowBatteryAsk;
       loc.samplingMs = effectiveGpsIntervalSec * 1000;
       // 云同步：开关、账号、令牌与三类数据的上次时间。令牌不进备份。
       syncMode = p.getString('syncMode') ?? syncMode;
@@ -6534,10 +6619,14 @@ class AppState extends ChangeNotifier {
     await p.setBool('beaconIncludeSats', beaconIncludeSats);
     await p.setBool('beaconIncludeDeskLoad', beaconIncludeDeskLoad);
     await p.setBool('acceptOtherSsidMsgs', acceptOtherSsidMsgs);
+    await p.setBool('msgResend', msgResend);
+    await p.setInt('msgResendGapSec', msgResendGapSec);
+    await p.setInt('msgResendTimes', msgResendTimes);
     await p.setBool('subsNotify', subsNotify);
     await p.setInt('beaconAmbiguity', beaconAmbiguity);
     await p.setString('notifStyle', notifStyle);
     await p.setString('notifLiveText', notifLiveText);
+    await p.setBool('installMarkSent', installMarkSent);
     await p.setInt('stepsBaseline', _stepsBaseline);
     await p.setString('stepsDayKey', _stepsDayKey);
     await p.setInt('stepsCarry', _stepsCarry);
@@ -6584,6 +6673,8 @@ class AppState extends ChangeNotifier {
     await p.setString('locationMode', locationMode);
     await p.setInt('gpsIntervalSec', gpsIntervalSec);
     await p.setBool('powerSave', powerSave);
+    await p.setBool('powerSaveNotice', powerSaveNotice);
+    await p.setBool('lowBatteryAsk', lowBatteryAsk);
     await p.setString('syncMode', syncMode);
     await p.setString('syncAccount', syncAccount);
     await p.setString('syncPassword', syncPassword);
@@ -6792,6 +6883,8 @@ class AppState extends ChangeNotifier {
       // 外接 GPS 的静默检测（连着但久久没有字节 → 状态转 silent）。
       // 它刻意不自起 Timer：已经在跑的秒 tick 就是天然的心跳。
       nmeaGps.heartbeat();
+      // 消息重发：没收到回执的私聊按设定的间隔与次数重试（开关在设置里）。
+      _tickMsgResend(DateTime.now());
       // 自动定时上报仅在链路可用时进行；未连接不发送（避免误以为在上报）。
       // TNC 模式下还需用户显式开启「射频信标」（见 canAutoBeacon）。
       // 上报判据：**定时到了，或者走够了**（智能信标的距离打点）。
@@ -7886,6 +7979,8 @@ class AppState extends ChangeNotifier {
     acnLink.password = acnPassword;
     // 与 APRS-IS 同一套过滤规则（用户：「netcn 的过滤规则与 aprsis 共同」）。
     acnLink.filter = filterString;
+    // 与 APRS-IS 一样：注册帧的正文先算好，连上就立刻发（这条链路上它是单独一帧）。
+    final markText = await _installMarkPreview();
     final ok = await acnLink.connect();
     _acnConnecting = false;
     _setLinkUp(srcAcn, ok);
@@ -7893,6 +7988,12 @@ class AppState extends ChangeNotifier {
       _acnAttempt = 0;
       _acnRetryAt = null;
       _log(LogLevel.info, 'APRSNETCN', '第二条链路已连接');
+      // 装好后第一次连上 APRSNETCN 也算「第一次连到 APRS 服务器」：单独发一帧
+      // 注册帧。这条链路平时不发 CONNECT 帧，注册帧就是这条链路上唯一的那一帧。
+      if (markText != null &&
+          acnLink.send('$myFullCall>APALOC,TCPIP*:>$markText')) {
+        _commitInstallMark(markText);
+      }
       // 24 小时台站不在连上时拉：那要再发一次 HTTP 请求，还要把账号口令再发
       // 一遍，等用户点了设置页的「立即同步」才做这件事。
     } else {
@@ -7970,6 +8071,9 @@ class AppState extends ChangeNotifier {
     _updateNotification();
     aprs.callsign = myFullCall;
     aprs.filter = filterString;
+    // 注册帧的正文连接前先算好（见 [_installMarkPreview]）：连上之后要立刻单独发
+    // 一帧，中间不能再停下来等偏好读完。
+    final markText = await _installMarkPreview();
     final ok = await aprs.connect();
     connecting = false;
     _setLinkUp(srcAprsIs, ok);
@@ -7981,9 +8085,18 @@ class AppState extends ChangeNotifier {
       _lastFilter = aprs.filter; // 记录本次连接的过滤器
       setConnStatus(ConnPhase.online, arg: myCall);
       _log(LogLevel.info, '连接', '已连接 · $myCall 在线 (过滤: $filterString)');
-      _flushPendingTx();
-      // 连接成功即发一次身份状态帧（APRS 惯例：上报在线/客户端标识）。
+      // ① 装好后第一次上线：单独发一帧注册帧，正文只有本机安装标识
+      // （用户 2026-11-13：「直接改成发送单独注册一帧」）。它排在身份状态帧之前，
+      // 所以 aprs.fi 上「台站状态」留的还是后面那帧。
+      if (markText != null &&
+          _sendAprs('$myFullCall>APALOC,TCPIP*:>$markText')) {
+        // 真发出去了才记账：socket 刚建好就抖动的那一次，留给下次上线重报。
+        _commitInstallMark(markText);
+      }
+      // ② 身份状态帧（APRS 惯例：上报在线/客户端标识）。
       _sendAprs(_defaultStatusFrame());
+      // ③ 再把断线期间攒下的消息补发出去。
+      _flushPendingTx();
       // 这是 CONNECT 帧唯一的自动发送点：保活帧只在没填自定义文本时才用它兜底。
       // 紧接着补一帧自定义状态（issue #31）：上面那帧会把 aprs.fi 上「台站状态」
       // 改写成 CONNECT 文本，不补就等于「一连上服务器，用户自己设的状态立刻被
@@ -8419,6 +8532,49 @@ class AppState extends ChangeNotifier {
   /// CONNECT 帧（见 [_connectTnc]）。
   String _defaultStatusFrame() =>
       '$myFullCall>APALOC,TCPIP*:>$_defaultStatusText';
+
+  /// 算好「首次上线那帧注册帧」的正文，但**不**记账。
+  ///
+  /// 连接前就把它算好：连上之后要立刻发出去，中间不能停在那里等偏好读完 —— 那是
+  /// 异步的，等待期间别的报文会插到前面。正文只有应用名与安装标识
+  /// （`APRSlocus ID:xxxxxxxxxxxx`），不塞进任何别的报文里（用户 2026-11-13：
+  /// 「直接改成发送单独注册一帧」）。已经报过 / 取不到安装标识时返回 null。
+  Future<String?> _installMarkPreview() async {
+    if (installMarkSent) return null;
+    final mark = InstallMark.of(await Blacklist.deviceId());
+    if (mark == null) return null;
+    return InstallMark.text('APRSlocus', mark, max: statusMaxLen);
+  }
+
+  /// 记账：这一帧真的发出去了才算报过。
+  ///
+  /// 先占位再返回，两条链路同时上线也只有一个能记账（另一个的下一次预览读不到）；
+  /// 连接失败、或发送失败没发出去的都不记账，下次连上重算。
+  bool _commitInstallMark(String text) {
+    if (installMarkSent) return false;
+    installMarkSent = true;
+    persist();
+    _log(LogLevel.info, '连接', '首次上线：单独发一帧注册帧 $text');
+    return true;
+  }
+
+  /// 首次上线那帧注册帧的**正文**；已经报过 / 取不到时为 null。
+  ///
+  /// 注册帧是独立的一帧状态报文（DTI `>`），不是位置报文的备注，也不挂在身份
+  /// 状态帧上：备注是跟着位置发的那句人话，状态报文另算（用户对这两者的区分很在意）。
+  Future<String?> _installMarkStatusText() async {
+    final text = await _installMarkPreview();
+    if (text == null) return null;
+    return _commitInstallMark(text) ? text : null;
+  }
+
+  /// 测试用：跑一次「首次上线要报的标识」判定（不碰网络，也不记账）。
+  @visibleForTesting
+  Future<String?> debugInstallMarkPreview() => _installMarkPreview();
+
+  /// 测试用：跑一次完整的「首次上线要报的标识」判定（不碰网络，会记账）。
+  @visibleForTesting
+  Future<String?> debugInstallMarkText() => _installMarkStatusText();
 
   /// 当前自定义状态文本对应的状态帧原文（DTI `>`）；未填自定义文本时返回 null。
   ///
@@ -9770,6 +9926,9 @@ class AppState extends ChangeNotifier {
       for (final m in messages) {
         if (m.sent && m.id == ackedId) m.acked = true;
       }
+      // 回执到了：这条不再重发。
+      _msgResend.remove(ackedId);
+      _msgResendStopped.remove(ackedId);
       // 策略帧的 ack：确认至少有一个队友收到（射频下这才是「送达」凭据），
       // 顺带把这条帧从待确认表里摘掉并记日志，便于排查射频丢包。
       final sf = _strategyAckWait.remove(ackedId);
@@ -11492,6 +11651,249 @@ class AppState extends ChangeNotifier {
   /// 实际用来发消息的呼号
   String get msgSendCall => msgSendAs ?? myFullCall;
 
+  // ─── 消息重发（对方没回执时按设定重试）──
+  //
+  // 只对**私聊**生效：群发用的是 `messageNoAck`（帧里没有 `{编号`），对方
+  // 本来就不回执，重发只会把同一句话在频道上刷很多遍。
+  //
+  // 三条规则，都是为了不把频道刷满：
+  //   * 链路没连上时不计次、不重发（等连上再说，秒表也停在原地）；
+  //   * 每重发一次都**用原来那个编号**（同一个 id）—— 对方在射频上收到两
+  //     份时按 msgid 去重，这正是「重发不等于重复」的前提；
+  //   * 次数用完就不再试，气泡上如实写「已重发 N 次，未收到回执」。
+
+  /// 消息重发总开关（用户要求可以自己选择开或关，默认开）。
+  bool msgResend = true;
+
+  /// 重发间隔可选值（秒）。它在等着的那几秒里会显示在气泡底下。
+  static const msgResendGapChoices = [15, 30, 60, 120];
+
+  /// 重发间隔（秒）：发出后等这么久没有回执，就重发一次。
+  int msgResendGapSec = 30;
+
+  /// 重发次数可选值。0 不在里面 —— 想关就关总开关。
+  static const msgResendTimesChoices = [1, 2, 3, 5];
+
+  /// 最多重发几次。
+  int msgResendTimes = 2;
+
+  /// 正在等回执的消息：msgid → 任务。只在内存里；冷启后仍留着的是
+  /// [AprsMsg.tries]，那是历史（这条消息当时确实重发过）。
+  final Map<String, MsgResend> _msgResend = {};
+
+  /// 用户在倒计时里点了「别发了」的那几条（只在内存里）。
+  ///
+  /// 冷启后本来就没有倒计时，所以这条记性也不必跟着磁盘走；它只负责让
+  /// 气泡底下写一句「已取消重发」，并让那一条还能点一下再发。
+  final Set<String> _msgResendStopped = {};
+
+  void setMsgResend(bool v) {
+    if (msgResend == v) return;
+    msgResend = v;
+    // 关掉就是「不要再替我发」：手上排着的也一起取消，否则关了之后还会
+    // 冒出几次重发，比不关更让人糊涂。
+    if (!v) {
+      _msgResend.clear();
+      _msgResendStopped.clear();
+    }
+    persist();
+    _notify();
+  }
+
+  void setMsgResendGap(int sec) {
+    final v = msgResendGapChoices.contains(sec) ? sec : 30;
+    if (msgResendGapSec == v) return;
+    msgResendGapSec = v;
+    persist();
+    _notify();
+  }
+
+  void setMsgResendTimes(int n) {
+    final v = msgResendTimesChoices.contains(n) ? n : 2;
+    if (msgResendTimes == v) return;
+    msgResendTimes = v;
+    persist();
+    _notify();
+  }
+
+  /// 这条消息还在等回执吗（气泡底下要显示倒计时）。
+  MsgResend? msgResendOf(String? id) =>
+      id == null ? null : _msgResend[id];
+
+  /// 离下一次重发还有几秒（没在等就是 null）。
+  int? msgResendInSec(String? id) {
+    final t = msgResendOf(id);
+    if (t == null) return null;
+    final left = t.dueAt.difference(DateTime.now()).inSeconds;
+    return left < 0 ? 0 : left;
+  }
+
+  /// 这条正在倒计时吗（气泡上点一下就是取消这一轮重发）。
+  bool msgResendCounting(AprsMsg m) => msgResendOf(m.id) != null;
+
+  /// 取消这一条手上的重发（用户 2026-11-13：「如果消息在重发倒计时过程中，
+  /// 可以选择该消息取消重发」）。
+  ///
+  /// 只摘掉还没走完的那一轮：**已经发出去的那几包收不回来**，消息上留着的
+  /// [AprsMsg.tries] 是历史，不改。之后想再试就再点一下（[resendMessage]）。
+  /// 返回 true = 真有一条在等着，被取消了。
+  bool cancelMsgResend(AprsMsg m) {
+    final id = m.id;
+    if (id == null || id.isEmpty) return false;
+    final had = _msgResend.remove(id) != null;
+    _msgResendStopped.add(id);
+    if (had) {
+      _log(LogLevel.info, '消息', '取消发给 ${m.to} 的重发（编号 $id）');
+    }
+    _notify();
+    return had;
+  }
+
+  /// 这条的重发被用户取消了（气泡底下写一句，点一下能再发一轮）。
+  bool msgResendCancelled(AprsMsg m) =>
+      m.sent &&
+      !m.acked &&
+      m.groupId == null &&
+      m.id != null &&
+      _msgResendStopped.contains(m.id) &&
+      _msgResend[m.id] == null;
+
+  /// 把一条刚发出的私聊排上重发。链路没连上就不排（那一包根本没发出去）。
+  void _armMsgResend(String id, String raw, String to) {
+    if (!msgResend) return;
+    // 重新排上就是「又开始等着了」：之前取消过的那句说明要撤掉。
+    _msgResendStopped.remove(id);
+    _msgResend[id] = MsgResend(
+      id,
+      raw,
+      to,
+      DateTime.now().add(Duration(seconds: msgResendGapSec)),
+    );
+  }
+
+  /// 把这条消息的「已重发次数」加一并落盘。
+  void _noteMsgTries(String id) {
+    for (final m in messages) {
+      if (m.id == id && m.sent) {
+        m.tries += 1;
+        break;
+      }
+    }
+    _saveMessages();
+  }
+
+  /// 秒 tick 里跑的一步：到点的重发、次数用完的收尾。
+  ///
+  /// [now] 由调用方给，测试可以直接把时间拨快（见 `test/msg_resend_test.dart`）。
+  void _tickMsgResend(DateTime now) {
+    if (_msgResend.isEmpty) return;
+    var changed = false;
+    // 只有「链路在线、正在倒计时」的那几秒才每秒通知一次（气泡底下那句
+    // 「N 秒后重发」要真的在走）。断线等待时不通知 —— 那时倒计时本来就不走，
+    // 每秒重画一遍全应用只是白烧电。
+    var counting = false;
+    for (final t in _msgResend.values.toList()) {
+      // 链路一直不回来就别永远挂着：超过 15 分钟算放弃，气泡上说未收到回执。
+      if (now.difference(t.startedAt) > const Duration(minutes: 15)) {
+        _msgResend.remove(t.id);
+        _log(LogLevel.warn, '消息',
+            '等了 15 分钟没能重发 ${t.to} 这一条，放弃（编号 ${t.id}）');
+        changed = true;
+        continue;
+      }
+      if (now.isBefore(t.dueAt)) {
+        if (msgLinkUp) counting = true;
+        continue;
+      }
+      if (t.tries >= msgResendTimes) {
+        // 次数用完：从表里摘掉，气泡改由 `m.tries > 0 && !acked` 说明结果。
+        _msgResend.remove(t.id);
+        _log(LogLevel.warn, '消息',
+            '重发 ${t.tries} 次仍未收到 ${t.to} 的回执（编号 ${t.id}）');
+        changed = true;
+        continue;
+      }
+      if (!msgLinkUp) {
+        // 链路断了：停在原地等它回来，这段时间不算次数、也不倒计时。
+        t.dueAt = now.add(const Duration(seconds: 2));
+        continue;
+      }
+      _sendRawMsg(t.raw);
+      t.tries += 1;
+      t.dueAt = now.add(Duration(seconds: msgResendGapSec));
+      _noteMsgTries(t.id);
+      _log(LogLevel.info, '消息',
+          '${t.to} 没有回执，第 ${t.tries} 次重发（编号 ${t.id}）');
+      changed = true;
+      counting = true;
+    }
+    if (changed || counting) _notify();
+  }
+
+  /// 这条消息「发了几轮都没回执」吗？
+  ///
+  /// 判据是「重发过至少一次、没回执、而且手上没有正在等回执的任务」—— 也就是
+  /// 上一轮重发次数已经用完。这时气泡底下写明白结果，点一下能重新来一轮
+  /// （用户 2026-11-13：「如果发送依旧失败的话，可以点击那个未发送成功的消息，
+  /// 重新激活发送」）。
+  bool msgResendGaveUp(AprsMsg m) =>
+      m.sent &&
+      !m.acked &&
+      m.groupId == null &&
+      m.tries > 0 &&
+      _msgResend[m.id] == null;
+
+  /// 重建一条已发出的消息的报文行（手动重发用）。
+  ///
+  /// 编号沿用原来那个（对方按 msgid 去重），路径由 [lineForLink] 发送时重算 ——
+  /// 所以换过链路之后手动重发依然带对路径。位置点消息的正文是策略帧，
+  /// 不能拿气泡上的「位置点」几个字去拼，要按坐标重新编一帧。
+  String? _frameFor(AprsMsg m) {
+    final id = m.id;
+    if (id == null || id.isEmpty) return null;
+    var text = m.sentAs ?? m.text;
+    if (m.type == 'location' && m.lat != null && m.lng != null) {
+      final station = (m.stationCall ?? '').trim().toUpperCase();
+      text = StrategyProto.encodeLocation(
+        StrategyProto.makeId(myCall, 0),
+        m.lat!,
+        m.lng!,
+        label: station.isEmpty ? '' : 'S:$station',
+      );
+    }
+    return AprsFmt.message(m.from, m.to, text, id, path: txPathMsg);
+  }
+
+  /// 手动重发一条没送达的消息（用户点那个气泡）。
+  ///
+  /// 立刻再发一包，并把重发计数器重新排上（重发开关关着时就只发这一包）。
+  /// 返回 false = 现在发不出去（没有可用链路 / 这条不可重发），由界面说一声。
+  bool resendMessage(AprsMsg m) {
+    if (!m.sent || m.acked || m.groupId != null) return false;
+    if (!msgLinkUp) return false;
+    final raw = _frameFor(m);
+    if (raw == null) return false;
+    _sendRawMsg(raw);
+    m.tries = 0;
+    _msgResendStopped.remove(m.id);
+    if (msgResend && m.id != null) {
+      _msgResend[m.id!] = MsgResend(
+        m.id!,
+        raw,
+        m.to,
+        DateTime.now().add(Duration(seconds: msgResendGapSec)),
+      );
+    }
+    _saveMessages();
+    _log(LogLevel.info, '消息', '手动重发给 ${m.to}（编号 ${m.id}）');
+    _notify();
+    return true;
+  }
+
+  /// 测试用：手动跑一步重发（把时间拨到 [now]）。
+  @visibleForTesting
+  void debugTickMsgResend(DateTime now) => _tickMsgResend(now);
+
   void sendMessage(String to, String text,
       {String? sentAs, String? fromCall}) {
     if (text.trim().isEmpty) return;
@@ -11528,6 +11930,7 @@ class AppState extends ChangeNotifier {
     if (msgLinkUp) {
       _sendRawMsg(raw);
       _lastTx = DateTime.now();
+      _armMsgResend(id, raw, to);
     }
     _log(LogLevel.info, '消息', '发送给 $to：$text');
     _pushPacket(
@@ -11601,6 +12004,7 @@ class AppState extends ChangeNotifier {
     if (msgLinkUp) {
       _sendRawMsg(raw);
       _lastTx = DateTime.now();
+      _armMsgResend(id, raw, target);
     }
     _log(LogLevel.info, '消息', '发送位置点给 $target：${frame}');
     _pushPacket(
